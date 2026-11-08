@@ -58,21 +58,44 @@ describe('damage at 0 HP in the player transcript (#2457)', () => {
   };
   const ON_YOU = { targetHp: true, targetMaxHp: 7 };
 
-  it('gives a struck-at-0-HP attack its own engine line and death-save card', () => {
+  it('combines the attack and the death-save failure into one result article', () => {
     const parts = formatCombatEngineParts(
       attackAction(REEVES, SCHOLAR),
       CRIT_AT_ZERO_HP,
       FIGHT_ROSTER,
       ON_YOU,
     );
-    const extra = parts[parts.length - 1];
+    expect(parts).toHaveLength(1);
+    const combined = parts[0];
     // The Engine: prefix marks this as engine fact, not DM fiction (#2457).
-    expect(extra.line.startsWith('⚙️ Engine:')).toBe(true);
-    expect(extra.line).toContain('strikes the unconscious The Scholar — automatic critical hit.');
-    expect(extra.line).toContain('Two death-save failures. ✕✕○');
-    expect(extra.card.kind).toBe('death_save');
-    expect(extra.card.badge).toMatchObject({ word: 'FAILED' });
-    expect(extra.card.deathSave).toMatchObject({ failures: 2 });
+    expect(combined.line.startsWith('⚙️ Engine:')).toBe(true);
+    expect(combined.line).toContain(
+      'rolled 14 + 0 = 14 vs AC 11 against The Scholar with Longsword — CRITICAL HIT.',
+    );
+    expect(combined.line).toContain('6 slashing damage.');
+    expect(
+      combined.line.endsWith(
+        'strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕○',
+      ),
+    ).toBe(true);
+    expect(combined.card.kind).toBe('death_save');
+    expect(combined.card.badge).toMatchObject({ word: 'CRITICAL HIT' });
+    expect(combined.card.math).toMatchObject({ kind: 'attack', d20: 14, bonus: 0, total: 14 });
+    expect(combined.card.effect).toBe('6 slashing damage');
+    expect(combined.card.deathSave).toMatchObject({ failures: 2 });
+    // The producer does not report successes here, so the card must not invent a tally.
+    expect(combined.card.deathSave).not.toHaveProperty('successes');
+  });
+
+  it('shows the success tally only when the producer actually supplies it', () => {
+    const parts = formatCombatEngineParts(
+      attackAction(REEVES, SCHOLAR),
+      { ...CRIT_AT_ZERO_HP, deathSavesSuccesses: 1 },
+      FIGHT_ROSTER,
+      ON_YOU,
+    );
+    expect(parts).toHaveLength(1);
+    expect(parts[0].card.deathSave).toEqual({ successes: 1, failures: 2 });
   });
 
   it('gives a struck-at-0-HP spell its own engine line and death-save card', () => {
@@ -109,8 +132,11 @@ describe('damage at 0 HP in the player transcript (#2457)', () => {
       FIGHT_ROSTER,
       ON_YOU,
     );
+    expect(parts).toHaveLength(1);
     expect(parts.map((part) => part.line).join('\n')).not.toContain('0 HP');
     expect(parts.some((part) => part.line.includes('death-save failure'))).toBe(false);
+    expect(parts[0].card.kind).toBe('attack');
+    expect(parts[0].card.deathSave).toBeUndefined();
   });
 
   it('asserts the whole payload carries no DM-facing instructions', () => {
@@ -227,7 +253,7 @@ describe('three-round death-save arc through the real client path (#2457)', () =
     assertNoDmInstructions(payloadStrings(allParts));
   });
 
-  it('adds a separate failure line for a hit at 0 HP', () => {
+  it('adds the failure to the attack card for a hit at 0 HP', () => {
     const hitAtZero: Record<string, unknown> = {
       ...ENEMY_HITS_PLAYER,
       finalDamage: 5,
@@ -240,13 +266,16 @@ describe('three-round death-save arc through the real client path (#2457)', () =
       targetHp: true,
       targetMaxHp: 7,
     });
-    const failurePart = parts[parts.length - 1];
+    expect(parts).toHaveLength(1);
+    const failurePart = parts[0];
     expect(failurePart.line.startsWith('⚙️ Engine:')).toBe(true);
     // A ranged hit on the body: one failure, no automatic critical.
     expect(failurePart.line).toContain('hits the unconscious The Scholar from range.');
     expect(failurePart.line).toContain('One death-save failure. ✕✕○');
     expect(failurePart.line).not.toContain('automatic critical');
     expect(failurePart.card.kind).toBe('death_save');
+    expect(failurePart.card.effect).toBe('5 slashing damage');
+    expect(failurePart.card.deathSave).toMatchObject({ failures: 2 });
     assertNoDmInstructions(payloadStrings(parts));
   });
 

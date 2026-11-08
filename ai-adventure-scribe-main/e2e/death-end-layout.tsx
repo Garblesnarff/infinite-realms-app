@@ -16,12 +16,17 @@ import {
   REEVES,
   SCHOLAR,
 } from '../shared/test-fixtures/engine-results';
-import { mapAuthoritativeCombat } from '../src/contexts/combat/authoritative-combat-state';
+import {
+  mapAuthoritativeCombat,
+  type AuthoritativeCombatPayload,
+} from '../src/contexts/combat/authoritative-combat-state';
 import { DyingPanel } from '../src/features/game-session/components/game/dying/DyingPanel';
 import { EngineResultCardView } from '../src/features/game-session/components/game/EngineResultCardView';
 import { FallenEndState } from '../src/features/game-session/components/game/game-content/DeathScreen';
 import { summarizeCombatTurn } from '../src/features/game-session/components/game/overhaul/combat-turn-order';
 import { CombatTurnBar } from '../src/features/game-session/components/game/overhaul/CombatTurnBar';
+import { LeftRail } from '../src/features/game-session/components/game/overhaul/LeftRail';
+import { buildEncounterCombatants } from '../src/features/game-session/components/game/overhaul/useOverhaulViewModel';
 import '../src/index.css';
 
 document.body.classList.add('ir-table-look');
@@ -113,27 +118,32 @@ function CardsView(): React.ReactElement {
 }
 
 function TurnBarView(): React.ReactElement {
+  const dyingEncounter = { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 4, currentTurnOrder: 0 };
+  const dyingScholar = {
+    ...DYING_SCHOLAR_PARTICIPANT,
+    conditions: [...DYING_SCHOLAR_PARTICIPANT.conditions],
+    status: { ...DYING_SCHOLAR_PARTICIPANT.status },
+  };
+  const reeves = {
+    ...DYING_SCHOLAR_PARTICIPANT,
+    id: 'm1',
+    characterId: null,
+    name: 'Captain Sarah Reeves',
+    participantType: 'monster',
+    initiative: 4,
+    vitalState: 'standing' as const,
+    conditions: [...DYING_SCHOLAR_PARTICIPANT.conditions],
+    status: {
+      ...DYING_SCHOLAR_PARTICIPANT.status,
+      currentHp: 7,
+      isConscious: true,
+      deathSavesFailures: 0,
+    },
+  };
   const dying = mapAuthoritativeCombat({
-    encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 4, currentTurnOrder: 0 },
-    participants: [
-      DYING_SCHOLAR_PARTICIPANT,
-      {
-        ...DYING_SCHOLAR_PARTICIPANT,
-        id: 'm1',
-        characterId: null,
-        name: 'Captain Sarah Reeves',
-        participantType: 'monster',
-        initiative: 4,
-        vitalState: 'standing',
-        status: {
-          ...DYING_SCHOLAR_PARTICIPANT.status,
-          currentHp: 7,
-          isConscious: true,
-          deathSavesFailures: 0,
-        },
-      },
-    ],
-  } as never);
+    encounter: dyingEncounter,
+    participants: [dyingScholar, reeves],
+  });
   const summary = summarizeCombatTurn(dying)!;
   const playerDown =
     dying.participants.find((p) => p.participantType === 'player')?.currentHitPoints ?? 1;
@@ -144,6 +154,71 @@ function TurnBarView(): React.ReactElement {
         busy={null}
         hp={{ current: 0, maximum: 7, temp: 0 }}
         playerDown={playerDown <= 0}
+      />
+    </main>
+  );
+}
+
+function TrackerView(): React.ReactElement {
+  const status = {
+    ...DYING_SCHOLAR_PARTICIPANT.status,
+    currentHp: 0,
+    isConscious: false,
+    deathSavesSuccesses: 0,
+    deathSavesFailures: 0,
+  };
+  const wire = (
+    overrides: Partial<AuthoritativeCombatPayload['participants'][number]>,
+  ): AuthoritativeCombatPayload['participants'][number] => ({
+    ...DYING_SCHOLAR_PARTICIPANT,
+    conditions: [...DYING_SCHOLAR_PARTICIPANT.conditions],
+    status: { ...status },
+    ...overrides,
+  });
+  const encounter = mapAuthoritativeCombat({
+    encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 4, currentTurnOrder: 0 },
+    participants: [
+      wire({ id: 'd', name: 'Dying hero', initiative: 18, vitalState: 'dying' }),
+      wire({
+        id: 's',
+        name: 'Stable hero',
+        initiative: 12,
+        vitalState: 'stabilized',
+        status: { ...status, deathSavesSuccesses: 3 },
+      }),
+      wire({
+        id: 'x',
+        name: 'Dead hero',
+        initiative: 8,
+        vitalState: 'dead',
+        status: { ...status, deathSavesFailures: 3 },
+      }),
+      wire({
+        id: 'h',
+        name: 'Healthy hero',
+        initiative: 4,
+        vitalState: 'standing',
+        status: { ...status, currentHp: 7, isConscious: true },
+      }),
+    ],
+  });
+  const turn = summarizeCombatTurn(encounter)!;
+  return (
+    <main className="p-4">
+      <LeftRail
+        campaign={{
+          name: 'Test campaign',
+          chapter: 'Chapter 1',
+          objective: '',
+          objectiveTasks: [],
+        }}
+        party={[]}
+        partyMax={4}
+        combat={{
+          active: true,
+          round: encounter.currentRound,
+          combatants: buildEncounterCombatants(encounter, turn),
+        }}
       />
     </main>
   );
@@ -166,6 +241,8 @@ createRoot(root).render(
       <CardsView />
     ) : view === 'turnbar' ? (
       <TurnBarView />
+    ) : view === 'tracker' ? (
+      <TrackerView />
     ) : (
       <MemoryRouter>
         <FallenEndState

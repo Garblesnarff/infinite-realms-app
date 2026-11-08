@@ -107,6 +107,7 @@ const Party: React.FC<{ party: PartyMemberVM[]; partyMax: number }> = ({ party, 
 );
 
 const STATE_LABEL = { acted: 'Acted', now: 'Now', waiting: 'Waiting', down: 'Down' } as const;
+const VITAL_LABEL = { dying: 'Unconscious', stable: 'Stable', dead: 'Dead' } as const;
 
 const EncounterTracker: React.FC<{
   round: number;
@@ -138,14 +139,35 @@ const EncounterTracker: React.FC<{
             {String(c.initiative).padStart(2, '0')}
           </span>
           <span className="flex-1 truncate text-xs">{c.name}</span>
-          {c.state && (
+          {c.vitalState && c.vitalState !== 'standing' ? (
             <span
-              className={`ir-text-min uppercase tracking-wide ${
-                c.state === 'now' ? 'font-bold text-infinite-gold' : 'text-white/70'
-              }`}
+              data-vital-state={c.vitalState}
+              className="inline-flex items-center gap-1 rounded-full bg-[#475569] px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-[#f1f5f9]"
             >
-              {STATE_LABEL[c.state]}
+              {c.vitalState === 'dying' && (
+                <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M5 8h6l-6 8h6M14 4h5l-5 6h5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+              {VITAL_LABEL[c.vitalState]}
             </span>
+          ) : (
+            c.state && (
+              <span
+                className={`ir-text-min uppercase tracking-wide ${
+                  c.state === 'now' ? 'font-bold text-infinite-gold' : 'text-white/70'
+                }`}
+              >
+                {STATE_LABEL[c.state]}
+              </span>
+            )
           )}
         </div>
       ))}

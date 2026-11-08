@@ -11,20 +11,6 @@ import {
   type EngineResultCard,
 } from '@/services/combat/engine-result-card';
 
-const subscribeTableLook = (notify: () => void): (() => void) => {
-  const observer = new MutationObserver(notify);
-  observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-  return () => observer.disconnect();
-};
-
-function useTableLook(): boolean {
-  return React.useSyncExternalStore(
-    subscribeTableLook,
-    () => document.body.classList.contains('ir-table-look'),
-    () => false,
-  );
-}
-
 const BADGE_ICONS: Record<EngineBadgeIcon, LucideIcon> = {
   check: Check,
   alert: AlertTriangle,
@@ -137,19 +123,22 @@ function Pip({ filled, kind }: { filled: boolean; kind: 'saved' | 'failed' }): R
     );
   const filledClass =
     kind === 'saved'
-      ? 'bg-infinite-gold text-infinite-dark ir-end-pip-saved'
-      : 'bg-destructive text-white ir-end-pip-failed';
+      ? 'border-[#e8c36a] bg-[#e8c36a] text-infinite-dark ir-end-pip-saved'
+      : 'border-red-400 bg-red-400 text-white ir-end-pip-failed';
+  const emptyClass =
+    kind === 'saved' ? 'border-[#e8c36a] ir-end-pip-empty' : 'border-red-400 ir-end-pip-empty';
   return (
     <span
       data-testid="death-save-pip"
       data-kind={kind}
       data-filled={filled ? 'true' : 'false'}
       className={cn(
-        'inline-flex h-5 w-5 items-center justify-center rounded-full [body.ir-table-look_&]:transition-[background-color,box-shadow] [body.ir-table-look_&]:duration-150 motion-reduce:[body.ir-table-look_&]:transition-none motion-reduce:[body.ir-table-look_&]:!duration-0 [html[data-reduce-motion=on]_body.ir-table-look_&]:transition-none [html[data-reduce-motion=on]_body.ir-table-look_&]:!duration-0',
-        filled ? filledClass : 'border-2 border-white/40 ir-end-pip-empty',
+        'inline-flex h-2.5 w-2.5 items-center justify-center rounded-full border',
+        '[body.ir-table-look_&]:h-5 [body.ir-table-look_&]:w-5 [body.ir-table-look_&]:border-0 [body.ir-table-look_&]:transition-[background-color,box-shadow] [body.ir-table-look_&]:duration-150 motion-reduce:[body.ir-table-look_&]:transition-none motion-reduce:[body.ir-table-look_&]:!duration-0 [html[data-reduce-motion=on]_body.ir-table-look_&]:transition-none [html[data-reduce-motion=on]_body.ir-table-look_&]:!duration-0',
+        filled ? filledClass : emptyClass,
       )}
     >
-      {filled ? mark : null}
+      {filled ? <span className="hidden [body.ir-table-look_&]:inline-flex">{mark}</span> : null}
     </span>
   );
 }
@@ -158,63 +147,38 @@ const DeathSavePips: React.FC<{ successes?: number; failures: number }> = ({
   successes,
   failures,
 }) => {
-  const tableLook = useTableLook();
-  if (!tableLook) {
-    return (
-      <span className="inline-flex items-center gap-1" aria-hidden="true">
-        {[0, 1, 2].map((index) => (
-          <span
-            key={`s${index}`}
-            data-testid="death-save-pip"
-            data-kind="saved"
-            data-filled={index < (successes ?? 0) ? 'true' : 'false'}
-            className={cn(
-              'h-2.5 w-2.5 rounded-full border border-[#e8c36a]',
-              index < (successes ?? 0) && 'bg-[#e8c36a]',
-            )}
-          />
-        ))}
-        <span className="mx-1 h-3 w-px bg-white/30" />
-        {[0, 1, 2].map((index) => (
-          <span
-            key={`f${index}`}
-            data-testid="death-save-pip"
-            data-kind="failed"
-            data-filled={index < failures ? 'true' : 'false'}
-            className={cn(
-              'h-2.5 w-2.5 rounded-full border border-red-400',
-              index < failures && 'bg-red-400',
-            )}
-          />
-        ))}
-      </span>
-    );
-  }
   return (
-    <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
+    <span
+      className="inline-flex items-center gap-1 [body.ir-table-look_&]:flex-wrap [body.ir-table-look_&]:gap-x-3.5 [body.ir-table-look_&]:gap-y-1.5"
+      aria-hidden="true"
+    >
+      {/* A tally the producer did not report is never invented: omit the Saved group entirely. */}
       {successes !== undefined && (
-        <span className="inline-flex items-center gap-2">
-          <span className="text-[13px] font-bold tracking-wide text-infinite-gold [body.ir-table-look_&]:text-[#f3deb0]">
-            Saved
+        <>
+          <span className="inline-flex items-center [body.ir-table-look_&]:gap-2">
+            <span className="hidden text-[13px] font-bold tracking-wide text-infinite-gold [body.ir-table-look_&]:inline [body.ir-table-look_&]:text-[#f3deb0]">
+              Saved
+            </span>
+            <span className="inline-flex gap-1 [body.ir-table-look_&]:gap-[5px]">
+              {[0, 1, 2].map((index) => (
+                <Pip key={`s${index}`} kind="saved" filled={index < successes} />
+              ))}
+            </span>
           </span>
-          <span className="inline-flex gap-[5px]">
-            {[0, 1, 2].map((index) => (
-              <Pip key={`s${index}`} kind="saved" filled={index < successes} />
-            ))}
-          </span>
-        </span>
+          <span className="mx-1 h-3 w-px bg-white/30 [body.ir-table-look_&]:hidden" />
+        </>
       )}
-      <span className="inline-flex items-center gap-2">
-        <span className="text-[13px] font-bold tracking-wide text-red-300 [body.ir-table-look_&]:text-[#ef8a8a]">
+      <span className="inline-flex items-center [body.ir-table-look_&]:gap-2">
+        <span className="hidden text-[13px] font-bold tracking-wide text-red-300 [body.ir-table-look_&]:inline [body.ir-table-look_&]:text-[#ef8a8a]">
           Failed
         </span>
-        <span className="inline-flex gap-[5px]">
+        <span className="inline-flex gap-1 [body.ir-table-look_&]:gap-[5px]">
           {[0, 1, 2].map((index) => (
             <Pip key={`f${index}`} kind="failed" filled={index < failures} />
           ))}
         </span>
       </span>
-    </div>
+    </span>
   );
 };
 

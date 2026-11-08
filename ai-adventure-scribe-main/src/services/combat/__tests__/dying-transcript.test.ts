@@ -36,13 +36,13 @@ const lineOf = (result: Record<string, unknown>): string => {
 describe('a blow on a downed player has its own engine line (#2518)', () => {
   it('melee within 5 ft: automatic critical hit, two failures, the pips', () => {
     expect(lineOf(ENEMY_STRIKES_DOWNED_PLAYER)).toBe(
-      '⚙️ Engine: Captain Sarah Reeves strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕○',
+      '⚙️ Engine: Captain Sarah Reeves rolled 2 + 0 = 2 vs AC 11 against The Scholar with Longsword — CRITICAL HIT. 6 slashing damage. The Scholar is now at 0 HP and is unconscious. Captain Sarah Reeves strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕○',
     );
   });
 
   it('a ranged hit: one failure, and no automatic critical hit', () => {
     expect(lineOf(ENEMY_SHOOTS_DOWNED_PLAYER)).toBe(
-      '⚙️ Engine: Captain Sarah Reeves hits the unconscious The Scholar from range. One death-save failure. ✕○○',
+      '⚙️ Engine: Captain Sarah Reeves rolled 14 + 0 = 14 vs AC 11 against The Scholar with Longsword — HIT. 2 slashing damage. The Scholar is now at 0 HP and is unconscious. Captain Sarah Reeves hits the unconscious The Scholar from range. One death-save failure. ✕○○',
     );
   });
 

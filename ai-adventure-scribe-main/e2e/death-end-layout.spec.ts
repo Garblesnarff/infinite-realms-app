@@ -241,6 +241,10 @@ for (const width of [1280, 390]) {
     await expect(strike).toContainText('CRITICAL HIT');
     await expect(strike).toContainText('automatic critical hit');
     await expect(strike).toContainText('Failed');
+    // Card 8 is one result article: the attack's roll/damage and the death-save failure
+    // share it. The producer omits successes here, so the card must not invent "Saved".
+    await expect(strike.getByTestId('engine-result-card')).toHaveCount(1);
+    await expect(strike).not.toContainText('Saved');
     const geometry = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
       viewport: document.documentElement.clientWidth,
@@ -268,6 +272,21 @@ for (const width of [1280, 390]) {
     expect(geometry.width).toBeLessThanOrEqual(geometry.viewport);
     await page.screenshot({ path: `test-results/dying-turnbar-${width}.png` });
   });
+
+  test(`tracker labels dying, stable and dead at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(`${origin}/e2e/death-end-layout.html?view=tracker`);
+    // The harness drives the real wire fixture through mapAuthoritativeCombat and
+    // buildEncounterCombatants, so these labels come from the producer's vitalState.
+    await expect(page.locator('[data-vital-state]')).toHaveText(['Unconscious', 'Stable', 'Dead']);
+    await expect(page.getByText('Healthy hero')).toBeVisible();
+    const geometry = await page.evaluate(() => ({
+      width: document.documentElement.scrollWidth,
+      viewport: document.documentElement.clientWidth,
+    }));
+    expect(geometry.width).toBeLessThanOrEqual(geometry.viewport);
+    await page.screenshot({ path: `test-results/dying-tracker-${width}.png`, fullPage: true });
+  });
 }
 
 test('death saves respect show target numbers and plain look stays plain', async ({ page }) => {
@@ -292,8 +311,9 @@ test('death saves respect show target numbers and plain look stays plain', async
     expect(box?.width ?? 0).toBeCloseTo(10, 0);
     expect(box?.height ?? 0).toBeCloseTo(10, 0);
   }
-  await expect(page.getByTestId('card-success')).not.toContainText('Saved');
-  await expect(page.getByTestId('card-success')).not.toContainText('Failed');
+  // The CSS-only table scoping keeps the labels in the DOM but hides them in plain look.
+  await expect(page.getByTestId('card-success').getByText('Saved', { exact: true })).toBeHidden();
+  await expect(page.getByTestId('card-success').getByText('Failed', { exact: true })).toBeHidden();
   await page.evaluate(() => document.body.classList.add('ir-table-look'));
   await expect(badge).toBeVisible();
   const tableHeight = (await badge.boundingBox())?.height ?? 0;

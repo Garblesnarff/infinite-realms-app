@@ -35,6 +35,8 @@ export interface CombatantVM {
   name: string;
   isEnemy?: boolean;
   isActive?: boolean;
+  /** Authoritative vital state for this combatant; drives the Unconscious chip. */
+  vitalState?: 'standing' | 'dying' | 'stable' | 'dead';
   /** Where the actor stands in this round's pass through the order. */
   state?: 'acted' | 'now' | 'waiting' | 'down';
 }

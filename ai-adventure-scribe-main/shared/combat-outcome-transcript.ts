@@ -103,6 +103,8 @@ export interface CombatEngineResult {
   deathSaveFailuresAdded?: number;
   /** The target's death-save failure tally after those failures were added. */
   deathSavesFailures?: number;
+  /** The target's death-save success tally, when the producer reports it. */
+  deathSavesSuccesses?: number;
   /** The blow's overflow past 0 HP reached the target's maximum: instant death (#2518). */
   instantDeath?: boolean;
   /** Damage left after 0 HP and the maximum it was judged against (#2640). */
@@ -298,42 +300,57 @@ export function formatCombatEngineParts(
     : state
       ? `${target} is ${state}.`
       : undefined;
-  parts.push({
+  const attackCard: EngineResultCard = {
+    kind: 'attack',
+    side,
     line,
-    card: {
-      kind: 'attack',
+    title: `${actor} attacks ${target}${weapon}`,
+    badge: engineBadge(
+      result.isCritical && result.hit ? 'critical' : result.hit ? 'hit' : 'miss',
       side,
-      line,
-      title: `${actor} attacks ${target}${weapon}`,
-      badge: engineBadge(
-        result.isCritical && result.hit ? 'critical' : result.hit ? 'hit' : 'miss',
-        side,
-      ),
-      ...(hasRoll
-        ? {
-            math: {
-              kind: 'attack' as const,
-              d20: result.d20 as number,
-              bonus: result.attackBonus as number,
-              total: result.totalAttackRoll as number,
-              ac: {
-                targetAC: result.targetAC,
-                baseAc: result.baseAc,
-                coverBonus: result.coverBonus,
-                cover: result.cover,
-              },
-              targetIsPlayer: options.targetHp === true,
+    ),
+    ...(hasRoll
+      ? {
+          math: {
+            kind: 'attack' as const,
+            d20: result.d20 as number,
+            bonus: result.attackBonus as number,
+            total: result.totalAttackRoll as number,
+            ac: {
+              targetAC: result.targetAC,
+              baseAc: result.baseAc,
+              coverBonus: result.coverBonus,
+              cover: result.cover,
             },
-          }
-        : {}),
-      effect: damageEffectText(result),
-      ...(hp ? { hp } : {}),
-      ...(status ? { status } : {}),
-    },
-  });
-  // Damage at 0 HP adds death-save failures: the failure is its own engine line and card (#2457).
+            targetIsPlayer: options.targetHp === true,
+          },
+        }
+      : {}),
+    effect: damageEffectText(result),
+    ...(hp ? { hp } : {}),
+    ...(status ? { status } : {}),
+  };
+  // Damage at 0 HP is the attack's consequence, not a second attack (#1431 card 8). Failure
+  // facts and the attack's own roll/damage share one article; instant death stays its own
+  // terminal card because it has no failure tally.
   const damageAtZero = damageAtZeroHpPart(result, target, actor);
-  if (damageAtZero) parts.push(damageAtZero);
+  if (damageAtZero && result.hit && result.instantDeath !== true) {
+    const combinedLine = `${line} ${damageAtZero.line.replace(/^⚙️ Engine: /, '')}`;
+    parts.push({
+      line: combinedLine,
+      card: {
+        ...damageAtZero.card,
+        line: combinedLine,
+        math: attackCard.math,
+        effect: attackCard.effect,
+        ...(attackCard.hp ? { hp: attackCard.hp } : {}),
+        ...(attackCard.status ? { status: attackCard.status } : {}),
+      },
+    });
+  } else {
+    parts.push({ line, card: attackCard });
+    if (damageAtZero) parts.push(damageAtZero);
+  }
   return parts;
 }
 
