@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.40.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.39.0...v0.40.0) (2026-11-08)
+
+
+### Features
+
+* **landing:** Table 12 public pages — landing, pricing FAQ, explore copy ([#92](https://github.com/Garblesnarff/infinite-realms-app/issues/92)) ([4d10348](https://github.com/Garblesnarff/infinite-realms-app/commit/4d10348c85a0439c7980d077aaeeaf828c98bedc))
+* **table:** game panels — memory, journal, voice, settings sheet ([#1429](https://github.com/Garblesnarff/infinite-realms-app/issues/1429)) ([73e96d5](https://github.com/Garblesnarff/infinite-realms-app/commit/73e96d52d5945bed177d315c818845ea2bd41e95))
+* **table:** show resolved roll seals ([#1410](https://github.com/Garblesnarff/infinite-realms-app/issues/1410)) ([ffbbd0c](https://github.com/Garblesnarff/infinite-realms-app/commit/ffbbd0cf43ca08e50eeec4bf85ae83db745d5ddc))
+* **table:** spell-attack label and journal links ([#92](https://github.com/Garblesnarff/infinite-realms-app/issues/92)) ([113331f](https://github.com/Garblesnarff/infinite-realms-app/commit/113331f98171b0de3c61fda843fc633afad9d241))
+
+
+### Bug Fixes
+
+* **character:** starting equipment on the Finalize summary and sheet ([#1402](https://github.com/Garblesnarff/infinite-realms-app/issues/1402)) ([380e7e0](https://github.com/Garblesnarff/infinite-realms-app/commit/380e7e0aed8a330d183a73518123c41632e2e51b))
+* **combat:** one seating line per confirm ([#1420](https://github.com/Garblesnarff/infinite-realms-app/issues/1420)) ([089af22](https://github.com/Garblesnarff/infinite-realms-app/commit/089af223e532a4c99e3cfe8c62569d473deb53a3))
+* **death:** table 11 end screen and dying panel ([#1431](https://github.com/Garblesnarff/infinite-realms-app/issues/1431)) ([e763ef9](https://github.com/Garblesnarff/infinite-realms-app/commit/e763ef98f0adbe9c17bd57054f59c3395fd44e45))
+* **table:** refine start screen access ([#1412](https://github.com/Garblesnarff/infinite-realms-app/issues/1412)) ([db80de7](https://github.com/Garblesnarff/infinite-realms-app/commit/db80de74a847828c68d1fd7b5d796dbb66a9d383))
+* **voice:** retry once with the fallback voice id on an upstream 404 ([#1406](https://github.com/Garblesnarff/infinite-realms-app/issues/1406)) ([731e11d](https://github.com/Garblesnarff/infinite-realms-app/commit/731e11d19af748c339e4678c82a2202f49e9944d))
+
+
+### Documentation
+
+* **design:** the Table canvas boards as reference HTML ([#92](https://github.com/Garblesnarff/infinite-realms-app/issues/92)) ([bffc1e6](https://github.com/Garblesnarff/infinite-realms-app/commit/bffc1e66a196ccbed50da3d12fecd6681ced3ff7))
+
+
+### Tests
+
+* **spells:** timezone-independent slot retry tests ([#1427](https://github.com/Garblesnarff/infinite-realms-app/issues/1427)) ([2e7bfc7](https://github.com/Garblesnarff/infinite-realms-app/commit/2e7bfc7af4b57430a9a58ec0cbe1d266ae6c3961))
+
 ## [0.39.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.38.3...v0.39.0) (2026-11-06)
 
 
