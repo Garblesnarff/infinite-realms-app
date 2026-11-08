@@ -95,10 +95,12 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
             return { error: 'Voice service unavailable' };
           }
 
-          let upstream: Response;
-          try {
-            upstream = await (options.fetchImpl ?? globalThis.fetch)(
-              `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(params.voiceId)}/stream`,
+          // One upstream call per voice id attempted (a 404 retries once
+          // with the fallback id, below). The fetch boundary is injectable
+          // (options.fetchImpl) so tests stub the provider without a live call.
+          const synthesize = (voiceId: string): Promise<Response> =>
+            (options.fetchImpl ?? globalThis.fetch)(
+              `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(voiceId)}/stream`,
               {
                 method: 'POST',
                 headers: {
@@ -110,17 +112,57 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
                 body: JSON.stringify({ ...providerBody, model_id: modelId }),
               },
             );
-          } catch (error) {
+          const fetchFailed = (error: unknown, voiceId: string): { error: string } => {
             // #1348: the proxy never logged provider failures, so a run of
             // 502s could not be told apart from a quota or a bad voice.
             logger.error({
               msg: 'TTS_UPSTREAM_FETCH_ERROR',
               error: error instanceof Error ? error.message : error,
               userId: user.userId,
-              voiceId: params.voiceId,
+              voiceId,
             });
             set.status = 503;
             return { error: 'Voice service unavailable' };
+          };
+
+          let attemptedVoiceId = params.voiceId;
+          let upstream: Response;
+          try {
+            upstream = await synthesize(params.voiceId);
+          } catch (error) {
+            return fetchFailed(error, params.voiceId);
+          }
+
+          // #1406: an upstream 404 means the voice id is not on the
+          // account's ElevenLabs "My Voices" list, so the server answers
+          // 502 and the client falls back to Standard silently. Log the id
+          // so the next run is visible, and retry once with the fallback
+          // voice when one is configured (and different from the requested
+          // id — retrying the same id would repeat the same 404).
+          if (upstream.status === 404) {
+            logger.error({
+              msg: 'TTS_VOICE_NOT_FOUND',
+              upstreamStatus: upstream.status,
+              userId: user.userId,
+              voiceId: params.voiceId,
+            });
+            const fallbackVoiceId = process.env.ELEVENLABS_FALLBACK_VOICE_ID?.trim();
+            if (fallbackVoiceId && fallbackVoiceId !== params.voiceId) {
+              attemptedVoiceId = fallbackVoiceId;
+              try {
+                upstream = await synthesize(fallbackVoiceId);
+              } catch (error) {
+                return fetchFailed(error, fallbackVoiceId);
+              }
+              if (upstream.status === 404) {
+                logger.error({
+                  msg: 'TTS_VOICE_NOT_FOUND',
+                  upstreamStatus: upstream.status,
+                  userId: user.userId,
+                  voiceId: fallbackVoiceId,
+                });
+              }
+            }
           }
 
           if (!upstream.ok) {
@@ -133,7 +175,7 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
               upstreamStatus: upstream.status,
               status,
               userId: user.userId,
-              voiceId: params.voiceId,
+              voiceId: attemptedVoiceId,
             });
             set.status = status;
             return { error: 'Voice request failed' };

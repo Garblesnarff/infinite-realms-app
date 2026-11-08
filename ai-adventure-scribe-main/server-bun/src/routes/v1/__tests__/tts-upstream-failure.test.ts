@@ -17,6 +17,7 @@ const envKeys = [
   'NODE_ENV',
   'ELEVENLABS_API_KEY',
   'ELEVEN_LABS_API_KEY',
+  'ELEVENLABS_FALLBACK_VOICE_ID',
   'RATE_LIMIT_VOICE_IP_FREE',
   'RATE_LIMIT_VOICE_USER_FREE',
 ];
@@ -121,6 +122,8 @@ function request(): Request {
 
 beforeEach(() => {
   logged.length = 0;
+  // The fallback id is set per test below; never leak it into the next one.
+  delete process.env.ELEVENLABS_FALLBACK_VOICE_ID;
 });
 
 afterAll(() => {
@@ -182,6 +185,269 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream failures (#1348)', () => {
     expect(logged).toContainEqual(
       expect.objectContaining({ msg: 'TTS_UPSTREAM_FETCH_ERROR', voiceId: 'voice-1' }),
     );
+    expect(calls.consume).toBe(0);
+    expect(calls.record).toBe(0);
+  });
+});
+
+describe('POST /v1/ai-proxy/voice/:voiceId upstream 404 with fallback (#1406)', () => {
+  it('retries once with the fallback voice id and returns the clip, charged once', async () => {
+    process.env.ELEVENLABS_FALLBACK_VOICE_ID = 'voice-fallback';
+    const urls: string[] = [];
+    const { app, calls } = makeApp(async (input) => {
+      urls.push(String(input));
+      if (urls.length === 1) return new Response('voice not found', { status: 404 });
+      return new Response('audio-bytes', {
+        status: 200,
+        headers: { 'content-type': 'audio/mpeg' },
+      });
+    });
+
+    const response = await app.handle(request());
+    const body = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(body).toBe('audio-bytes');
+    expect(urls).toEqual([
+      'https://api.elevenlabs.io/v1/text-to-speech/voice-1/stream',
+      'https://api.elevenlabs.io/v1/text-to-speech/voice-fallback/stream',
+    ]);
+    expect(logged).toContainEqual(
+      expect.objectContaining({
+        msg: 'TTS_VOICE_NOT_FOUND',
+        upstreamStatus: 404,
+        userId: 'tts-upstream-user',
+        voiceId: 'voice-1',
+      }),
+    );
+    expect(logged.filter((entry) => entry.msg === 'TTS_VOICE_NOT_FOUND')).toHaveLength(1);
+    expect(logged).not.toContainEqual(
+      expect.objectContaining({ msg: 'TTS_UPSTREAM_ERROR' }),
+    );
+    // One usable clip: charged once, not once per attempt.
+    expect(calls.consume).toBe(1);
+    expect(calls.record).toBe(1);
+  });
+
+  it('returns 502 without retrying when no fallback voice is configured', async () => {
+    const urls: string[] = [];
+    const { app, calls } = makeApp(async (input) => {
+      urls.push(String(input));
+      return new Response('voice not found', { status: 404 });
+    });
+
+    const response = await app.handle(request());
+    const body = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(502);
+    expect(body.error).toBe('Voice request failed');
+    expect(urls).toEqual(['https://api.elevenlabs.io/v1/text-to-speech/voice-1/stream']);
+    expect(logged).toContainEqual(
+      expect.objectContaining({
+        msg: 'TTS_VOICE_NOT_FOUND',
+        upstreamStatus: 404,
+        voiceId: 'voice-1',
+      }),
+    );
+    expect(logged.filter((entry) => entry.msg === 'TTS_VOICE_NOT_FOUND')).toHaveLength(1);
+    expect(logged).toContainEqual(
+      expect.objectContaining({
+        msg: 'TTS_UPSTREAM_ERROR',
+        upstreamStatus: 404,
+        status: 502,
+        voiceId: 'voice-1',
+      }),
+    );
+    expect(calls.consume).toBe(0);
+    expect(calls.record).toBe(0);
+  });
+
+  it('returns 502 and logs both ids when the fallback voice also 404s', async () => {
+    process.env.ELEVENLABS_FALLBACK_VOICE_ID = 'voice-fallback';
+    const urls: string[] = [];
+    const { app, calls } = makeApp(async (input) => {
+      urls.push(String(input));
+      return new Response('voice not found', { status: 404 });
+    });
+
+    const response = await app.handle(request());
+    const body = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(502);
+    expect(body.error).toBe('Voice request failed');
+    expect(urls).toEqual([
+      'https://api.elevenlabs.io/v1/text-to-speech/voice-1/stream',
+      'https://api.elevenlabs.io/v1/text-to-speech/voice-fallback/stream',
+    ]);
+    expect(logged).toContainEqual(
+      expect.objectContaining({ msg: 'TTS_VOICE_NOT_FOUND', voiceId: 'voice-1' }),
+    );
+    expect(logged).toContainEqual(
+      expect.objectContaining({ msg: 'TTS_VOICE_NOT_FOUND', voiceId: 'voice-fallback' }),
+    );
+    expect(
+      logged.filter(
+        (entry) => entry.msg === 'TTS_VOICE_NOT_FOUND' && entry.voiceId === 'voice-1',
+      ),
+    ).toHaveLength(1);
+    expect(
+      logged.filter(
+        (entry) => entry.msg === 'TTS_VOICE_NOT_FOUND' && entry.voiceId === 'voice-fallback',
+      ),
+    ).toHaveLength(1);
+    // The error log names the id that actually failed last.
+    expect(logged).toContainEqual(
+      expect.objectContaining({
+        msg: 'TTS_UPSTREAM_ERROR',
+        upstreamStatus: 404,
+        status: 502,
+        voiceId: 'voice-fallback',
+      }),
+    );
+    expect(calls.consume).toBe(0);
+    expect(calls.record).toBe(0);
+  });
+
+  it('does not retry when the fallback id is the requested id', async () => {
+    process.env.ELEVENLABS_FALLBACK_VOICE_ID = 'voice-1';
+    const urls: string[] = [];
+    const { app, calls } = makeApp(async (input) => {
+      urls.push(String(input));
+      return new Response('voice not found', { status: 404 });
+    });
+
+    const response = await app.handle(request());
+
+    expect(response.status).toBe(502);
+    expect(urls).toEqual(['https://api.elevenlabs.io/v1/text-to-speech/voice-1/stream']);
+    expect(
+      logged.filter((entry) => entry.msg === 'TTS_VOICE_NOT_FOUND'),
+    ).toHaveLength(1);
+    expect(calls.consume).toBe(0);
+    expect(calls.record).toBe(0);
+  });
+
+  it('does not retry a non-404 failure even when a fallback is configured', async () => {
+    process.env.ELEVENLABS_FALLBACK_VOICE_ID = 'voice-fallback';
+    const urls: string[] = [];
+    const { app, calls } = makeApp(async (input) => {
+      urls.push(String(input));
+      return new Response('unprocessable', { status: 422 });
+    });
+
+    const response = await app.handle(request());
+    const body = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(502);
+    expect(body.error).toBe('Voice request failed');
+    expect(urls).toEqual(['https://api.elevenlabs.io/v1/text-to-speech/voice-1/stream']);
+    expect(logged).not.toContainEqual(
+      expect.objectContaining({ msg: 'TTS_VOICE_NOT_FOUND' }),
+    );
+    expect(logged).toContainEqual(
+      expect.objectContaining({
+        msg: 'TTS_UPSTREAM_ERROR',
+        upstreamStatus: 422,
+        status: 502,
+        voiceId: 'voice-1',
+      }),
+    );
+    expect(calls.consume).toBe(0);
+    expect(calls.record).toBe(0);
+  });
+
+  it('answers 503 without charging when the fallback retry itself throws', async () => {
+    process.env.ELEVENLABS_FALLBACK_VOICE_ID = 'voice-fallback';
+    const urls: string[] = [];
+    const { app, calls } = makeApp(async (input) => {
+      urls.push(String(input));
+      if (urls.length === 1) return new Response('voice not found', { status: 404 });
+      throw new Error('socket hangup');
+    });
+
+    const response = await app.handle(request());
+    const body = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(503);
+    expect(body.error).toBe('Voice service unavailable');
+    expect(urls).toEqual([
+      'https://api.elevenlabs.io/v1/text-to-speech/voice-1/stream',
+      'https://api.elevenlabs.io/v1/text-to-speech/voice-fallback/stream',
+    ]);
+    expect(logged).toContainEqual(
+      expect.objectContaining({ msg: 'TTS_VOICE_NOT_FOUND', voiceId: 'voice-1' }),
+    );
+    // The retry throw is a fetch failure naming the fallback id, not an
+    // upstream-status error.
+    expect(logged).toContainEqual(
+      expect.objectContaining({
+        msg: 'TTS_UPSTREAM_FETCH_ERROR',
+        voiceId: 'voice-fallback',
+      }),
+    );
+    expect(logged).not.toContainEqual(
+      expect.objectContaining({ msg: 'TTS_UPSTREAM_ERROR' }),
+    );
+    expect(calls.consume).toBe(0);
+    expect(calls.record).toBe(0);
+  });
+
+  it('maps a fallback 500 to 503 and names the fallback id in the error log', async () => {
+    process.env.ELEVENLABS_FALLBACK_VOICE_ID = 'voice-fallback';
+    const urls: string[] = [];
+    const { app, calls } = makeApp(async (input) => {
+      urls.push(String(input));
+      if (urls.length === 1) return new Response('voice not found', { status: 404 });
+      return new Response('upstream error', { status: 500 });
+    });
+
+    const response = await app.handle(request());
+    const body = (await response.json()) as { error?: string };
+
+    expect(response.status).toBe(503);
+    expect(body.error).toBe('Voice request failed');
+    expect(urls).toEqual([
+      'https://api.elevenlabs.io/v1/text-to-speech/voice-1/stream',
+      'https://api.elevenlabs.io/v1/text-to-speech/voice-fallback/stream',
+    ]);
+    expect(
+      logged.filter(
+        (entry) => entry.msg === 'TTS_VOICE_NOT_FOUND' && entry.voiceId === 'voice-1',
+      ),
+    ).toHaveLength(1);
+    // A retry 500 is an upstream error, not a second voice-not-found: the
+    // fallback id is named only in TTS_UPSTREAM_ERROR below.
+    expect(
+      logged.filter(
+        (entry) => entry.msg === 'TTS_VOICE_NOT_FOUND' && entry.voiceId === 'voice-fallback',
+      ),
+    ).toHaveLength(0);
+    // The error log names the id that actually failed last.
+    expect(logged).toContainEqual(
+      expect.objectContaining({
+        msg: 'TTS_UPSTREAM_ERROR',
+        upstreamStatus: 500,
+        status: 503,
+        voiceId: 'voice-fallback',
+      }),
+    );
+    expect(calls.consume).toBe(0);
+    expect(calls.record).toBe(0);
+  });
+
+  it('does not retry when the fallback id is blank', async () => {
+    process.env.ELEVENLABS_FALLBACK_VOICE_ID = '   ';
+    const urls: string[] = [];
+    const { app, calls } = makeApp(async (input) => {
+      urls.push(String(input));
+      return new Response('voice not found', { status: 404 });
+    });
+
+    const response = await app.handle(request());
+
+    expect(response.status).toBe(502);
+    expect(urls).toEqual(['https://api.elevenlabs.io/v1/text-to-speech/voice-1/stream']);
+    expect(logged.filter((entry) => entry.msg === 'TTS_VOICE_NOT_FOUND')).toHaveLength(1);
     expect(calls.consume).toBe(0);
     expect(calls.record).toBe(0);
   });
