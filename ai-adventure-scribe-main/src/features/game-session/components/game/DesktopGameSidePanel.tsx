@@ -2,10 +2,9 @@ import { List, ChevronDown, ChevronUp, User, Sword, BookOpen, ChevronLeft } from
 import React from 'react';
 
 import { CombatSummary } from './CombatSummary';
+import { JournalTabContent } from './JournalTabContent';
 import { DesktopMemoryTab } from './memory/DesktopMemoryTab';
 import { RightSheetLive } from './overhaul/RightSheetLive';
-import { StorySoFarLink } from './StorySoFarLink';
-import { HandoutCard } from '../handouts/HandoutCard';
 
 import type { SpellCastHandlerRef } from './spell-cast-handler';
 import type { JournalHandoutEntry } from '@/services/user-data-api';
@@ -184,13 +183,9 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
 
                 <TabsContent
                   value="memory"
-                  className="mt-0 flex flex-1 flex-col overflow-hidden border-0 bg-transparent"
+                  className="mt-0 flex flex-1 flex-col overflow-hidden border-0 bg-transparent data-[state=inactive]:hidden"
                 >
                   <DesktopMemoryTab
-                    sessionNotesId={sessionNotesId}
-                    localSessionNotes={localSessionNotes}
-                    setLocalSessionNotes={setLocalSessionNotes}
-                    handleSaveNotes={handleSaveNotes}
                     selectedType={selectedType}
                     setSelectedType={setSelectedType}
                     memoriesLoading={memoriesLoading}
@@ -213,40 +208,19 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
 
                 <TabsContent
                   value="journal"
-                  className="mt-0 flex flex-1 flex-col overflow-hidden border-0 bg-transparent"
+                  className="mt-0 flex flex-1 flex-col overflow-hidden border-0 bg-transparent data-[state=inactive]:hidden"
                 >
-                  <ScrollArea className="flex-1 bg-black/10 p-4" style={{ maxHeight: '56vh' }}>
-                    {journalLoading && (
-                      <p className="text-xs text-muted-foreground">Loading journal...</p>
-                    )}
-                    {!journalLoading && journalEntries.length === 0 && (
-                      <p className="text-xs text-muted-foreground">No handouts delivered yet.</p>
-                    )}
-                    <div className="space-y-5">
-                      {Object.entries(
-                        journalEntries.reduce<Record<string, JournalHandoutEntry[]>>(
-                          (groups, entry) => {
-                            const label =
-                              entry.sessionNumber == null
-                                ? 'This campaign'
-                                : `Session ${entry.sessionNumber}`;
-                            (groups[label] ||= []).push(entry);
-                            return groups;
-                          },
-                          {},
-                        ),
-                      ).map(([session, entries]) => (
-                        <section key={session} className="space-y-2">
-                          <h4 className="text-xs font-semibold uppercase tracking-wider text-amber-100/70">
-                            {session}
-                          </h4>
-                          {entries.map((entry) => (
-                            <HandoutCard key={entry.id} entry={entry} />
-                          ))}
-                        </section>
-                      ))}
-                      {sessionId && <StorySoFarLink sessionId={sessionId} />}
-                    </div>
+                  <ScrollArea className="flex-1 bg-black/10">
+                    <JournalTabContent
+                      sessionId={sessionId}
+                      sessionNotesId={sessionNotesId}
+                      localSessionNotes={localSessionNotes}
+                      setLocalSessionNotes={setLocalSessionNotes}
+                      handleSaveNotes={handleSaveNotes}
+                      notesPlaceholder="Type your session notes here..."
+                      journalEntries={journalEntries}
+                      journalLoading={journalLoading}
+                    />
                   </ScrollArea>
                 </TabsContent>
               </div>

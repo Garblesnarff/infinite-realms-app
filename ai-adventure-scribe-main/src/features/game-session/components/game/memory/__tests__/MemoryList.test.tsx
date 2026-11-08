@@ -64,7 +64,7 @@ describe('MemoryList (#1236 section B)', () => {
     render(<MemoryList {...baseProps} allMemories={all} sortedMemories={[all[0]]} />);
 
     expect(
-      screen.getByText('The DM remembers 3 things about this story.', { exact: false }),
+      screen.getByText('The DM remembers 3 things about this story.'),
     ).toBeInTheDocument();
   });
 
@@ -74,7 +74,7 @@ describe('MemoryList (#1236 section B)', () => {
     expect(screen.getByText(/remembers 1 thing about/)).toBeInTheDocument();
   });
 
-  it('shows chips only for categories that have memories, plus All', () => {
+  it('shows chips only for categories that have memories, plus All, each with a count', () => {
     const all = [mem('1', 'npc'), mem('2', 'npc'), mem('3', 'location')];
     render(<MemoryList {...baseProps} allMemories={all} sortedMemories={all} />);
 
@@ -82,15 +82,26 @@ describe('MemoryList (#1236 section B)', () => {
     const chips = within(group)
       .getAllByRole('button')
       .map((b) => b.textContent);
-    expect(chips).toEqual(['All', 'Locations', 'Characters']);
+    expect(chips).toEqual(['All 3', 'Locations 1', 'Characters 2']);
   });
 
   it('groups cards by category with counts in the group headings', () => {
     const all = [mem('1', 'npc'), mem('2', 'npc'), mem('3', 'location')];
     render(<MemoryList {...baseProps} allMemories={all} sortedMemories={all} />);
 
-    expect(screen.getByRole('heading', { name: /Characters\s*\(2\)/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /Locations\s*\(1\)/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Characters · 2' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Locations · 1' })).toBeInTheDocument();
+  });
+
+  it('shows a flat list with no group headings when a filter is selected', () => {
+    const all = [mem('1', 'npc'), mem('2', 'npc'), mem('3', 'location')];
+    render(
+      <MemoryList {...baseProps} selectedType="npc" allMemories={all} sortedMemories={all} />,
+    );
+
+    expect(screen.queryByRole('heading', { name: /Characters/ })).not.toBeInTheDocument();
+    expect(screen.getByText('memory 1')).toBeInTheDocument();
+    expect(screen.getByText('memory 2')).toBeInTheDocument();
   });
 
   it('shows the new empty state when there are no memories', () => {
@@ -119,7 +130,7 @@ describe('MemoryList (#1236 section B)', () => {
         sortedMemories={all}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Characters' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Characters 1' }));
     expect(setSelectedType).toHaveBeenCalledWith('npc');
   });
 
@@ -142,6 +153,16 @@ describe('MemoryList (#1236 section B)', () => {
     });
     expect(screen.getByText('No memories match. Try another word.')).toBeInTheDocument();
     expect(screen.queryByText(/has not written anything/)).not.toBeInTheDocument();
+  });
+
+  it('shows a flat list with no group headings while searching', () => {
+    const all = [mem('1', 'npc', 'The guard is Mara.'), mem('2', 'npc', 'Mara again.')];
+    render(<MemoryList {...baseProps} allMemories={all} sortedMemories={all} />);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search memories' }), {
+      target: { value: 'mara' },
+    });
+    expect(screen.queryByRole('heading', { name: /Characters/ })).not.toBeInTheDocument();
+    expect(screen.getByText('The guard is Mara.')).toBeInTheDocument();
   });
 
   it('has no pin, lock or edit controls yet', () => {

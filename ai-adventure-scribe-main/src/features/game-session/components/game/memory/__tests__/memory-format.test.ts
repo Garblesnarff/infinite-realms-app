@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { formatWhen, groupMemoriesByCategory, importanceLevel } from '../memory-format';
+import { boardKindFor, formatWhen, groupMemoriesByCategory, importanceLevel } from '../memory-format';
 
 import type { Memory } from '../types';
 
@@ -38,6 +38,30 @@ describe('formatWhen', () => {
   });
   it('returns an empty string for an invalid date', () => {
     expect(formatWhen('not-a-date', now)).toBe('');
+  });
+});
+
+describe('boardKindFor', () => {
+  it('returns the board kind for a drawn type', () => {
+    expect(boardKindFor('location', 'Locations')).toEqual({
+      color: '#4fb6c4',
+      glyph: 'L',
+      singular: 'Location',
+    });
+  });
+  it('falls back to the category label for an undrawn type', () => {
+    expect(boardKindFor('plot_point', 'Plot points')).toEqual({
+      color: '#aab3cc',
+      glyph: 'P',
+      singular: 'Plot points',
+    });
+  });
+  it('does not resolve Object.prototype members like "constructor"', () => {
+    expect(boardKindFor('constructor', 'Other')).toEqual({
+      color: '#aab3cc',
+      glyph: 'O',
+      singular: 'Other',
+    });
   });
 });
 
