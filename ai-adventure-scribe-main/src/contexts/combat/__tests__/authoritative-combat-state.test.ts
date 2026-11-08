@@ -35,7 +35,10 @@ const payload: AuthoritativeCombatPayload = {
       attacks: [],
       displayName: 'Flavor-Elemental (Corrupted) 1',
     }),
-    participant('p2', 'Doorkeeper', { source: 'derived', attacks: [] }),
+    {
+      ...participant('p2', 'Doorkeeper', { source: 'derived', attacks: [] }),
+      healthCondition: 'bloodied',
+    },
   ],
 };
 
@@ -46,6 +49,8 @@ describe('mapAuthoritativeCombat display name (#2398)', () => {
     expect(shard.name).toBe('Corrupted Shard A');
     expect(shard.displayName).toBe('Flavor-Elemental (Corrupted) 1');
     expect(doorkeeper.displayName).toBeUndefined();
+    expect(doorkeeper.healthCondition).toBe('bloodied');
+    expect(shard.healthCondition).toBeUndefined();
   });
 
   it('feeds the roster builders the engine lines use', () => {

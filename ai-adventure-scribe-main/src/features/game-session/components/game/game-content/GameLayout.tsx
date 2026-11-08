@@ -1,12 +1,14 @@
-import React, { useLayoutEffect, useState, useCallback, memo } from 'react';
+import React, { useLayoutEffect, useState, useCallback, useSyncExternalStore, memo } from 'react';
 import { createPortal } from 'react-dom';
 
+import { BuildSessionStatus } from './BuildSessionStatus';
 import { EndSessionButton } from './EndSessionButton';
 import { GameCombatSheet } from './GameCombatSheet';
 import { GameLeftPanel } from './GameLeftPanel';
 import { GameMainContent } from './GameMainContent';
 import { GameRightPanel } from './GameRightPanel';
 import { RailOverStoryLayer } from './RailOverStoryLayer';
+import { TableContextCard } from './TableContextCard';
 import { RAIL_OVER_STORY } from './use-game-rails';
 import { TacticalMapProvider, useMapInRail } from '../../tactical/TacticalMapProvider';
 import { FloatingActionPanel } from '../FloatingActionPanel';
@@ -18,6 +20,13 @@ import type { ExtendedGameSession, SessionStateUpdater } from '@/hooks/game-sess
 import { Z_INDEX } from '@/constants/z-index';
 import { useSceneBackground } from '@/contexts/SceneBackgroundContext';
 import { useMediaQuery } from '@/hooks/use-media-query';
+
+const subscribeTableLook = (notify: () => void): (() => void) => {
+  const observer = new MutationObserver(notify);
+  observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  return () => observer.disconnect();
+};
+const tableLookSnapshot = (): boolean => document.body.classList.contains('ir-table-look');
 
 /**
  * GameLayout Component
@@ -94,6 +103,20 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
     comfortLevel,
     showSafetyInfo,
   }) => {
+    const tableLook = useSyncExternalStore(subscribeTableLook, tableLookSnapshot, () => false);
+    const [tableHeaderSlot, setTableHeaderSlot] = useState<HTMLDivElement | null>(null);
+    const [tableRollSlot, setTableRollSlot] = useState<HTMLDivElement | null>(null);
+    const [tableDrawerOpen, setTableDrawerOpen] = useState(false);
+    const [tableDrawerRequest, setTableDrawerRequest] = useState(0);
+    const [tableLeftHidden, setTableLeftHidden] = useState(false);
+    const [tableDrawerTab, setTableDrawerTab] = useState<'character' | 'memory' | 'journal'>(
+      'character',
+    );
+    const openTablePanel = useCallback((tab: 'character' | 'memory' | 'journal'): void => {
+      setTableDrawerTab(tab);
+      setTableDrawerRequest((request) => request + 1);
+      setTableDrawerOpen(true);
+    }, []);
     const [topOffset, setTopOffset] = useState(0);
     const [isFloatingPanelVisible, setIsFloatingPanelVisible] = useState(false);
     const { currentBackgroundUrl, isTransitioning } = useSceneBackground();
@@ -111,10 +134,13 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
       setIsLeftCollapsed(true);
     }, [setIsLeftCollapsed]);
     const handleRailOverStoryClose = useCallback((): void => {
-      if (!isLeftCollapsed) setIsLeftCollapsed(true);
-      else setIsRightCollapsed(true);
-    }, [isLeftCollapsed, setIsLeftCollapsed, setIsRightCollapsed]);
-    const mapInRail = useMapInRail(isLeftCollapsed, isRightCollapsed);
+      if (tableLook) setTableDrawerOpen(false);
+      else if (isLeftCollapsed) setIsRightCollapsed(true);
+      else setIsLeftCollapsed(true);
+    }, [tableLook, isLeftCollapsed, setIsLeftCollapsed, setIsRightCollapsed]);
+    const plainMapInRail = useMapInRail(isLeftCollapsed, isRightCollapsed);
+    const tableDesktop = useMediaQuery('(min-width: 1024px)');
+    const mapInRail = tableLook ? !tableLeftHidden && tableDesktop : plainMapInRail;
     // #2517: when the character falls, the end state is the whole page — the
     // panels, tracker and floating controls are not rendered at all.
     const [isFallen, setIsFallen] = useState(false);
@@ -144,8 +170,10 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
     const leftPanel = (
       <GameLeftPanel
         sessionId={sessionId}
-        isCollapsed={isLeftCollapsed}
+        isCollapsed={tableLook ? tableLeftHidden : isLeftCollapsed}
+        tableLook={tableLook}
         onToggle={handleLeftClose}
+        onOpenSheet={() => (tableLook ? openTablePanel('character') : setIsRightCollapsed(false))}
         showMap={mapInRail}
         chapterLabel={resolveCampaignChapterLabel(sessionData?.turn_count)}
       />
@@ -153,12 +181,14 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
     const rightPanel = (
       <GameRightPanel
         sessionId={sessionId}
-        isCollapsed={isRightCollapsed}
+        isCollapsed={tableLook ? !tableDrawerOpen : isRightCollapsed}
+        initialTab={tableLook ? tableDrawerTab : undefined}
+        initialTabRequest={tableLook ? tableDrawerRequest : undefined}
         sessionData={sessionData}
         updateGameSessionState={updateGameSessionState}
         combatMode={combatMode}
         spellCastHandlerRef={spellCastHandlerRef}
-        onToggle={handleRightToggle}
+        onToggle={tableLook ? () => setTableDrawerOpen((open) => !open) : handleRightToggle}
       />
     );
     const floatingPanel = (anchored: boolean): React.ReactNode => (
@@ -198,7 +228,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
           className="w-full h-[calc(100dvh-var(--top-offset,0px))] mobile-bottom-safe overflow-hidden relative flex flex-col"
           style={{ zIndex: Z_INDEX.DROPDOWN }}
         >
-          {!isCombatDetected && !isFallen && (
+          {(tableLook || !isCombatDetected) && !isFallen && (
             <div className="flex justify-end px-2 py-1">
               <EndSessionButton
                 sessionId={sessionId}
@@ -207,40 +237,59 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               />
             </div>
           )}
+          {tableLook && !isFallen && (
+            <div
+              ref={setTableHeaderSlot}
+              data-testid="table-header-slot"
+              className="relative shrink-0"
+            />
+          )}
           <TacticalMapProvider
             key={sessionId}
             sessionId={sessionId}
-            setLeftCollapsed={setIsLeftCollapsed}
+            setLeftCollapsed={tableLook ? setTableLeftHidden : setIsLeftCollapsed}
           >
             <div
               key={sessionId}
-              className={`grid transition-all duration-300 ease-in-out flex-1 min-h-0 gap-2 md:gap-3 items-stretch w-full ${
-                isFallen || overStory || (isLeftCollapsed && isRightCollapsed)
-                  ? 'grid-cols-1'
-                  : isLeftCollapsed
-                    ? 'grid-cols-1 md:grid-cols-[1fr_minmax(300px,340px)]'
-                    : isRightCollapsed
-                      ? 'grid-cols-1 md:grid-cols-[minmax(210px,250px)_1fr]'
-                      : 'grid-cols-1 lg:grid-cols-[minmax(210px,250px)_1fr_minmax(300px,340px)]'
+              className={`grid transition-all duration-300 ease-in-out flex-1 min-h-0 gap-2 md:gap-3 items-stretch w-full ${tableLook ? 'relative' : ''} ${
+                tableLook && !isFallen
+                  ? tableLeftHidden
+                    ? 'grid-cols-1 grid-rows-[minmax(0,1fr)] lg:grid-rows-1 lg:grid-cols-[minmax(0,1fr)_280px]'
+                    : 'grid-cols-1 grid-rows-[auto_minmax(0,1fr)] lg:grid-rows-1 lg:grid-cols-[260px_minmax(0,1fr)_280px]'
+                  : isFallen || overStory || (isLeftCollapsed && isRightCollapsed)
+                    ? 'grid-cols-1'
+                    : isLeftCollapsed
+                      ? 'grid-cols-1 md:grid-cols-[1fr_minmax(300px,340px)]'
+                      : isRightCollapsed
+                        ? 'grid-cols-1 md:grid-cols-[minmax(210px,250px)_1fr]'
+                        : 'grid-cols-1 lg:grid-cols-[minmax(210px,250px)_1fr_minmax(300px,340px)]'
               }`}
             >
               {/* Left Campaign Panel */}
-              {!overStory && !isFallen && leftPanel}
+              {(!overStory || tableLook) && !isFallen && leftPanel}
 
               {/* Main Content Area */}
               <GameMainContent
                 sessionId={sessionId}
+                tableLook={tableLook}
+                tableHeaderSlot={tableHeaderSlot}
+                tableRollSlot={tableRollSlot}
+                onOpenTablePanel={openTablePanel}
                 campaignIdForHandler={campaignIdForHandler}
                 characterIdForHandler={characterIdForHandler}
                 sessionData={sessionData}
                 updateGameSessionState={updateGameSessionState}
                 showSceneBlurb={showSceneBlurb}
                 onSceneBlurbToggle={onSceneBlurbToggle}
-                isLeftCollapsed={isLeftCollapsed}
-                isRightCollapsed={isRightCollapsed}
+                isLeftCollapsed={tableLook ? tableLeftHidden : isLeftCollapsed}
+                isRightCollapsed={tableLook ? !tableDrawerOpen : isRightCollapsed}
                 mapInRail={mapInRail}
-                onLeftToggle={handleLeftToggle}
-                onRightToggle={handleRightToggle}
+                onLeftToggle={
+                  tableLook ? () => setTableLeftHidden((hidden) => !hidden) : handleLeftToggle
+                }
+                onRightToggle={
+                  tableLook ? () => setTableDrawerOpen((open) => !open) : handleRightToggle
+                }
                 storyBoxRef={setStoryBox}
                 showTracker={showTracker}
                 setShowTracker={setShowTracker}
@@ -257,10 +306,31 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                 onFallenChange={setIsFallen}
               />
 
+              {tableLook && !isFallen && (
+                <aside
+                  data-testid="table-roll-column"
+                  className="contents lg:order-3 lg:flex lg:min-h-0 lg:flex-col lg:gap-3 lg:overflow-y-auto"
+                >
+                  <div className="hidden rounded-xl border-2 border-[#a9823f] bg-[#4b1116] p-3 text-[#f6e3b8] lg:block">
+                    <h2 className="font-heading text-lg font-bold">Roll at the table</h2>
+                    <p className="ir-table-roll-wait text-sm">
+                      The rules engine waits for your roll.
+                    </p>
+                  </div>
+                  <div
+                    ref={setTableRollSlot}
+                    data-testid="table-roll-slot"
+                    className="ir-table-roll-host fixed inset-x-0 bottom-0 z-50 max-h-[70dvh] overflow-y-auto empty:hidden lg:static lg:max-h-none lg:overflow-visible"
+                  />
+                  <div className="hidden lg:block">
+                    <TableContextCard sessionId={sessionId} />
+                  </div>
+                </aside>
+              )}
               {/* Right Character/Memory Panel. Closed, it is only a fixed floating toggle, so its
                   wrapper is `contents`: an empty grid item made a second row that took half the
                   height and lifted the chat box off the bottom of a narrow screen (#2281). */}
-              {!isFallen && (!overStory || isRightCollapsed) && (
+              {!tableLook && !isFallen && (!overStory || isRightCollapsed) && (
                 <div
                   className={
                     isRightCollapsed ? 'contents' : isLeftCollapsed ? 'order-2' : 'order-3'
@@ -271,7 +341,8 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               )}
 
               {/* Floating Action Panel for Quick RPG Actions */}
-              {!isFallen &&
+              {!tableLook &&
+                !isFallen &&
                 (portalToStory
                   ? createPortal(floatingPanel(true), portalToStory)
                   : floatingPanel(false))}
@@ -279,18 +350,23 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               {/* A rail opened on a narrow screen: over the story, above the dock. */}
               {!isFallen &&
                 portalToStory &&
-                (!isLeftCollapsed || !isRightCollapsed) &&
+                (tableLook ? tableDrawerOpen : !isLeftCollapsed || !isRightCollapsed) &&
                 createPortal(
                   <RailOverStoryLayer
-                    key={isLeftCollapsed ? 'right' : 'left'}
+                    key={tableLook || isLeftCollapsed ? 'right' : 'left'}
                     onClose={handleRailOverStoryClose}
-                    sizeByCast={isLeftCollapsed}
+                    sizeByCast={tableLook || isLeftCollapsed}
                   >
-                    {isLeftCollapsed ? rightPanel : leftPanel}
+                    {tableLook || isLeftCollapsed ? rightPanel : leftPanel}
                   </RailOverStoryLayer>,
                   portalToStory,
                 )}
 
+              {tableLook && !overStory && tableDrawerOpen && !isFallen && (
+                <div className="absolute inset-y-0 right-0 z-50 w-[min(90vw,380px)] overflow-hidden bg-[#0b1120] shadow-2xl">
+                  {rightPanel}
+                </div>
+              )}
               {/* Combat Tracker Sheet */}
               {!isFallen && (
                 <GameCombatSheet
@@ -303,6 +379,11 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               )}
             </div>
           </TacticalMapProvider>
+          {tableLook && !isFallen && (
+            <div className="shrink-0 text-right">
+              <BuildSessionStatus sessionId={sessionId} />
+            </div>
+          )}
         </div>
       </div>
     );

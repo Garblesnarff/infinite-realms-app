@@ -37,6 +37,15 @@ describe('dice result timing', () => {
     act(() => vi.advanceTimersByTime(2000));
     expect(onRoll).toHaveBeenCalledOnce();
   });
+  it('keeps the settled dice mounted when the watchdog deadline passes', () => {
+    const onRoll = vi.fn();
+    render(<DiceRollEmbed expression="1d20+4" autoRoll onRoll={onRoll} />);
+    act(() => vi.advanceTimersByTime(1500));
+    fireEvent.click(screen.getByRole('button', { name: 'Dice stopped' }));
+    act(() => vi.advanceTimersByTime(10_000));
+    expect(screen.getByRole('button', { name: 'Dice stopped' })).toBeInTheDocument();
+    expect(onRoll).toHaveBeenCalledOnce();
+  });
   it('delivers the engine result once when unmounted during a tumble', () => {
     const onRoll = vi.fn();
     const view = render(<DiceRollEmbed expression="1d20+4" autoRoll onRoll={onRoll} />);

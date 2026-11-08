@@ -2,6 +2,9 @@ import React from 'react';
 
 import type { CombatantVM, PartyMemberVM } from './types';
 
+import { tableImageUrl } from '@/features/campaigns/table/image-url';
+import { TableImage } from '@/features/campaigns/table/TableImage';
+
 /** Scene header and the Table-look plaque use the same live view model. */
 export const SceneHeader: React.FC<{
   title: string;
@@ -36,14 +39,6 @@ export const SceneHeader: React.FC<{
       <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] p-3 text-center text-[#f6e3b8] max-[699px]:flex max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:px-2 max-[699px]:py-0">
         <h1 className="ir-display break-words text-lg font-bold max-[699px]:text-sm">{title}</h1>
         {chapter && <p className="text-sm">{chapter}</p>}
-        <button
-          type="button"
-          onClick={onSceneInfo}
-          aria-label="Show scene details"
-          className="min-h-11 min-w-11 underline"
-        >
-          Scene Info
-        </button>
       </section>
       <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] p-3 text-center text-[#f6e3b8] max-[699px]:flex max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:px-2 max-[699px]:py-0">
         <p className="ir-display text-sm">
@@ -56,35 +51,55 @@ export const SceneHeader: React.FC<{
         </p>
         {blurb && <p className="break-words text-sm max-[699px]:hidden">{blurb}</p>}
       </section>
-      <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] p-3 text-[#f6e3b8] max-[699px]:flex max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:px-2 max-[699px]:py-1">
+      <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] p-3 text-[#f6e3b8] max-[699px]:flex max-[699px]:max-h-24 max-[699px]:flex-wrap max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:overflow-y-auto max-[699px]:px-2 max-[699px]:py-1">
         <p className="ir-display text-sm">The Table</p>
         {tableExtra}
         {party.map((member) => (
-          <div key={member.id} className="min-w-0 flex-1">
-            <p className="flex justify-between gap-2 text-sm">
-              <span className="break-words">{member.name}</span>
-              <span className="shrink-0">
-                {member.currentHp != null && member.maxHp != null
-                  ? `${member.currentHp} / ${member.maxHp}`
-                  : 'HP unavailable'}
-              </span>
-            </p>
-            {member.currentHp != null && member.maxHp != null && member.maxHp > 0 && (
-              <progress
-                className="block h-1.5 w-full"
-                value={member.currentHp}
-                max={member.maxHp}
-                aria-label={`${member.name} hit points`}
-              />
-            )}
+          <div
+            key={member.id}
+            className="flex min-w-0 flex-1 items-center gap-2 max-[699px]:min-w-[160px]"
+          >
+            <TableImage
+              src={tableImageUrl(member.avatarUrl ?? null, 72, 72)}
+              alt=""
+              width={36}
+              height={36}
+              className="h-9 w-9 shrink-0 rounded-full object-cover"
+              fallback={
+                <span
+                  aria-hidden="true"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#d5b070]"
+                >
+                  {member.name.slice(0, 1)}
+                </span>
+              }
+            />
+            <div className="min-w-0 flex-1">
+              <p className="flex justify-between gap-2 text-sm">
+                <span className="break-words">{member.name}</span>
+                <span className="shrink-0">
+                  {member.currentHp != null && member.maxHp != null
+                    ? `${member.currentHp} / ${member.maxHp}`
+                    : 'HP unavailable'}
+                </span>
+              </p>
+              {member.currentHp != null && member.maxHp != null && member.maxHp > 0 && (
+                <progress
+                  className="block h-1.5 w-full"
+                  value={member.currentHp}
+                  max={member.maxHp}
+                  aria-label={`${member.name} hit points`}
+                />
+              )}
+            </div>
           </div>
         ))}
         {combat?.active &&
           combat.combatants
             .filter((actor) => actor.isEnemy)
             .map((foe) => (
-              <p key={foe.id} className="text-sm">
-                {foe.name} · condition unavailable
+              <p key={foe.id} className="text-sm max-[699px]:basis-full">
+                {foe.name} · {foe.healthCondition ?? 'condition unavailable'}
               </p>
             ))}
       </section>

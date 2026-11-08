@@ -17,6 +17,7 @@ import {
   proposeCombatAttack,
   type SubmittedCombatIntent,
 } from '../../../services/combat/combat-intent-service.js';
+import { healthConditionForCombat } from '../../../services/combat/health-condition.js';
 import { buildInitiativeOrder } from '../../../services/combat/initiative-order.js';
 import { runNpcTurnsIfNpcHolds } from '../../../services/combat/npc-turn-drain.js';
 import { readPendingCombatEntry } from '../../../services/combat/pending-combat-entry.js';
@@ -312,7 +313,34 @@ export const intentRoutes = new Elysia()
           ...(pending ? { combatEntryPending: pending.pending } : {}),
         };
       }
-      const combat = await CombatEncounterService.getCombatState(encounter.id, user.userId);
+      const state = await CombatEncounterService.getCombatState(encounter.id, user.userId);
+      const combat = {
+        ...state,
+        participants: state.participants.map((participant) => {
+          const live = participant as typeof participant & {
+            status?: { currentHp?: number; isConscious?: boolean } | null;
+            vitalState?: string;
+          };
+          const currentHp = live.status?.currentHp;
+          return {
+            ...participant,
+            ...(participant.participantType !== 'player' &&
+            typeof currentHp === 'number' &&
+            Number.isFinite(currentHp) &&
+            Number.isFinite(participant.maxHp) &&
+            participant.maxHp > 0
+              ? {
+                  healthCondition: healthConditionForCombat(
+                    currentHp,
+                    participant.maxHp,
+                    live.status?.isConscious,
+                    live.vitalState === 'dead',
+                  ),
+                }
+              : {}),
+          };
+        }),
+      };
       return {
         combat,
         initiativeOrder: buildInitiativeOrder(combat),

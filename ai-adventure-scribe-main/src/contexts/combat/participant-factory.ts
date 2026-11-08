@@ -55,6 +55,7 @@ export function createCombatParticipant(
   const participant: CombatParticipant = {
     id: partial.id || crypto.randomUUID(),
     participantType: partial.participantType || 'monster',
+    healthCondition: partial.healthCondition,
     name: partial.name || 'Unknown',
     displayName: partial.displayName,
     characterId: partial.characterId,

@@ -34,6 +34,7 @@ export interface CombatantVM {
   initiative: number; // 18
   name: string;
   isEnemy?: boolean;
+  healthCondition?: 'unharmed' | 'wounded' | 'bloodied' | 'near death';
   isActive?: boolean;
   /** Where the actor stands in this round's pass through the order. */
   state?: 'acted' | 'now' | 'waiting' | 'down';

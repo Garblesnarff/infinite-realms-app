@@ -1,5 +1,6 @@
 import { Dice6, Map as MapIcon, Sword, X } from 'lucide-react';
 import React, { memo } from 'react';
+import { createPortal } from 'react-dom';
 
 import { BuildSessionStatus } from './BuildSessionStatus';
 import { CampaignCompleteEndState } from './CompletionScreen';
@@ -7,7 +8,8 @@ import { buildChooseHeroHref, FallenEndState, FallenStoryLog } from './DeathScre
 import { GamePanelControls } from './GamePanelControls';
 import { GameSettingsButton } from './GameSettingsButton';
 import { currentQueueRoll, queueRollLabel } from './queue-roll-label';
-import { RollTraySlotProvider } from './roll-tray-slot';
+import { RollTraySlotProvider, useStableRollTraySlot } from './roll-tray-slot';
+import { TableContextCard } from './TableContextCard';
 import { TargetNumbersToggle } from './TargetNumbersToggle';
 import { ChatInput } from '../../chat/ChatInput';
 import { ComposerDraftProvider } from '../../chat/composer-draft';
@@ -234,6 +236,10 @@ function useHeightAboveDock(
 
 interface GameMainContentProps {
   sessionId: string;
+  tableLook?: boolean;
+  tableHeaderSlot?: HTMLElement | null;
+  tableRollSlot?: HTMLElement | null;
+  onOpenTablePanel?: (tab: 'character' | 'memory' | 'journal') => void;
   campaignIdForHandler: string | null;
   characterIdForHandler: string | null;
   sessionData: ExtendedGameSession;
@@ -287,6 +293,10 @@ interface GameMainContentProps {
 export const GameMainContent: React.FC<GameMainContentProps> = memo(
   ({
     sessionId,
+    tableLook = false,
+    tableHeaderSlot,
+    tableRollSlot,
+    onOpenTablePanel,
     campaignIdForHandler,
     characterIdForHandler,
     sessionData,
@@ -316,7 +326,11 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     useApplyReduceMotion();
     const chatScrollRef = React.useRef<HTMLDivElement>(null);
     // The roll tray's element: in flow between the stream and the chat box (#2252).
-    const [rollTraySlot, setRollTraySlot] = React.useState<HTMLDivElement | null>(null);
+    const [inlineRollHost, setInlineRollHost] = React.useState<HTMLDivElement | null>(null);
+    const rollTraySlot = useStableRollTraySlot(
+      tableLook ? (tableRollSlot ?? null) : inlineRollHost,
+    );
+    const [tableTurnSlot, setTableTurnSlot] = React.useState<HTMLDivElement | null>(null);
     // The tactical map never sits in this column. When the rail is not showing it, a Map
     // button opens it in a sheet over the stream only, so it can't cover the tray or input.
     const hasTacticalMap = Boolean(useTacticalMapContext()?.map);
@@ -410,7 +424,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     if (terminalUiState) {
       return (
         <div
-          className={`flex-1 min-w-0 min-h-0 ${isLeftCollapsed ? 'order-1' : 'order-2'} layout-main flex flex-col h-full`}
+          className={`flex-1 min-w-0 min-h-0 ${tableLook ? 'order-2' : isLeftCollapsed ? 'order-1' : 'order-2'} layout-main flex flex-col h-full`}
         >
           <FallenEndStateWithCharacter
             finalLines={terminalUiState.finalLines}
@@ -424,7 +438,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     if (completionUiState && completionUiState.sessionId === sessionId) {
       return (
         <div
-          className={`flex-1 min-w-0 min-h-0 ${isLeftCollapsed ? 'order-1' : 'order-2'} layout-main flex flex-col h-full`}
+          className={`flex-1 min-w-0 min-h-0 ${tableLook ? 'order-2' : isLeftCollapsed ? 'order-1' : 'order-2'} layout-main flex flex-col h-full`}
         >
           <CampaignCompleteEndStateWithCharacter
             summary={completionUiState.summary}
@@ -437,35 +451,86 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
 
     return (
       <div
-        className={`flex-1 min-w-0 min-h-0 ${isLeftCollapsed ? 'order-1' : 'order-2'} layout-main flex flex-col h-full`}
+        className={`flex-1 min-w-0 min-h-0 ${tableLook ? 'order-2' : isLeftCollapsed ? 'order-1' : 'order-2'} layout-main flex flex-col h-full`}
       >
-        <Card
-          ref={cardRef}
-          className="ir-panel mobile-chat relative flex h-full flex-col overflow-hidden border border-white/10 bg-[linear-gradient(180deg,#0c1322,#0a0f1c)] shadow-2xl transition-all duration-300"
-        >
-          {/* The header is the one part that gives way on a short screen (it scrolls inside
-              itself), so the roll tray and the chat box below never leave the viewport (#2252). */}
-          <div className="relative min-h-0 overflow-y-auto border-b border-white/10 bg-[linear-gradient(180deg,#0e1626_0%,#0b1120_100%)]">
-            <SceneHeader
-              title={overhaul.scene.title}
-              tableExtra={<InspirationCoin />}
-              chapter={overhaul.campaign.chapter}
-              location={overhaul.campaign.regionLabel}
-              party={overhaul.party}
-              combat={overhaul.combat}
-              blurb={
-                showSceneBlurb
-                  ? overhaul.scene.blurb ||
-                    'Your infinite story unfolds across realms of endless possibility...'
-                  : overhaul.campaign.chapter
-              }
-              onSceneInfo={onSceneBlurbToggle}
-              right={<Sword className="h-4 w-4 text-infinite-gold/80" aria-hidden="true" />}
-            />
-            <div
-              className="relative flex flex-wrap items-center justify-between gap-3 border-t border-white/5 px-3 py-2"
-              style={{ zIndex: Z_INDEX.DROPDOWN }}
-            >
+        {tableLook &&
+          tableHeaderSlot &&
+          createPortal(
+            <div className="relative pr-12" data-testid="table-screen-header">
+              <SceneHeader
+                title={overhaul.scene.title}
+                chapter={overhaul.campaign.chapter}
+                location={overhaul.campaign.regionLabel}
+                party={overhaul.party}
+                combat={overhaul.combat}
+                blurb={showSceneBlurb ? overhaul.scene.blurb : overhaul.campaign.chapter}
+                onSceneInfo={onSceneBlurbToggle}
+              />
+              <nav aria-label="Table panels" className="flex justify-end gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11 min-w-11"
+                  aria-label="Open tracker"
+                  onClick={() => setShowTracker(true)}
+                >
+                  <Sword aria-hidden="true" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11 min-w-11"
+                  onClick={() => onOpenTablePanel?.('memory')}
+                >
+                  Memory
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11 min-w-11"
+                  onClick={() => onOpenTablePanel?.('journal')}
+                >
+                  Journal
+                </Button>
+              </nav>
+              <div ref={setTableTurnSlot} data-testid="table-turn-slot" />
+              <details className="absolute right-1 top-1 z-50">
+                <summary
+                  aria-label="Table controls"
+                  className="ir-brass-btn flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded"
+                >
+                  ⚙
+                </summary>
+                <div className="absolute right-0 z-50 flex w-72 max-w-[90vw] flex-col gap-2 rounded border border-[#a9823f] bg-[#0c1322] p-3 shadow-xl">
+                  <GamePanelControls
+                    sessionId={sessionId}
+                    isLeftCollapsed={isLeftCollapsed}
+                    isRightCollapsed={isRightCollapsed}
+                    showSceneBlurb={showSceneBlurb}
+                    onLeftToggle={onLeftToggle}
+                    onRightToggle={onRightToggle}
+                    onSceneBlurbToggle={onSceneBlurbToggle}
+                  />
+                  <TargetNumbersToggle />
+                  <GameSettingsButton />
+                  {showMapButton && (
+                    <Button
+                      type="button"
+                      onClick={() => setMapSheetOpen((open) => !open)}
+                      className="min-h-11"
+                    >
+                      {showMapSheet ? 'Hide map' : 'Open map'}
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    onClick={() => setShowTracker(!showTracker)}
+                    className="min-h-11"
+                  >
+                    {showTracker ? 'Close Tracker' : 'Open Tracker'}
+                  </Button>
+                </div>
+              </details>
               <SafetyBanner
                 isPaused={(sessionData as unknown as { is_paused?: boolean })?.is_paused || false}
                 lastSafetyCommand={lastSafetyCommand}
@@ -473,72 +538,111 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 comfortLevel={comfortLevel}
                 showSafetyInfo={showSafetyInfo}
               />
-
-              <div className="flex max-w-full min-w-0 flex-wrap items-center justify-end gap-2">
-                {/* Build + session id a player can quote (#2583). In this header row, so it adds
-                    no height to the story column and can never reach the composer dock below. */}
-                <BuildSessionStatus sessionId={sessionId} />
-                <GamePanelControls
-                  sessionId={sessionId}
-                  isLeftCollapsed={isLeftCollapsed}
-                  isRightCollapsed={isRightCollapsed}
-                  showSceneBlurb={showSceneBlurb}
-                  onLeftToggle={onLeftToggle}
-                  onRightToggle={onRightToggle}
-                  onSceneBlurbToggle={onSceneBlurbToggle}
+            </div>,
+            tableHeaderSlot,
+          )}
+        <Card
+          ref={cardRef}
+          className="ir-panel mobile-chat relative flex h-full flex-col overflow-hidden border border-white/10 bg-[linear-gradient(180deg,#0c1322,#0a0f1c)] shadow-2xl transition-all duration-300"
+        >
+          {/* The header is the one part that gives way on a short screen (it scrolls inside
+              itself), so the roll tray and the chat box below never leave the viewport (#2252). */}
+          {!tableLook && (
+            <div className="relative min-h-0 overflow-y-auto border-b border-white/10 bg-[linear-gradient(180deg,#0e1626_0%,#0b1120_100%)]">
+              <SceneHeader
+                title={overhaul.scene.title}
+                tableExtra={<InspirationCoin />}
+                chapter={overhaul.campaign.chapter}
+                location={overhaul.campaign.regionLabel}
+                party={overhaul.party}
+                combat={overhaul.combat}
+                blurb={
+                  showSceneBlurb
+                    ? overhaul.scene.blurb ||
+                      'Your infinite story unfolds across realms of endless possibility...'
+                    : overhaul.campaign.chapter
+                }
+                onSceneInfo={onSceneBlurbToggle}
+                right={<Sword className="h-4 w-4 text-infinite-gold/80" aria-hidden="true" />}
+              />
+              <div
+                className="relative flex flex-wrap items-center justify-between gap-3 border-t border-white/5 px-3 py-2"
+                style={{ zIndex: Z_INDEX.DROPDOWN }}
+              >
+                <SafetyBanner
+                  isPaused={(sessionData as unknown as { is_paused?: boolean })?.is_paused || false}
+                  lastSafetyCommand={lastSafetyCommand}
+                  contentWarnings={contentWarnings}
+                  comfortLevel={comfortLevel}
+                  showSafetyInfo={showSafetyInfo}
                 />
-                <TargetNumbersToggle />
-                <GameSettingsButton />
-                {showMapButton && (
+
+                <div className="flex max-w-full min-w-0 flex-wrap items-center justify-end gap-2">
+                  {/* Build + session id a player can quote (#2583). In this header row, so it adds
+                    no height to the story column and can never reach the composer dock below. */}
+                  <BuildSessionStatus sessionId={sessionId} />
+                  <GamePanelControls
+                    sessionId={sessionId}
+                    isLeftCollapsed={isLeftCollapsed}
+                    isRightCollapsed={isRightCollapsed}
+                    showSceneBlurb={showSceneBlurb}
+                    onLeftToggle={onLeftToggle}
+                    onRightToggle={onRightToggle}
+                    onSceneBlurbToggle={onSceneBlurbToggle}
+                  />
+                  <TargetNumbersToggle />
+                  <GameSettingsButton />
+                  {showMapButton && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      aria-expanded={showMapSheet}
+                      aria-controls="tactical-map-sheet"
+                      onClick={() => setMapSheetOpen((open) => !open)}
+                      className="ir-hit border-infinite-gold/30 bg-white/[0.03] text-infinite-gold/90 hover:bg-infinite-gold/10"
+                    >
+                      <MapIcon className="h-4 w-4" aria-hidden="true" />
+                      <span className="font-display font-medium">
+                        {showMapSheet ? 'Hide map' : 'Map'}
+                      </span>
+                    </Button>
+                  )}
                   <Button
-                    type="button"
+                    variant={showTracker ? 'destructive' : 'outline'}
                     size="sm"
-                    variant="outline"
-                    aria-expanded={showMapSheet}
-                    aria-controls="tactical-map-sheet"
-                    onClick={() => setMapSheetOpen((open) => !open)}
-                    className="ir-hit border-infinite-gold/30 bg-white/[0.03] text-infinite-gold/90 hover:bg-infinite-gold/10"
+                    onClick={() => setShowTracker(!showTracker)}
+                    className={`ir-hit relative overflow-hidden transition-all duration-300 border-2 hover-glow focus-glow ${
+                      showTracker
+                        ? 'bg-gradient-to-r from-red-600 to-red-700 border-red-500 animate-pulse shadow-2xl'
+                        : 'bg-white/[0.03] border-infinite-gold/30 text-infinite-gold/90 hover:bg-infinite-gold/10'
+                    }`}
                   >
-                    <MapIcon className="h-4 w-4" aria-hidden="true" />
-                    <span className="font-display font-medium">
-                      {showMapSheet ? 'Hide map' : 'Map'}
-                    </span>
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
+                    <div className="relative flex items-center gap-2">
+                      {showTracker ? (
+                        <>
+                          <X className="w-5 h-5" />
+                          <span className="font-display font-medium">Close Tracker</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sword className="w-5 h-5" />
+                          <span className="font-display font-medium">Open Tracker</span>
+                        </>
+                      )}
+                    </div>
                   </Button>
-                )}
-                <Button
-                  variant={showTracker ? 'destructive' : 'outline'}
-                  size="sm"
-                  onClick={() => setShowTracker(!showTracker)}
-                  className={`ir-hit relative overflow-hidden transition-all duration-300 border-2 hover-glow focus-glow ${
-                    showTracker
-                      ? 'bg-gradient-to-r from-red-600 to-red-700 border-red-500 animate-pulse shadow-2xl'
-                      : 'bg-white/[0.03] border-infinite-gold/30 text-infinite-gold/90 hover:bg-infinite-gold/10'
-                  }`}
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
-                  <div className="relative flex items-center gap-2">
-                    {showTracker ? (
-                      <>
-                        <X className="w-5 h-5" />
-                        <span className="font-display font-medium">Close Tracker</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sword className="w-5 h-5" />
-                        <span className="font-display font-medium">Open Tracker</span>
-                      </>
-                    )}
-                  </div>
-                </Button>
+                </div>
               </div>
+              {/* StatsBar hides in combat: the TurnBar owns the one HP value (#85). */}
+              {isRightCollapsed && !isCombatDetected && (
+                <div className="flex items-center justify-center gap-3 border-t border-white/5 px-3 py-2 text-sm">
+                  <StatsBar />
+                </div>
+              )}
             </div>
-            {/* StatsBar hides in combat: the TurnBar owns the one HP value (#85). */}
-            {isRightCollapsed && !isCombatDetected && (
-              <div className="flex items-center justify-center gap-3 border-t border-white/5 px-3 py-2 text-sm">
-                <StatsBar />
-              </div>
-            )}
-          </div>
+          )}
 
           {/* Enhanced Content Area - Chat is always visible; tracker lives in a sheet */}
           {/* No min-h-0 here: this column's minimum is the stream's floor plus the tray plus the
@@ -582,10 +686,20 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                       data-testid="story-box"
                       className="relative flex min-h-24 flex-1 flex-col overflow-hidden [contain:size]"
                     >
-                      <CombatTurnBarLive
-                        turnInFlight={isProcessing}
-                        onOpenMap={showMapButton ? () => setMapSheetOpen(true) : undefined}
-                      />
+                      {tableLook && isCombatDetected && tableTurnSlot
+                        ? createPortal(
+                            <CombatTurnBarLive
+                              turnInFlight={isProcessing}
+                              onOpenMap={showMapButton ? () => setMapSheetOpen(true) : undefined}
+                            />,
+                            tableTurnSlot,
+                          )
+                        : !tableLook && (
+                            <CombatTurnBarLive
+                              turnInFlight={isProcessing}
+                              onOpenMap={showMapButton ? () => setMapSheetOpen(true) : undefined}
+                            />
+                          )}
                       <MessageList
                         onSendFullMessage={handleSendMessage}
                         onRetryTurn={onRetry}
@@ -645,14 +759,38 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                       </div>
                     )}
 
+                    {tableLook && (
+                      <div
+                        className="flex shrink-0 gap-2 overflow-x-auto p-1 lg:hidden"
+                        data-testid="table-phone-tiles"
+                      >
+                        {showMapButton ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="min-h-11 shrink-0"
+                            onClick={() => setMapSheetOpen(true)}
+                          >
+                            Open full map
+                          </Button>
+                        ) : (
+                          <span className="flex min-h-11 shrink-0 items-center rounded border border-[#a9823f] bg-[#0c1322] px-3 text-[#f6e3b8]">
+                            Map unavailable
+                          </span>
+                        )}
+                        <TableContextCard sessionId={sessionId} compact />
+                      </div>
+                    )}
                     {/* The dock: roll tray, roll status and chat box, in flow at the bottom. */}
                     <div ref={dockRef} className="shrink-0">
                       {/* The roll tray: the dice prompt is portaled in here (see roll-tray-slot). */}
-                      <div
-                        ref={setRollTraySlot}
-                        data-testid="roll-tray-slot"
-                        className="empty:hidden [body.ir-table-look_&:empty]:block [body.ir-table-look_&:empty]:h-3 [body.ir-table-look_&:empty]:rounded [body.ir-table-look_&:empty]:border [body.ir-table-look_&:empty]:border-[#a9823f] [body.ir-table-look_&:empty]:bg-[#3b2616]"
-                      />
+                      {!tableLook && (
+                        <div
+                          ref={setInlineRollHost}
+                          data-testid="roll-tray-slot"
+                          className="empty:hidden [body.ir-table-look_&:empty]:block [body.ir-table-look_&:empty]:h-3 [body.ir-table-look_&:empty]:rounded [body.ir-table-look_&:empty]:border [body.ir-table-look_&:empty]:border-[#a9823f] [body.ir-table-look_&:empty]:bg-[#3b2616]"
+                        />
+                      )}
 
                       {/* One line, in flow, from the same queue roll that fills the tray, so it
                       exists only while the tray does (#2234). */}
@@ -675,7 +813,11 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                       has fallen this whole column is replaced by the end state above, so the
                       composer is never left live under a death screen. */}
                       <div
-                        className="relative border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)]"
+                        className={
+                          tableLook
+                            ? 'relative border-0 bg-transparent backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)]'
+                            : 'relative border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)]'
+                        }
                         style={{ zIndex: Z_INDEX.STICKY }}
                       >
                         <DyingComposerSlot
@@ -710,7 +852,11 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                             sendError={sendError ?? undefined}
                             onRetry={onRetry}
                             retryInFlight={retryInFlight}
-                            placeholder={combatChatPlaceholder}
+                            placeholder={
+                              tableLook && !isCombatDetected
+                                ? 'Speak to the table… “I feint high and cut at its legs”'
+                                : combatChatPlaceholder
+                            }
                             disabledReason={
                               isGeneratingGreeting
                                 ? 'You can type once the scene appears'

@@ -20,6 +20,7 @@ type ServerParticipant = {
   characterId?: string | null;
   name: string;
   participantType: string;
+  healthCondition?: 'unharmed' | 'wounded' | 'bloodied' | 'near death';
   initiative: number;
   initiativeModifier: number;
   armorClass: number;
@@ -65,6 +66,7 @@ export function mapAuthoritativeCombat(payload: AuthoritativeCombatPayload): Com
         position: participant.position,
         characterId: participant.characterId ?? undefined,
         participantType: participant.participantType === 'player' ? 'player' : 'monster',
+        healthCondition: participant.healthCondition,
         name: participant.name,
         displayName: participant.monsterAttack?.displayName,
         initiative: participant.initiative,

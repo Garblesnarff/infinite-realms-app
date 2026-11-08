@@ -478,6 +478,7 @@ export function buildEncounterCombatants(
       // #876: the tracker shows the same facing name as the feed and turn bar.
       name: p.displayName ?? p.name,
       isEnemy: isHostileParticipantType(p.participantType),
+      healthCondition: p.healthCondition,
       isActive: encounter?.currentTurnParticipantId === p.id,
       state: turn?.actors.find((actor) => actor.id === p.id)?.state,
     }));

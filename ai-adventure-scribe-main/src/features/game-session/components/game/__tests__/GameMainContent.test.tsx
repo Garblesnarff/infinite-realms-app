@@ -748,7 +748,7 @@ describe('GameMainContent overhaul behavior contract', () => {
     it('renders an empty tray slot and no roll status when no roll is pending', () => {
       render(<GameMainContent {...baseProps} />);
 
-      expect(screen.getByTestId('roll-tray-slot')).toBeEmptyDOMElement();
+      expect(screen.getByTestId('roll-tray-slot').firstElementChild).toBeEmptyDOMElement();
       expect(screen.queryByRole('button', { name: 'Roll Dice' })).not.toBeInTheDocument();
       expect(screen.queryByText(/Your roll:/)).not.toBeInTheDocument();
     });
