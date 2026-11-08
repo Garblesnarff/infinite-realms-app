@@ -13,6 +13,7 @@ import { sanitizeSceneSpec } from './scene-spec-sanitizer.js';
 import { createTacticalCombatMap } from './tactical-combat-lifecycle.js';
 import { combatLogger } from '../../lib/logger.js';
 import { verifySessionOwnership } from '../../routes/v1/combat/helpers.js';
+import { publishHeldReplyAtSeating } from '../dm/dm-reply-persistence.js';
 import { SessionMessageService } from '../session/session-message-service.js';
 
 import type { CombatEntryGateDeps } from './combat-entry-gate.js';
@@ -43,25 +44,11 @@ export const combatEntryGateDeps: CombatEntryGateDeps = {
     trackCombatEvent(event as Parameters<typeof trackCombatEvent>[0], properties),
   persistSessionMessage: ({ sessionId, userId, speakerType, message }) =>
     SessionMessageService.addMessage({ sessionId, speakerType, message }, userId),
-  // #1390: the held narration, written under its reserved id. `addMessage`
-  // replaces a provisional row in place and inserts exactly once on the id,
-  // so a client save of the same turn cannot duplicate it.
+  // #1416: seating no longer writes the held narration itself. The record
+  // module moves it held → ready → persisted under its reserved id, applying
+  // the harm gate on the way, and writes the row once.
   persistHeldDmReply: ({ sessionId, userId, messageId, text }) =>
-    SessionMessageService.addMessage(
-      {
-        id: messageId,
-        sessionId,
-        speakerType: 'dm',
-        message: text,
-        context: {
-          emotion: 'neutral',
-          intent: 'response',
-          combat_transition: 'none',
-          provisional: true,
-        },
-      },
-      userId,
-    ),
+    publishHeldReplyAtSeating({ sessionId, userId, messageId, text }),
   publishCombatState,
   deriveFirstAction: (params) => deriveCombatEntryFirstAction(params),
   loadEncounterContext: (sessionId, userId) => loadSessionEncounterContext(sessionId, userId),

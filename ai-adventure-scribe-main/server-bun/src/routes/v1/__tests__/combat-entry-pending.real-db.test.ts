@@ -18,6 +18,7 @@ import { afterAll, beforeAll, beforeEach, expect, mock, test } from 'bun:test';
 import { asc, eq, like, sql } from 'drizzle-orm';
 
 import {
+  dmReplyRecords,
   campaigns,
   characterStats,
   characters,
@@ -120,9 +121,12 @@ const { intentRoutes } = await importWithRealDb(() => import('../combat/intents.
 const { combatEntryGateDeps } = await importWithRealDb(
   () => import('../../../services/combat/combat-entry-gate-deps.js'),
 );
-const { persistFallbackDmReply } = await importWithRealDb(
-  () => import('../../../services/dm/dm-reply-persistence.js'),
-);
+const {
+  persistFallbackDmReply,
+  postgresDmReplyRecordStore,
+  scheduleDmReplyWatchdog,
+  dmReplyRowExists,
+} = await importWithRealDb(() => import('../../../services/dm/dm-reply-persistence.js'));
 const { Elysia } = await import('elysia');
 const {
   liftCombatEntryDecline,
@@ -165,6 +169,7 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
   const heldSessionId = crypto.randomUUID();
   const characterId = '99999999-8888-4777-8666-555555555913';
   let campaignId = '';
+  let dropHeldWrite = false;
 
   const player = {
     characterId,
@@ -183,6 +188,11 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
               createCombatEntryRoutes({
                 combatEntryGateDeps: {
                   ...combatEntryGateDeps,
+                  // #1416: when set, seating's held-reply write is lost, as in the 03:16:07Z case.
+                  persistHeldDmReply: (reply) =>
+                    dropHeldWrite
+                      ? Promise.resolve(undefined)
+                      : combatEntryGateDeps.persistHeldDmReply!(reply),
                   createTacticalCombatMap: async () => undefined,
                   publishCombatState: async () => undefined,
                 },
@@ -521,6 +531,123 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
     });
     expect(stale).toEqual({ persisted: false, skipped: 'combat_entry_pending' });
     expect((await historyRows()).filter((row) => row.id === staleMessageId)).toHaveLength(0);
+  });
+
+  test('#1416: a ready reply whose fight ended before the watchdog is published once, by its record', async () => {
+    // The trace case: the reply was held at generation, seating confirmed the fight but its row
+    // write was lost (the record is `ready`, no row), and the encounter ended before the watchdog.
+    await database.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    const messageId = '55555555-6666-4777-8888-999999999416';
+    await database.delete(dmReplyRecords).where(eq(dmReplyRecords.id, messageId));
+    const generated = await generateWithDmReply(messageId);
+    expect(generated.dmReplyPersisted).toBe(false);
+    expect((await postgresDmReplyRecordStore.read(messageId))?.state).toBe('held');
+    const ready = await postgresDmReplyRecordStore.transition(messageId, 'ready');
+    expect(ready).toEqual({ ok: true, state: 'ready' });
+
+    // No active encounter when the watchdog runs (the fight ended before the 120 s check).
+    const watchdog = {
+      sessionId,
+      userId,
+      messageId,
+      reason: 'roll_requests',
+      generatedAt: new Date(),
+      envelope: null,
+      delayMs: 0,
+      hasDmRow: dmReplyRowExists,
+      replyRecords: postgresDmReplyRecordStore,
+    };
+    await scheduleDmReplyWatchdog(watchdog);
+
+    const rows = (await historyRows()).filter((row) => row.id === messageId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.speakerType).toBe('dm');
+    expect(rows[0]?.message).toContain('Balthazar raises his cleaver');
+    const context =
+      typeof rows[0]?.context === 'string'
+        ? (JSON.parse(rows[0].context) as Record<string, unknown>)
+        : (rows[0]?.context as Record<string, unknown>);
+    expect('rollRequests' in context).toBe(false);
+    expect((await postgresDmReplyRecordStore.read(messageId))?.state).toBe('persisted');
+
+    // A retry (watchdog again, or a client save later) keeps exactly one row by reserved id.
+    await scheduleDmReplyWatchdog(watchdog);
+    expect((await historyRows()).filter((row) => row.id === messageId)).toHaveLength(1);
+  });
+
+  test('#1416: a held reply whose fight ended before the watchdog is published once, in order, through the real routes', async () => {
+    await database.delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+    const messageId = '77777777-8888-4999-8aaa-bbbbbbbb0416';
+    await database.delete(dmReplyRecords).where(eq(dmReplyRecords.id, messageId));
+    // Generate (real route): a pending entry and a held record for the reserved id.
+    dropHeldWrite = true;
+    try {
+      const generated = await generateWithDmReply(messageId);
+      expect(generated.dmReplyPersisted).toBe(false);
+      expect((await postgresDmReplyRecordStore.read(messageId))?.state).toBe('held');
+      // Confirm (real route): the fight is seated, and seating's held-reply write is lost.
+      const { status } = await enter();
+      expect(status).toBe(201);
+    } finally {
+      dropHeldWrite = false;
+    }
+    expect((await historyRows()).filter((row) => row.id === messageId)).toHaveLength(0);
+    expect((await postgresDmReplyRecordStore.read(messageId))?.state).toBe('held');
+
+    // The fight ends before the watchdog runs. The client save is suppressed: nothing posts it.
+    await database
+      .update(combatEncounters)
+      .set({ status: 'completed' })
+      .where(eq(combatEncounters.sessionId, sessionId));
+
+    const watchdog = {
+      sessionId,
+      userId,
+      messageId,
+      reason: 'roll_requests',
+      generatedAt: new Date(),
+      envelope: null,
+      delayMs: 0,
+      hasDmRow: dmReplyRowExists,
+      replyRecords: postgresDmReplyRecordStore,
+    };
+    await scheduleDmReplyWatchdog(watchdog);
+
+    const ordered = await database
+      .select({
+        id: dialogueHistory.id,
+        speakerType: dialogueHistory.speakerType,
+        message: dialogueHistory.message,
+        context: dialogueHistory.context,
+        timestamp: dialogueHistory.timestamp,
+      })
+      .from(dialogueHistory)
+      .where(eq(dialogueHistory.sessionId, sessionId))
+      .orderBy(asc(dialogueHistory.timestamp));
+    const replies = ordered.filter((row) => row.id === messageId);
+    expect(replies).toHaveLength(1);
+    const reply = replies[0]!;
+    expect(reply.speakerType).toBe('dm');
+    expect(reply.message).toContain('Balthazar raises his cleaver');
+    const context = reply.context as Record<string, unknown>;
+    expect('rollRequests' in context).toBe(false);
+    const seatingRows = ordered.filter((row) => row.message?.startsWith('⚙️ Engine: Initiative'));
+    expect(seatingRows.length).toBeGreaterThan(0);
+    for (const row of seatingRows) {
+      expect(reply.timestamp!.getTime() < row.timestamp!.getTime()).toBe(true);
+    }
+    expect((await postgresDmReplyRecordStore.read(messageId))?.state).toBe('persisted');
+
+    // Idempotent: a second run (or a client save racing it) keeps exactly one row.
+    await scheduleDmReplyWatchdog(watchdog);
+    expect(
+      (
+        await database
+          .select({ id: dialogueHistory.id })
+          .from(dialogueHistory)
+          .where(eq(dialogueHistory.sessionId, sessionId))
+      ).filter((row) => row.id === messageId),
+    ).toHaveLength(1);
   });
 
   test('a recorded decline persists in the session_state row and lifts (#1328)', async () => {

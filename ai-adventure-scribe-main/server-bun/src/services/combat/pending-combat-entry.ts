@@ -218,12 +218,39 @@ async function writeDeclined(sessionId: string, actorKeys: string[]): Promise<vo
  * #1328: remember that the player declined the fight with these actors.
  * An empty key declines nothing: there is nothing to match.
  */
-export async function recordCombatEntryDecline(sessionId: string, actorKey: string): Promise<void> {
+export async function recordCombatEntryDecline(
+  sessionId: string,
+  actorKey: string,
+  heldMessageId?: string,
+): Promise<void> {
   const key = actorKey.trim();
   if (!key) return;
   const keys = await readDeclined(sessionId);
   if (!keys.includes(key)) keys.push(key);
   await writeDeclined(sessionId, keys);
+  // #1416: a declined fight's held opening narration is cancelled, so the watchdog never publishes it.
+  // A record already ready or persisted is refused by the table, which is the right outcome.
+  if (heldMessageId) {
+    // Imported here, not at the top: the DM persistence module is loaded only when a decline needs it.
+    const { postgresDmReplyRecordStore } = await import('../dm/dm-reply-persistence.js');
+    await postgresDmReplyRecordStore.transition(heldMessageId, 'cancelled');
+  }
+}
+
+/**
+ * #1416: whether the pending entry for these actors expired without an answer. Read-only: an
+ * expired entry is not cleared here, so the caller decides what expiry means for its reply.
+ */
+export async function pendingEntryExpiredFor(
+  sessionId: string,
+  pending: Record<string, unknown>,
+): Promise<boolean> {
+  if (!Array.isArray(pending.combatants)) return false;
+  const stored = await readStored(sessionId);
+  if (!stored) return false;
+  return (
+    stored.actorKey === actorKeyOf(pending as unknown as CombatEntryPending) && expired(stored)
+  );
 }
 
 /** #1328: the declined actor keys for this session, in record order. */
@@ -371,19 +398,33 @@ export async function rememberDeliveredCombatEntry(
  * for different actors must not inherit this turn's narration. Returns
  * false when nothing was waiting for these actors.
  */
+export type HeldReplyAttachResult =
+  | { attached: true }
+  | {
+      attached: false;
+      reason: 'invalid_pending' | 'no_pending_entry' | 'entry_expired' | 'actor_mismatch';
+    };
+
+/**
+ * #1416: says why nothing was attached, so the log line can name the cause. `no_pending_entry`
+ * (nothing stored) and `actor_mismatch` (a different turn's fight) are normal; `entry_expired`
+ * means the player took too long to answer the offer.
+ */
 export async function attachHeldReplyToPendingEntry(
   sessionId: string,
   pending: CombatEntryPending,
   heldReply: { messageId: string; text: string },
-): Promise<boolean> {
-  if (!pending || !Array.isArray(pending.combatants)) return false;
+): Promise<HeldReplyAttachResult> {
+  if (!pending || !Array.isArray(pending.combatants))
+    return { attached: false, reason: 'invalid_pending' };
   // readStored, not readPendingCombatEntry: an expired entry attaches nothing,
   // and this must not fire the expired line in the middle of a generate turn.
   const stored = await readStored(sessionId);
-  if (!stored || expired(stored)) return false;
-  if (stored.actorKey !== actorKeyOf(pending)) return false;
+  if (!stored) return { attached: false, reason: 'no_pending_entry' };
+  if (expired(stored)) return { attached: false, reason: 'entry_expired' };
+  if (stored.actorKey !== actorKeyOf(pending)) return { attached: false, reason: 'actor_mismatch' };
   await writeStored(sessionId, { ...stored, heldReply });
-  return true;
+  return { attached: true };
 }
 
 /**
