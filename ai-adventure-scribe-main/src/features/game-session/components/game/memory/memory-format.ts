@@ -33,6 +33,33 @@ export interface MemoryGroup {
   items: Memory[];
 }
 
+/** The Panels board draws four kinds with a glyph letter and a color (#1429). */
+export interface BoardKind {
+  color: string;
+  glyph: string;
+  singular: string;
+}
+
+const BOARD_KINDS = new Map<string, BoardKind>([
+  ['location', { color: '#4fb6c4', glyph: 'L', singular: 'Location' }],
+  ['npc', { color: '#ef8a8a', glyph: 'C', singular: 'Character' }],
+  ['event', { color: '#c9b6f0', glyph: 'E', singular: 'Event' }],
+  ['item', { color: '#d5b070', glyph: 'I', singular: 'Item' }],
+]);
+
+/**
+ * Board kind for a memory type. Types the board does not draw keep their category
+ * label with a neutral color and the label's first letter as the glyph.
+ * A Map (not a plain object) so a type like "constructor" cannot resolve
+ * to Object.prototype. (Object.hasOwn is not in this project's TS lib.)
+ */
+export const boardKindFor = (type: string, fallbackLabel: string): BoardKind =>
+  BOARD_KINDS.get(type) ?? {
+    color: '#aab3cc',
+    glyph: fallbackLabel.charAt(0).toUpperCase(),
+    singular: fallbackLabel,
+  };
+
 /** Groups in the MEMORY_CATEGORIES order; types with no chip go to one "Other" group. */
 export const groupMemoriesByCategory = (memories: Memory[]): MemoryGroup[] => {
   const groups: MemoryGroup[] = [];
