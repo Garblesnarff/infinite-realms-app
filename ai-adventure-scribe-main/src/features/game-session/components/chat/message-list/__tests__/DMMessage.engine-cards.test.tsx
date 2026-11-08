@@ -8,6 +8,7 @@ import {
   FIGHT_ROSTER,
   PLAYER_HITS_ENEMY,
   PLAYER_MISSES_ENEMY,
+  PLAYER_SPELL_ATTACK_MISSES,
   REEVES,
   SCHOLAR,
   spellAction,
@@ -168,6 +169,25 @@ describe('engine result cards in the chat (#2417)', () => {
       expect(card.hasAttribute('aria-label')).toBe(false);
       expect(card.querySelector(':scope > [aria-hidden="true"]')).not.toBeNull();
     }
+  });
+
+  it('labels a spell attack roll "Spell attack" on its math line', () => {
+    const [part] = formatCombatEngineParts(
+      spellAction(SCHOLAR, REEVES),
+      PLAYER_SPELL_ATTACK_MISSES,
+      FIGHT_ROSTER,
+    );
+    const block: CombatEngineBlock = {
+      sequence: 0,
+      round: 1,
+      source: 'player',
+      actor: SCHOLAR.name,
+      lines: [part.line],
+      cards: [part.card],
+    };
+    const { container } = renderMessage([block]);
+
+    expect(container.textContent).toContain('Spell attack: d20');
   });
 
   it('shows the player their HP when hit: HP 4 of 7, −3', () => {

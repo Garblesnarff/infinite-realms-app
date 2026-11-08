@@ -112,6 +112,11 @@ export const buildSheetUpdatePayload = (
     payload.equipment = transformEquipmentForStorage(next, next.id);
   }
 
+  // #1402: the sheet's starting-equipment chooser sets the purse with the package.
+  if ((prev.currency?.gp ?? 0) !== (next.currency?.gp ?? 0)) {
+    payload.gold_pieces = next.currency?.gp ?? 0;
+  }
+
   return payload;
 };
 

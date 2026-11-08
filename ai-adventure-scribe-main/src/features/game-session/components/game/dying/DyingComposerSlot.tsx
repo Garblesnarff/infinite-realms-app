@@ -7,6 +7,7 @@ import type { MessageSendContext } from '../../chat/MessageList';
 import { useOptionalCombat } from '@/contexts/CombatContext';
 import { participantVital } from '@/services/combat/participant-vital';
 import {
+  pendingDeathSaveDeadline,
   representPendingDeathSaveRoll,
   wasDeathSavePromptDismissed,
 } from '@/services/combat/player-roll-bridge';
@@ -110,6 +111,21 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
     representPendingDeathSaveRoll();
   }, [turnKey, dismissedKey]);
 
+  const [autoRollSecondsLeft, setAutoRollSecondsLeft] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    if (!isOwnTurn || vital !== 'dying') {
+      setAutoRollSecondsLeft(null);
+      return undefined;
+    }
+    const read = (): number | null => {
+      const deadline = pendingDeathSaveDeadline();
+      return deadline === null ? null : Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    };
+    setAutoRollSecondsLeft(read());
+    const interval = setInterval(() => setAutoRollSecondsLeft(read()), 1000);
+    return () => clearInterval(interval);
+  }, [turnKey, promptOpen, isProcessing, isOwnTurn, vital]);
+
   if (!player || (vital !== 'dying' && vital !== 'stable')) return <>{children}</>;
 
   // The Roll button is the retry for a failed send, not a second way to roll: it renders
@@ -123,6 +139,12 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
       ? rollAfterDismiss
       : undefined;
 
+  const actor = encounter?.participants.find(
+    (participant) => participant.id === encounter.currentTurnParticipantId,
+  );
+  const waitingOn =
+    actor && player && actor.id !== player.id ? (actor.displayName ?? actor.name) : null;
+
   return (
     <DyingPanel
       name={player.displayName ?? player.name}
@@ -132,6 +154,8 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
       isOwnTurn={isOwnTurn}
       promptOpen={promptOpen}
       onRoll={onRoll}
+      waitingOn={waitingOn}
+      autoRollSecondsLeft={autoRollSecondsLeft}
     />
   );
 };

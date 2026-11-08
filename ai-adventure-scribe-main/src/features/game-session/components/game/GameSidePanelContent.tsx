@@ -4,6 +4,7 @@ import { CombatSummary } from './CombatSummary';
 import { MemoryList } from './memory/MemoryList';
 import { HandoutCard } from '../handouts/HandoutCard';
 import { RightSheetLive } from './overhaul/RightSheetLive';
+import { StorySoFarLink } from './StorySoFarLink';
 
 import type { SpellCastHandlerRef } from './spell-cast-handler';
 import type { CharacterState } from '@/contexts/character/types';
@@ -200,6 +201,7 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
                     ))}
                   </section>
                 ))}
+                {sessionId && <StorySoFarLink sessionId={sessionId} />}
               </div>
             </ScrollArea>
           )}

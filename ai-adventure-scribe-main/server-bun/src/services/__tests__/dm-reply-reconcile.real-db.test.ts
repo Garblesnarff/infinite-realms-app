@@ -10,7 +10,7 @@
  * dedicated local/CI Postgres because it writes fixtures.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, spyOn, test } from 'bun:test';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql as drizzleSql } from 'drizzle-orm';
 
 import {
   closeRealDb,
@@ -44,6 +44,7 @@ import {
   spells,
   type DialogueHistory,
 } from '../../../../db/schema/index';
+import { transactionContext } from '../../../../db/transaction-context';
 import {
   apprenticeLevel2SpellLists,
   apprenticeSpellLists,
@@ -2878,6 +2879,42 @@ ${playerInput}
     expect(await levelOneSlots(character.id)).toEqual([{ total: 2, used: 2 }]);
     expect(await slotSpends(character.id)).toHaveLength(2);
   });
+
+  test.each(['America/Chicago', 'UTC'])(
+    '#1427: story slot retry compares instants in database timezone %s',
+    async (timezone) => {
+      const character = await apprenticeWhoCastBurningHands();
+      // Only rows written in this transaction's timezone belong in this scenario.
+      await database
+        .delete(spellSlotUsageLog)
+        .where(eq(spellSlotUsageLog.characterId, character.id));
+      await playerSays('I cast Burning Hands at the rats under the stair.');
+      const [{ createdAt: since }] = await database
+        .select({ createdAt: dialogueHistory.createdAt })
+        .from(dialogueHistory)
+        .where(
+          and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+        )
+        .orderBy(desc(dialogueHistory.createdAt))
+        .limit(1);
+      await database.transaction(async (tx) => {
+        await tx.execute(drizzleSql`select set_config('TimeZone', ${timezone}, true)`);
+        await transactionContext.run({ database: tx, afterCommit: [] }, async () => {
+          const input = {
+            characterId: character.id,
+            userId,
+            sessionId,
+            since,
+            spells: [{ spellName: 'Burning Hands', spellLevel: 1 }],
+          };
+          expect(await SpellSlotsService.spendStoryCastSlots(input)).toEqual(['spent']);
+          expect(await SpellSlotsService.spendStoryCastSlots(input)).toEqual(['already_spent']);
+        });
+      });
+      expect(await levelOneSlots(character.id)).toEqual([{ total: 2, used: 2 }]);
+      expect(await slotSpends(character.id)).toHaveLength(1);
+    },
+  );
 
   test('#218 step 1: two concurrent casts with one slot left: one spends, one finds no slot, never negative', async () => {
     const character = await apprenticeWhoCastBurningHands();

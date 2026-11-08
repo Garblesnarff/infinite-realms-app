@@ -97,7 +97,7 @@ describe('CharacterSheet fallen (#2517)', () => {
     await waitFor(() => {
       expect(chooseHero).not.toBeDisabled();
     });
-    expect(screen.getByText(/Begin Abyssal Descent again with a new hero/)).toBeInTheDocument();
+    expect(screen.getByText(/Abyssal Descent goes on/)).toBeInTheDocument();
     fireEvent.click(chooseHero);
     expect(navigate).toHaveBeenCalledWith(
       '/explore/abyssal-descent/choose-character?campaignId=camp-1',
@@ -194,7 +194,7 @@ describe('CharacterSheet fallen (#2517)', () => {
       characterId: 'char-1',
       limit: 5,
     });
-    expect(screen.getByText(/Begin The Gardener's Heir again with a new hero/)).toBeInTheDocument();
+    expect(screen.getByText(/The Gardener's Heir goes on/)).toBeInTheDocument();
     fireEvent.click(chooseHero);
     expect(navigate).toHaveBeenCalledWith(
       '/explore/the-gardeners-heir/choose-character?campaignId=camp-gh',

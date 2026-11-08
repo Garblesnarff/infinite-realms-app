@@ -2,6 +2,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it } from 'vitest';
 
+import { CampaignEndState } from '../CampaignEndState';
 import { buildChooseHeroHref, FallenEndState } from '../DeathScreen';
 
 import type { RenderResult } from '@testing-library/react';
@@ -56,12 +57,21 @@ describe('FallenEndState (#2456, #2517)', () => {
 
     expect(screen.getByTestId('death-screen-new-character')).toHaveTextContent('Choose a new hero');
     expect(
-      screen.getByText('Begin Abyssal Descent again with a new hero. The Scholar’s story is kept.'),
+      screen.getByText('Abyssal Descent goes on. The Scholar’s story is kept.'),
     ).toBeInTheDocument();
     expect(screen.getByTestId('death-screen-explore')).toHaveTextContent('Explore other campaigns');
     expect(screen.getByTestId('death-screen-read-story')).toHaveTextContent(
       'Read the story so far',
     );
+    // Table 11: story, then a new hero, then explore, then the realm.
+    // The design wins over the old order that led with the hero pick.
+    const story = screen.getByTestId('death-screen-read-story');
+    const hero = screen.getByTestId('death-screen-new-character');
+    const explore = screen.getByTestId('death-screen-explore');
+    const realm = screen.getByTestId('death-screen-realm');
+    expect(story.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(hero.compareDocumentPosition(explore) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(explore.compareDocumentPosition(realm) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('disables "Choose a new hero" while the hero-pick route is still resolving', () => {
@@ -88,12 +98,15 @@ describe('FallenEndState (#2456, #2517)', () => {
     expect(lines).not.toHaveTextContent('Engine:');
   });
 
-  it('#136: shows a stable final line when no engine lines were carried', () => {
+  it('#136: renders nothing for how they fell or the run until those lines exist', () => {
+    // The old screen invented "The Scholar is dead." when the killing turn
+    // carried no lines. Table 11 hides both blocks instead of a placeholder.
     renderEndState({ characterName: 'The Scholar' });
 
-    expect(screen.getByTestId('death-screen-final-lines')).toHaveTextContent(
-      'The Scholar is dead.',
-    );
+    expect(screen.queryByTestId('death-screen-final-lines')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'HOW THEY FELL' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'THE RUN' })).not.toBeInTheDocument();
+    expect(screen.queryByText('The Scholar is dead.')).not.toBeInTheDocument();
   });
 
   it('does not render the resume-loop text', () => {
@@ -125,6 +138,36 @@ describe('FallenEndState (#2456, #2517)', () => {
     renderEndState({ characterName: 'The Scholar' });
 
     expect(screen.queryByTestId('death-screen-read-story')).not.toBeInTheDocument();
+  });
+
+  it('shows the run only when the caller already has the numbers', () => {
+    render(
+      <MemoryRouter>
+        <CampaignEndState
+          mode="fallen"
+          characterName="The Scholar"
+          campaignName="Abyssal Descent"
+          chooseHeroHref="/explore"
+          finalLines={['Rolled 2: the third failure.']}
+          runSummary={{
+            turns: 16,
+            fights: 1,
+            monstersDefeated: 0,
+            rounds: 4,
+            fatalRoll: '2',
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole('heading', { name: 'HOW THEY FELL' })).toBeInTheDocument();
+    expect(screen.getByTestId('death-screen-final-lines')).toHaveTextContent(
+      'Rolled 2: the third failure.',
+    );
+    expect(screen.getByRole('heading', { name: 'THE RUN' })).toBeInTheDocument();
+    expect(screen.getByText('16')).toBeInTheDocument();
+    expect(screen.getByText('Rounds survived')).toBeInTheDocument();
+    expect(screen.getByText('Last roll')).toBeInTheDocument();
   });
 });
 

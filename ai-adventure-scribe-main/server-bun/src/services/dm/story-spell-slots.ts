@@ -11,6 +11,7 @@
 
 import { resolveCatalogSpell } from '../../data/spellData.js';
 import { logger } from '../../lib/logger.js';
+import { slotUsageAtOrAfter } from '../spell-slots/slot-usage-time.js';
 import { SpellSlotsService } from '../spell-slots-service.js';
 
 import type { AllowedCasts } from './dm-feature-gate.js';
@@ -241,7 +242,7 @@ export async function spellsWithNoSlot(input: {
         and(
           eq(spellSlotUsageLog.characterId, character.id),
           eq(spellSlotUsageLog.sessionId, sessionId),
-          gte(spellSlotUsageLog.timestamp, message.createdAt),
+          slotUsageAtOrAfter(message.createdAt),
         ),
       )
       .limit(1);

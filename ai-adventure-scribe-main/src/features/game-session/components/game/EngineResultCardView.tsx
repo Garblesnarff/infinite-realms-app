@@ -146,6 +146,7 @@ export const EngineResultCardView: React.FC<{
         )}
         {card.math && (
           <p className="mt-1 text-[15px] tabular-nums text-white/85">
+            {card.kind === 'spell' && card.math.kind === 'attack' && 'Spell attack: '}
             {engineCardMathText(card.math, showTargetNumbers)}
           </p>
         )}

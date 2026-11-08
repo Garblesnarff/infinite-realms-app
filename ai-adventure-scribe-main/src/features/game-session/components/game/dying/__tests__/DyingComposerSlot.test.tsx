@@ -88,7 +88,7 @@ describe('DyingComposerSlot (#2518)', () => {
 
     expect(screen.queryByTestId('composer')).toBeNull();
     expect(screen.getByTestId('dying-panel')).toBeTruthy();
-    expect(screen.getByTestId('dying-panel-failures').textContent).toContain('✕✕○');
+    expect(screen.getByRole('img', { name: '0 of 3 successes, 2 of 3 failures' })).toBeTruthy();
   });
 
   it('starts the dying turn on its own when the order reaches the player at 0 HP, once', () => {
@@ -153,18 +153,28 @@ describe('DyingComposerSlot (#2518)', () => {
     // The send takes a moment; during that window the old button dispatched a duplicate
     // turn the server refused (#261 CB-025).
     let resolveSend!: () => void;
-    const slowSend = vi.fn(() => new Promise<void>((resolve) => { resolveSend = resolve; }));
+    const slowSend = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSend = resolve;
+        }),
+    );
     renderSlot({ onSendMessage: slowSend });
     expect(slowSend).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('dying-panel-roll')).toBeNull();
-    await act(async () => { resolveSend(); });
+    await act(async () => {
+      resolveSend();
+    });
     expect(slowSend).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('dying-panel-roll')).toBeNull();
   });
 
   it('the panel’s Roll button is the retry when the auto-send failed', async () => {
     useCombatNow(board({ holder: 'scholar' }));
-    const failingSend = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValue(undefined);
+    const failingSend = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValue(undefined);
     renderSlot({ onSendMessage: failingSend });
     expect(failingSend).toHaveBeenCalledTimes(1);
 
@@ -193,6 +203,7 @@ describe('DyingComposerSlot (#2518)', () => {
     expect(onSendMessage).toHaveBeenCalledTimes(1);
     const rollButton = await screen.findByTestId('dying-panel-roll');
     expect(rollButton).toBeTruthy();
+    expect(screen.getByTestId('dying-panel-countdown').textContent).toMatch(/Auto-roll in 4[45] s/);
 
     // Clicking it re-opens the waiting prompt; the turn is not sent again.
     await act(async () => {
