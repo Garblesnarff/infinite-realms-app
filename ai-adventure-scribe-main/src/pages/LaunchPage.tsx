@@ -13,14 +13,9 @@ import { Link } from 'react-router-dom';
 
 import { LandingCampaigns } from '@/components/launch/LandingCampaigns';
 import { LandingMemory } from '@/components/launch/LandingMemory';
-import { LandingVoiceSample } from '@/components/launch/LandingVoiceSample';
 import { LaunchHeader } from '@/components/launch/LaunchHeader';
 import { WaitlistForm } from '@/components/launch/WaitlistForm';
 import { launchPageContent } from '@/data/launchPageContent';
-
-const VOICE_SAMPLE_SRC = '/audio/landing-voice-sample.mp3';
-const VOICE_SAMPLE_TRANSCRIPT =
-  'The rope is slick with cold water. The next ledge is thirty feet down, and the wall is too smooth for your boots.';
 
 const LaunchPage: React.FC = () => {
   useEffect(() => {
@@ -131,9 +126,8 @@ const LaunchPage: React.FC = () => {
           {/* Voice */}
           <section
             aria-labelledby="landing-voice"
-            className="mx-auto grid max-w-[1216px] items-center gap-12 px-4 py-16 lg:grid-cols-2 lg:gap-[72px]"
+            className="mx-auto max-w-[1216px] px-4 py-16 text-center lg:text-left"
           >
-            <LandingVoiceSample src={VOICE_SAMPLE_SRC} transcript={VOICE_SAMPLE_TRANSCRIPT} />
             <div>
               <div className="text-sm font-bold tracking-[0.16em] text-[#4fb6c4]">VOICE</div>
               <h2

@@ -111,6 +111,14 @@ describe('LaunchPage', () => {
     expect(screen.getByRole('link', { name: 'FAQ' })).toHaveAttribute('href', '/pricing#faq');
   });
 
+  it('shows no voice player until the sample file ships', () => {
+    renderPage();
+    expect(screen.queryByRole('button', { name: /voice sample/i })).toBeNull();
+    expect(
+      screen.getByText('Press Listen on any message and the DM reads it aloud.'),
+    ).toBeInTheDocument();
+  });
+
   it('has exactly one signup form on the page', () => {
     renderPage();
     expect(screen.getAllByRole('form')).toHaveLength(1);
