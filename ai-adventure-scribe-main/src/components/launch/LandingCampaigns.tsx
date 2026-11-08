@@ -83,11 +83,13 @@ export const LandingCampaigns: React.FC = () => {
     LANDING_CAMPAIGN_COUNT,
   );
 
-  if (isLoading || list.length === 0) return null;
+  // Loaded and empty: nothing will arrive later, so there is nothing to reserve for.
+  if (!isLoading && list.length === 0) return null;
 
   return (
     <section
       aria-labelledby="landing-campaigns"
+      aria-busy={isLoading || undefined}
       className="mx-auto max-w-[1280px] px-4 py-16 sm:py-20"
     >
       <div className="text-center">
@@ -101,13 +103,30 @@ export const LandingCampaigns: React.FC = () => {
           Every campaign has ready-made heroes. No setup.
         </p>
       </div>
-      <ul className="mt-11 grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-3">
-        {list.map((campaign) => (
-          <li key={campaign.id}>
-            <LandingCampaignCard campaign={campaign} />
-          </li>
-        ))}
-      </ul>
+      {isLoading ? (
+        // Reserved-height skeleton (#1432 item 5): the same grid and the same
+        // aspect-square card boxes as the loaded row, so the page does not jump
+        // when the campaigns arrive.
+        <ul
+          data-testid="landing-campaigns-skeleton"
+          aria-hidden="true"
+          className="mt-11 grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-3"
+        >
+          {[0, 1, 2].map((index) => (
+            <li key={index}>
+              <div className="mx-auto aspect-square w-full max-w-[400px] animate-pulse rounded-2xl bg-[#0c1220] shadow-[0_0_0_1px_rgba(213,176,112,0.28),0_14px_30px_rgba(0,0,0,0.45)] motion-reduce:animate-none" />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <ul className="mt-11 grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-3">
+          {list.map((campaign) => (
+            <li key={campaign.id}>
+              <LandingCampaignCard campaign={campaign} />
+            </li>
+          ))}
+        </ul>
+      )}
       <div className="mt-8 text-center">
         <Link
           to="/explore"

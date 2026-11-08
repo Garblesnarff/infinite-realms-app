@@ -14,7 +14,6 @@ import { Link } from 'react-router-dom';
 import { LandingCampaigns } from '@/components/launch/LandingCampaigns';
 import { LandingMemory } from '@/components/launch/LandingMemory';
 import { LaunchHeader } from '@/components/launch/LaunchHeader';
-import { WaitlistForm } from '@/components/launch/WaitlistForm';
 import { launchPageContent } from '@/data/launchPageContent';
 
 const LaunchPage: React.FC = () => {
@@ -142,7 +141,8 @@ const LaunchPage: React.FC = () => {
             </div>
           </section>
 
-          {/* Join */}
+          {/* Join — no waitlist (Table 12, #1432 item 4): the form is gone, the
+              hero pill stays, and the section sends visitors straight to /explore. */}
           <section
             aria-labelledby="landing-join"
             className="mx-auto flex max-w-[1280px] flex-col items-center px-4 py-20"
@@ -153,8 +153,15 @@ const LaunchPage: React.FC = () => {
             >
               Be a founding adventurer
             </h2>
-            <div className="mt-6 w-full max-w-xl">
-              <WaitlistForm variant="section" />
+            <div className="mt-6">
+              <Link
+                to="/explore"
+                data-track-cta="play_free_join"
+                className="inline-flex min-h-[56px] items-center justify-center rounded-xl border border-[#f3deb0] bg-gradient-to-b from-[#f6e3b8] via-[#d5b070] to-[#a9823f] px-8 font-heading text-lg font-bold tracking-[0.06em] text-[#1a1206] shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_6px_14px_rgba(0,0,0,0.45)] hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-[#f3deb0]"
+              >
+                Join the beta
+                <ArrowRight className="ml-2 h-5 w-5" aria-hidden="true" />
+              </Link>
             </div>
           </section>
         </main>
