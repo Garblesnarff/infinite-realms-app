@@ -418,7 +418,11 @@ export function createCombatEntryRoutes({
             ),
           ]);
           if (encounter.known && !encounter.active) {
-            await recordCombatEntryDecline(params.sessionId, stored.actorKey);
+            await recordCombatEntryDecline(
+              params.sessionId,
+              stored.actorKey,
+              stored.heldReply?.messageId,
+            );
           }
         }
         return { cleared: true };

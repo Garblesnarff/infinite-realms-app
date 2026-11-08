@@ -575,10 +575,11 @@ export interface CombatEntryGateDeps {
   }) => Promise<unknown>;
   publishCombatState: (encounterId: string, userId: string, reason: string) => Promise<unknown>;
   /**
-   * #1390: persist the fight-opening narration the player confirmed from.
-   * Optional so unit-test wirings seat without a database; production wiring
-   * writes it under its reserved id via `SessionMessageService.addMessage`,
-   * which replaces a provisional row in place and inserts exactly once.
+   * #1390: hand the fight-opening narration the player confirmed from to the
+   * reply record (#1416). Production wiring calls `publishHeldReplyAtSeating`,
+   * which moves the record held → ready → persisted and writes the row once
+   * under its reserved id, timestamped at generation. A cancelled or refused
+   * record writes nothing. Optional so unit-test wirings seat without a database.
    * No `rollRequests` in context: combat initiative superseded the roll.
    */
   persistHeldDmReply?: (reply: {

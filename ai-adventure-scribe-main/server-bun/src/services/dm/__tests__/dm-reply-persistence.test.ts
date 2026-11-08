@@ -44,12 +44,34 @@ mock.module('../dm-fallback-broadcast.js', () => ({
 }));
 
 const {
+  canTransitionDmReply,
   dmReplySkipReason,
   persistFallbackDmReply,
   persistGeneratedDmReply,
   provisionalDmText,
+  publishHeldReplyAtSeating,
+  publishReadyDmReply,
   scheduleDmReplyWatchdog,
 } = await import('../dm-reply-persistence.js');
+
+type DmReplyRecord = {
+  id: string;
+  sessionId: string;
+  userId: string;
+  state: DmReplyRecordState;
+  text: string;
+  envelope: Record<string, unknown> | null;
+  createdAt: Date;
+};
+type DmReplyRecordState = 'held' | 'ready' | 'persisted' | 'cancelled';
+type DmReplyTransitionResult =
+  | { ok: true; state: DmReplyRecordState }
+  | { ok: false; reason: 'no_record' | 'illegal_from'; state?: DmReplyRecordState };
+interface DmReplyRecordStore {
+  read(id: string): Promise<DmReplyRecord | null>;
+  insertHeld(record: Omit<DmReplyRecord, 'state' | 'createdAt'>): Promise<void>;
+  transition(id: string, to: DmReplyRecordState): Promise<DmReplyTransitionResult>;
+}
 
 // The shape the model actually returns on an ordinary exploration turn: every array present,
 // most of them empty (dmResponseSchema requires them).
@@ -444,6 +466,8 @@ describe('scheduleDmReplyWatchdog', () => {
       userId: 'user-1',
       delayMs: 5,
       hasDmRow: async () => false,
+      // #1416: inject the encounter seam; the default would query the database here.
+      hasActiveEncounter: async () => false,
     });
 
     expect(addMessageCalls).toHaveLength(0);
@@ -790,5 +814,409 @@ describe('persistFallbackDmReply live push (#800 item 3)', () => {
         sessionId: 'session-1',
       }),
     ]);
+  });
+});
+
+// #1416: the durable reply record (transitions, seating publish, ready-state watchdog).
+function memoryStore(
+  seed: DmReplyRecord[] = [],
+): DmReplyRecordStore & { rows: Map<string, DmReplyRecord> } {
+  const rows = new Map(seed.map((record) => [record.id, { ...record }]));
+  return {
+    rows,
+    async read(id) {
+      const row = rows.get(id);
+      return row ? { ...row } : null;
+    },
+    async insertHeld(record) {
+      if (!rows.has(record.id))
+        rows.set(record.id, { ...record, state: 'held', createdAt: new Date() });
+    },
+    async transition(id, to): Promise<DmReplyTransitionResult> {
+      const row = rows.get(id);
+      if (!row) return { ok: false, reason: 'no_record' };
+      if (!canTransitionDmReply(row.state, to)) {
+        return { ok: false, reason: 'illegal_from', state: row.state };
+      }
+      rows.set(id, { ...row, state: to });
+      return { ok: true, state: to };
+    },
+  };
+}
+
+const ID = '11111111-1111-4111-8111-111111111111';
+const SESSION = '22222222-2222-4222-8222-222222222222';
+const USER = 'user_test';
+const TEXT = 'The goblins leap from the rocks. Roll initiative.\n\nA. Fight\nB. Flee';
+
+/** Writes rows in a Map keyed by id, so an id written twice is still one row. */
+function rowWriter() {
+  const rows = new Map<string, string>();
+  const writer = async (record: DmReplyRecord) => {
+    rows.set(record.id, record.text);
+  };
+  return { rows, writer };
+}
+
+describe('#1416 transition table', () => {
+  test('allows only the listed moves', () => {
+    const allowed: Array<[DmReplyRecordState, DmReplyRecordState]> = [
+      ['held', 'ready'],
+      ['held', 'cancelled'],
+      ['ready', 'ready'],
+      ['ready', 'persisted'],
+    ];
+    for (const [from, to] of allowed) expect(canTransitionDmReply(from, to)).toBe(true);
+    expect(canTransitionDmReply('held', 'persisted')).toBe(false);
+    expect(canTransitionDmReply('ready', 'cancelled')).toBe(false);
+    expect(canTransitionDmReply('persisted', 'ready')).toBe(false);
+    expect(canTransitionDmReply('cancelled', 'ready')).toBe(false);
+    expect(canTransitionDmReply('ready', 'cancelled')).toBe(false);
+  });
+});
+
+describe('#1416 seating publish', () => {
+  test('held → ready → persisted, exactly one row by reserved id', async () => {
+    const store = memoryStore([
+      {
+        id: ID,
+        sessionId: SESSION,
+        userId: USER,
+        state: 'held',
+        text: TEXT,
+        envelope: null,
+        createdAt: new Date(0),
+      },
+    ]);
+    const { rows, writer } = rowWriter();
+    const outcome = await publishHeldReplyAtSeating(
+      { sessionId: SESSION, userId: USER, messageId: ID, text: TEXT },
+      store,
+      writer,
+    );
+    expect(outcome).toBe('persisted');
+    expect(store.rows.get(ID)?.state).toBe('persisted');
+    expect(rows.size).toBe(1);
+    expect(rows.get(ID)).toBe(TEXT);
+  });
+
+  test('creates the record when the held write never reached the store', async () => {
+    const store = memoryStore();
+    const { rows, writer } = rowWriter();
+    const outcome = await publishHeldReplyAtSeating(
+      { sessionId: SESSION, userId: USER, messageId: ID, text: TEXT },
+      store,
+      writer,
+    );
+    expect(outcome).toBe('persisted');
+    expect(store.rows.get(ID)?.state).toBe('persisted');
+    expect(rows.size).toBe(1);
+  });
+
+  test('a fabricated outcome cancels the held reply and writes nothing', async () => {
+    const fabricated = 'The goblin hits you for 9 damage and you collapse.';
+    const store = memoryStore([
+      {
+        id: ID,
+        sessionId: SESSION,
+        userId: USER,
+        state: 'held',
+        text: fabricated,
+        envelope: null,
+        createdAt: new Date(0),
+      },
+    ]);
+    const { rows, writer } = rowWriter();
+    const outcome = await publishHeldReplyAtSeating(
+      { sessionId: SESSION, userId: USER, messageId: ID, text: fabricated },
+      store,
+      writer,
+    );
+    expect(outcome).toBe('cancelled');
+    expect(store.rows.get(ID)?.state).toBe('cancelled');
+    expect(rows.size).toBe(0);
+  });
+
+  test('a publish that fails leaves the record ready, and a retry writes the same row', async () => {
+    const store = memoryStore([
+      {
+        id: ID,
+        sessionId: SESSION,
+        userId: USER,
+        state: 'held',
+        text: TEXT,
+        envelope: null,
+        createdAt: new Date(0),
+      },
+    ]);
+    const { rows, writer } = rowWriter();
+    let failNext = true;
+    const flaky = async (record: DmReplyRecord) => {
+      if (failNext) {
+        failNext = false;
+        throw new Error('write failed');
+      }
+      await writer(record);
+    };
+    const first = await publishHeldReplyAtSeating(
+      { sessionId: SESSION, userId: USER, messageId: ID, text: TEXT },
+      store,
+      flaky,
+    );
+    expect(first).toBe('retry');
+    expect(store.rows.get(ID)?.state).toBe('ready');
+
+    const current = await store.read(ID);
+    const second = await publishReadyDmReply(current!, store, flaky);
+    expect(second).toBe('persisted');
+    expect(store.rows.get(ID)?.state).toBe('persisted');
+    expect(rows.size).toBe(1);
+  });
+
+  test('a second seating for a persisted reply is idempotent', async () => {
+    const store = memoryStore([
+      {
+        id: ID,
+        sessionId: SESSION,
+        userId: USER,
+        state: 'persisted',
+        text: TEXT,
+        envelope: null,
+        createdAt: new Date(0),
+      },
+    ]);
+    const { rows, writer } = rowWriter();
+    const outcome = await publishHeldReplyAtSeating(
+      { sessionId: SESSION, userId: USER, messageId: ID, text: TEXT },
+      store,
+      writer,
+    );
+    expect(outcome).toBe('persisted');
+    expect(rows.size).toBe(0);
+  });
+});
+
+describe('#1416 watchdog on a ready record', () => {
+  test('publishes a ready record with no live encounter and no in-memory envelope', async () => {
+    const store = memoryStore([
+      {
+        id: ID,
+        sessionId: SESSION,
+        userId: USER,
+        state: 'ready',
+        text: TEXT,
+        envelope: null,
+        createdAt: new Date(0),
+      },
+    ]);
+    const { rows, writer } = rowWriter();
+    await scheduleDmReplyWatchdog({
+      sessionId: SESSION,
+      messageId: ID,
+      reason: 'roll_requests',
+      generatedAt: new Date(),
+      userId: USER,
+      delayMs: 0,
+      hasDmRow: async () => false,
+      replyRecords: store,
+      writeReplyRow: writer,
+    });
+    expect(rows.get(ID)).toBe(TEXT);
+    expect(store.rows.get(ID)?.state).toBe('persisted');
+  });
+
+  test('leaves a held record alone: the player has not confirmed the fight', async () => {
+    const store = memoryStore([
+      {
+        id: ID,
+        sessionId: SESSION,
+        userId: USER,
+        state: 'held',
+        text: TEXT,
+        envelope: null,
+        createdAt: new Date(0),
+      },
+    ]);
+    const { rows, writer } = rowWriter();
+    await scheduleDmReplyWatchdog({
+      sessionId: SESSION,
+      messageId: ID,
+      reason: 'roll_requests',
+      generatedAt: new Date(),
+      userId: USER,
+      delayMs: 0,
+      hasDmRow: async () => false,
+      replyRecords: store,
+      writeReplyRow: writer,
+    });
+    expect(rows.size).toBe(0);
+    expect(store.rows.get(ID)?.state).toBe('held');
+  });
+
+  test('a row that already exists settles a ready record as persisted', async () => {
+    const store = memoryStore([
+      {
+        id: ID,
+        sessionId: SESSION,
+        userId: USER,
+        state: 'ready',
+        text: TEXT,
+        envelope: null,
+        createdAt: new Date(0),
+      },
+    ]);
+    const { rows, writer } = rowWriter();
+    await scheduleDmReplyWatchdog({
+      sessionId: SESSION,
+      messageId: ID,
+      reason: 'roll_requests',
+      generatedAt: new Date(),
+      userId: USER,
+      delayMs: 0,
+      hasDmRow: async () => true,
+      replyRecords: store,
+      writeReplyRow: writer,
+    });
+    expect(rows.size).toBe(0);
+    expect(store.rows.get(ID)?.state).toBe('persisted');
+  });
+});
+
+// #1416 review: a failed record lookup fails open to the legacy fallback rather than dropping it.
+describe('#1416 watchdog record lookup failure', () => {
+  test('still runs the legacy fallback when the record read throws', async () => {
+    const failingStore = {
+      read: async () => {
+        throw new Error('record store unavailable');
+      },
+      insertHeld: async () => {},
+      transition: async () => ({ ok: false as const, reason: 'no_record' as const }),
+    };
+    await scheduleDmReplyWatchdog({
+      sessionId: 'session-1',
+      messageId: '66666666-7777-4888-8999-000000000416',
+      reason: 'roll_requests',
+      generatedAt: new Date(),
+      userId: 'user-1',
+      envelope: {
+        text: 'The door creaks open.',
+        roll_requests: [{ type: 'check', formula: '1d20', purpose: 'Listen at the door', dc: 10 }],
+        combat_transition: 'none',
+      },
+      delayMs: 0,
+      hasDmRow: async () => false,
+      replyRecords: failingStore,
+    });
+    expect(addMessageCalls).toHaveLength(1);
+    expect(warnings.some((w) => w['msg'] === 'DM_REPLY_RECORD_LOOKUP_FAILED')).toBe(true);
+  });
+});
+
+// #1416 FIX: held records are decided at the watchdog by the fight, the expiry and the gates.
+describe('#1416 held reply verdicts at the watchdog', () => {
+  const heldRecord = (overrides: Partial<DmReplyRecord> = {}): DmReplyRecord => ({
+    id: ID,
+    sessionId: SESSION,
+    userId: USER,
+    state: 'held',
+    text: TEXT,
+    envelope: {
+      text: TEXT,
+      roll_requests: [{ type: 'initiative', formula: '1d20+2', purpose: 'Initiative' }],
+      combat_entry_pending: { combatants: [{ name: 'Head Chef Balthazar', count: 1 }] },
+    },
+    createdAt: new Date(0),
+    ...overrides,
+  });
+  const noFight = {
+    confirmedSince: async (_sessionId: string, _userId: string, _since: Date) => false,
+    pendingEntryExpired: async (_sessionId: string, _pending: Record<string, unknown>) => false,
+    declinedActorKeys: async (_sessionId: string): Promise<string[]> => [],
+  };
+  const run = (
+    store: ReturnType<typeof memoryStore>,
+    deps: Partial<typeof noFight>,
+    writer: (record: DmReplyRecord) => Promise<void>,
+    userId: string | null = USER,
+  ) =>
+    scheduleDmReplyWatchdog({
+      sessionId: SESSION,
+      messageId: ID,
+      reason: 'roll_requests',
+      generatedAt: new Date(),
+      userId: userId ?? undefined,
+      delayMs: 0,
+      hasDmRow: async () => false,
+      replyRecords: store,
+      writeReplyRow: writer,
+      heldReplyDeps: { ...noFight, ...deps },
+    });
+
+  test('a confirmed fight publishes the held reply, timestamped at generation', async () => {
+    const store = memoryStore([heldRecord()]);
+    const written: DmReplyRecord[] = [];
+    await run(store, { confirmedSince: async () => true }, async (r) => {
+      written.push(r);
+    });
+    expect(written).toHaveLength(1);
+    expect(written[0]?.createdAt.getTime()).toBe(0);
+    expect(store.rows.get(ID)?.state).toBe('persisted');
+  });
+
+  test('an expired pending entry publishes the held reply', async () => {
+    const store = memoryStore([heldRecord()]);
+    const { rows, writer } = rowWriter();
+    await run(store, { pendingEntryExpired: async () => true }, writer);
+    expect(rows.get(ID)).toBe(TEXT);
+    expect(store.rows.get(ID)?.state).toBe('persisted');
+  });
+
+  test('a declined fight cancels the held reply and publishes nothing', async () => {
+    const store = memoryStore([heldRecord()]);
+    const { rows, writer } = rowWriter();
+    await run(
+      store,
+      {
+        confirmedSince: async () => true,
+        declinedActorKeys: async () => ['head chef balthazar'],
+      },
+      writer,
+    );
+    expect(rows.size).toBe(0);
+    expect(store.rows.get(ID)?.state).toBe('cancelled');
+  });
+
+  test('a fabricated outcome cancels the held reply even when the fight is confirmed', async () => {
+    const fabricated = 'The goblin hits you for 9 damage and you collapse.';
+    const store = memoryStore([heldRecord({ text: fabricated })]);
+    const { rows, writer } = rowWriter();
+    await run(store, { confirmedSince: async () => true }, writer);
+    expect(rows.size).toBe(0);
+    expect(store.rows.get(ID)?.state).toBe('cancelled');
+  });
+
+  test('with no fight and no expiry the held reply waits, and the legacy fallback stays off', async () => {
+    const store = memoryStore([heldRecord()]);
+    const { rows, writer } = rowWriter();
+    await run(store, {}, writer);
+    expect(rows.size).toBe(0);
+    expect(store.rows.get(ID)?.state).toBe('held');
+    expect(addMessageCalls).toHaveLength(0);
+  });
+
+  test('without a user the fight cannot be checked, so the reply waits', async () => {
+    const store = memoryStore([heldRecord()]);
+    const { rows, writer } = rowWriter();
+    await run(store, { confirmedSince: async () => true }, writer, null);
+    expect(rows.size).toBe(0);
+    expect(store.rows.get(ID)?.state).toBe('held');
+  });
+
+  test('a cancelled record is never resurrected by the legacy fallback', async () => {
+    const store = memoryStore([heldRecord({ state: 'cancelled' })]);
+    const { rows, writer } = rowWriter();
+    await run(store, { confirmedSince: async () => true }, writer);
+    expect(rows.size).toBe(0);
+    expect(addMessageCalls).toHaveLength(0);
   });
 });

@@ -57,6 +57,7 @@ import {
 } from '../../services/dm/dm-feature-gate.js';
 import {
   persistGeneratedDmReply,
+  postgresDmReplyRecordStore,
   provisionalDmText,
   scheduleDmReplyWatchdog,
 } from '../../services/dm/dm-reply-persistence.js';
@@ -2107,6 +2108,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               // a fallback row if the client never saves this reply.
               envelope,
               userId,
+              // #1416: a held combat-entry reply has a durable record (below).
+              replyRecords: postgresDmReplyRecordStore,
             };
             const schedule = () => {
               void scheduleDmReplyWatchdog(watchdog);
@@ -2131,11 +2134,30 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                 await import('../../services/combat/pending-combat-entry.js');
               const text = provisionalDmText(envelope);
               if (text) {
-                await attachHeldReplyToPendingEntry(
+                // #1416: the held reply is durable before the pending entry points at it, so
+                // seating and the watchdog both find the same record by its reserved id.
+                await postgresDmReplyRecordStore.insertHeld({
+                  id: dmReply.messageId,
+                  sessionId: dmSessionId,
+                  userId,
+                  text,
+                  envelope,
+                });
+                const attach = await attachHeldReplyToPendingEntry(
                   dmSessionId,
                   envelope.combat_entry_pending as CombatEntryPending,
                   { messageId: dmReply.messageId, text },
                 );
+                if (!attach.attached) {
+                  // The record stays held: the watchdog decides it from the fight, the expiry and
+                  // the gates. Only a decline or a fabricated outcome cancels it.
+                  logger.info({
+                    msg: 'DM_REPLY_HELD_NOT_ATTACHED',
+                    sessionId: dmSessionId,
+                    messageId: dmReply.messageId,
+                    reason: attach.reason,
+                  });
+                }
               }
             } catch (error) {
               logger.warn({

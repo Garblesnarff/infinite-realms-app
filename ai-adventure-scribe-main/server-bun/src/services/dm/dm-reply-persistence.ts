@@ -168,6 +168,16 @@ export interface DmReplyWatchdogParams {
   hasActiveEncounter?: (sessionId: string, userId: string, generatedAt?: Date) => Promise<boolean>;
   /** #1390: test seam for the session's declined actor keys. */
   declinedActorKeys?: (sessionId: string) => Promise<string[]>;
+  /**
+   * #1416: the durable record for a held combat-entry reply. When given, the record decides
+   * whether the reply is published, so the watchdog no longer depends on a live encounter.
+   * Absent (non-combat turns, unit tests), the legacy fallback below runs unchanged.
+   */
+  replyRecords?: DmReplyRecordStore;
+  /** #1416: test seam for the row write a `ready` record publishes through. */
+  writeReplyRow?: (record: DmReplyRecord) => Promise<void>;
+  /** #1416: test seam for what a held reply's fight and entry facts read as. */
+  heldReplyDeps?: HeldReplyDeps;
 }
 
 /**
@@ -183,15 +193,29 @@ async function defaultHasActiveEncounter(
   userId: string,
   generatedAt?: Date,
 ): Promise<boolean> {
+  if (!generatedAt) return false;
+  // #1416: three outcomes read as "no fight" but mean different things, so each logs its own line.
+  let encounter: { startedAt: Date } | null | undefined;
   try {
-    if (!generatedAt) return false;
     const { CombatEncounterService } = await import('../combat/combat-encounter-service.js');
-    const encounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
-    if (!encounter) return false;
-    return encounter.startedAt.getTime() > generatedAt.getTime();
-  } catch {
+    encounter = await CombatEncounterService.getActiveEncounter(sessionId, userId);
+  } catch (error) {
+    logger.warn({
+      msg: 'DM_REPLY_ENCOUNTER_LOOKUP_FAILED',
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return false;
   }
+  if (!encounter) {
+    logger.info({ msg: 'DM_REPLY_ENCOUNTER_ENDED', sessionId, reason: 'no_active_encounter' });
+    return false;
+  }
+  if (encounter.startedAt.getTime() <= generatedAt.getTime()) {
+    logger.info({ msg: 'DM_REPLY_ENCOUNTER_ENDED', sessionId, reason: 'predates_turn' });
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -260,10 +284,7 @@ const FALLBACK_SKIP_REASONS: ReadonlySet<string> = new Set([
  * carrying roll requests arrives with reason 'roll_requests' and the
  * combat/gate skips would never run. Check the envelope conditions directly.
  */
-function fallbackSkipReason(
-  envelope: Record<string, unknown>,
-  reason: string,
-): string | null {
+function fallbackSkipReason(envelope: Record<string, unknown>, reason: string): string | null {
   if (envelope.combat_transition === 'start') return 'combat_start';
   if (envelope.combat_entry_pending) return 'combat_entry_pending';
   if (nonEmptyArray(envelope.combat_actions) || nonEmptyArray(envelope.combatants)) {
@@ -492,6 +513,294 @@ export async function dmReplyRowExists(messageId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
+/* ------------------------------------------------------------------------------------------------
+ * #1416: the durable record of a held combat-entry reply.
+ *
+ * One row per reserved reply id in `dm_reply_records`, apart from `dialogue_history` until the
+ * reply is safe to publish. This module is the only writer of its `state`. Seating, the watchdog
+ * and the decline path all call the guarded transitions below.
+ *
+ *   held → ready → persisted      (ready → ready is a publish retry that did not finish)
+ *   held → cancelled              (the player declined the fight, or the prose asserts an
+ *                                  outcome the dice have not decided)
+ *
+ * A held reply is published (held → ready → persisted) when, at the watchdog's check, either:
+ *   - the fight it opened is confirmed: an encounter for the session, active or concluded, began
+ *     after the reply was generated; or
+ *   - its pending entry expired (the offer lapsed).
+ * The decline gate and the harm gate run before either. Neither depends on the encounter being
+ * live at the check, so a fight that ended before the watchdog still publishes its narration.
+ * A `held` reply with neither condition yet stays held; the watchdog does not run the legacy
+ * fallback for it.
+ * ---------------------------------------------------------------------------------------------- */
+
+export type DmReplyRecordState = 'held' | 'ready' | 'persisted' | 'cancelled';
+
+/** Legal moves. Anything else is refused and the refusal names the state it found. */
+const DM_REPLY_TRANSITIONS: Readonly<Record<DmReplyRecordState, readonly DmReplyRecordState[]>> = {
+  held: ['ready', 'cancelled'],
+  ready: ['ready', 'persisted'],
+  persisted: [],
+  cancelled: [],
+};
+
+export function canTransitionDmReply(from: DmReplyRecordState, to: DmReplyRecordState): boolean {
+  return DM_REPLY_TRANSITIONS[from].includes(to);
+}
+
+export interface DmReplyRecord {
+  id: string;
+  sessionId: string;
+  userId: string;
+  state: DmReplyRecordState;
+  text: string;
+  envelope: Record<string, unknown> | null;
+  /** Server clock at generation. Published rows carry it as their timestamp, so they sort before the fight's seating rows. */
+  createdAt: Date;
+}
+
+export type DmReplyTransitionResult =
+  | { ok: true; state: DmReplyRecordState }
+  | { ok: false; reason: 'no_record' | 'illegal_from'; state?: DmReplyRecordState };
+
+/** Storage for the record. The Postgres store is the default; tests inject an in-memory one. */
+export interface DmReplyRecordStore {
+  read(id: string): Promise<DmReplyRecord | null>;
+  /** Inserts a `held` record, or does nothing when one already exists for this id. */
+  insertHeld(record: Omit<DmReplyRecord, 'state' | 'createdAt'>): Promise<void>;
+  /** Moves the record only from a state the table allows, in one guarded write. */
+  transition(id: string, to: DmReplyRecordState): Promise<DmReplyTransitionResult>;
+}
+
+export const postgresDmReplyRecordStore: DmReplyRecordStore = {
+  async read(id) {
+    const [{ db }, { dmReplyRecords }, { eq }] = await Promise.all([
+      import('../../../../db/client.js'),
+      import('../../../../db/schema/index.js'),
+      import('drizzle-orm'),
+    ]);
+    const [row] = await db.select().from(dmReplyRecords).where(eq(dmReplyRecords.id, id)).limit(1);
+    if (!row) return null;
+    return {
+      id: row.id,
+      sessionId: row.sessionId,
+      userId: row.userId,
+      state: row.state as DmReplyRecordState,
+      text: row.text,
+      envelope: (row.envelope as Record<string, unknown> | null) ?? null,
+      createdAt: row.createdAt,
+    };
+  },
+  async insertHeld(record) {
+    const [{ db }, { dmReplyRecords }] = await Promise.all([
+      import('../../../../db/client.js'),
+      import('../../../../db/schema/index.js'),
+    ]);
+    await db
+      .insert(dmReplyRecords)
+      .values({ ...record, state: 'held' })
+      .onConflictDoNothing({ target: dmReplyRecords.id });
+  },
+  async transition(id, to) {
+    const froms = (Object.keys(DM_REPLY_TRANSITIONS) as DmReplyRecordState[]).filter((from) =>
+      canTransitionDmReply(from, to),
+    );
+    const [{ db }, { dmReplyRecords }, { and, eq, inArray }] = await Promise.all([
+      import('../../../../db/client.js'),
+      import('../../../../db/schema/index.js'),
+      import('drizzle-orm'),
+    ]);
+    const [moved] = await db
+      .update(dmReplyRecords)
+      .set({ state: to, updatedAt: new Date() })
+      .where(and(eq(dmReplyRecords.id, id), inArray(dmReplyRecords.state, froms)))
+      .returning({ state: dmReplyRecords.state });
+    if (moved) return { ok: true, state: to };
+    const current = await postgresDmReplyRecordStore.read(id);
+    return current
+      ? { ok: false, reason: 'illegal_from', state: current.state }
+      : { ok: false, reason: 'no_record' };
+  },
+};
+
+/** Writes the provisional row for a published reply; the same id replaces in place. */
+async function writeReplyRow(record: DmReplyRecord): Promise<void> {
+  const { SessionMessageService } = await import('../session/session-message-service.js');
+  await SessionMessageService.addMessage(
+    {
+      id: record.id,
+      sessionId: record.sessionId,
+      speakerType: 'dm',
+      message: record.text,
+      // Dialogue order is by timestamp: the reply sorts at its generation time, before the seating
+      // rows the fight wrote after it.
+      timestamp: record.createdAt,
+      context: {
+        emotion: 'neutral',
+        intent: 'response',
+        combat_transition: 'none',
+        [PROVISIONAL_DM_CONTEXT_KEY]: true,
+      },
+    },
+    record.userId,
+  );
+}
+
+/**
+ * Publish a `ready` record to `dialogue_history`, then mark it persisted. Restart-safe: the row is
+ * keyed by the reserved id, so a retry replaces the same row rather than adding one. A failed write
+ * leaves the record `ready` (the `ready → ready` retry) and reports `retry`. A refused final
+ * transition reports `refused`, unless the record is already persisted (an earlier publish won).
+ */
+export async function publishReadyDmReply(
+  record: DmReplyRecord,
+  store: DmReplyRecordStore = postgresDmReplyRecordStore,
+  writeRow: (record: DmReplyRecord) => Promise<void> = writeReplyRow,
+): Promise<'persisted' | 'retry' | 'refused'> {
+  try {
+    await writeRow(record);
+  } catch (error) {
+    logger.error({
+      msg: 'DM_REPLY_RECORD_PUBLISH_FAILED',
+      sessionId: record.sessionId,
+      messageId: record.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await store.transition(record.id, 'ready');
+    return 'retry';
+  }
+  const moved = await store.transition(record.id, 'persisted');
+  if (moved.ok) return 'persisted';
+  if (moved.reason === 'illegal_from' && moved.state === 'persisted') return 'persisted';
+  logger.warn({
+    msg: 'DM_REPLY_RECORD_TRANSITION_REFUSED',
+    sessionId: record.sessionId,
+    messageId: record.id,
+    to: 'persisted',
+    state: moved.state,
+    reason: moved.reason,
+  });
+  return 'refused';
+}
+
+/**
+ * Seating confirmed the fight, so the held reply becomes publishable. Applies the harm gate here
+ * (a fabricated outcome cancels the record instead of publishing), then publishes. Seating calls
+ * this instead of writing `dialogue_history` itself.
+ */
+export async function publishHeldReplyAtSeating(
+  params: { sessionId: string; userId: string; messageId: string; text: string },
+  store: DmReplyRecordStore = postgresDmReplyRecordStore,
+  writeRow: (record: DmReplyRecord) => Promise<void> = writeReplyRow,
+): Promise<'persisted' | 'cancelled' | 'retry' | 'refused'> {
+  let record = await store.read(params.messageId);
+  if (!record) {
+    await store.insertHeld({
+      id: params.messageId,
+      sessionId: params.sessionId,
+      userId: params.userId,
+      text: params.text,
+      envelope: null,
+    });
+    record = await store.read(params.messageId);
+  }
+  if (!record) return 'refused';
+  if (record.state === 'persisted') return 'persisted';
+  if (record.state === 'cancelled') return 'cancelled';
+  if (record.state === 'held') {
+    if (suspectsFabricatedOutcome(record.text, { playerMayHaveActed: true })) {
+      await store.transition(record.id, 'cancelled');
+      logger.warn({
+        msg: 'DM_REPLY_RECORD_CANCELLED',
+        sessionId: params.sessionId,
+        messageId: params.messageId,
+        reason: 'unverified_harm_claim',
+      });
+      return 'cancelled';
+    }
+    const moved = await store.transition(record.id, 'ready');
+    if (!moved.ok) return 'refused';
+  }
+  return publishReadyDmReply({ ...record, state: 'ready' }, store, writeRow);
+}
+
+/**
+ * The client saved this reply under its reserved id (or the row exists for another reason). A
+ * `ready` record is then settled as persisted, so the watchdog stops considering it.
+ */
+export async function settleRecordWhenRowExists(
+  messageId: string,
+  store: DmReplyRecordStore = postgresDmReplyRecordStore,
+): Promise<void> {
+  const record = await store.read(messageId);
+  if (record?.state === 'ready') await store.transition(messageId, 'persisted');
+}
+
+/** What the watchdog decides for a `held` record. */
+export type HeldReplyVerdict =
+  | { action: 'publish'; reason: 'fight_confirmed' | 'entry_expired' }
+  | { action: 'cancel'; reason: 'declined' | 'unverified_harm_claim' }
+  | { action: 'wait' };
+
+/** Facts the watchdog needs about a held reply. Defaults read the database; tests inject them. */
+export interface HeldReplyDeps {
+  /** An encounter for the session, active or concluded, began after `since`. */
+  confirmedSince: (sessionId: string, userId: string, since: Date) => Promise<boolean>;
+  /** The pending entry for these actors expired without an answer. */
+  pendingEntryExpired: (sessionId: string, pending: Record<string, unknown>) => Promise<boolean>;
+  /** The actor keys the player declined in this session. */
+  declinedActorKeys: (sessionId: string) => Promise<string[]>;
+}
+
+const defaultHeldReplyDeps: HeldReplyDeps = {
+  async confirmedSince(sessionId, userId, since) {
+    const { CombatEncounterService } = await import('../combat/combat-encounter-service.js');
+    const encounter =
+      (await CombatEncounterService.getActiveEncounter(sessionId, userId)) ??
+      (await CombatEncounterService.getLatestConcludedEncounter(sessionId, userId));
+    return Boolean(encounter && encounter.startedAt.getTime() > since.getTime());
+  },
+  async pendingEntryExpired(sessionId, pending) {
+    const { pendingEntryExpiredFor } = await import('../combat/pending-combat-entry.js');
+    return pendingEntryExpiredFor(sessionId, pending);
+  },
+  declinedActorKeys: (sessionId) => defaultDeclinedActorKeys(sessionId),
+};
+
+/**
+ * Decide a `held` record. Order: the decline gate and the harm gate cancel first; a confirmed
+ * fight or an expired entry publishes; anything else waits. A record without a user cannot be
+ * checked for a confirmed fight, so it waits.
+ */
+export async function resolveHeldReply(
+  record: DmReplyRecord,
+  userId: string | undefined,
+  deps: HeldReplyDeps = defaultHeldReplyDeps,
+): Promise<HeldReplyVerdict> {
+  const names = combatantNames(record.envelope ?? {});
+  if (names.length > 0) {
+    const keys = await deps.declinedActorKeys(record.sessionId);
+    if (keys.some((key) => names.some((name) => key.split('|').includes(name)))) {
+      return { action: 'cancel', reason: 'declined' };
+    }
+  }
+  if (suspectsFabricatedOutcome(record.text, { playerMayHaveActed: true })) {
+    return { action: 'cancel', reason: 'unverified_harm_claim' };
+  }
+  if (userId && (await deps.confirmedSince(record.sessionId, userId, record.createdAt))) {
+    return { action: 'publish', reason: 'fight_confirmed' };
+  }
+  const pending = record.envelope?.combat_entry_pending;
+  if (
+    pending &&
+    typeof pending === 'object' &&
+    (await deps.pendingEntryExpired(record.sessionId, pending as Record<string, unknown>))
+  ) {
+    return { action: 'publish', reason: 'entry_expired' };
+  }
+  return { action: 'wait' };
+}
+
 /**
  * Check once, after `delayMs`, that this turn's DM row was saved after a
  * generation the server did not persist. When it was not, write the envelope
@@ -507,7 +816,96 @@ export function scheduleDmReplyWatchdog(params: DmReplyWatchdogParams): Promise<
       void Promise.resolve()
         .then(() => hasDmRow(params.messageId))
         .then(async (found) => {
-          if (found) return;
+          const store = params.replyRecords;
+          if (found) {
+            if (store) await settleRecordWhenRowExists(params.messageId, store);
+            return;
+          }
+          // #1416: a held combat-entry reply has a durable record, and the record decides it.
+          // A failed lookup fails open to the legacy fallback below; it does not drop the reply.
+          if (store) {
+            let record: DmReplyRecord | null = null;
+            try {
+              record = await store.read(params.messageId);
+            } catch (error) {
+              logger.warn({
+                msg: 'DM_REPLY_RECORD_LOOKUP_FAILED',
+                sessionId: params.sessionId,
+                messageId: params.messageId,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+            if (record) {
+              const logOutcome = (fields: Record<string, unknown>) =>
+                logger.warn({
+                  msg: 'DM_REPLY_UNPERSISTED',
+                  sessionId: params.sessionId,
+                  messageId: params.messageId,
+                  reason: params.reason,
+                  waitedMs: delayMs,
+                  ...fields,
+                });
+              if (record.state === 'held') {
+                const verdict = await resolveHeldReply(record, params.userId, params.heldReplyDeps);
+                if (verdict.action === 'cancel') {
+                  await store.transition(record.id, 'cancelled');
+                  logger.warn({
+                    msg: 'DM_REPLY_RECORD_CANCELLED',
+                    sessionId: params.sessionId,
+                    messageId: params.messageId,
+                    reason: verdict.reason,
+                  });
+                  logOutcome({
+                    fallbackPersisted: false,
+                    fallbackSkipped: `held_${verdict.reason}`,
+                  });
+                  return;
+                }
+                if (verdict.action === 'publish') {
+                  const moved = await store.transition(record.id, 'ready');
+                  if (moved.ok) {
+                    const outcome = await publishReadyDmReply(
+                      { ...record, state: 'ready' },
+                      store,
+                      params.writeReplyRow,
+                    );
+                    logOutcome({
+                      fallbackPersisted: outcome === 'persisted',
+                      fallbackSkipped: outcome === 'persisted' ? undefined : `publish_${outcome}`,
+                      publishReason: verdict.reason,
+                      recordState: 'ready',
+                    });
+                    return;
+                  }
+                }
+                // Neither the fight nor the expiry has happened yet: the reply stays held, and
+                // the legacy fallback does not run for it.
+                logOutcome({
+                  fallbackPersisted: false,
+                  fallbackSkipped: 'record_held',
+                  recordState: 'held',
+                });
+                return;
+              }
+              if (record.state === 'ready') {
+                const outcome = await publishReadyDmReply(record, store, params.writeReplyRow);
+                logOutcome({
+                  fallbackPersisted: outcome === 'persisted',
+                  fallbackSkipped: outcome === 'persisted' ? undefined : `publish_${outcome}`,
+                  recordState: 'ready',
+                });
+                return;
+              }
+              // persisted or cancelled: already settled. A cancelled reply is not resurrected by
+              // the legacy fallback.
+              logOutcome({
+                fallbackPersisted: false,
+                fallbackSkipped: `record_${record.state}`,
+                recordState: record.state,
+              });
+              return;
+            }
+          }
           // #783: the client never saved this reply. The server generated it,
           // so persist the fallback row before reporting — the player gets
           // the reply (and its roll popup) after a reload instead of nothing.
