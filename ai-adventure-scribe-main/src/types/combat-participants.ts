@@ -31,6 +31,8 @@ export interface CombatParticipant {
   /** Bible heading to show players when it differs from `name` (the DM's label; #2398). */
   displayName?: string;
   participantType: 'player' | 'enemy' | 'npc' | 'monster';
+  /** Engine-supplied health tier; absent when the server has no current status. */
+  healthCondition?: 'unharmed' | 'wounded' | 'bloodied' | 'near death';
   characterId?: string;
   characterClass?: string;
   level?: number;

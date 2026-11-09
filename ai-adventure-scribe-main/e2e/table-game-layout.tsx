@@ -5,13 +5,15 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { TooltipProvider } from '../src/components/ui/tooltip';
 import { AuthProvider } from '../src/contexts/AuthContext';
-import { CampaignProvider } from '../src/contexts/CampaignContext';
+import { CampaignProvider, useCampaign } from '../src/contexts/CampaignContext';
 import { CharacterProvider } from '../src/contexts/CharacterContext';
+import { useCombat } from '../src/contexts/CombatContext';
 import { useGame } from '../src/contexts/GameContext';
 import { GameLayout } from '../src/features/game-session/components/game/game-content/GameLayout';
 import GameProviders from '../src/features/game-session/components/game/GameProviders';
 import { TRPCProvider } from '../src/infrastructure/api';
 import { userDataApi } from '../src/services/user-data-api';
+import { setRngSeed } from '../src/utils/rng';
 import '../src/index.css';
 
 const story = [
@@ -42,6 +44,61 @@ document.body.classList.add('ir-table-look');
 
 function Fixture(): React.JSX.Element {
   const { requestDiceRoll } = useGame();
+  const { dispatch: campaignDispatch } = useCampaign();
+  const { startCombat } = useCombat();
+  const combatFixture = new URLSearchParams(window.location.search).get('combat') === 'true';
+  React.useEffect(() => {
+    campaignDispatch({
+      type: 'UPDATE_CAMPAIGN',
+      payload: {
+        name: 'Abyssal Descent',
+        description: 'Find the basalt path',
+        difficulty_level: 'medium',
+      },
+    });
+  }, [campaignDispatch]);
+  React.useEffect(() => {
+    if (!combatFixture) return;
+    setRngSeed(1234);
+    void startCombat('layout-session', [
+      {
+        id: 'hero',
+        characterId: 'fixture-hero',
+        name: 'The Scholar',
+        participantType: 'player',
+        currentHitPoints: 7,
+        maxHitPoints: 7,
+        armorClass: 11,
+        initiative: 15,
+        initiativeBonus: 0,
+      },
+      {
+        id: 'foe',
+        name: 'Captain Reeves',
+        participantType: 'monster',
+        healthCondition: 'wounded',
+        currentHitPoints: 9,
+        maxHitPoints: 12,
+        armorClass: 12,
+        initiative: 0,
+        initiativeBonus: 0,
+      },
+      ...(new URLSearchParams(window.location.search).get('many') === 'true'
+        ? Array.from({ length: 12 }, (_, index) => ({
+            id: `foe-${index}`,
+            name: `Long-named opponent ${index + 1}`,
+            participantType: 'monster' as const,
+            healthCondition: 'wounded' as const,
+            currentHitPoints: 9,
+            maxHitPoints: 12,
+            armorClass: 12,
+            initiative: 0,
+            initiativeBonus: 0,
+          }))
+        : []),
+    ]);
+    setRngSeed(undefined);
+  }, [combatFixture, startCombat]);
   React.useEffect(() => {
     if (new URLSearchParams(window.location.search).get('roll') === 'true') {
       requestDiceRoll({
@@ -61,7 +118,13 @@ function Fixture(): React.JSX.Element {
         sessionId="layout-session"
         campaignIdForHandler={null}
         characterIdForHandler={null}
-        sessionData={{ id: 'layout-session', turn_count: 1 } as never}
+        sessionData={
+          {
+            id: 'layout-session',
+            turn_count: 1,
+            current_scene_description: 'The rope hangs over a dark chasm.',
+          } as never
+        }
         updateGameSessionState={asyncNoop}
         isLeftCollapsed={left}
         isRightCollapsed={right}
@@ -69,10 +132,10 @@ function Fixture(): React.JSX.Element {
         setIsRightCollapsed={setRight}
         showSceneBlurb={false}
         onSceneBlurbToggle={noop}
-        combatMode={false}
+        combatMode={combatFixture}
         showTracker={false}
         setShowTracker={noop}
-        isCombatDetected={false}
+        isCombatDetected={combatFixture}
         isGeneratingGreeting={false}
         innerHandleAIResponse={asyncNoop}
         isDM={false}
@@ -89,7 +152,18 @@ createRoot(document.getElementById('root')!).render(
   <HelmetProvider>
     <AuthProvider>
       <TRPCProvider>
-        <CharacterProvider>
+        <CharacterProvider
+          initialCharacter={
+            {
+              id: 'fixture-hero',
+              name: 'The Scholar',
+              level: 1,
+              race: { name: 'Human', speed: 30 },
+              class: { name: 'Wizard', hitDie: 6 },
+              character_stats: { current_hit_points: 7, max_hit_points: 7, armor_class: 11 },
+            } as never
+          }
+        >
           <CampaignProvider>
             <MemoryRouter>
               <TooltipProvider>

@@ -9,14 +9,12 @@ vi.mock('@/contexts/CharacterContext', () => ({
 }));
 
 describe('Inspiration coin', () => {
-  it.each([
-    [true, 'available'],
-    [false, 'unavailable'],
-    [undefined, 'unknown'],
-  ] as const)('shows %s from the character state', (inspiration, label) => {
-    value.inspiration = inspiration;
-    render(<InspirationCoin />);
-    expect(screen.getByRole('status')).toHaveTextContent(`Inspiration ${label}`);
-    expect(screen.getByRole('status')).toHaveTextContent('spending coming soon');
-  });
+  it.each([true, false, undefined] as const)(
+    'hides the nonfunctional coin for state %s',
+    (inspiration) => {
+      value.inspiration = inspiration;
+      render(<InspirationCoin />);
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    },
+  );
 });

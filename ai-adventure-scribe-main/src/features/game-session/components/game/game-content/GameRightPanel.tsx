@@ -19,6 +19,8 @@ import { Z_INDEX } from '@/constants/z-index';
 interface GameRightPanelProps {
   sessionId?: string;
   isCollapsed: boolean;
+  initialTab?: 'character' | 'memory' | 'journal';
+  initialTabRequest?: number;
   sessionData: ExtendedGameSession;
   updateGameSessionState: (newState: SessionStateUpdater) => Promise<void>;
   combatMode: boolean;
@@ -30,6 +32,8 @@ export const GameRightPanel: React.FC<GameRightPanelProps> = memo(
   ({
     sessionId,
     isCollapsed,
+    initialTab,
+    initialTabRequest,
     sessionData,
     updateGameSessionState,
     combatMode,
@@ -41,6 +45,8 @@ export const GameRightPanel: React.FC<GameRightPanelProps> = memo(
         <div className="w-full md:w-auto min-h-0 transition-all duration-300">
           <GameSidePanel
             sessionId={sessionId}
+            initialTab={initialTab}
+            initialTabRequest={initialTabRequest}
             sessionData={sessionData}
             updateGameSessionState={updateGameSessionState}
             combatMode={combatMode}

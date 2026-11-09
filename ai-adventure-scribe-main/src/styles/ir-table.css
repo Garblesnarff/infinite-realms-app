@@ -319,3 +319,67 @@ html[data-reduce-motion='on'] body.ir-table-look .ir-end-dot,
 html[data-reduce-motion='on'] body.ir-table-look .ir-end-rise {
   animation: none;
 }
+
+/* The table composer keeps the ordinary send and attachment controls on parchment. */
+body.ir-table-look .ir-app .chat-composer {
+  background: var(--ir-parchment-1) !important;
+  border-color: var(--ir-brass-4) !important;
+  color: var(--ir-ink);
+}
+body.ir-table-look .ir-app .chat-composer textarea,
+body.ir-table-look .ir-app .chat-composer textarea::placeholder {
+  color: var(--ir-ink);
+  opacity: 1;
+}
+body.ir-table-look .chat-composer button {
+  color: var(--ir-ink);
+}
+body.ir-table-look .chat-composer button[aria-label*='Send'] {
+  background: var(--ir-brass-2);
+  color: var(--ir-brass-ink);
+}
+
+body.ir-table-look .ir-table-roll-host:has(> .ir-stable-roll-slot:empty) {
+  display: none;
+}
+body.ir-table-look
+  [data-testid='table-roll-column']:has(.ir-stable-roll-slot:not(:empty))
+  .ir-table-roll-wait {
+  display: none;
+}
+
+/* Engine ledger text stays legible on the parchment story page. */
+body.ir-table-look [data-testid='engine-line'] > button {
+  background: var(--ir-parchment-2);
+  color: var(--ir-ink);
+}
+body.ir-table-look [data-testid='engine-line'] > button > span:nth-child(2),
+body.ir-table-look [data-testid='engine-line'] > button > span:nth-child(2) *,
+body.ir-table-look [data-testid='engine-line'] > p {
+  color: var(--ir-ink) !important;
+}
+body.ir-table-look [data-testid='engine-line-pill'].ir-wax-seal--gold {
+  background: #6e4a16;
+  color: #fff;
+}
+body.ir-table-look [data-testid='engine-line-pill'].ir-wax-seal--red {
+  background: var(--ir-wax-red-2);
+  color: #fff;
+}
+body.ir-table-look [data-testid='engine-line-pill'].ir-wax-seal--slate {
+  background: var(--ir-wax-slate);
+  color: #fff;
+}
+
+/* The voice control is a dark pill on the parchment story page. */
+body.ir-table-look .ir-app .ir-tts {
+  color: var(--ir-brass-1) !important;
+}
+body.ir-table-look .ir-app .ir-tts svg {
+  color: var(--ir-brass-1) !important;
+}
+body.ir-table-look .ir-app .chat-composer .text-gray-400,
+body.ir-table-look .ir-app .chat-composer .text-gray-500,
+body.ir-table-look .ir-app .chat-composer code {
+  color: var(--ir-ink) !important;
+}

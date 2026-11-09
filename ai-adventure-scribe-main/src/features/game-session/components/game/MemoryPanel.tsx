@@ -30,6 +30,8 @@ interface MemoryPanelProps {
 }
 
 interface GameSidePanelProps extends MemoryPanelProps {
+  initialTab?: 'character' | 'memory' | 'journal';
+  initialTabRequest?: number;
   isCollapsed: boolean;
   onToggle: () => void;
 }
@@ -46,6 +48,8 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
     updateGameSessionState,
     combatMode,
     spellCastHandlerRef,
+    initialTab,
+    initialTabRequest,
     isCollapsed,
     onToggle,
   }) => {
@@ -71,6 +75,10 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
       handleDrag,
       stopDrag,
     } = usePanelResize();
+
+    useEffect(() => {
+      if (initialTab) setActiveTab(initialTab);
+    }, [initialTab, initialTabRequest, setActiveTab]);
 
     // Combat tab disappears when combat ends; fall back to the sheet so the panel is not blank.
     useEffect(() => {

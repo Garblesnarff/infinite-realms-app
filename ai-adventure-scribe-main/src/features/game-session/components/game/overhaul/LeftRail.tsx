@@ -1,8 +1,10 @@
 import React from 'react';
 
-import type { CampaignSummaryVM, CombatantVM, PartyMemberVM } from './types';
+import type { CampaignSummaryVM, CharacterSheetVM, CombatantVM, PartyMemberVM } from './types';
 
 import { IRBar, IRPanel, IRPanelHeader, IRThumb } from '@/components/ui/ir-primitives';
+import { tableImageUrl } from '@/features/campaigns/table/image-url';
+import { TableImage } from '@/features/campaigns/table/TableImage';
 import { formatCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
 const CurrentCampaign: React.FC<{ campaign: CampaignSummaryVM }> = ({ campaign }) => (
@@ -152,6 +154,103 @@ const EncounterTracker: React.FC<{
     </div>
   </IRPanel>
 );
+
+/** Compact view of the same character data used by the full sheet. */
+export const TableCharacterCard: React.FC<{
+  character: CharacterSheetVM;
+  onOpenSheet: () => void;
+  preferredPortrait?: string;
+}> = ({ character, onOpenSheet, preferredPortrait }) => {
+  const [expanded, setExpanded] = React.useState(false);
+  const portrait = tableImageUrl(preferredPortrait ?? null, 144, 144);
+  const alternatePortrait = tableImageUrl(character.avatarUrl ?? null, 144, 144);
+  const portraitImage = (size: number): React.ReactNode => (
+    <TableImage
+      src={portrait}
+      alt=""
+      width={size}
+      height={size}
+      className="rounded object-cover"
+      fallback={
+        <TableImage
+          src={alternatePortrait}
+          alt=""
+          width={size}
+          height={size}
+          className="rounded object-cover"
+          fallback={<span aria-hidden="true">{character.name.slice(0, 1)}</span>}
+        />
+      }
+    />
+  );
+  const hp = formatCharacterSheetHitPoints({
+    current: character.hpCurrent,
+    maximum: character.hpMax,
+  }).replace('/', ' / ');
+  return (
+    <section
+      className="ir-index-card rounded-lg p-1 text-[#2a1a0c] md:p-4"
+      aria-label="Character summary"
+    >
+      <button
+        type="button"
+        className="flex min-h-11 w-full items-center gap-2 text-left md:hidden"
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
+      >
+        {portraitImage(36)}
+        <span className="min-w-0 flex-1 truncate font-bold">{character.name}</span>
+        <span>
+          ♥ {hp} · AC {character.ac ?? '—'}
+        </span>
+      </button>
+      <div className="hidden items-center gap-3 md:flex">
+        {portraitImage(64)}
+        <div className="min-w-0">
+          <h2 className="ir-display break-words text-lg font-bold">{character.name}</h2>
+          <p>
+            {character.subtitle} · Level {character.level}
+          </p>
+        </div>
+      </div>
+      <div className={expanded ? 'block' : 'hidden md:block'}>
+        <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div>
+            <dt>AC</dt>
+            <dd>{character.ac ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>INIT</dt>
+            <dd>{character.initiative}</dd>
+          </div>
+          <div>
+            <dt>SPEED</dt>
+            <dd>{character.speed}</dd>
+          </div>
+        </dl>
+        <p className="mt-3 font-semibold">Hit points · {hp}</p>
+        {character.hpCurrent !== null &&
+          character.hpMax !== null &&
+          character.hpMax > 0 &&
+          character.hpMax <= 20 && (
+            <p aria-hidden="true" className="break-words text-[#7a1016]">
+              {Array.from({ length: character.hpMax }, (_, index) =>
+                index < (character.hpCurrent ?? 0) ? '♥' : '♡',
+              ).join(' ')}
+            </p>
+          )}
+        {character.attacks.map((attack) => (
+          <p key={attack.id}>
+            {attack.name} {attack.bonus} · {attack.damage}
+          </p>
+        ))}
+        <button type="button" onClick={onOpenSheet} className="min-h-11 underline">
+          Open full sheet
+        </button>
+      </div>
+    </section>
+  );
+};
 
 export const LeftRail: React.FC<{
   campaign: CampaignSummaryVM;

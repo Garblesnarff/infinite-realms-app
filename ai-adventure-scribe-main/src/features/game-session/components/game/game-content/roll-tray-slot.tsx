@@ -1,4 +1,12 @@
-import { createContext, useContext, type ReactElement, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { createPortal } from 'react-dom';
 
 /**
@@ -11,6 +19,21 @@ import { createPortal } from 'react-dom';
 const RollTraySlotContext = createContext<HTMLElement | null>(null);
 
 export const RollTraySlotProvider = RollTraySlotContext.Provider;
+
+/** Move one persistent portal target between layouts without unmounting a pending roll. */
+export function useStableRollTraySlot(host: HTMLElement | null): HTMLElement | null {
+  const [slot] = useState(() => {
+    if (typeof document === 'undefined') return null;
+    const element = document.createElement('div');
+    element.className = 'ir-stable-roll-slot';
+    return element;
+  });
+  useLayoutEffect(() => {
+    if (host && slot) host.appendChild(slot);
+  }, [host, slot]);
+  useEffect(() => () => slot?.remove(), [slot]);
+  return slot;
+}
 
 /**
  * Renders the roll prompt into the tray slot. Without a slot (a message list rendered outside

@@ -164,7 +164,11 @@ exports[`GameMainContent overhaul behavior contract > keeps the live message, di
         <div
           class="empty:hidden [body.ir-table-look_&:empty]:block [body.ir-table-look_&:empty]:h-3 [body.ir-table-look_&:empty]:rounded [body.ir-table-look_&:empty]:border [body.ir-table-look_&:empty]:border-[#a9823f] [body.ir-table-look_&:empty]:bg-[#3b2616]"
           data-testid="roll-tray-slot"
-        />
+        >
+          <div
+            class="ir-stable-roll-slot"
+          />
+        </div>
         <div
           class="relative border-t border-border/60 bg-card/70 backdrop-blur-sm pb-4 md:pb-[env(safe-area-inset-bottom)]"
           style="z-index: 30;"

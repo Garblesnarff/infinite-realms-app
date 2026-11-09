@@ -1,3 +1,5 @@
+import { networkInterfaces } from 'node:os';
+
 /* eslint-disable max-lines -- one cohesive reproduction: slug resolution at the gateway, the
    error split behind it, and the browser bridge that feeds both, sharing one mock setup. */
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
@@ -42,6 +44,7 @@ const entity = (id: string, name: string, x: number, type: 'pc' | 'monster') =>
     movementRemaining: 30,
   }) satisfies MapEntity;
 
+let foeHp: number | null = 30;
 const participant = (id: string, name: string, participantType: 'player' | 'npc') => ({
   id,
   name,
@@ -50,7 +53,10 @@ const participant = (id: string, name: string, participantType: 'player' | 'npc'
   maxHp: 30,
   armorClass: 14,
   encounterId: ENCOUNTER_ID,
-  status: { currentHp: 30 },
+  status:
+    participantType === 'npc' && foeHp === null
+      ? null
+      : { currentHp: participantType === 'npc' ? foeHp : 30, isConscious: true },
 });
 
 const attackInputs: AttackRollInput[] = [];
@@ -292,6 +298,7 @@ const postIntent = (body: unknown) =>
   );
 
 beforeEach(() => {
+  foeHp = 30;
   encounterStatus = 'active';
   activeEncounter = { id: ENCOUNTER_ID, sessionId: SESSION_ID };
   attackInputs.length = 0;
@@ -329,6 +336,39 @@ describe('the server-run NPC turns behind the intent route (#2658)', () => {
 });
 
 describe('the active combat read', () => {
+  it('sends the engine health tier for a foe and leaves it absent without status', async () => {
+    for (const [hp, tier] of [
+      [30, 'unharmed'],
+      [20, 'wounded'],
+      [14, 'bloodied'],
+      [5, 'near death'],
+      [null, undefined],
+    ] as const) {
+      foeHp = hp;
+      const response = await app.handle(
+        new Request(
+          `http://${
+            Object.values(networkInterfaces())
+              .flatMap((entries) => entries ?? [])
+              .find((entry) => entry.internal && entry.family === 'IPv4')!.address
+          }/v1/combat/sessions/${SESSION_ID}/active`,
+          {
+            headers: { authorization: 'Bearer valid-token' },
+          },
+        ),
+      );
+      expect(response.status).toBe(200);
+      const payload = (await response.json()) as {
+        combat: { participants: Array<{ id: string; healthCondition?: string }> };
+      };
+      expect(payload.combat.participants.find((p) => p.id === VOID_MAW_ID)?.healthCondition).toBe(
+        tier,
+      );
+      expect(
+        payload.combat.participants.find((p) => p.id === SEEKER_ID)?.healthCondition,
+      ).toBeUndefined();
+    }
+  });
   it('returns a successful empty result when the session has no combat', async () => {
     activeEncounter = null;
 

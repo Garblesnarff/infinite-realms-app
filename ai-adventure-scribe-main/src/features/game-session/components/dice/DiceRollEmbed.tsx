@@ -172,6 +172,7 @@ export const DiceRollEmbed: React.FC<DiceRollEmbedProps> = ({
   useEffect(() => {
     if (!result || settledResult.current === result) return;
     const fallback = window.setTimeout(() => {
+      if (settledResult.current === result) return;
       setAnimationTimedOut(true);
       handleSettled();
     }, 10_000);
