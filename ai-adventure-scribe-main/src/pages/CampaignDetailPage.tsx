@@ -235,6 +235,9 @@ const CampaignDetailPage: React.FC = () => {
   );
   const [artworkUnavailable, setArtworkUnavailable] = React.useState(!campaignBannerImage);
   const overviewPreview = campaign?.overview ? previewCampaignOverview(campaign.overview) : '';
+  const overviewFull = campaign?.overview
+    ? previewCampaignOverview(campaign.overview, Number.POSITIVE_INFINITY)
+    : '';
 
   React.useEffect(() => {
     setBannerImage(campaignBannerImage || CAMPAIGN_ARTWORK_PLACEHOLDER);
@@ -526,7 +529,14 @@ const CampaignDetailPage: React.FC = () => {
   }
 
   const premise = campaign.premise?.trim();
-  const overviewStory = overviewPreview ? cutAtSentenceEnd(overviewPreview) : '';
+  // Collapsed: capped preview cut at a sentence end. Expanded: uncapped plain-text
+  // narrative, so Read more reveals the whole stored story.
+  let overviewStory = '';
+  if (storyExpanded) {
+    overviewStory = overviewFull;
+  } else if (overviewPreview) {
+    overviewStory = cutAtSentenceEnd(overviewPreview);
+  }
   const hasStory = Boolean(premise || overviewStory);
 
   return (

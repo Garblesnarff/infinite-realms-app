@@ -260,6 +260,31 @@ describe('CampaignDetailPage "The story" Read more (#2281, #89, #1432 item 2)', 
       'false',
     );
   });
+
+  it('reveals the uncapped narrative end after Read more when the first section exceeds 800 chars', () => {
+    const finalSentence = 'The final gate bears a silver fox and opens into daylight.';
+    const prose = `${'The expedition follows the ancient rope through the impossible cavern. '.repeat(20)}${finalSentence}`;
+    expect(prose.length).toBeGreaterThan(800);
+    state.campaign = campaign({
+      premise: '  ',
+      overview: `# Abyssal Descent\n\n## Campaign Overview\n\n${prose}`,
+    });
+    renderPage();
+
+    const story = () => screen.getByText('The story').closest('section') as HTMLElement;
+    expect(story()).not.toHaveTextContent(finalSentence);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Read more' }));
+
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(story()).toHaveTextContent(finalSentence);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(story()).not.toHaveTextContent(finalSentence);
+  });
 });
 
 describe('CampaignDetailPage level and length labels (#829)', () => {
