@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.42.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.41.0...v0.42.0) (2026-11-09)
+
+
+### Features
+
+* **death:** dying cards 4–9 and sticky-bar e2e ([#1431](https://github.com/Garblesnarff/infinite-realms-app/issues/1431)) ([8ae9195](https://github.com/Garblesnarff/infinite-realms-app/commit/8ae91951fb8442ae9766258c514b4baf03dfcaf5))
+* **table:** lay out the game screen ([#1421](https://github.com/Garblesnarff/infinite-realms-app/issues/1421)) ([7624a75](https://github.com/Garblesnarff/infinite-realms-app/commit/7624a7544d07d9298f87984f5a99083574a06baf))
+
 ## [0.41.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.40.0...v0.41.0) (2026-11-08)
 
 
