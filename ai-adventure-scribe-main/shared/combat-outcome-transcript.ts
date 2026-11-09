@@ -103,6 +103,8 @@ export interface CombatEngineResult {
   deathSaveFailuresAdded?: number;
   /** The target's death-save failure tally after those failures were added. */
   deathSavesFailures?: number;
+  /** The target's death-save success tally, when the producer reports it. */
+  deathSavesSuccesses?: number;
   /** The blow's overflow past 0 HP reached the target's maximum: instant death (#2518). */
   instantDeath?: boolean;
   /** Damage left after 0 HP and the maximum it was judged against (#2640). */
@@ -124,6 +126,7 @@ export interface EngineDeathSave {
   isStabilized?: boolean;
   isDead?: boolean;
   wasRevived?: boolean;
+  newCurrentHp?: number;
 }
 
 type EngineParticipant = {
@@ -297,42 +300,57 @@ export function formatCombatEngineParts(
     : state
       ? `${target} is ${state}.`
       : undefined;
-  parts.push({
+  const attackCard: EngineResultCard = {
+    kind: 'attack',
+    side,
     line,
-    card: {
-      kind: 'attack',
+    title: `${actor} attacks ${target}${weapon}`,
+    badge: engineBadge(
+      result.isCritical && result.hit ? 'critical' : result.hit ? 'hit' : 'miss',
       side,
-      line,
-      title: `${actor} attacks ${target}${weapon}`,
-      badge: engineBadge(
-        result.isCritical && result.hit ? 'critical' : result.hit ? 'hit' : 'miss',
-        side,
-      ),
-      ...(hasRoll
-        ? {
-            math: {
-              kind: 'attack' as const,
-              d20: result.d20 as number,
-              bonus: result.attackBonus as number,
-              total: result.totalAttackRoll as number,
-              ac: {
-                targetAC: result.targetAC,
-                baseAc: result.baseAc,
-                coverBonus: result.coverBonus,
-                cover: result.cover,
-              },
-              targetIsPlayer: options.targetHp === true,
+    ),
+    ...(hasRoll
+      ? {
+          math: {
+            kind: 'attack' as const,
+            d20: result.d20 as number,
+            bonus: result.attackBonus as number,
+            total: result.totalAttackRoll as number,
+            ac: {
+              targetAC: result.targetAC,
+              baseAc: result.baseAc,
+              coverBonus: result.coverBonus,
+              cover: result.cover,
             },
-          }
-        : {}),
-      effect: damageEffectText(result),
-      ...(hp ? { hp } : {}),
-      ...(status ? { status } : {}),
-    },
-  });
-  // Damage at 0 HP adds death-save failures: the failure is its own engine line and card (#2457).
+            targetIsPlayer: options.targetHp === true,
+          },
+        }
+      : {}),
+    effect: damageEffectText(result),
+    ...(hp ? { hp } : {}),
+    ...(status ? { status } : {}),
+  };
+  // Damage at 0 HP is the attack's consequence, not a second attack (#1431 card 8). Failure
+  // facts and the attack's own roll/damage share one article; instant death stays its own
+  // terminal card because it has no failure tally.
   const damageAtZero = damageAtZeroHpPart(result, target, actor);
-  if (damageAtZero) parts.push(damageAtZero);
+  if (damageAtZero && result.hit && result.instantDeath !== true) {
+    const combinedLine = `${line}\n\n${damageAtZero.line}`;
+    parts.push({
+      line: combinedLine,
+      card: {
+        ...damageAtZero.card,
+        line: combinedLine,
+        math: attackCard.math,
+        effect: attackCard.effect,
+        ...(attackCard.hp ? { hp: attackCard.hp } : {}),
+        ...(attackCard.status ? { status: attackCard.status } : {}),
+      },
+    });
+  } else {
+    parts.push({ line, card: attackCard });
+    if (damageAtZero) parts.push(damageAtZero);
+  }
   return parts;
 }
 
@@ -547,6 +565,13 @@ export function formatCombatEngineOutcome(
 }
 
 /**
+ * SRD 5.1 death-save threshold as static rules copy on the card. The server does not
+ * provide a DC field on the wire (`EngineDeathSave` has none); the card displays this
+ * value without comparing, and never claims it was engine-supplied.
+ */
+const DEATH_SAVE_DC = 10;
+
+/**
  * One death-save card. The NPC-turn card covers the line the server already printed;
  * the single-action card carries the line itself.
  */
@@ -556,13 +581,34 @@ function deathSaveCard(
   line: string,
   covers?: string[],
 ): EngineResultCard {
+  const revivedHp =
+    typeof save.newCurrentHp === 'number' && Number.isFinite(save.newCurrentHp)
+      ? save.newCurrentHp
+      : null;
   const detail = save.wasRevived
-    ? `Rolled a natural 20: ${name} is back on their feet at 1 HP.`
+    ? revivedHp !== null
+      ? `Rolled a natural 20: ${name} is back on their feet at ${revivedHp} HP.`
+      : `Rolled a natural 20: ${name} is back on their feet.`
     : save.isDead
       ? `Rolled ${save.roll}: the third failure. ${name} is dead.`
       : save.isStabilized
         ? `Rolled ${save.roll}: the third success. ${name} is stable.`
         : `Rolled ${save.roll}.`;
+  const successes = save.successes ?? 0;
+  const failures = save.failures ?? 0;
+  const effect = save.wasRevived
+    ? revivedHp !== null
+      ? `You wake with ${revivedHp} HP`
+      : undefined
+    : save.isDead
+      ? `${name} is dead.`
+      : save.isStabilized
+        ? `${name} is stable.`
+        : save.roll === 1 && save.isCritical === true
+          ? 'Two death-save failures'
+          : save.isSuccess
+            ? `${successes} of 3 successes`
+            : `${failures} of 3 failures`;
   return {
     kind: 'death_save',
     side: 'party',
@@ -570,8 +616,10 @@ function deathSaveCard(
     ...(covers ? { covers } : {}),
     title: `${name} makes a death saving throw`,
     badge: engineBadge(save.isSuccess ? 'death-save-passed' : 'death-save-failed', 'party'),
+    math: { kind: 'save' as const, ability: 'death', roll: save.roll as number, dc: DEATH_SAVE_DC },
+    ...(effect !== undefined ? { effect } : {}),
     detail,
-    deathSave: { successes: save.successes ?? 0, failures: save.failures ?? 0 },
+    deathSave: { successes, failures },
   };
 }
 

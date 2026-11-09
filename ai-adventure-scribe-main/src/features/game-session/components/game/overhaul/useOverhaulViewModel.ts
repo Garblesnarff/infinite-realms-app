@@ -30,6 +30,7 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { getExperienceForLevel } from '@/data/levelProgression';
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
+import { participantVital } from '@/services/combat/participant-vital';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { formatClassWithSubclass } from '@/utils/character/class-with-subclass';
 import { resolvePlayerHitPoints } from '@/utils/character/player-hit-points';
@@ -480,6 +481,7 @@ export function buildEncounterCombatants(
       isEnemy: isHostileParticipantType(p.participantType),
       healthCondition: p.healthCondition,
       isActive: encounter?.currentTurnParticipantId === p.id,
+      vitalState: participantVital(p),
       state: turn?.actors.find((actor) => actor.id === p.id)?.state,
     }));
 }

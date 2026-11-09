@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { buildNpcEngineMessage } from '../../../../shared/npc-engine-message';
-import { DEATH_SAVE_FAILED } from '../../../../shared/test-fixtures/engine-results';
+import {
+  DEATH_SAVE_FAILED,
+  ENEMY_STRIKES_DOWNED_PLAYER,
+} from '../../../../shared/test-fixtures/engine-results';
 import {
   formatCombatActionParts,
   formatCombatEndLine,
@@ -377,6 +380,60 @@ describe('spell engine lines', () => {
         '⚙️ Engine: The Scholar rolled 6 on their death saving throw — FAILURE (0 successes, 2 failures).',
       ]);
     });
+  });
+});
+
+describe('legacy persisted paragraphs for a killing blow on a downed player (#1431)', () => {
+  it('keeps the attack and death-save failure as two complete Engine paragraphs on one card', () => {
+    // The real gate result (dying-and-death.real-db.test.ts:1876): an automatic critical on the
+    // unconscious hero adds two failures, the third ends the fight. Both Engine paragraphs must
+    // survive byte-for-byte in the stored row, with one card for the one result.
+    const result = {
+      ...ENEMY_STRIKES_DOWNED_PLAYER,
+      actorId: 'spider-1',
+      actorName: 'Vitruvian Spider',
+      targetId: 'hero-1',
+      targetName: 'The Scholar',
+      d20: 15,
+      d20Rolls: [15, 15] as [number, number],
+      advantage: true,
+      attackBonus: 5,
+      totalAttackRoll: 20,
+      targetAC: 11,
+      baseAc: 11,
+      finalDamage: 4,
+      damage: 4,
+      damageType: 'piercing',
+      targetNewHp: 0,
+      targetIsConscious: false,
+      targetIsDead: true,
+      isCritical: true,
+      autoCritOnDowned: true,
+      autoCritReason: 'unconscious',
+      deathSaveFailuresAdded: 2,
+      deathSavesFailures: 3,
+      weaponResolution: { requested: 'Fangs', resolved: 'Fangs', substituted: false },
+      endedReason: 'party_defeated',
+    };
+    const row = buildNpcEngineMessage(
+      [
+        { id: 'spider-1', name: 'Vitruvian Spider', participantType: 'monster' },
+        { id: 'hero-1', name: 'The Scholar', participantType: 'player', maxHp: 7 },
+      ],
+      3,
+      { type: 'attack', actorId: 'spider-1', targetId: 'hero-1' },
+      result,
+    );
+
+    expect(row.text).toBe(
+      [
+        '⚙️ Engine: Vitruvian Spider rolled 15 and 15 (advantage, kept 15) + 5 = 20 vs AC 11 against The Scholar with Fangs — CRITICAL HIT (the target is unconscious). 4 piercing damage. The Scholar is now at 0 HP and is dead.',
+        '⚙️ Engine: Vitruvian Spider strikes the unconscious The Scholar — automatic critical hit. Two death-save failures. ✕✕✕ The Scholar is DEAD.',
+        '⚙️ Engine: Combat ended — the party was defeated.',
+      ].join('\n\n'),
+    );
+    expect(row.context.engineCards).toHaveLength(1);
+    expect(row.context.engineCards[0].kind).toBe('death_save');
   });
 });
 

@@ -266,7 +266,14 @@ const FallenStoryEntries: React.FC = () => {
         text = cards
           .flatMap((card) => {
             if (card.kind === 'initiative' || card.kind === 'refused') return [];
-            if (card.kind === 'death_save') return card.detail ? [card.detail] : [];
+            if (card.kind === 'death_save') {
+              if (card.math?.kind !== 'attack') return card.detail ? [card.detail] : [];
+              const status =
+                card.status && card.hp
+                  ? `${card.hp.name} is ${card.status.toLowerCase()}`
+                  : card.status;
+              return [[card.detail, card.effect, status].filter(Boolean).join(' ')];
+            }
             const outcome = card.badge ? `: ${card.badge.word.toLowerCase()}` : '';
             const status =
               card.status && card.hp

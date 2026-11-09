@@ -19,6 +19,13 @@ export interface TurnActor {
   isEnemy: boolean;
   /** A player on the floor with death saves owed: their turn is the save, nothing else (#2518). */
   isDying: boolean;
+  /**
+   * Authoritative vital state for this actor; stable/dead are never treated as dying. Optional
+   * so hand-built summaries from before #1431 keep compiling; the live summary always sets it.
+   */
+  vitalState?: 'standing' | 'dying' | 'stable' | 'dead';
+  /** Current HP carried for the transient HP-only fallback, bound to this actor only. */
+  currentHitPoints?: number;
   /** Whether this actor already spent their action this turn (#85 copy: "action used"). */
   actionTaken: boolean;
   state: TurnActorState;
@@ -85,6 +92,8 @@ export function summarizeCombatTurn(
       isPlayer: participant.participantType === 'player',
       isEnemy: isHostileParticipantType(participant.participantType),
       isDying: participantVital(participant) === 'dying',
+      vitalState: participantVital(participant),
+      currentHitPoints: participant.currentHitPoints,
       actionTaken: participant.actionTaken === true,
       state: isDown
         ? 'down'
@@ -170,10 +179,24 @@ export function nearestEnemyDistanceFeet(
 }
 
 /**
+ * Whether this actor is down, read from its own authoritative state (#1431). Stable and dead
+ * actors are never dying, and a standing actor with positive HP is never dying even when the
+ * global `playerDown` flag belongs to a different player. `playerDown` is only the legacy
+ * fallback for a hand-built actor that carries no authoritative state.
+ */
+export function actorIsDying(actor: TurnActor, playerDown = false): boolean {
+  if (!actor.isPlayer) return false;
+  if (actor.vitalState === 'stable' || actor.vitalState === 'dead') return false;
+  if (actor.isDying || actor.vitalState === 'dying') return true;
+  if (actor.vitalState === 'standing') {
+    return actor.currentHitPoints !== undefined ? actor.currentHitPoints <= 0 : playerDown;
+  }
+  return playerDown;
+}
+
+/**
  * The bar's title line (#85 copy table), with the in-flight overrides kept: a sheet cast
  * still reads `Casting…`, an enemy holding a turn being answered still reads as acting.
- * `playerDown` covers a player at 0 HP whose unconscious flag hasn't landed yet; the
- * summary's own isDying covers the usual death-save flow.
  */
 export function turnBarTitle(
   summary: CombatTurnSummary,
@@ -181,7 +204,7 @@ export function turnBarTitle(
   playerDown = false,
 ): string {
   const { active } = summary;
-  if (active.isPlayer && (active.isDying || playerDown)) return 'You are down';
+  if (actorIsDying(active, playerDown)) return 'You are down';
   if (busy === 'casting' && active.isPlayer) return 'Casting…';
   if (busy && !active.isPlayer) return `${active.name} is acting…`;
   return active.isPlayer ? 'Your turn' : `${active.name}'s turn`;
@@ -194,7 +217,7 @@ export function turnBarSub(
   playerDown = false,
 ): string {
   const { active, round } = summary;
-  if (active.isPlayer && (active.isDying || playerDown)) return '0 HP · roll a death saving throw';
+  if (actorIsDying(active, playerDown)) return '0 HP · roll a death saving throw';
   if (active.isPlayer && active.actionTaken) {
     return `Round ${round} · action used · bonus action and move left`;
   }

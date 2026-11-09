@@ -1,6 +1,7 @@
 import React from 'react';
 
 import {
+  actorIsDying,
   nearestEnemyDistanceFeet,
   summarizeCombatTurn,
   turnBarSub,
@@ -158,9 +159,10 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
     () => document.body.classList.contains('ir-table-look'),
     () => false,
   );
-  const title = turnBarTitle(summary, busy, playerDown);
+  const baseTitle = turnBarTitle(summary, busy, playerDown);
   const sub = turnBarSub(summary, enemyDistance ?? null, playerDown);
-  const down = summary.active.isPlayer && (summary.active.isDying || playerDown);
+  const down = actorIsDying(summary.active, playerDown);
+  const title = tableLook && down ? 'Dying' : baseTitle;
   const edge = down ? 'bad' : summary.active.isPlayer ? 'gold' : 'teal';
   const titleClassName = down
     ? 'text-ir-hp-bad'
@@ -202,7 +204,26 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
                   {actor.initiative != null ? `${actor.initiative} · ` : ''}
                   {actor.name}
                 </span>
-                {actor.state === 'now' && actor.isPlayer && <span>Your turn</span>}
+                {actorIsDying(actor, actor.id === summary.active.id ? playerDown : false) ? (
+                  <span
+                    data-testid="combat-turn-dying"
+                    className="inline-flex items-center gap-1 rounded-full bg-[#475569] px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-[#f1f5f9]"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M5 8h6l-6 8h6M14 4h5l-5 6h5"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.4"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Dying
+                  </span>
+                ) : (
+                  actor.state === 'now' && actor.isPlayer && <span>Your turn</span>
+                )}
               </>
             ) : (
               actor.initials
@@ -296,9 +317,12 @@ export const CombatTurnBarLive: React.FC<{
       : lastPlayerMessage?.context?.intent === 'spell_cast'
         ? 'casting'
         : 'acting';
-    const playerParticipant = encounter?.participants.find(
-      (participant) => participant.participantType === 'player' && participant.isActive !== false,
-    );
+    const playerParticipant = summary?.active?.isPlayer
+      ? encounter?.participants.find(
+          (participant) =>
+            participant.id === summary.active.id && participant.participantType === 'player',
+        )
+      : undefined;
     const playerDown = (playerParticipant?.currentHitPoints ?? 1) <= 0;
     return (
       <CombatTurnBar

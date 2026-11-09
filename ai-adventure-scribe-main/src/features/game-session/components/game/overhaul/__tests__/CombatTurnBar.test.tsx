@@ -1,17 +1,21 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DYING_SCHOLAR_ENCOUNTER,
   DYING_SCHOLAR_PARTICIPANT,
 } from '../../../../../../../shared/test-fixtures/dying-participant-wire';
-import { summarizeCombatTurn } from '../combat-turn-order';
+import { summarizeCombatTurn, type CombatTurnSummary } from '../combat-turn-order';
 import { CombatTurnBar, CombatTurnBarLive } from '../CombatTurnBar';
 import { LeftRail } from '../LeftRail';
+import { buildEncounterCombatants } from '../useOverhaulViewModel';
 
 import type { CombatEncounter } from '@/types/combat-encounter';
 
-import { mapAuthoritativeCombat } from '@/contexts/combat/authoritative-combat-state';
+import {
+  mapAuthoritativeCombat,
+  type AuthoritativeCombatPayload,
+} from '@/contexts/combat/authoritative-combat-state';
 
 const live = vi.hoisted(() => ({
   encounter: null as CombatEncounter | null,
@@ -85,7 +89,10 @@ describe('turn bar (#2417, copy #85)', () => {
     const dying = mapAuthoritativeCombat({
       encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 3, currentTurnOrder: 0 },
       participants: [
-        DYING_SCHOLAR_PARTICIPANT,
+        {
+          ...DYING_SCHOLAR_PARTICIPANT,
+          conditions: [...DYING_SCHOLAR_PARTICIPANT.conditions],
+        },
         {
           ...DYING_SCHOLAR_PARTICIPANT,
           id: 'm1',
@@ -93,6 +100,7 @@ describe('turn bar (#2417, copy #85)', () => {
           name: 'Captain Sarah Reeves',
           participantType: 'monster',
           vitalState: 'standing',
+          conditions: [...DYING_SCHOLAR_PARTICIPANT.conditions],
           status: {
             ...DYING_SCHOLAR_PARTICIPANT.status,
             currentHp: 7,
@@ -101,7 +109,7 @@ describe('turn bar (#2417, copy #85)', () => {
           },
         },
       ],
-    } as never);
+    });
     const summary = summarizeCombatTurn(dying)!;
     render(<CombatTurnBar summary={summary} busy={null} />);
 
@@ -378,6 +386,218 @@ describe('turn bar (#2417, copy #85)', () => {
   });
 });
 
+describe('stable and multi-player vital states (#1431)', () => {
+  const wireParticipant = (
+    overrides: Partial<AuthoritativeCombatPayload['participants'][number]> = {},
+  ): AuthoritativeCombatPayload['participants'][number] => ({
+    ...DYING_SCHOLAR_PARTICIPANT,
+    conditions: [...DYING_SCHOLAR_PARTICIPANT.conditions],
+    ...overrides,
+  });
+
+  const standingStatus = {
+    ...DYING_SCHOLAR_PARTICIPANT.status,
+    currentHp: 7,
+    isConscious: true,
+    deathSavesSuccesses: 0,
+    deathSavesFailures: 0,
+  };
+
+  afterEach(() => document.body.classList.remove('ir-table-look'));
+
+  it('does not mark a stable 0 HP player Dying when an enemy owns the turn', () => {
+    const stableEncounter = mapAuthoritativeCombat({
+      encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 4, currentTurnOrder: 2 },
+      participants: [
+        wireParticipant({
+          vitalState: 'stabilized',
+          status: {
+            ...DYING_SCHOLAR_PARTICIPANT.status,
+            currentHp: 0,
+            isConscious: false,
+            deathSavesSuccesses: 3,
+            deathSavesFailures: 0,
+          },
+        }),
+        wireParticipant({
+          id: 'ally',
+          characterId: null,
+          name: 'Standing companion',
+          participantType: 'npc',
+          vitalState: 'standing',
+          initiative: 10,
+          status: standingStatus,
+        }),
+        wireParticipant({
+          id: 'enemy',
+          characterId: null,
+          name: 'Captain Sarah Reeves',
+          participantType: 'monster',
+          vitalState: 'standing',
+          initiative: 4,
+          status: standingStatus,
+        }),
+      ],
+    });
+    document.body.classList.add('ir-table-look');
+    const summary = summarizeCombatTurn(stableEncounter)!;
+    render(<CombatTurnBar summary={summary} busy={null} playerDown />);
+
+    expect(summary.active.name).toBe('Captain Sarah Reeves');
+    expect(screen.queryByTestId('combat-turn-dying')).toBeNull();
+    expect(screen.getByTestId('combat-turn-text').textContent).not.toBe('Dying');
+  });
+
+  it('does not mark a stable 0 HP player Dying while a healthy player is also standing', () => {
+    const stableEncounter = mapAuthoritativeCombat({
+      encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 4, currentTurnOrder: 0 },
+      participants: [
+        wireParticipant({
+          vitalState: 'stabilized',
+          status: {
+            ...DYING_SCHOLAR_PARTICIPANT.status,
+            currentHp: 0,
+            isConscious: false,
+            deathSavesSuccesses: 3,
+            deathSavesFailures: 0,
+          },
+        }),
+        wireParticipant({
+          id: 'healthy',
+          name: 'Healthy hero',
+          vitalState: 'standing',
+          initiative: 10,
+          status: standingStatus,
+        }),
+      ],
+    });
+    document.body.classList.add('ir-table-look');
+    const summary = summarizeCombatTurn(stableEncounter)!;
+    render(<CombatTurnBar summary={summary} busy={null} playerDown />);
+
+    expect(summary.active.name).toBe('The Scholar');
+    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Your turn');
+    expect(screen.queryByTestId('combat-turn-dying')).toBeNull();
+  });
+
+  it('does not mark a healthy active player Dying when another player is down', () => {
+    const multiEncounter = mapAuthoritativeCombat({
+      encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 4, currentTurnOrder: 1 },
+      participants: [
+        wireParticipant({
+          id: 'downed',
+          name: 'Downed hero',
+          vitalState: 'dying',
+          status: {
+            ...DYING_SCHOLAR_PARTICIPANT.status,
+            currentHp: 0,
+            isConscious: false,
+            deathSavesSuccesses: 0,
+            deathSavesFailures: 2,
+          },
+        }),
+        wireParticipant({
+          id: 'healthy',
+          name: 'Healthy hero',
+          vitalState: 'standing',
+          initiative: 10,
+          status: standingStatus,
+        }),
+        wireParticipant({
+          id: 'enemy',
+          characterId: null,
+          name: 'Captain Sarah Reeves',
+          participantType: 'monster',
+          vitalState: 'standing',
+          initiative: 4,
+          status: standingStatus,
+        }),
+      ],
+    });
+    document.body.classList.add('ir-table-look');
+    const summary = summarizeCombatTurn(multiEncounter)!;
+    render(<CombatTurnBar summary={summary} busy={null} playerDown />);
+
+    expect(summary.active.name).toBe('Healthy hero');
+    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Your turn');
+    const chips = screen.queryAllByTestId('combat-turn-dying');
+    expect(chips).toHaveLength(1);
+    const downedPip = screen
+      .getAllByTestId('combat-turn-pip')
+      .find((pip) => pip.textContent?.includes('Downed hero'));
+    expect(downedPip?.querySelector('[data-testid="combat-turn-dying"]')).not.toBeNull();
+    const healthyPip = screen
+      .getAllByTestId('combat-turn-pip')
+      .find((pip) => pip.textContent?.includes('Healthy hero'));
+    expect(healthyPip?.querySelector('[data-testid="combat-turn-dying"]')).toBeNull();
+  });
+
+  it('binds the legacy fallback to the active player only when it has no authoritative state', () => {
+    const active = {
+      id: 'active',
+      name: 'Active hero',
+      initials: 'AH',
+      initiative: 15,
+      isPlayer: true,
+      isEnemy: false,
+      isDying: false,
+      actionTaken: false,
+      state: 'now' as const,
+    };
+    const other = {
+      ...active,
+      id: 'other',
+      name: 'Other hero',
+      initials: 'OH',
+      initiative: 10,
+      state: 'waiting' as const,
+    };
+    const summary: CombatTurnSummary = {
+      round: 1,
+      actors: [active, other],
+      turn: 1,
+      active,
+      nextLine: '',
+    };
+    document.body.classList.add('ir-table-look');
+    render(<CombatTurnBar summary={summary} busy={null} playerDown />);
+
+    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Dying');
+    const activePip = screen
+      .getAllByTestId('combat-turn-pip')
+      .find((pip) => pip.textContent?.includes('Active hero'));
+    const otherPip = screen
+      .getAllByTestId('combat-turn-pip')
+      .find((pip) => pip.textContent?.includes('Other hero'));
+    expect(activePip?.querySelector('[data-testid="combat-turn-dying"]')).not.toBeNull();
+    expect(otherPip?.querySelector('[data-testid="combat-turn-dying"]')).toBeNull();
+  });
+
+  it('still marks an ordinary dying player Dying', () => {
+    const dyingEncounter = mapAuthoritativeCombat({
+      encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 4, currentTurnOrder: 0 },
+      participants: [
+        wireParticipant(),
+        wireParticipant({
+          id: 'enemy',
+          characterId: null,
+          name: 'Captain Sarah Reeves',
+          participantType: 'monster',
+          vitalState: 'standing',
+          initiative: 4,
+          status: standingStatus,
+        }),
+      ],
+    });
+    document.body.classList.add('ir-table-look');
+    const summary = summarizeCombatTurn(dyingEncounter)!;
+    render(<CombatTurnBar summary={summary} busy={null} playerDown />);
+
+    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Dying');
+    expect(screen.queryAllByTestId('combat-turn-dying')).toHaveLength(1);
+  });
+});
+
 describe('encounter list (#2417)', () => {
   const rail = (round: number, turnIndex: number, seats?: Seat[]) => {
     const current = encounter(round, turnIndex, seats);
@@ -441,5 +661,75 @@ describe('encounter list (#2417)', () => {
         (row) => (row as HTMLElement).dataset.state,
       ),
     ).toEqual(['now', 'waiting', 'waiting']);
+  });
+
+  it('labels authoritative dying, stable and dead states instead of the initiative state', () => {
+    const status = {
+      ...DYING_SCHOLAR_PARTICIPANT.status,
+      currentHp: 0,
+      isConscious: false,
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0,
+    };
+    const wire = (
+      overrides: Partial<AuthoritativeCombatPayload['participants'][number]>,
+    ): AuthoritativeCombatPayload['participants'][number] => ({
+      ...DYING_SCHOLAR_PARTICIPANT,
+      conditions: [...DYING_SCHOLAR_PARTICIPANT.conditions],
+      status: { ...status },
+      ...overrides,
+    });
+    const authoritative = mapAuthoritativeCombat({
+      encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 4, currentTurnOrder: 3 },
+      participants: [
+        wire({ id: 'd', name: 'Dying hero', initiative: 18, vitalState: 'dying' }),
+        wire({
+          id: 's',
+          name: 'Stable hero',
+          initiative: 12,
+          vitalState: 'stabilized',
+          status: { ...status, deathSavesSuccesses: 3 },
+        }),
+        wire({
+          id: 'x',
+          name: 'Dead hero',
+          initiative: 8,
+          vitalState: 'dead',
+          status: { ...status, deathSavesFailures: 3 },
+        }),
+        wire({
+          id: 'h',
+          name: 'Healthy hero',
+          initiative: 4,
+          vitalState: 'standing',
+          status: { ...status, currentHp: 7, isConscious: true },
+        }),
+      ],
+    });
+    const turn = summarizeCombatTurn(authoritative)!;
+    render(
+      <LeftRail
+        campaign={{
+          name: 'Test',
+          chapter: 'Chapter 1',
+          objective: '',
+          objectiveTasks: [],
+        }}
+        party={[]}
+        partyMax={4}
+        combat={{
+          active: true,
+          round: authoritative.currentRound,
+          combatants: buildEncounterCombatants(authoritative, turn),
+        }}
+      />,
+    );
+
+    expect(
+      Array.from(document.querySelectorAll('[data-vital-state]')).map((chip) => chip.textContent),
+    ).toEqual(['Unconscious', 'Stable', 'Dead']);
+    const healthyRow = screen.getByText('Healthy hero').closest('[data-state]');
+    expect(healthyRow?.textContent).toContain('Now');
+    expect(screen.queryByText('Down')).toBeNull();
   });
 });

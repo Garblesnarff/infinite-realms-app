@@ -346,6 +346,7 @@ export function damageAtZeroHpPart(
     CombatEngineResult,
     | 'deathSaveFailuresAdded'
     | 'deathSavesFailures'
+    | 'deathSavesSuccesses'
     | 'instantDeath'
     | 'damageOverflow'
     | 'hpMaximum'
@@ -363,7 +364,7 @@ export function damageAtZeroHpPart(
       line,
       card: {
         kind: 'death_save',
-        side: 'party',
+        side: 'enemy',
         line,
         title: `${target} is dead`,
         badge: engineBadge('death-save-failed', 'party'),
@@ -375,6 +376,7 @@ export function damageAtZeroHpPart(
   const added = result.deathSaveFailuresAdded ?? 0;
   if (!Number.isFinite(added) || added <= 0) return null;
   const failures = result.deathSavesFailures ?? 0;
+  const critical = result.autoCritOnDowned === true || result.isCritical === true;
   const description =
     attacker !== undefined
       ? describeStrikeOnDowned(attacker, target, {
@@ -389,12 +391,22 @@ export function damageAtZeroHpPart(
     line,
     card: {
       kind: 'death_save',
-      side: 'party',
+      side: 'enemy',
       line,
-      title: `${target} takes damage at 0 HP`,
-      badge: engineBadge('death-save-failed', 'party'),
+      title: attacker
+        ? `${attacker} strikes the unconscious ${target}`
+        : `${target} takes damage at 0 HP`,
+      badge: critical
+        ? engineBadge('critical', 'enemy')
+        : engineBadge('death-save-failed', 'party'),
       detail: description,
-      deathSave: { failures },
+      deathSave: {
+        failures,
+        ...(typeof result.deathSavesSuccesses === 'number' &&
+        Number.isFinite(result.deathSavesSuccesses)
+          ? { successes: result.deathSavesSuccesses }
+          : {}),
+      },
     },
   };
 }
