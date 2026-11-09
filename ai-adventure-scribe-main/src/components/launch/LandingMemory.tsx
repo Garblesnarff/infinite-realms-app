@@ -41,6 +41,9 @@ export const LandingMemory: React.FC = () => (
       </p>
     </div>
     <div className="flex w-full max-w-[340px] flex-col gap-2.5 justify-self-center rounded-2xl bg-[#0c1220] p-4 shadow-[0_0_0_1px_rgba(213,176,112,0.3),0_24px_50px_rgba(0,0,0,0.55)]">
+      <div className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#aab3cc]">
+        Example
+      </div>
       <div className="text-[15px] font-bold text-[#f3deb0]">The DM remembers this story.</div>
       <ul className="flex flex-col gap-2.5">
         {MEMORY_EXAMPLES.map((m) => (

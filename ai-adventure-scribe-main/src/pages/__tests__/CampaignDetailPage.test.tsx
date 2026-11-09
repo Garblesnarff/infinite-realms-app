@@ -173,7 +173,7 @@ beforeEach(() => {
   navTarget.hash = '';
 });
 
-describe('CampaignDetailPage "About this campaign" details (#2281, #89)', () => {
+describe('CampaignDetailPage "The story" Read more (#2281, #89, #1432 item 2)', () => {
   it('fills the details from the first overview section with prose', () => {
     state.campaign = campaign({
       overview:
@@ -181,7 +181,7 @@ describe('CampaignDetailPage "About this campaign" details (#2281, #89)', () => 
     });
     renderPage();
 
-    const details = screen.getByText('About this campaign').closest('details');
+    const details = screen.getByText('The story').closest('section');
     expect(details).toHaveTextContent('The guests have been eating for a century.');
   });
 
@@ -189,7 +189,7 @@ describe('CampaignDetailPage "About this campaign" details (#2281, #89)', () => 
     state.campaign = campaign({ overview: '# The Eternal Feast\n\n## Campaign Overview\n' });
     renderPage();
 
-    const details = screen.getByText('About this campaign').closest('details');
+    const details = screen.getByText('The story').closest('section');
     expect(details).toHaveTextContent('A banquet that never ends.');
     expect(details).not.toHaveTextContent('Campaign Overview');
   });
@@ -198,7 +198,7 @@ describe('CampaignDetailPage "About this campaign" details (#2281, #89)', () => 
     state.campaign = campaign({ overview: null });
     renderPage();
 
-    expect(screen.getByText('About this campaign').closest('details')).toHaveTextContent(
+    expect(screen.getByText('The story').closest('section')).toHaveTextContent(
       'A banquet that never ends.',
     );
   });
@@ -207,16 +207,16 @@ describe('CampaignDetailPage "About this campaign" details (#2281, #89)', () => 
     state.campaign = campaign({ premise: '  ', overview: 'An opening line.' });
     renderPage();
 
-    const details = screen.getByText('About this campaign').closest('details');
+    const details = screen.getByText('The story').closest('section');
     expect(details).toHaveTextContent('An opening line.');
     expect(details).not.toHaveTextContent('A banquet');
   });
 
-  it('hides the details entirely when there is no story at all', () => {
+  it('hides the story entirely when there is no story at all', () => {
     state.campaign = campaign({ premise: '  ', overview: null });
     renderPage();
 
-    expect(screen.queryByText('About this campaign')).not.toBeInTheDocument();
+    expect(screen.queryByText('The story')).not.toBeInTheDocument();
   });
 
   it('cuts the overview story at a sentence end, never mid-word', () => {
@@ -226,7 +226,7 @@ describe('CampaignDetailPage "About this campaign" details (#2281, #89)', () => 
     });
     renderPage();
 
-    const details = screen.getByText('About this campaign').closest('details');
+    const details = screen.getByText('The story').closest('section');
     expect(details).toHaveTextContent('Sentence one.');
     expect(details).not.toHaveTextContent('word');
   });
@@ -235,8 +235,30 @@ describe('CampaignDetailPage "About this campaign" details (#2281, #89)', () => 
     state.campaign = campaign({ premise: '  ', overview: 'He paused... then left.' });
     renderPage();
 
-    const details = screen.getByText('About this campaign').closest('details');
+    const details = screen.getByText('The story').closest('section');
     expect(details).toHaveTextContent('He paused... then left.');
+  });
+
+  it('toggles Read more / Show less with aria-expanded, keeping the story in the document', () => {
+    state.campaign = campaign({ overview: 'An opening line.' });
+    renderPage();
+
+    const toggle = screen.getByRole('button', { name: 'Read more' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText('The story').closest('section')).toHaveTextContent('An opening line.');
+
+    fireEvent.click(toggle);
+    expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(screen.getByText('The story').closest('section')).toHaveTextContent('An opening line.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
+    expect(screen.getByRole('button', { name: 'Read more' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
   });
 });
 
@@ -288,6 +310,58 @@ describe('CampaignDetailPage level and length labels (#829)', () => {
 
     expect(screen.getByText('Level 1-5')).toBeInTheDocument();
     expect(screen.getByText('8-12 sessions')).toBeInTheDocument();
+  });
+});
+
+describe('CampaignDetailPage difficulty chip and hard-campaign note (#1432 item 2)', () => {
+  // Fixtures follow the real producer: mapCampaignRow in
+  // use-starter-campaigns maps `difficulty` straight off the DB row, so the
+  // fixtures below are the mapped shape, not an invented one.
+  it('shows the difficulty capitalized from campaign.difficulty', () => {
+    state.campaign = campaign({ difficulty: 'hard', levelRange: '3-3', tone: [] });
+    renderPage();
+
+    expect(screen.getByText('Hard')).toBeInTheDocument();
+    expect(screen.getByText('Level 3')).toBeInTheDocument();
+  });
+
+  it('capitalizes hyphenated difficulties like the card formatter', () => {
+    state.campaign = campaign({ difficulty: 'medium-hard', tone: [] });
+    renderPage();
+
+    expect(screen.getByText('Medium Hard')).toBeInTheDocument();
+  });
+
+  it('shows the hard note for difficulty hard, case-insensitive, with the board copy', () => {
+    for (const difficulty of ['hard', 'Hard', 'HARD']) {
+      state.campaign = campaign({ difficulty });
+      const { unmount } = renderPage();
+      expect(
+        screen.getByText(
+          'Hard campaign: target numbers (DC and AC) start hidden. You can show them in Settings.',
+        ),
+      ).toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it('hides the hard note when the difficulty is not hard', () => {
+    state.campaign = campaign({ difficulty: 'medium' });
+    renderPage();
+
+    expect(
+      screen.queryByText(
+        'Hard campaign: target numbers (DC and AC) start hidden. You can show them in Settings.',
+      ),
+    ).not.toBeInTheDocument();
+  });
+
+  it('omits the difficulty segment and fabricates no level when fields are missing', () => {
+    state.campaign = campaign({ difficulty: ' ', levelRange: null, tone: [] });
+    renderPage();
+
+    expect(screen.queryByText(/^Level/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Level 1(?!-)/)).not.toBeInTheDocument();
   });
 });
 
