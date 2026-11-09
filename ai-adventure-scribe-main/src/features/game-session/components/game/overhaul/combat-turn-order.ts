@@ -70,7 +70,9 @@ export function summarizeCombatTurn(
   // `currentTurnParticipantId` indexes the participants still in the order, so only they count.
   const inOrder = encounter.participants.filter((participant) => participant.isActive !== false);
   const roster = inOrder.map(rosterEntryForParticipant);
-  const ordered = inOrder.slice().sort((a, b) => (b.initiative ?? 0) - (a.initiative ?? 0));
+  // Both the authoritative mapper and the local reducer keep participants in turn order.
+  // Sorting their displayed initiative again can disagree with the server's persisted pointer.
+  const ordered = inOrder;
   const activeIndex = ordered.findIndex(
     (participant) => participant.id === encounter.currentTurnParticipantId,
   );

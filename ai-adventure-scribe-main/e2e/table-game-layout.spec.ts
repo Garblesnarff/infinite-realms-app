@@ -190,7 +190,10 @@ for (const mode of ['explore', 'combat'] as const) {
       await expect(page.getByRole('button', { name: 'Hide Campaign' })).not.toBeVisible();
       if (mode === 'combat') {
         await expect(header.getByText('Captain Reeves · wounded')).toBeVisible();
-        await expect(header.getByTestId('combat-turn-pip').first()).toBeVisible();
+        await expect(header.getByTestId('combat-turn-pip')).toHaveCount(2);
+        await expect(header.getByTestId('combat-turn-text')).toHaveText('Your turn');
+        await expect(header.getByTestId('combat-turn-sub')).toHaveText('Round 1 · Turn 1 of 2');
+        await expect(header.getByTestId('combat-turn-next')).toHaveText('Next: Captain Reeves.');
       } else {
         await expect(header.getByText('Exploring')).toBeVisible();
         await expect(page.getByTestId('table-turn-slot')).toBeEmpty();
