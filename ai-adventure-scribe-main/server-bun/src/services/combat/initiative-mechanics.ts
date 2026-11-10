@@ -51,9 +51,10 @@ export class InitiativeMechanics {
       };
     }
 
-    // Preserve original logic from service exactly to ensure no functional change
+    // A round is one full pass through the initiative order (2014 5e, PHB p.189), so the order
+    // wrapping back to the first combatant starts a new round, even with a single participant (#1424).
     const nextTurnOrder = (currentTurnOrder + 1) % totalParticipants;
-    const newRound = nextTurnOrder === 0 && currentTurnOrder !== 0;
+    const newRound = nextTurnOrder === 0;
     const newRoundNumber = newRound ? currentRound + 1 : currentRound;
 
     return {
