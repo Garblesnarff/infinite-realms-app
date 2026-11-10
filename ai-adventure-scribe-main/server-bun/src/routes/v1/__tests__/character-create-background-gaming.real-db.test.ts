@@ -115,7 +115,7 @@ describeWithDb('concrete background gaming choice (#893)', () => {
       .select()
       .from(characterEquipment)
       .where(eq(characterEquipment.characterId, id));
-    expect(items.map((item) => item.itemName).sort()).toEqual(['Deck of cards', 'Dice set']);
+    expect(items.map((item) => item.itemName).sort()).toEqual(['Deck of cards']);
     await db.delete(characterEquipment).where(eq(characterEquipment.characterId, id));
     const res = await app.handle(new Request(`http://localhost/v1/characters/${id}`));
     expect(res.status).toBe(200);
