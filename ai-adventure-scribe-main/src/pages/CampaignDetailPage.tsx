@@ -222,6 +222,7 @@ const CampaignDetailPage: React.FC = () => {
   const [choices, setChoices] = React.useState<ReturnType<typeof buildSavedPlaythroughs> | null>(
     null,
   );
+  const [storyExpanded, setStoryExpanded] = React.useState(false);
   // #209: synchronous in-flight guard — the disabled button lags a render
   // behind, so a double-click would otherwise seed two characters.
   const startingRef = React.useRef(false);
@@ -234,11 +235,18 @@ const CampaignDetailPage: React.FC = () => {
   );
   const [artworkUnavailable, setArtworkUnavailable] = React.useState(!campaignBannerImage);
   const overviewPreview = campaign?.overview ? previewCampaignOverview(campaign.overview) : '';
+  const overviewFull = campaign?.overview
+    ? previewCampaignOverview(campaign.overview, Number.POSITIVE_INFINITY)
+    : '';
 
   React.useEffect(() => {
     setBannerImage(campaignBannerImage || CAMPAIGN_ARTWORK_PLACEHOLDER);
     setArtworkUnavailable(!campaignBannerImage);
   }, [campaignBannerImage]);
+
+  React.useEffect(() => {
+    setStoryExpanded(false);
+  }, [slug]);
 
   const handleBannerImageError = (): void => {
     if (bannerImage === CAMPAIGN_ARTWORK_PLACEHOLDER) return;
@@ -491,7 +499,18 @@ const CampaignDetailPage: React.FC = () => {
   // The level segment is omitted when the campaign declares no range: the
   // old page omitted it too, and asserting Level 1 for a range-less campaign
   // would fabricate a fact. (The ticket's "Level 1" is the level-1 case.)
+  // Same for difficulty and sessions: a missing field is omitted, never
+  // invented. Sessions keep the #829 one-shot override from the overview.
+  const difficultyRaw = campaign.difficulty?.trim() ?? '';
+  const difficultyLabel = difficultyRaw
+    ? difficultyRaw
+        .split('-')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ')
+    : '';
+  const isHard = difficultyRaw.toLowerCase() === 'hard';
   const metaSegments: React.ReactNode[] = [];
+  if (difficultyLabel) metaSegments.push(<span key="difficulty">{difficultyLabel}</span>);
   if (campaign.levelRange) {
     metaSegments.push(
       <span key="level">Level {formatStarterLevelRange(campaign.levelRange)}</span>,
@@ -510,7 +529,14 @@ const CampaignDetailPage: React.FC = () => {
   }
 
   const premise = campaign.premise?.trim();
-  const overviewStory = overviewPreview ? cutAtSentenceEnd(overviewPreview) : '';
+  // Collapsed: capped preview cut at a sentence end. Expanded: uncapped plain-text
+  // narrative, so Read more reveals the whole stored story.
+  let overviewStory = '';
+  if (storyExpanded) {
+    overviewStory = overviewFull;
+  } else if (overviewPreview) {
+    overviewStory = cutAtSentenceEnd(overviewPreview);
+  }
   const hasStory = Boolean(premise || overviewStory);
 
   return (
@@ -579,18 +605,39 @@ const CampaignDetailPage: React.FC = () => {
           </div>
         </div>
 
-        {/* About this campaign: closed by default; story as plain text, cut
-            at a sentence end. Hidden when there is no story (#2281). */}
+        {/* The story: Read more / Show less (PublicCampaign board). Story as
+            plain text, cut at a sentence end. Hidden when there is no story
+            (#2281). */}
         {hasStory && (
-          <details className="mb-12 rounded-[13px] border border-white/10 bg-[color:var(--infinite-surface)] p-4">
-            <summary className="cursor-pointer font-heading text-xl text-infinite-gold">
-              About this campaign
-            </summary>
-            <div className="mt-3 space-y-4 text-muted-foreground leading-relaxed">
+          <section className="mb-12" aria-labelledby="campaign-story">
+            <h2 id="campaign-story" className="font-heading text-xl text-infinite-gold">
+              The story
+            </h2>
+            <div
+              className={`mt-3 space-y-4 text-muted-foreground leading-relaxed ${
+                storyExpanded ? '' : 'line-clamp-4'
+              }`}
+            >
               {premise && <p className="whitespace-pre-line">{premise}</p>}
               {overviewStory && <p className="whitespace-pre-line">{overviewStory}</p>}
             </div>
-          </details>
+            <button
+              type="button"
+              aria-expanded={storyExpanded}
+              onClick={() => setStoryExpanded((value) => !value)}
+              className="mt-2 inline-flex min-h-11 items-center font-bold text-infinite-gold hover:underline"
+            >
+              {storyExpanded ? 'Show less' : 'Read more'}
+            </button>
+          </section>
+        )}
+
+        {isHard && (
+          <div className="mb-12 rounded-[13px] border border-white/10 bg-[color:var(--infinite-surface)] p-4">
+            <p className="text-muted-foreground leading-relaxed">
+              Hard campaign: target numbers (DC and AC) start hidden. You can show them in Settings.
+            </p>
+          </div>
         )}
 
         {/* Heroes */}
