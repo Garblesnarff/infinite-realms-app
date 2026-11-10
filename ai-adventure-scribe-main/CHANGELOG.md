@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.43.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.42.0...v0.43.0) (2026-11-10)
+
+
+### Features
+
+* **public:** campaign page board, measurements, memory block, voice sample ([#1432](https://github.com/Garblesnarff/infinite-realms-app/issues/1432)) ([873cede](https://github.com/Garblesnarff/infinite-realms-app/commit/873cedec4dee191905e6298994c8e16093027f20))
+* **table:** improve combat readability ([#1428](https://github.com/Garblesnarff/infinite-realms-app/issues/1428)) ([96e1778](https://github.com/Garblesnarff/infinite-realms-app/commit/96e1778008dd1f7ee02d78c2ef814853cb644cb4))
+
+
+### Bug Fixes
+
+* **character:** chosen kit replaces background default, list items on Finalize ([#1402](https://github.com/Garblesnarff/infinite-realms-app/issues/1402)) ([1c4ff2c](https://github.com/Garblesnarff/infinite-realms-app/commit/1c4ff2c89f0d435ff80ea0234b6ac26b9155ee16))
+
 ## [0.42.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.41.0...v0.42.0) (2026-11-09)
 
 
