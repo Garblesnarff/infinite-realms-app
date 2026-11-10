@@ -46,10 +46,13 @@ const LaunchPage: React.FC = () => {
         });
         if (cancelled) return;
         if (response && response.ok && response.status === 200) {
-          setVoiceSamplePresent(true);
-        } else {
-          setVoiceSamplePresent(false);
+          const contentType = response.headers?.get?.('content-type') ?? '';
+          if (contentType.trim().toLowerCase().startsWith('audio/')) {
+            if (!cancelled) setVoiceSamplePresent(true);
+            return;
+          }
         }
+        setVoiceSamplePresent(false);
       } catch {
         if (!cancelled) setVoiceSamplePresent(false);
       }

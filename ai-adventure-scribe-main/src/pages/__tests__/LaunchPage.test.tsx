@@ -121,7 +121,52 @@ describe('LaunchPage', () => {
   });
 
   it('shows the voice play control when the sample file ships', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'audio/mpeg' : null) },
+      }),
+    );
+    renderPage();
+    const button = await screen.findByRole('button', { name: /voice sample/i });
+    expect(button).toBeEnabled();
+    expect(button.className).toMatch(/h-16/);
+    expect(button.className).toMatch(/w-16/);
+    expect(
+      screen.getByText('Press Listen on any message and the DM reads it aloud.'),
+    ).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it('hides the voice play control when HEAD returns 200 text/html (SPA fallback)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null) },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderPage();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole('button', { name: /voice sample/i })).toBeNull();
+    expect(
+      screen.getByText('Press Listen on any message and the DM reads it aloud.'),
+    ).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it('shows the voice play control when HEAD returns 200 audio/mpeg (case-insensitive)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'Audio/MPEG' : null) },
+      }),
+    );
     renderPage();
     const button = await screen.findByRole('button', { name: /voice sample/i });
     expect(button).toBeEnabled();
@@ -158,7 +203,14 @@ describe('LaunchPage', () => {
   });
 
   it('plays the sample when the Play control is clicked', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'audio/mpeg' : null) },
+      }),
+    );
     const playMock = vi.fn().mockResolvedValue(undefined);
     const originalPlay = HTMLMediaElement.prototype.play;
     HTMLMediaElement.prototype.play = playMock as unknown as typeof HTMLMediaElement.prototype.play;

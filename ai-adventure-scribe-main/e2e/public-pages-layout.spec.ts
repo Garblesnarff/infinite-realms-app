@@ -112,3 +112,30 @@ test('landing hero pill exact text at 1280', async ({ page }) => {
   const text = await page.getByText('Open beta · Free to play · No waitlist').textContent();
   expect(text?.trim()).toEqual('Open beta · Free to play · No waitlist');
 });
+
+test.describe('unstubbed voice sample (vite preview SPA fallback)', () => {
+  test.beforeEach(async ({ page }) => {
+    // Parent beforeEach also fulfills this path as audio/mpeg; drop it so the
+    // built preview's SPA fallback (200 text/html) is what the page sees.
+    await page.unroute('**/audio/landing-voice-sample.mp3');
+  });
+
+  test('hides the voice play control on the unstubbed built preview', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 844 });
+    const headResponse = page.waitForResponse((res) => {
+      const url = new URL(res.url());
+      return url.pathname === '/audio/landing-voice-sample.mp3';
+    });
+    await page.goto(`${origin}/`);
+    const audioHead = await headResponse;
+    expect(audioHead.status()).toBe(200);
+    expect((audioHead.headers()['content-type'] ?? '').toLowerCase()).toMatch(/^text\/html/);
+    await expect(
+      page.getByRole('heading', { name: /THE 5E CAMPAIGN/i }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Open beta · Free to play · No waitlist')).toBeVisible();
+    await expect(page.getByText('Press Listen on any message and the DM reads it aloud.')).toBeVisible();
+    const voicePlay = page.getByRole('button', { name: /voice sample/i });
+    await expect(voicePlay).toHaveCount(0);
+  });
+});
