@@ -21,6 +21,20 @@ for (const width of [1280, 390]) {
     await expect(
       page.getByLabel('Missed engine attack').getByTestId('engine-roll-seal'),
     ).toHaveText('MISS');
+    await page.waitForTimeout(1600);
+    await expect(
+      page.getByLabel('Ability check result').getByTestId('engine-roll-seal'),
+    ).toHaveText('SUCCESS');
+    await expect(page.getByLabel('Save result').getByTestId('engine-roll-seal')).toHaveText(/FAIL/);
+    await expect(page.getByLabel('Attack result').getByTestId('engine-roll-seal')).toHaveText(
+      'HIT',
+    );
+    await expect(page.getByLabel('Initiative result').getByTestId('engine-roll-seal')).toHaveText(
+      '9',
+    );
+    await expect(page.getByLabel('NPC roll result').getByTestId('engine-roll-seal')).toHaveText(
+      'HIT',
+    );
     const sections = ['Resolved narrative check', 'Failed narrative check', 'Missed engine attack'];
     for (const section of sections) {
       const ratio = await page

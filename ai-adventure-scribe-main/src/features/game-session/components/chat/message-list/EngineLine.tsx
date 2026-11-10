@@ -2,6 +2,8 @@ import React, { useId, useState } from 'react';
 
 import type { EngineLineModel, EngineLineOutcome } from './engine-line-model';
 
+import { ResultWaxSeal } from '@/components/game/ResultWaxSeal';
+import { useTableLookActive } from '@/features/campaigns/table/useTableLookActive';
 import { cn } from '@/lib/utils';
 
 /** One pill style per outcome, written from the player's side (#87). */
@@ -38,6 +40,7 @@ interface EngineLineProps {
  */
 export const EngineLine: React.FC<EngineLineProps> = ({ model, showLabel = true }) => {
   const [expanded, setExpanded] = useState(false);
+  const tableLook = useTableLookActive();
   const regionId = useId();
   // A line without math already shows its whole sentence; there is nothing more to expand.
   const hasMore = model.math !== null && model.sentence !== model.detail;
@@ -89,20 +92,24 @@ export const EngineLine: React.FC<EngineLineProps> = ({ model, showLabel = true 
             ) : null}
           </span>
         </span>
-        <span
-          data-testid="engine-line-pill"
-          className={cn(
-            'ir-wax-seal text-xs font-bold uppercase tracking-[.08em] px-2 py-1 rounded-md',
-            ['hit', 'enemy-hit', 'fail', 'refused'].includes(model.outcome)
-              ? 'ir-wax-seal--red'
-              : ['critical', 'pass'].includes(model.outcome)
-                ? 'ir-wax-seal--gold'
-                : 'ir-wax-seal--slate',
-            PILL_CLASS[model.outcome],
-          )}
-        >
-          {model.pill}
-        </span>
+        {tableLook && model.sealWord ? (
+          <ResultWaxSeal word={model.sealWord} />
+        ) : (
+          <span
+            data-testid="engine-line-pill"
+            className={cn(
+              'ir-wax-seal text-xs font-bold uppercase tracking-[.08em] px-2 py-1 rounded-md',
+              ['hit', 'enemy-hit', 'fail', 'refused'].includes(model.outcome)
+                ? 'ir-wax-seal--red'
+                : ['critical', 'pass'].includes(model.outcome)
+                  ? 'ir-wax-seal--gold'
+                  : 'ir-wax-seal--slate',
+              PILL_CLASS[model.outcome],
+            )}
+          >
+            {model.pill}
+          </span>
+        )}
       </button>
       {hasMore && (
         <p

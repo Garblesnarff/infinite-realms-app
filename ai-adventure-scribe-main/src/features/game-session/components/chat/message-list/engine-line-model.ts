@@ -13,6 +13,7 @@
  */
 import type { ChatMessage } from '@/types/game';
 
+import { engineVerdictWord } from '@/components/game/result-seal';
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
 
 export type EngineLineSide = 'player' | 'npc';
@@ -43,6 +44,8 @@ export interface EngineLineModel {
   detail: string | null;
   outcome: EngineLineOutcome;
   pill: string;
+  /** The verdict token written on the engine line, when it has one. */
+  sealWord?: string;
   /** The engine sentence in player-facing words (names, no enemy HP); the expanded line. */
   sentence: string;
 }
@@ -192,7 +195,8 @@ export function parseEngineLine(line: string, options: EngineLineOptions = {}): 
     options.side ??
     (isPartyRow(actor ? rosterRowFor(actor, roster) : undefined) === false ? 'npc' : 'player');
   const enemy = side === 'npc';
-  const base = { side, sentence };
+  const sealWord = engineVerdictWord(sentence);
+  const base = { side, sentence, ...(sealWord ? { sealWord } : {}) };
 
   const refused = sentence.match(/^.+?'s spell "(.+?)" was refused/);
   if (refused) {
@@ -363,6 +367,18 @@ export function engineLineFromDiceRoll(roll: DiceRollData): EngineLineModel {
           ? 'pass'
           : 'fail';
   const math = `${die} ${signed(roll.modifier)} = ${roll.total}`;
+  const storedVerdict = typeof roll.verdict === 'string' ? roll.verdict.trim() : '';
+  const sealWord =
+    storedVerdict ||
+    (typeof roll.success !== 'boolean'
+      ? undefined
+      : isAttack
+        ? roll.success
+          ? 'HIT'
+          : 'MISS'
+        : roll.success
+          ? 'SUCCESS'
+          : 'FAILED');
   return {
     badge: String(die),
     side: 'player',
@@ -371,6 +387,7 @@ export function engineLineFromDiceRoll(roll: DiceRollData): EngineLineModel {
     detail: target,
     outcome,
     pill: outcome === 'info' ? 'Rolled' : PILL[outcome],
+    ...(sealWord ? { sealWord } : {}),
     sentence: `${label}: ${math}${target ? ` ${target}` : ''}${outcome === 'info' ? '' : ` — ${PILL[outcome]}`}.`,
   };
 }

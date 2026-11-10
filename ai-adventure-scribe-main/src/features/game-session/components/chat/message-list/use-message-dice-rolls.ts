@@ -464,6 +464,16 @@ export function useMessageDiceRolls({
         };
         const formattedRoll = formatDiceRoll(completedRoll);
         const outcome = getDiceRollOutcome(completedRoll);
+        const verdict =
+          outcome?.targetType === 'ac'
+            ? outcome.success
+              ? 'HIT'
+              : 'MISS'
+            : outcome?.targetType === 'dc'
+              ? outcome.success
+                ? 'SUCCESS'
+                : 'FAILED'
+              : undefined;
         // Combat outcomes arrive from the server; the narrative check uses the
         // dice engine verdict already sent with this turn.
         if (!isEngineTaggedRoll(roll) && outcome?.targetType === 'dc') {
@@ -495,6 +505,7 @@ export function useMessageDiceRolls({
             dc: roll.dc,
             ac: roll.ac,
             success: outcome?.success,
+            ...(verdict ? { verdict } : {}),
             timestamp: new Date().toISOString(),
           },
         };
