@@ -39,6 +39,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.js';
 
 const stub = () => ({
@@ -194,6 +195,7 @@ describeWithDb('sheet feature uses and rests persist (#224)', () => {
   beforeAll(async () => {
     if (!hasRealDb) return;
     userId = testId('sheet-rest-user');
+    await grantLegendPlan(userId);
     [{ id: campaignId }] = await db
       .insert(campaigns)
       .values({ userId, name: testId('camp') })
@@ -701,6 +703,7 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
     if (!hasRealDb) return;
     db = realDb();
     userId = testId('rest-parity-user');
+    await grantLegendPlan(userId);
 
     // The conditions library is a shared reference table: insert the rows this
     // suite needs, ignoring the unique-name conflict when another suite (or a
@@ -1583,7 +1586,11 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
       prompt: 'The wizard casts a spell while exploring. What happens?',
       player_input: playerInput,
       sessionId,
-      dmReply: { messageId: '11111111-2222-4333-8444-555555555559', inCombat: false, holdProse: true },
+      dmReply: {
+        messageId: '11111111-2222-4333-8444-555555555559',
+        inCombat: false,
+        holdProse: true,
+      },
       combatEntry: {
         sessionId,
         player: {
@@ -1720,7 +1727,11 @@ describeWithDb('one long-rest ruleset for the sheet and combat paths (#170)', ()
         prompt: 'The wizard casts a spell while exploring. What happens?',
         player_input: playerInput,
         sessionId,
-        dmReply: { messageId: '11111111-2222-4333-8444-555555555560', inCombat: false, holdProse: true },
+        dmReply: {
+          messageId: '11111111-2222-4333-8444-555555555560',
+          inCombat: false,
+          holdProse: true,
+        },
         combatEntry: {
           sessionId,
           player: {
@@ -2081,6 +2092,7 @@ describeWithDb('a continuation session carries HP until the long rest (#1239)', 
     if (!hasRealDb) return;
     db = realDb();
     userId = testId('rest-first-user');
+    await grantLegendPlan(userId);
 
     [{ id: campaignId }] = await db
       .insert(campaigns)
@@ -2126,12 +2138,8 @@ describeWithDb('a continuation session carries HP until the long rest (#1239)', 
       }
     };
     await drop(() => db.delete(restEvents).where(eq(restEvents.characterId, characterId)));
-    await drop(() =>
-      db.delete(gameSessions).where(eq(gameSessions.characterId, characterId)),
-    );
-    await drop(() =>
-      db.delete(characterStats).where(eq(characterStats.characterId, characterId)),
-    );
+    await drop(() => db.delete(gameSessions).where(eq(gameSessions.characterId, characterId)));
+    await drop(() => db.delete(characterStats).where(eq(characterStats.characterId, characterId)));
     await drop(() => db.delete(characters).where(eq(characters.id, characterId)));
     await drop(() => db.delete(campaigns).where(eq(campaigns.id, campaignId)));
     await closeRealDb();
@@ -2190,6 +2198,7 @@ describeWithDb('a Retry does not restart concentration (#772)', () => {
     if (!hasRealDb) return;
     db = realDb();
     userId = testId('772-retry-user');
+    await grantLegendPlan(userId);
     [{ id: campaignId }] = await db
       .insert(campaigns)
       .values({ userId, name: testId('772-camp') })

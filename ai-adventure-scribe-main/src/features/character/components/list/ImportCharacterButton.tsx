@@ -2,6 +2,7 @@ import { Upload } from 'lucide-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { LegendGateCard } from '@/components/character-creation/LegendGateCard';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -9,6 +10,7 @@ import {
   CHARACTER_EXPORT_VERSION,
   importCharacterJson,
 } from '@/services/character-json-api';
+import { isLegendRequiredError } from '@/services/legend-gate';
 
 const INVALID_FILE_MESSAGE =
   'This is not a valid Infinite Realms character JSON file. Choose a file exported from a character sheet.';
@@ -53,6 +55,7 @@ export const ImportCharacterButton: React.FC = () => {
   const { toast } = useToast();
   const [error, setError] = React.useState<string | null>(null);
   const [isImporting, setIsImporting] = React.useState(false);
+  const [legendRequired, setLegendRequired] = React.useState(false);
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = event.target.files?.[0];
@@ -60,6 +63,7 @@ export const ImportCharacterButton: React.FC = () => {
     if (!file) return;
 
     setError(null);
+    setLegendRequired(false);
     setIsImporting(true);
     try {
       const imported = await importCharacterJson(parseCharacterFile(await file.text()));
@@ -67,11 +71,20 @@ export const ImportCharacterButton: React.FC = () => {
       toast({ title: 'Character imported', description: 'Opening your new character copy.' });
       navigate(`/app/character/${encodeURIComponent(imported.id)}`);
     } catch (nextError) {
+      // #1344: a free plan cannot import a hero; show the Legend gate, not a raw error.
+      if (isLegendRequiredError(nextError)) {
+        setLegendRequired(true);
+        return;
+      }
       setError(nextError instanceof Error ? nextError.message : INVALID_FILE_MESSAGE);
     } finally {
       setIsImporting(false);
     }
   };
+
+  if (legendRequired) {
+    return <LegendGateCard backTarget="/app/characters" backLabel="Back to characters" />;
+  }
 
   return (
     <div className="flex flex-col items-center gap-2">

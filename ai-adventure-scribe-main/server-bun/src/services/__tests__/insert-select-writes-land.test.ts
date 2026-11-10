@@ -26,6 +26,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from './fixtures/real-db.js';
 import {
   characterEquipment,
@@ -40,6 +41,13 @@ import {
   spells,
 } from '../../../../db/schema/index';
 
+// The real-DB CI job does not provide these; the character routes validate them on first use
+// (the plan lookup, #1344). Dummy values only, and real values win via ??=.
+process.env.CORS_ORIGIN ??= 'http://localhost:5173';
+process.env.WORKOS_API_KEY ??= 'test-workos-api-key';
+process.env.WORKOS_CLIENT_ID ??= 'test-workos-client-id';
+process.env.PORT ??= '8888';
+
 if (!hasRealDb) {
   // Say it out loud. A silently-skipped suite reads exactly like a passing one.
   console.warn(
@@ -50,6 +58,9 @@ if (!hasRealDb) {
 describeWithDb('converted insert-select writes actually land', () => {
   const db = hasRealDb ? realDb() : (null as never);
   const userId = testId('user');
+  beforeAll(async () => {
+    await grantLegendPlan(userId);
+  });
 
   let characterId: string;
   let classId: string;
@@ -259,6 +270,9 @@ describeWithDb('character-sheet updates persist through PUT /v1/characters/:id (
   // afterAll, and realDb() reconnects when the cached client is gone.
   let db: ReturnType<typeof realDb>;
   const userId = `${SHEET_USER_PREFIX}${testId('sheet')}`;
+  beforeAll(async () => {
+    await grantLegendPlan(userId);
+  });
   let characterId: string;
   let app: { handle: (request: Request) => Promise<Response> };
 
@@ -343,6 +357,9 @@ describeWithDb('character-sheet updates persist through PUT /v1/characters/:id (
 describeWithDb('wizard completion saves equipment, gold, spells (#2710)', () => {
   let db: ReturnType<typeof realDb>;
   const userId = `${SHEET_USER_PREFIX}${testId('wizard')}`;
+  beforeAll(async () => {
+    await grantLegendPlan(userId);
+  });
   const className = testId('Wizard2710');
   let characterId: string;
   let wizardClassId: string;

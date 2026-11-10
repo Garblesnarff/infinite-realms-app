@@ -29,6 +29,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.js';
 
 const stub = () => ({
@@ -109,6 +110,7 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
 
   beforeAll(async () => {
     userId = testId('user-619');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.js');

@@ -19,6 +19,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 // Same logger stub the other character-route real-DB suites use.
@@ -86,6 +87,7 @@ describeWithDb('spell catalog seed and the Wizard spell round trip (#957)', () =
 
   beforeAll(async () => {
     userId = testId('user-957');
+    await grantLegendPlan(userId);
     db = realDb();
     const seed = readFileSync(seedPath, 'utf8');
     await db.execute(sql.raw(seed));

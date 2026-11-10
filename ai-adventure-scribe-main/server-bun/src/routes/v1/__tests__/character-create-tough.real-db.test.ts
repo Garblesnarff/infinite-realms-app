@@ -12,6 +12,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 const stub = () => ({
@@ -55,6 +56,7 @@ describeWithDb('#989 Tough Fighter real create/read/recompute', () => {
   const ids: string[] = [];
   beforeAll(async () => {
     userId = testId('user-989');
+    await grantLegendPlan(userId);
     const modules = await importWithRealDb(async () => ({
       ...(await import('../../../http-pipeline.ts')),
       ...(await import('../characters.ts')),

@@ -23,6 +23,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 const stub = () => ({
@@ -127,6 +128,7 @@ describeWithDb('ability-gated features and Divine Intervention (#1232)', () => {
 
   beforeAll(async () => {
     userId = testId('user-1232');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');

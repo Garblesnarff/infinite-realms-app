@@ -48,6 +48,7 @@ import {
   realDb,
   realDbUrl,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 const stub = () => ({
@@ -280,6 +281,7 @@ describeWithDb('character create every class (#388)', () => {
 
   beforeAll(async () => {
     userId = testId('user-388');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
@@ -1091,6 +1093,7 @@ describeWithDb('character create grants class features for levels 1..N (#829)', 
 
   beforeAll(async () => {
     userId = testId('user-829');
+    await grantLegendPlan(userId);
     db = realDb();
     // Insert only the rows the database does not already hold under the
     // same key (the 20261009 seed's own matching rule: class, subclass,
@@ -1123,7 +1126,8 @@ describeWithDb('character create grants class features for levels 1..N (#829)', 
       ),
     );
     const missingRows = SEED_LIBRARY_ROWS.filter(
-      (r) => !existingKeys.has(libraryKey(r.className, r.subclassName, r.featureName, r.levelAcquired)),
+      (r) =>
+        !existingKeys.has(libraryKey(r.className, r.subclassName, r.featureName, r.levelAcquired)),
     );
     if (missingRows.length > 0) {
       await db.insert(classFeaturesLibrary).values(missingRows).onConflictDoNothing();
@@ -1215,30 +1219,23 @@ describeWithDb('character create grants class features for levels 1..N (#829)', 
     // hand them out. (A wizard body that picks Draconic Bloodline stores the
     // choice as a class_features string; granting that origin's rows at
     // create is a separate gap — see the note in CharacterService.create.)
-    expect(await grantedFeatures(id)).toEqual([
-      'Sorcerous Origin@1',
-      'Spellcasting: Sorcerer@1',
-    ]);
+    expect(await grantedFeatures(id)).toEqual(['Sorcerous Origin@1', 'Spellcasting: Sorcerer@1']);
   });
 
   // #899: a Life Cleric picked in the wizard is stored as a divine-domain
   // choice string, not a subclass column. Create must record that subclass so
   // its level-1 feature (Disciple of Life) is granted, as a premade's is.
   it('PIN: a wizard-created Life Cleric gets Disciple of Life at level 1 (#899)', async () => {
-    const res = await request(
-      '/v1/characters',
-      'POST',
-      {
-        ...wizardBody({ name: 'Cleric', hitDie: '1d8', baseHp: 8 }),
-        class_features: {
-          'divine-domain': {
-            name: 'Divine Domain',
-            description: 'Choose one domain related to your deity.',
-            choice: 'Life Domain: Focuses on healing and protection',
-          },
+    const res = await request('/v1/characters', 'POST', {
+      ...wizardBody({ name: 'Cleric', hitDie: '1d8', baseHp: 8 }),
+      class_features: {
+        'divine-domain': {
+          name: 'Divine Domain',
+          description: 'Choose one domain related to your deity.',
+          choice: 'Life Domain: Focuses on healing and protection',
         },
       },
-    );
+    });
     const text = await res.text();
     expect(res.status, text.slice(0, 300)).toBe(201);
     const { id } = JSON.parse(text) as { id: string };
@@ -1416,6 +1413,7 @@ describeWithDb('starter template subclass (#829)', () => {
 
   beforeAll(async () => {
     userId = testId('user-829');
+    await grantLegendPlan(userId);
     db = realDb();
 
     // The campaign the seeder targets: in the real flow the bootstrap
@@ -1698,7 +1696,10 @@ describeWithDb('starter template subclass (#829)', () => {
 const premadeFixture = (name: string): Record<string, unknown> =>
   JSON.parse(
     readFileSync(
-      resolve(dirname(fileURLToPath(import.meta.url)), `../../../../../shared/test-fixtures/${name}`),
+      resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        `../../../../../shared/test-fixtures/${name}`,
+      ),
       'utf8',
     ),
   ) as Record<string, unknown>;
@@ -1737,6 +1738,7 @@ describeWithDb('premade level-3 heroes carry subclass and features (#1019)', () 
 
   beforeAll(async () => {
     userId = testId('user-1019');
+    await grantLegendPlan(userId);
     db = realDb();
     const [campaign] = await db
       .insert(campaigns)
@@ -1923,7 +1925,14 @@ describeWithDb('premade level-3 heroes carry subclass and features (#1019)', () 
       level: 3,
       total_level: 3,
       class_levels: [{ classId: 'sorcerer', className: 'Sorcerer', level: 3 }],
-      stats: { strength: 8, dexterity: 12, constitution: 14, intelligence: 11, wisdom: 10, charisma: 17 },
+      stats: {
+        strength: 8,
+        dexterity: 12,
+        constitution: 14,
+        intelligence: 11,
+        wisdom: 10,
+        charisma: 17,
+      },
       class_features: {
         'sorcerous-origin': {
           name: 'Sorcerous Origin',
@@ -2048,6 +2057,7 @@ describeWithDb('Fighter sheet exposes level-gated features (#975)', () => {
 
   beforeAll(async () => {
     userId = testId('user-975');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');

@@ -35,6 +35,12 @@ const noopLogger = { debug: () => {}, info: () => {}, warn: () => {}, error: () 
 mock.module('../../../lib/db.js', () => ({ sql: async () => templateRows }));
 mock.module('../../../lib/env.js', () => ({ env: { WORKOS_CLIENT_ID: 'test-client' } }));
 mock.module('../../../lib/logger.js', () => ({ logger: noopLogger }));
+// #1344: create now checks the plan through the strict resolver. These tests assert
+// their own subject, not the gate, so the caller is given a Legend plan.
+mock.module('../../../lib/user-plan.js', () => ({
+  resolveUserPlanStrict: async () => 'pro',
+  resolveUserPlan: async () => 'pro',
+}));
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async (request: Request) => {
     const token = request.headers.get('authorization');

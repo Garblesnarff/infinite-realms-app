@@ -36,6 +36,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.js';
 
 let userId = '';
@@ -217,6 +218,7 @@ describeWithDb('limited class features are counted, never unlimited (#1225)', ()
   beforeAll(async () => {
     if (!hasRealDb) return;
     userId = testId('user-1225');
+    await grantLegendPlan(userId);
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
       const { charactersRoutes } = await import('../characters.js');
@@ -622,15 +624,13 @@ describeWithDb('limited class features are counted, never unlimited (#1225)', ()
       } as typeof classFeaturesLibrary.$inferInsert)
       .returning({ id: classFeaturesLibrary.id });
     insertedLibraryIds.push(row.id);
-    await db
-      .insert(characterFeatures)
-      .values({
-        characterId: barbarianId,
-        featureId: row.id,
-        usesRemaining: 1,
-        isActive: true,
-        acquiredAtLevel: 1,
-      });
+    await db.insert(characterFeatures).values({
+      characterId: barbarianId,
+      featureId: row.id,
+      usesRemaining: 1,
+      isActive: true,
+      acquiredAtLevel: 1,
+    });
     const results = await Promise.all([use(barbarianId, row.id), use(barbarianId, row.id)]);
     expect(results.map((result) => result.status).sort()).toEqual([200, 400]);
     const [pool] = await db
