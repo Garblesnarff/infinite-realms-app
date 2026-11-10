@@ -66,7 +66,10 @@ describe('Finalize summary equipment line (#1402)', () => {
       currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
     });
     // Outlander's bare '10 gp' coin string is purse money, not an item (#971).
-    expect(line).toBe('Equipment: Monk Equipment Package, 2 items, 10 gp starting gold');
+    // Names (background + package) replace the old package/count label (#1402 reopen).
+    expect(line).toBe(
+      "Equipment: Monk Equipment Package: Staff, Hunting trap, Traveler's clothes, Belt pouch, Dagger, Staff, 10 gp starting gold",
+    );
   });
 
   it('names starting gold when the gold option was chosen', () => {

@@ -3,10 +3,10 @@ import React from 'react';
 
 import type { Equipment } from '@/data/equipmentOptions';
 
+import { resolveBackgroundEquipment } from '@/components/character-creation/steps/equipment-selection/starting-equipment';
 import { StartingGoldOption } from '@/components/character-creation/steps/equipment-selection/StartingGoldOption';
 import { Card } from '@/components/ui/card';
 import { useCharacter } from '@/contexts/CharacterContext';
-import { backgrounds } from '@/data/backgroundOptions';
 import { resolveEquipmentById } from '@/data/equipment';
 import { getStartingEquipment, startingGoldByClass, weapons } from '@/data/equipmentOptions';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
@@ -22,8 +22,9 @@ const EquipmentSelection: React.FC = () => {
   const { scrollToNavigation } = useAutoScroll();
   const characterClass = state.character?.class;
   const characterBackground = state.character?.background;
-  const backgroundEquipment =
-    backgrounds.find((b) => b.id === characterBackground?.id)?.equipment ?? [];
+  const backgroundEquipment = characterBackground
+    ? resolveBackgroundEquipment(characterBackground, state.character?.toolProficiencies)
+    : [];
 
   // #2710: derive gold state from currency so it survives remount.
   // hasRolledGold is true when currency.gp > 0.
@@ -87,9 +88,14 @@ const EquipmentSelection: React.FC = () => {
     const equipmentNames = selectedEquipment.map((eq) => eq.name);
     let totalEquipment: string[] = [...equipmentNames];
 
-    // Automatically add background equipment if background is selected
+    // Automatically add background equipment if background is selected.
+    // Resolved through the shared producer so a chosen gaming set replaces
+    // the background's default kit instead of being appended (#1402).
     if (characterBackground) {
-      totalEquipment = [...backgroundEquipment, ...equipmentNames];
+      totalEquipment = [
+        ...resolveBackgroundEquipment(characterBackground, state.character?.toolProficiencies),
+        ...equipmentNames,
+      ];
     }
 
     const isGold = selectedEquipment.length === 0;

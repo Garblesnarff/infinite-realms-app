@@ -65,22 +65,6 @@
   "equipment": [
     {
       "character_id": "00000000-0000-0000-0000-000000000000",
-      "item_name": "Dice set",
-      "item_type": "equipment",
-      "quantity": 1,
-      "equipped": false,
-      "is_magic": false,
-      "magic_bonus": 0,
-      "magic_properties": null,
-      "requires_attunement": false,
-      "is_attuned": false,
-      "attunement_requirements": null,
-      "magic_item_type": null,
-      "magic_item_rarity": "common",
-      "magic_effects": null
-    },
-    {
-      "character_id": "00000000-0000-0000-0000-000000000000",
       "item_name": "Deck of cards",
       "item_type": "equipment",
       "quantity": 1,

@@ -7,6 +7,10 @@ import { logger } from '../lib/logger';
 
 import type { Character } from '@/types/character';
 
+import {
+  GAMING_KIT_ITEM_NAMES,
+  resolveGamingKit,
+} from '@/components/character-creation/steps/equipment-selection/starting-equipment';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case
@@ -53,22 +57,22 @@ export const mapWizardEquipmentToInventory = (
         equipped: false,
       }));
   if (character.id) return inventory;
-  const gamingItem = character.toolProficiencies?.includes('Gaming set (cards)')
-    ? 'Deck of cards'
-    : character.toolProficiencies?.includes('Gaming set (dice)')
-      ? 'Dice set'
-      : undefined;
-  if (
-    !gamingItem ||
-    inventory.some(
-      (item) => (item.itemName ?? item.itemId).toLowerCase() === gamingItem.toLowerCase(),
-    )
-  )
-    return inventory;
-  return [
-    ...inventory,
-    { itemId: gamingItem, itemType: 'equipment', quantity: 1, equipped: false },
-  ];
+  const gamingItem = resolveGamingKit(character.toolProficiencies);
+  if (!gamingItem) return inventory;
+
+  // #1402: a chosen gaming set replaces the background's default kit rather
+  // than being appended alongside it. Drop any non-chosen gaming-kit item, then
+  // ensure the chosen one is present.
+  const chosenLower = gamingItem.toLowerCase();
+  const filtered = inventory.filter((item) => {
+    const name = item.itemName ?? item.itemId;
+    if (!(GAMING_KIT_ITEM_NAMES as readonly string[]).includes(name)) return true;
+    return name.toLowerCase() === chosenLower;
+  });
+  if (filtered.some((item) => (item.itemName ?? item.itemId).toLowerCase() === chosenLower)) {
+    return filtered;
+  }
+  return [...filtered, { itemId: gamingItem, itemType: 'equipment', quantity: 1, equipped: false }];
 };
 
 /**
