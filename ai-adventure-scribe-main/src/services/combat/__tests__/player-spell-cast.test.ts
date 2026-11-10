@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { askPlayerForSpellCast } from '../player-spell-cast';
 
 import { SessionExpiredError } from '@/infrastructure/api/rest-client';
+import { proposeAuthoritativeSpell } from '@/services/combat/combat-attack-proposal';
 import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
 import { requestSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
 
@@ -11,6 +12,9 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/services/combat/player-roll-bridge', () => ({
   requestPlayerAttackRoll: vi.fn(),
+}));
+vi.mock('@/services/combat/combat-attack-proposal', () => ({
+  proposeAuthoritativeSpell: vi.fn(),
 }));
 vi.mock('@/services/combat/spell-target-save-bridge', () => ({
   requestSpellTargetSave: vi.fn(),
@@ -65,6 +69,40 @@ describe('askPlayerForSpellCast', () => {
     vi.mocked(requestPlayerAttackRoll).mockRejectedValue(new SessionExpiredError());
 
     await expect(ask('fire-bolt')).rejects.toBeInstanceOf(SessionExpiredError);
+  });
+
+  it('an armed Inspiration names itself in the sources but does not change the proposal advantage (round 2, B1)', async () => {
+    vi.mocked(proposeAuthoritativeSpell).mockResolvedValue({
+      movementOnly: false,
+      spellId: 'fire-bolt',
+      spellName: 'Fire Bolt',
+      kind: 'attack',
+      attackBonus: 5,
+      saveDC: 13,
+      targetAc: 11,
+      advantage: false,
+      disadvantage: false,
+      targetLabel: 'Professor Umeboshi',
+    } as any);
+
+    await expect(
+      askPlayerForSpellCast({
+        encounterId: 'enc-1',
+        action: action('fire-bolt'),
+        actorLabel: 'Rook',
+        participants: PARTICIPANTS,
+        inspirationArmed: true,
+      }),
+    ).resolves.toEqual({ d20: 17, autoRolled: false, movementOnly: false });
+    // Same as the weapon dialog: the proposal stays the rules' own, only the sources
+    // name Inspiration — the popup adds the armed advantage from its own context.
+    expect(requestPlayerAttackRoll).toHaveBeenCalledWith(
+      expect.objectContaining({
+        advantage: false,
+        disadvantage: false,
+        advantageSources: ['Inspiration'],
+      }),
+    );
   });
 
   it('opens a spell-attack roll popup for Acid Arrow (#1185)', async () => {

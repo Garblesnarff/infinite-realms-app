@@ -858,6 +858,39 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     { body: t.Object({ amount: t.Number({ minimum: 0 }) }) },
   )
 
+  /**
+   * POST /v1/characters/:id/spend-inspiration
+   *
+   * #1414: the engine owns the Inspiration flag. The client arms advantage locally; the
+   * roll that consumes it pays here, server-side, by clearing the flag in the personality
+   * envelope. A cancelled roll never reaches this route, so it never spends — the
+   * prompt's buttons lock down (isRolling) before the spend await, so Cancel cannot
+   * fire mid-spend. (Unmounting mid-spend still pays the flag with no roll — the spend
+   * already went out.) A flag already false (or unknown) is refused with 409; a
+   * view-only reader is refused with 403. Either way the caller rolls without advantage
+   * instead of losing the roll.
+   */
+  .post(
+    '/:id/spend-inspiration',
+    async ({ params, user, set }) => {
+      const result = await CharacterService.spendInspiration(params.id, user!.userId);
+      if (!result.success) {
+        if (result.reason === 'not_found') {
+          set.status = 404;
+          return { error: 'Character not found' };
+        }
+        if (result.reason === 'forbidden') {
+          set.status = 403;
+          return { error: 'Inspiration cannot be spent by a viewer', reason: 'forbidden' };
+        }
+        set.status = 409;
+        return { error: 'No inspiration to spend', reason: 'no_inspiration' };
+      }
+      return { inspiration: false };
+    },
+    { body: t.Object({}) },
+  )
+
   .put(
     '/:id/stats',
     async ({ params, body, user }) => {

@@ -16,6 +16,44 @@ vi.mock('@/services/combat/spell-target-save-bridge', () => ({
   requestSpellTargetSave: vi.fn(),
 }));
 
+const inspirationHolder = vi.hoisted(() => ({
+  armed: false,
+  arm: vi.fn(),
+  disarm: vi.fn(),
+  spendInspiration: vi.fn(async () => true),
+}));
+vi.mock('@/features/game-session/hooks/use-inspiration-spend', () => ({
+  useInspirationSpend: () => ({
+    armed: inspirationHolder.armed,
+    arm: (...args: unknown[]) => {
+      inspirationHolder.arm(...args);
+      inspirationHolder.armed = true;
+    },
+    disarm: (...args: unknown[]) => {
+      inspirationHolder.disarm(...args);
+      inspirationHolder.armed = false;
+    },
+    spendInspiration: inspirationHolder.spendInspiration,
+  }),
+}));
+// #1414 round 4 (CI fix): useCombatLegalActions reads the armed state straight from
+// the armed context now (it never spends), so the chip tests mock that hook. The
+// useInspirationSpend mock above stays as the B2 tripwire: if a spend ever creeps
+// back into runAction, the mock is wired up again and the no-spend tests catch it.
+vi.mock('@/features/game-session/contexts/inspiration-armed-context', () => ({
+  useInspirationArmed: () => ({
+    armed: inspirationHolder.armed,
+    arm: (...args: unknown[]) => {
+      inspirationHolder.arm(...args);
+      inspirationHolder.armed = true;
+    },
+    disarm: (...args: unknown[]) => {
+      inspirationHolder.disarm(...args);
+      inspirationHolder.armed = false;
+    },
+  }),
+}));
+
 const combatHolder = vi.hoisted(() => ({
   current: {
     state: {
@@ -539,5 +577,184 @@ describe('useCombatLegalActions spell cast (#1185)', () => {
     const intents = intentCalls(fetchSpy);
     expect(intents).toHaveLength(2);
     expect(intents[1].body.intent.type).toBe('end_turn');
+  });
+});
+
+describe('useCombatLegalActions inspiration (#1414)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+    inspirationHolder.armed = false;
+  });
+
+  const inspirationAction = {
+    type: 'inspiration',
+    label: 'Spend Inspiration — advantage on your next roll',
+  };
+
+  function routeFetch(
+    legalActions: Array<Record<string, unknown>>,
+  ): MockInstance<typeof fetch> {
+    return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: unknown, init?: unknown) => {
+      const href = String(url);
+      if (href.includes('/legal-actions')) {
+        return {
+          ok: true,
+          json: async () => ({ actorId: 'pc-1', actions: legalActions }),
+        } as Response;
+      }
+      if (href.includes('/intent')) {
+        const body = JSON.parse(String((init as { body?: string }).body ?? '{}')) as {
+          intent?: { type?: string };
+          phase?: string;
+        };
+        if (body.phase === 'propose') {
+          if (body.intent?.type === 'spell') {
+            return {
+              ok: true,
+              json: async () => ({
+                proposal: {
+                  movementOnly: false,
+                  spellId: 'acid-arrow',
+                  spellName: 'Acid Arrow',
+                  kind: 'attack',
+                  attackBonus: 5,
+                  saveDC: 13,
+                  targetAc: 11,
+                  advantage: false,
+                  disadvantage: false,
+                  targetLabel: 'Rubble Sentinel',
+                },
+              }),
+            } as Response;
+          }
+          return {
+            ok: true,
+            json: async () => ({
+              proposal: {
+                movementOnly: false,
+                weaponName: 'Quarterstaff',
+                targetLabel: 'Rubble Sentinel',
+                attackBonus: 5,
+                targetAc: 11,
+                advantage: false,
+                disadvantage: false,
+              },
+            }),
+          } as Response;
+        }
+        return { ok: true, json: async () => ({ accepted: true, result: {} }) } as Response;
+      }
+      return { ok: false, status: 404 } as Response;
+    });
+  }
+
+  it('an armed attack spends nothing in runAction — the popup is the single spend site (round 2, B2)', async () => {
+    inspirationHolder.armed = true;
+    vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 17 });
+    const attackAction = {
+      type: 'attack',
+      label: 'Attack with Quarterstaff',
+      weaponId: 'quarterstaff',
+      targetIds: ['monster-1'],
+    };
+    const fetchSpy = routeFetch([attackAction]);
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.runAction(result.current.actions[0] as never);
+    });
+
+    // The popup spends when the die is rolled; runAction must not spend again — and a
+    // typed number must not spend at all. Either way this hook never calls the spend.
+    expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
+    const intents = fetchSpy.mock.calls
+      .map(([, init]) => JSON.parse(String((init as { body?: string }).body ?? '{}')))
+      .filter(
+        (body: { phase?: string; intent?: { type?: string } }) =>
+          !body.phase && body.intent?.type === 'attack',
+      );
+    expect(intents).toHaveLength(1);
+    expect(intents[0].intent).toMatchObject({ type: 'attack', d20: 17 });
+  });
+
+  it('an armed spell attack spends nothing in runAction (round 2, B2)', async () => {
+    inspirationHolder.armed = true;
+    vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 17 });
+    const castAction = {
+      type: 'spell',
+      label: 'Cast Acid Arrow',
+      spellId: 'acid-arrow',
+      targetIds: ['monster-1'],
+    };
+    const fetchSpy = routeFetch([castAction]);
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.runAction(result.current.actions[0] as never);
+    });
+
+    expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
+    const intents = fetchSpy.mock.calls
+      .map(([, init]) => JSON.parse(String((init as { body?: string }).body ?? '{}')))
+      .filter(
+        (body: { phase?: string; intent?: { type?: string } }) =>
+          !body.phase && body.intent?.type === 'spell',
+      );
+    expect(intents).toHaveLength(1);
+    expect(intents[0].intent).toMatchObject({ type: 'spell', d20: 17 });
+  });
+
+  it('arms advantage from the chip and spends nothing', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('/legal-actions'))
+        return {
+          ok: true,
+          json: async () => ({ actorId: 'pc-1', actions: [inspirationAction] }),
+        } as Response;
+      throw new Error(`Unexpected request ${String(url)}`);
+    });
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendText: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.runAction(result.current.actions[0]);
+    });
+
+    expect(inspirationHolder.arm).toHaveBeenCalled();
+    // The chip itself spends nothing: no intent, no spend call.
+    expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
+  });
+
+  it('tapping the chip while armed disarms', async () => {
+    inspirationHolder.armed = true;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (String(url).includes('/legal-actions'))
+        return {
+          ok: true,
+          json: async () => ({ actorId: 'pc-1', actions: [inspirationAction] }),
+        } as Response;
+      throw new Error(`Unexpected request ${String(url)}`);
+    });
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendText: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.runAction(result.current.actions[0]);
+    });
+
+    expect(inspirationHolder.disarm).toHaveBeenCalled();
+    expect(inspirationHolder.arm).not.toHaveBeenCalled();
   });
 });

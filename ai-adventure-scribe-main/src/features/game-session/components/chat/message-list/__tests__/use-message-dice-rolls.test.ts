@@ -332,6 +332,35 @@ describe('useMessageDiceRolls', () => {
       );
     });
 
+    it('records a paid advantage the popup rolled with even when the queued config predates the arm (round 2, B4)', async () => {
+      // #1414: the queued rollConfig is written when the DM asks; the arm comes later.
+      // The popup's details carry what the dice actually rolled with, so the DM-facing
+      // record must say advantage — not the straight roll the queued config claims.
+      const { result } = renderHook(() =>
+        useMessageDiceRolls({
+          onSendMessage: mockOnSendMessage,
+          onSendFullMessage: mockOnSendFullMessage,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleManualResult(17, {
+          naturalRoll: 15,
+          results: [15, 8],
+          keptResults: [15],
+          advantage: true,
+          disadvantage: false,
+        });
+      });
+
+      expect(mockOnSendFullMessage).toHaveBeenCalledWith(
+        expect.stringContaining('[ADV]'),
+        expect.objectContaining({
+          diceRoll: expect.objectContaining({ advantage: true, disadvantage: false }),
+        }),
+      );
+    });
+
     it('formats disadvantage for an animated result', async () => {
       // Successor of `handleDiceRoll › should format disadvantage`.
       const rollWithDis = {

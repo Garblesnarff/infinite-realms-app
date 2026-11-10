@@ -451,7 +451,15 @@ export function useMessageDiceRolls({
           details?.naturalRoll !== undefined ? numericResult - details.naturalRoll : queuedModifier;
         const completedRoll = {
           ...roll,
-          rollConfig: { ...roll.rollConfig, modifier: recordedModifier },
+          rollConfig: {
+            ...roll.rollConfig,
+            modifier: recordedModifier,
+            // #1414 round 2 (B4): the popup's details carry what the dice actually rolled
+            // with — the request's values plus any armed Inspiration. The queued config
+            // predates the arm and would record a paid advantage as a straight roll.
+            advantage: details?.advantage ?? roll.rollConfig.advantage,
+            disadvantage: details?.disadvantage ?? roll.rollConfig.disadvantage,
+          },
           result: settledResult,
         };
         const formattedRoll = formatDiceRoll(completedRoll);
@@ -474,8 +482,10 @@ export function useMessageDiceRolls({
             count: roll.rollConfig.count,
             dieType: roll.rollConfig.dieType,
             modifier: recordedModifier,
-            advantage: roll.rollConfig.advantage,
-            disadvantage: roll.rollConfig.disadvantage,
+            // #1414 round 2 (B4): same as completedRoll above — the details say what the
+            // dice actually rolled with, so the DM-facing record names the paid advantage.
+            advantage: details?.advantage ?? roll.rollConfig.advantage,
+            disadvantage: details?.disadvantage ?? roll.rollConfig.disadvantage,
             results: details?.results ?? [naturalFace],
             ...(details?.keptResults ? { keptResults: details.keptResults } : {}),
             total: numericResult,

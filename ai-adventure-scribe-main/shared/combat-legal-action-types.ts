@@ -14,6 +14,12 @@ export const LEGAL_ACTION_TYPES = [
   'action_surge',
   'divine_sense',
   'divine_smite',
+  /**
+   * #1414: spend Inspiration — advantage on the next roll. Not an action in 5e: the chip
+   * arms the advantage and the roll that consumes it pays server-side; the chip itself
+   * spends nothing.
+   */
+  'inspiration',
   'use_item',
   'flee',
   'yield',

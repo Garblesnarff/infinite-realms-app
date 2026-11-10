@@ -215,6 +215,25 @@ let featureUses: { secondWind: number | null; actionSurge: number | null } = {
   actionSurge: null,
 };
 let divineSenseRemaining: number | null = 1;
+/**
+ * #1414: the Inspiration flag on the actor's character, as `CharacterService.characterHasInspiration`
+ * reads it from the personality envelope. The legal-action computation is what this suite pins,
+ * so the read is stubbed at its module boundary behind a mutable holder, defaulting to "no
+ * inspiration" — the state every pre-#1414 actor reads as. The end-to-end behaviour (real rows,
+ * spends, refusals) is pinned against a real database in limited-feature-uses.real-db.test.ts.
+ */
+let hasInspiration = false;
+/** #1414 round 4 (CI fix): when set, the character read throws — the mocked-route shape
+ * (an empty db object). The offering must fail closed, not fail the whole response. */
+let inspirationReadThrows = false;
+mock.module('../../character-service.js', () => ({
+  CharacterService: {
+    characterHasInspiration: async () => {
+      if (inspirationReadThrows) throw new Error('db.query is not available');
+      return hasInspiration;
+    },
+  },
+}));
 mock.module('../fighter-features-service.js', () => ({
   fighterFeatureUses: async () => featureUses,
   resolveSecondWind: async () => {
@@ -247,7 +266,9 @@ const { getLegalCombatActions, VERSIONED_INTENT_TYPES } =
   await import('../combat-intent-service.js');
 
 test('all claim-based legal actions require a version', () => {
-  const nonClaimActions = new Set(['move', 'death_save', 'end_turn']);
+  // #1414: `inspiration` arms advantage locally and never submits an intent, so it needs
+  // no version claim — like `move`, `death_save` and `end_turn`.
+  const nonClaimActions = new Set(['move', 'death_save', 'end_turn', 'inspiration']);
   for (const type of LEGAL_ACTION_TYPES.filter((type) => !nonClaimActions.has(type))) {
     expect(VERSIONED_INTENT_TYPES.has(type)).toBe(true);
   }
@@ -262,6 +283,8 @@ describe('getLegalCombatActions', () => {
     player.status.currentHp = 20;
     featureUses = { secondWind: null, actionSurge: null };
     divineSenseRemaining = 1;
+    hasInspiration = false;
+    inspirationReadThrows = false;
     player.characterClass = 'Paladin';
     player.characterLevel = 6;
     player.characterClassLevels = [{ className: 'Paladin', level: 6 }];
@@ -751,6 +774,47 @@ describe('getLegalCombatActions', () => {
     ];
     const multiclass = await getLegalCombatActions('encounter-1', 'user-1');
     expect(multiclass.actions).toContainEqual({ type: 'divine_sense', label: 'Divine Sense' });
+  });
+
+  test('offers Inspiration when the character has it, even with the Action spent (#1414)', async () => {
+    hasInspiration = true;
+    const offered = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(offered.actions).toContainEqual({
+      type: 'inspiration',
+      label: 'Spend Inspiration — advantage on your next roll',
+    });
+
+    // Inspiration is not an action in 5e: a spent Action does not take it away.
+    player.actionUsed = true;
+    const actionSpent = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(actionSpent.actions).toContainEqual({
+      type: 'inspiration',
+      label: 'Spend Inspiration — advantage on your next roll',
+    });
+  });
+
+  test('offers no Inspiration without the flag, or on a monster’s turn (#1414)', async () => {
+    hasInspiration = false;
+    const none = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(none.actions.some((action) => action.type === 'inspiration')).toBe(false);
+
+    hasInspiration = true;
+    monster.turnOrder = 0;
+    player.turnOrder = 1;
+    const monsterTurn = await getLegalCombatActions('encounter-1', 'user-1');
+    monster.turnOrder = 1;
+    player.turnOrder = 0;
+    expect(monsterTurn.actions.some((action) => action.type === 'inspiration')).toBe(false);
+  });
+
+  test('still returns the legal actions when the character read throws — the offering fails closed, not the request (#1414 round 4)', async () => {
+    // Mocked-route tests run with an empty db object, so the character read throws
+    // (player-spell-turn-real-resolver.test.ts: the legal-actions route 500'd). The
+    // offering must not take the whole response down with it.
+    inspirationReadThrows = true;
+    const offered = await getLegalCombatActions('encounter-1', 'user-1');
+    expect(offered.actions.some((action) => action.type === 'inspiration')).toBe(false);
+    expect(offered.actions.length).toBeGreaterThan(0);
   });
 
   // #1362: Divine Smite is a choice declared with a melee weapon attack, before the roll.

@@ -2485,6 +2485,30 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         actions.push({ type: 'divine_sense', label: 'Divine Sense' });
       }
     }
+    // #1414: Inspiration is not an action in 5e — it arms advantage on the next roll — so
+    // it is offered even when the Action is already spent. The chip itself spends nothing;
+    // the roll that consumes the advantage pays through POST /v1/characters/:id/spend-inspiration.
+    // The dying branch returns before this point, so a dying character is never offered it.
+    // The flag lives in the character's personality envelope, so this is a DB read — but it
+    // must never fail the whole legal-actions response. Mocked-route tests run with an
+    // empty db object (and the paladin lookup above is class-gated for the same reason:
+    // keep the offering database-free where the flag cannot be read). A read failure just
+    // means the chip is not offered — fail closed, not fail the request.
+    try {
+      const { CharacterService } = await import('../character-service.js');
+      if (await CharacterService.characterHasInspiration(actor.characterId, userId)) {
+        actions.push({
+          type: 'inspiration',
+          label: 'Spend Inspiration — advantage on your next roll',
+        });
+      }
+    } catch (error) {
+      logger.warn({
+        msg: 'INSPIRATION_OFFERING_SKIPPED',
+        characterId: actor.characterId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   // #2580: the way out of a fight the end guard would otherwise hold open. Offered outside the
   // Action gate on purpose — a player whose Action is already spent is exactly the player stuck

@@ -7,6 +7,7 @@ import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
 import type { ChatMessage } from '@/types/game';
 
 import { useCombat } from '@/contexts/CombatContext';
+import { useInspirationArmed } from '@/features/game-session/contexts/inspiration-armed-context';
 import { fetchWithAuth, SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { equipCharacterItem } from '@/services/character-equipment-api';
@@ -46,7 +47,8 @@ export function fleeProvokerOf(label: string): string | null {
 
 export type LegalAction = {
   /** `divine_smite` (#1362) is a melee attack chip that declares the slot, sent as an attack. */
-  type: ClientCombatIntent['type'] | 'divine_smite';
+  /** `inspiration` (#1414) arms advantage on the next roll; it spends nothing itself. */
+  type: ClientCombatIntent['type'] | 'divine_smite' | 'inspiration';
   label: string;
   weaponId?: string;
   spellId?: string;
@@ -142,6 +144,12 @@ export function useCombatLegalActions(input: {
   const [isRefreshingLegalActions, setIsRefreshingLegalActions] = useState(false);
   const [loadFailed, setLoadFailed] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
+  // #1414 round 4 (CI fix): the armed-advantage state the Inspiration chip and the
+  // coin share. Read it straight from the armed context — this hook never spends
+  // (round 2, B2), so it must not pull in useInspirationSpend, which reads the
+  // character context and broke renders whose CharacterContext mock lacks that
+  // export (use-ai-response.combat-options.test.tsx: 17/17 in CI).
+  const { armed, arm, disarm } = useInspirationArmed();
 
   const refreshLegalActions = useCallback(async () => {
     if (!showCombatMenu || !encounter?.id) {
@@ -222,7 +230,13 @@ export function useCombatLegalActions(input: {
       // commit while the fetch has not started yet (#118).
       setIsRefreshingLegalActions(true);
       try {
-        if (action.type === 'end_turn') {
+        if (action.type === 'inspiration') {
+          // #1414: the chip arms advantage on the next roll; it spends nothing. The roll
+          // that consumes the advantage pays server-side, so arming and disarming are free
+          // and the coin shows the same state. No engine notice: the armed coin is the feedback.
+          if (armed) disarm();
+          else arm();
+        } else if (action.type === 'end_turn') {
           // The server writes the boundary's row (death saves, a stable hero waking, the
           // ending) and runs the creatures that follow before it answers (#2658).
           await endTurnUnlessAlreadyMoved(encounter.id, {
@@ -464,6 +478,11 @@ export function useCombatLegalActions(input: {
             encounterId: encounter.id,
             action: structuredAction,
             actorLabel: actor?.name ?? 'You',
+            // #1414 round 4 (CI fix): only pass the field when armed. The dialog treats
+            // absent and false identically (sources name Inspiration only when === true),
+            // and an explicit false broke exact-equality assertions on the call args in
+            // DynamicOptionsSection.attack-pipeline.test.tsx.
+            ...(armed ? { inspirationArmed: true } : {}),
           });
           // #2652 round 4: same gap as the spell branch — if the proposal was
           // refused/failed or the popup did not produce a die, stop here.
@@ -479,6 +498,11 @@ export function useCombatLegalActions(input: {
             );
             return;
           }
+          // #1414 round 2 (B2): no spend here. The popup is the single choke point for
+          // a player die — handleAutoRoll spends before the animation, and a typed
+          // number disarms without spending (it takes no advantage). Spending here too
+          // double-spent every armed auto-roll (the in-flight closure still saw the
+          // pre-roll armed=true) and spent typed numbers the design says keep.
           const execution = await executeStructuredCombatActionWithBoundary(
             encounter.id,
             structuredAction,
@@ -595,6 +619,10 @@ export function useCombatLegalActions(input: {
                 action: structuredAction,
                 actorLabel: actor?.name ?? 'You',
                 participants: encounter.participants,
+                // #1414 round 4 (CI fix): only pass the field when armed — same as the
+                // attack branch above; an explicit false broke exact-equality assertions
+                // on the call args in DynamicOptionsSection.attack-pipeline.test.tsx.
+                ...(armed ? { inspirationArmed: true } : {}),
               });
               castRollId = cast.rollId;
               // A save spell's "target saves" card can be cancelled; nothing is spent.
@@ -625,6 +653,9 @@ export function useCombatLegalActions(input: {
                 );
                 return;
               }
+              // #1414 round 2 (B2): no spend here — same as the attack branch. The popup
+              // spends for an attack-kind spell's real player die; save/auto-hit spells
+              // roll no player die, so the armed state survives for the next roll.
               execution = await executeStructuredCombatActionWithBoundary(
                 encounter.id,
                 structuredAction,
@@ -709,7 +740,7 @@ export function useCombatLegalActions(input: {
         await refreshLegalActions();
       }
     },
-    [encounter, legalState, roster, input, refreshCombatState, refreshLegalActions],
+    [encounter, legalState, roster, input, refreshCombatState, refreshLegalActions, armed, arm, disarm],
   );
 
   return {

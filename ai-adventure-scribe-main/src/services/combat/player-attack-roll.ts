@@ -46,6 +46,8 @@ export interface PlayerAttackDieParams {
   encounterId: string;
   action: StructuredCombatAction;
   actorLabel: string;
+  /** #1414: the player armed Inspiration for this roll — advantage from the player, not the rules. */
+  inspirationArmed?: boolean;
 }
 
 /**
@@ -115,9 +117,18 @@ export async function askPlayerForAttackDie(params: PlayerAttackDieParams): Prom
       bless: proposal.bless,
       attackBonus: proposal.attackBonus ?? 0,
       targetAc: proposal.targetAc ?? 10,
+      // #1414 round 2 (B1): the proposal's advantage is the rules' alone — an armed
+      // Inspiration must NOT be OR'd in here. The popup rolls with advantage from the
+      // armed context, and a failed spend disarms there; a baked-in proposal advantage
+      // would survive the disarm and roll two dice for free. The sources record
+      // Inspiration on the request, but the edge label only renders for proposal
+      // advantage — the armed coin is what shows the player why two dice are rolling.
       advantage: !!proposal.advantage,
       disadvantage: !!proposal.disadvantage,
-      advantageSources: proposal.advantageSources,
+      advantageSources: [
+        ...(proposal.advantageSources ?? []),
+        ...(params.inspirationArmed === true ? ['Inspiration'] : []),
+      ],
       disadvantageSources: proposal.disadvantageSources,
       ...(typeof proposal.coverBonus === 'number' ? { coverBonus: proposal.coverBonus } : {}),
     });
