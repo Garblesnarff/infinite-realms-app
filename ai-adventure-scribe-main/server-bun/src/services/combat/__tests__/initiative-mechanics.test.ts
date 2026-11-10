@@ -70,14 +70,14 @@ describe('InitiativeMechanics', () => {
       expect(result.newRoundNumber).toBe(1);
     });
 
-    it('should match original behavior for single participant', () => {
-        // In original code:
-        // const nextTurnOrder = (0 + 1) % 1; // 0
-        // const newRound = 0 === 0 && 0 !== 0; // false
-        const result = InitiativeMechanics.calculateNextTurn(0, 1, 1);
-        expect(result.nextTurnOrder).toBe(0);
-        expect(result.newRound).toBe(false);
-        expect(result.newRoundNumber).toBe(1);
+    it('advances the round for a single participant (2014 5e, PHB p.189)', () => {
+      // Strategist ruling on #1424: a round is one pass through the initiative order, however
+      // many combatants there are. With one combatant, every turn is the end of a pass.
+      // (Previously: newRound was false here, because the old guard required currentTurnOrder !== 0.)
+      const result = InitiativeMechanics.calculateNextTurn(0, 1, 1);
+      expect(result.nextTurnOrder).toBe(0);
+      expect(result.newRound).toBe(true);
+      expect(result.newRoundNumber).toBe(2);
     });
   });
 
