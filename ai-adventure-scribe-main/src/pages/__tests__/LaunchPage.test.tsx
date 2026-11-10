@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { HelmetProvider } from 'react-helmet-async';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -108,12 +108,75 @@ describe('LaunchPage', () => {
     expect(screen.getByRole('link', { name: 'FAQ' })).toHaveAttribute('href', '/pricing#faq');
   });
 
-  it('shows no voice player until the sample file ships', () => {
+  it('shows no voice player until the sample file ships', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
     renderPage();
-    expect(screen.queryByRole('button', { name: /voice sample/i })).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /voice sample/i })).toBeNull();
+    });
     expect(
       screen.getByText('Press Listen on any message and the DM reads it aloud.'),
     ).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it('shows the voice play control when the sample file ships', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+    renderPage();
+    const button = await screen.findByRole('button', { name: /voice sample/i });
+    expect(button).toBeEnabled();
+    expect(button.className).toMatch(/h-16/);
+    expect(button.className).toMatch(/w-16/);
+    expect(
+      screen.getByText('Press Listen on any message and the DM reads it aloud.'),
+    ).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it('hides the voice play control when HEAD returns 404', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /voice sample/i })).toBeNull();
+    });
+    expect(
+      screen.getByText('Press Listen on any message and the DM reads it aloud.'),
+    ).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it('hides the voice play control when HEAD fetch rejects', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network error')));
+    renderPage();
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: /voice sample/i })).toBeNull();
+    });
+    expect(
+      screen.getByText('Press Listen on any message and the DM reads it aloud.'),
+    ).toBeInTheDocument();
+    vi.unstubAllGlobals();
+  });
+
+  it('plays the sample when the Play control is clicked', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
+    const playMock = vi.fn().mockResolvedValue(undefined);
+    const originalPlay = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = playMock as unknown as typeof HTMLMediaElement.prototype.play;
+    try {
+      renderPage();
+      const button = await screen.findByRole('button', { name: /voice sample/i });
+      expect(playMock).not.toHaveBeenCalled();
+      fireEvent.click(button);
+      await waitFor(() => {
+        expect(playMock).toHaveBeenCalled();
+      });
+      expect(
+        screen.getByText('Press Listen on any message and the DM reads it aloud.'),
+      ).toBeInTheDocument();
+    } finally {
+      HTMLMediaElement.prototype.play = originalPlay;
+      vi.unstubAllGlobals();
+    }
   });
 
   it('has no signup form on the page', () => {

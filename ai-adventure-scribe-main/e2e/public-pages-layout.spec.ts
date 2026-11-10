@@ -28,6 +28,13 @@ test.beforeEach(async ({ page }) => {
     const allowed = url.hostname === '127.0.0.1' && (url.port === '4565' || url.port === '4566');
     return allowed ? route.continue() : route.abort();
   });
+  await page.route('**/audio/landing-voice-sample.mp3', (route) => {
+    return route.fulfill({
+      status: 200,
+      contentType: 'audio/mpeg',
+      body: Buffer.alloc(0),
+    });
+  });
 });
 
 const routes = ['/', '/explore', '/explore/abyssal-descent', '/pricing'] as const;
@@ -68,6 +75,12 @@ for (const width of [1280, 390]) {
       if (route === '/') {
         await expect(page.getByText('Open beta · Free to play · No waitlist')).toBeVisible();
         await expectTarget44(page.getByRole('link', { name: /roll for initiative/i }).first());
+        const voicePlay = page.getByRole('button', { name: /voice sample/i });
+        await expect(voicePlay).toBeVisible({ timeout: 15_000 });
+        const voiceBox = await voicePlay.boundingBox();
+        expect(voiceBox).not.toBeNull();
+        expect(voiceBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+        expect(voiceBox?.width ?? 0).toBeGreaterThanOrEqual(44);
         await page.screenshot({ path: `${screenshotDir}/landing-${width}.png` });
       } else if (route === '/explore') {
         await expect(page.getByText('Open the box').first()).toBeVisible();
