@@ -24,7 +24,7 @@ export interface CombatSummaryProps {
 export const CombatSummaryMessage: React.FC<CombatSummaryProps> = React.memo(
   ({ summary, timestamp }) => {
     return (
-      <Card className="p-4 mb-2 bg-slate-50 border-l-4 border-l-slate-500">
+      <Card className="ir-combat-summary p-4 mb-2 bg-slate-50 border-l-4 border-l-slate-500">
         <div className="flex items-center gap-2 mb-3">
           <div className="p-2 rounded-full text-white bg-slate-500">
             <Shield className="w-4 h-4" />

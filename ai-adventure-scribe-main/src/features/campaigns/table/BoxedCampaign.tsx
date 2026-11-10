@@ -51,7 +51,7 @@ export const BoxedCampaign: React.FC<{ campaign: StarterCampaign; isFirst?: bool
         </div>
         <div className="flex flex-1 flex-col gap-2 p-4">
           <p className="text-xs uppercase tracking-wider text-[#f6e3b8]">
-            {campaign.genre.join(' · ')} · {campaign.difficulty}
+            {campaign.genre.join(' · ')} · <span className="normal-case">{difficultyLabel}</span>
           </p>
           <h3 className="font-heading text-xl font-bold">{campaign.title}</h3>
           <p className="text-sm text-muted-foreground">{campaign.premise}</p>

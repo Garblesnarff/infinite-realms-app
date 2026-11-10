@@ -319,4 +319,85 @@ describe('nearestEnemyDistanceFeet (#85)', () => {
     expect(nearestEnemyDistanceFeet(noPlayerPosition)).toBeNull();
     expect(nearestEnemyDistanceFeet(null)).toBeNull();
   });
+
+  it('does not name a foe the engine has marked dead (#1459)', () => {
+    const encounter = {
+      participants: [
+        baseParticipant({
+          id: 'hero',
+          name: 'The Veteran',
+          participantType: 'player',
+          initiative: 15,
+          position: placed(0, 0),
+        }),
+        baseParticipant({
+          id: 'zombie',
+          name: 'Spore-Zombie 2',
+          initiative: 8,
+          currentHitPoints: 0,
+          isDead: true,
+          position: placed(1, 0),
+        }),
+        baseParticipant({
+          id: 'far',
+          name: 'Far Stalker',
+          initiative: 4,
+          position: placed(3, 0),
+        }),
+      ],
+    };
+    expect(nearestEnemyDistanceFeet(encounter)).toEqual({ name: 'Far Stalker', feet: 15 });
+    const onlyDead = {
+      participants: [
+        baseParticipant({
+          id: 'hero',
+          name: 'The Veteran',
+          participantType: 'player',
+          initiative: 15,
+          position: placed(0, 0),
+        }),
+        baseParticipant({
+          id: 'zombie',
+          name: 'Spore-Zombie 2',
+          initiative: 8,
+          isDead: true,
+          position: placed(1, 0),
+        }),
+      ],
+    };
+    expect(nearestEnemyDistanceFeet(onlyDead)).toBeNull();
+    expect(
+      turnBarSub(
+        summarizeCombatTurn({
+          currentRound: 3,
+          currentTurnParticipantId: 'hero',
+          participants: onlyDead.participants,
+        })!,
+        null,
+      ),
+    ).toBe('Round 3');
+  });
+
+  it('still names a foe at 0 HP when the engine has not marked it dead', () => {
+    const encounter = {
+      participants: [
+        baseParticipant({
+          id: 'hero',
+          name: 'The Veteran',
+          participantType: 'player',
+          initiative: 15,
+          position: placed(0, 0),
+        }),
+        baseParticipant({
+          id: 'near',
+          name: 'Spore-Zombie 2',
+          initiative: 8,
+          currentHitPoints: 0,
+          isDead: false,
+          position: placed(1, 0),
+        }),
+      ],
+    };
+    expect(nearestEnemyDistanceFeet(encounter)).toEqual({ name: 'Spore-Zombie 2', feet: 5 });
+  });
 });

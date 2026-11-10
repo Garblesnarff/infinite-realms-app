@@ -167,6 +167,18 @@ for (const mode of ['explore', 'combat'] as const) {
         const seal = ledger.querySelector('[data-testid="engine-line-pill"]')!;
         const detail = ledger.querySelector('span.text-muted-foreground')!;
         const voice = document.querySelector('.ir-tts')!;
+        const system = document.querySelector(
+          '[aria-label="System message"] .text-muted-foreground',
+        )!;
+        const summary = document.querySelector('.ir-combat-summary')!;
+        const summaryTitle = Array.from(summary.querySelectorAll('span')).find(
+          (element) => element.textContent === 'Combat Summary',
+        )!;
+        const swatch = document.createElement('div');
+        swatch.style.backgroundColor = 'var(--ir-parchment-2)';
+        document.body.appendChild(swatch);
+        const parchment = getComputedStyle(swatch).backgroundColor;
+        swatch.remove();
         return {
           composer: ratio(
             getComputedStyle(input).color,
@@ -176,6 +188,11 @@ for (const mode of ['explore', 'combat'] as const) {
           seal: ratio(getComputedStyle(seal).color, getComputedStyle(seal).backgroundColor),
           detail: ratio(getComputedStyle(detail).color, getComputedStyle(ledger).backgroundColor),
           voice: ratio(getComputedStyle(voice).color, getComputedStyle(voice).backgroundColor),
+          system: ratio(getComputedStyle(system).color, parchment),
+          summary: ratio(
+            getComputedStyle(summaryTitle).color,
+            getComputedStyle(summary).backgroundColor,
+          ),
         };
       });
       expect(colors.composer).toBeGreaterThanOrEqual(7);
@@ -183,6 +200,8 @@ for (const mode of ['explore', 'combat'] as const) {
       expect(colors.seal).toBeGreaterThanOrEqual(7);
       expect(colors.detail).toBeGreaterThanOrEqual(7);
       expect(colors.voice).toBeGreaterThanOrEqual(7);
+      expect(colors.system).toBeGreaterThanOrEqual(7);
+      expect(colors.summary).toBeGreaterThanOrEqual(7);
       await expect(page.getByText('The Scholar').first()).toBeVisible();
       await expect(header.locator('section').first().getByRole('heading')).toHaveText(
         /Abyssal Descent/i,
