@@ -179,4 +179,39 @@ describe('option clicks send immediately while preserving the roll guard (#1407)
     ).toHaveValue('');
     expect(screen.getByTestId('dice-roll-request')).toBeInTheDocument();
   });
+
+  it('sends exactly once when a second click lands while the send is pending', async () => {
+    const onSendFullMessage = vi.fn(() => new Promise<void>(() => {}));
+    renderStory(onSendFullMessage);
+    const first = parsedOptions[0];
+    const option = await screen.findByRole('button', { name: `Option 1 - ${first.text}` });
+
+    fireEvent.click(option);
+    fireEvent.click(option);
+
+    expect(onSendFullMessage).toHaveBeenCalledTimes(1);
+    expect(onSendFullMessage).toHaveBeenCalledWith(createPlayerMessageFromOption(first));
+    for (const button of screen.getAllByRole('button', { name: /^Option \d - / })) {
+      expect(button).toBeDisabled();
+    }
+  });
+
+  it('re-enables the options after a failed send so the player can choose again', async () => {
+    const onSendFullMessage = vi
+      .fn<(text: string) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('send failed'))
+      .mockResolvedValue(undefined);
+    renderStory(onSendFullMessage);
+    const [first, second] = parsedOptions;
+
+    await user.click(await screen.findByRole('button', { name: `Option 1 - ${first.text}` }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: `Option 2 - ${second.text}` })).not.toBeDisabled(),
+    );
+    expect(screen.getByRole('button', { name: `Option 1 - ${first.text}` })).not.toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: `Option 2 - ${second.text}` }));
+    await waitFor(() => expect(onSendFullMessage).toHaveBeenCalledTimes(2));
+    expect(onSendFullMessage).toHaveBeenLastCalledWith(createPlayerMessageFromOption(second));
+  });
 });
