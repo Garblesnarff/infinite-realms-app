@@ -56,7 +56,7 @@ const LandingCampaignCard: React.FC<{ campaign: StarterCampaign }> = ({ campaign
       )}
       <div className="absolute inset-0 bg-gradient-to-b from-[#070b14]/5 via-[#070b14]/50 to-[#070b14]" />
       <span
-        className="absolute right-4 top-4 rounded-full border bg-[#070b14] px-2.5 py-1 text-xs font-bold uppercase tracking-[0.06em]"
+        className="absolute right-4 top-4 rounded-full border bg-[#070b14] px-2.5 py-1 text-xs font-bold tracking-[0.06em]"
         style={{ borderColor: color, color }}
       >
         {difficulty}

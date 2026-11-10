@@ -75,9 +75,7 @@ describe('LandingCampaigns', () => {
       expect(item.firstElementChild?.className).toContain('aspect-square');
       expect(item.firstElementChild?.className).toContain('max-w-[400px]');
     }
-    expect(
-      screen.getByRole('link', { name: /see all adventures/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /see all adventures/i })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /difficulty/i })).toBeNull();
   });
 
@@ -97,6 +95,10 @@ describe('LandingCampaigns', () => {
 
     expect(screen.queryByTestId('landing-campaigns-skeleton')).toBeNull();
     expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+    for (const chip of screen.getAllByText('Medium')) {
+      expect(chip).not.toHaveClass('uppercase');
+      expect(chip).toHaveTextContent('Medium');
+    }
     expect(screen.getByRole('link', { name: /the eternal feast/i })).toHaveAttribute(
       'href',
       '/explore/the-eternal-feast',

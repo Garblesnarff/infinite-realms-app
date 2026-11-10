@@ -98,6 +98,19 @@ describe('Table start screens', () => {
         `${label} campaign: target numbers (DC and AC) start ${state}. You can ${action} them in Settings → Table.`,
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText(label, { exact: true })).toHaveClass('normal-case');
+  });
+
+  it('renders the difficulty word in title case outside the uppercase genre row', () => {
+    render(
+      <MemoryRouter>
+        <BoxedCampaign campaign={campaign} />
+      </MemoryRouter>,
+    );
+    const word = screen.getByText('Hard', { exact: true });
+    expect(word).toHaveClass('normal-case');
+    expect(word.parentElement).toHaveClass('uppercase');
+    expect(word.parentElement).toHaveTextContent('horror · Hard');
   });
 
   it('moves the hero selection with arrows and starts the selected hero once', () => {

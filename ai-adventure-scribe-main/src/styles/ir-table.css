@@ -383,3 +383,15 @@ body.ir-table-look .ir-app .chat-composer .text-gray-500,
 body.ir-table-look .ir-app .chat-composer code {
   color: var(--ir-ink) !important;
 }
+
+/* #1458: short system lines and the Combat Summary use parchment ink on cream.
+   Plain look keeps its own colors; these rules apply only with Table look on. */
+body.ir-table-look [aria-label='System message'] .text-muted-foreground {
+  color: var(--ir-ink) !important;
+}
+body.ir-table-look .ir-combat-summary {
+  color: var(--ir-ink);
+}
+body.ir-table-look .ir-combat-summary .text-muted-foreground {
+  color: var(--ir-ink) !important;
+}

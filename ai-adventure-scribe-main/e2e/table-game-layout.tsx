@@ -32,6 +32,36 @@ const story = [
   sequence_number: index + 1,
   context: {},
 }));
+story.push(
+  {
+    id: 'message-system',
+    speaker_type: 'system',
+    message: 'Athletics 17 SUCCESS',
+    timestamp: '2026-11-05T00:00:07.000Z',
+    sequence_number: 8,
+    context: {},
+  },
+  {
+    id: 'message-summary',
+    speaker_type: 'system',
+    message: '',
+    timestamp: '2026-11-05T00:00:08.000Z',
+    sequence_number: 9,
+    context: {
+      combatData: {
+        type: 'summary',
+        summary: {
+          rounds: 2,
+          totalDamage: 9,
+          outcome: 'The foe falls.',
+          participants: [
+            { name: 'Captain Reeves', damageDealt: 0, damageTaken: 9, status: 'dead' },
+          ],
+        },
+      },
+    },
+  },
+);
 userDataApi.listSessionMessages = async () => ({
   messages: story,
   total: story.length,

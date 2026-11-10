@@ -161,9 +161,12 @@ export function nearestEnemyDistanceFeet(
   if (!player?.position) return null;
   let best: NearestEnemy | null = null;
   for (const enemy of encounter.participants) {
+    // #1459: the engine stamps vitalState 'dead' onto isDead. A foe at 0 HP
+    // without that flag is still in the fight, so hit points are not a guess.
     if (
       !isHostileParticipantType(enemy.participantType) ||
       enemy.isActive === false ||
+      enemy.isDead === true ||
       !enemy.position
     ) {
       continue;
