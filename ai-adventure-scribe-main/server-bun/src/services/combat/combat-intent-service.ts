@@ -62,6 +62,7 @@ import {
   type OpportunityAttacker,
   type PlayerExitResult,
 } from './player-exit-service.js';
+import { spellSlotLedger } from './resource-ledger.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { showTargetNumbersForSession } from './session-target-numbers.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
@@ -98,7 +99,6 @@ import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/er
 import { planApproach } from '../../tactical/approach.js';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
 import { paladinLevelOf } from '../progression/paladin-features-service.js';
-import { SpellSlotMechanics } from '../spell-slots/spell-slot-mechanics.js';
 
 import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
 import type { LegalActionType } from '../../../../shared/combat-legal-action-types';
@@ -2198,34 +2198,6 @@ export async function executeCombatIntent(
   }
 }
 
-/**
- * #1362: the spell slots a Paladin can spend on Divine Smite, keyed by slot level. Stored rows
- * win. A level with no row is granted from class progression, the way ensureSpellSlotRow seeds
- * it when the attack runs, so a premade with no seeded rows is still offered its slots.
- */
-async function smiteSlotLedger(
-  characterId: string,
-  actor: {
-    characterClass?: string | null;
-    characterLevel?: number | null;
-    characterClassLevels?: unknown;
-  },
-): Promise<Map<number, number>> {
-  const stored = (await remainingSpellSlots(characterId)) ?? new Map<number, number>();
-  const ledger = new Map<number, number>();
-  for (const row of SpellSlotMechanics.seedRowsForCharacter(
-    actor.characterClass,
-    actor.characterLevel ?? 0,
-    actor.characterClassLevels,
-  )) {
-    ledger.set(row.spellLevel, stored.get(row.spellLevel) ?? row.totalSlots);
-  }
-  for (const [level, count] of stored) {
-    if (!ledger.has(level)) ledger.set(level, count);
-  }
-  return ledger;
-}
-
 export async function getLegalCombatActions(encounterId: string, userId: string) {
   const state = await CombatEncounterService.getCombatState(encounterId, userId, {
     includeCharacterClass: true,
@@ -2357,7 +2329,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     // sends the attack intent with divineSmiteSlotLevel; combat-attack-service refuses it again
     // before the roll if the class or slot no longer holds.
     if (actor.characterId && actor.characterClass?.toLowerCase().includes('paladin')) {
-      const ledger = await smiteSlotLedger(actor.characterId, actor);
+      const ledger = await spellSlotLedger(actor.characterId, actor);
       const slotLevels = [...ledger.entries()]
         .filter(([, count]) => count > 0)
         .map(([level]) => level)
