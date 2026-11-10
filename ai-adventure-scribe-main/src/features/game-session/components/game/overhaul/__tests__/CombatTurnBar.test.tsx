@@ -178,6 +178,22 @@ describe('turn bar (#2417, copy #85)', () => {
     expect(summary.nextLine).toBe('Next: The Scholar starts round 2.');
   });
 
+  it('uses the server participant order even when initiative numbers do not sort that way', () => {
+    const summary = summarizeCombatTurn(
+      encounter(2, 0, [
+        ['p1', 'The Scholar', 'player', 4],
+        ['m1', 'Captain Sarah Reeves', 'monster', 20],
+      ]),
+    )!;
+    expect(summary.actors.map((actor) => actor.name)).toEqual([
+      'The Scholar',
+      'Captain Sarah Reeves',
+    ]);
+    expect(summary.turn).toBe(1);
+    expect(summary.active.name).toBe('The Scholar');
+    expect(summary.nextLine).toBe('Next: Captain Sarah Reeves.');
+  });
+
   it('draws one pip per actor: spent, now, waiting', () => {
     bar(1, 1);
 
@@ -731,5 +747,31 @@ describe('encounter list (#2417)', () => {
     const healthyRow = screen.getByText('Healthy hero').closest('[data-state]');
     expect(healthyRow?.textContent).toContain('Now');
     expect(screen.queryByText('Down')).toBeNull();
+  });
+});
+
+describe('Table turn bar (#1428)', () => {
+  it('shows the engine round, position and next actor with one pip per active combatant', () => {
+    document.body.classList.add('ir-table-look');
+    try {
+      const view = bar(2, 0);
+      expect(screen.getByTestId('combat-turn-text')).toHaveTextContent('Your turn');
+      expect(screen.getByTestId('combat-turn-sub')).toHaveTextContent('Round 2 · Turn 1 of 2');
+      expect(screen.getByTestId('combat-turn-next')).toHaveTextContent(
+        'Next: Captain Sarah Reeves.',
+      );
+      expect(screen.getAllByTestId('combat-turn-pip')).toHaveLength(2);
+      view.unmount();
+      bar(2, 1);
+      expect(screen.getByTestId('combat-turn-text')).toHaveTextContent(
+        "Captain Sarah Reeves's turn",
+      );
+      expect(screen.getByTestId('combat-turn-sub')).toHaveTextContent('Round 2 · Turn 2 of 2');
+      expect(screen.getByTestId('combat-turn-next')).toHaveTextContent(
+        'Next: The Scholar starts round 3.',
+      );
+    } finally {
+      document.body.classList.remove('ir-table-look');
+    }
   });
 });

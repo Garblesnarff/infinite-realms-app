@@ -93,12 +93,13 @@ const TurnBarShell: React.FC<{
   title: string;
   sub: string | null;
   hpSentence: string | null;
+  next?: string;
   edge: keyof typeof EDGE_SHADOW;
   titleClassName: string;
   children?: React.ReactNode;
-}> = ({ title, sub, hpSentence, edge, titleClassName, children }) => {
+}> = ({ title, sub, hpSentence, next, edge, titleClassName, children }) => {
   const sentence =
-    `${title.replace(/…$/, '')}. ${sub ? `${sub}. ` : ''}${hpSentence ? `${hpSentence}.` : ''}`.trim();
+    `${title.replace(/…$/, '')}. ${sub ? `${sub}. ` : ''}${next ? `${next} ` : ''}${hpSentence ? `${hpSentence}.` : ''}`.trim();
   return (
     <div
       data-testid="combat-turn-bar"
@@ -122,6 +123,11 @@ const TurnBarShell: React.FC<{
         {sub && (
           <p data-testid="combat-turn-sub" className="truncate text-xs text-muted-foreground">
             {sub}
+          </p>
+        )}
+        {next && (
+          <p data-testid="combat-turn-next" className="text-xs">
+            {next}
           </p>
         )}
       </div>
@@ -160,9 +166,12 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
     () => false,
   );
   const baseTitle = turnBarTitle(summary, busy, playerDown);
-  const sub = turnBarSub(summary, enemyDistance ?? null, playerDown);
+  const normalSub = turnBarSub(summary, enemyDistance ?? null, playerDown);
   const down = actorIsDying(summary.active, playerDown);
   const title = tableLook && down ? 'Dying' : baseTitle;
+  const sub = tableLook
+    ? `Round ${summary.round} · Turn ${summary.turn} of ${summary.actors.length}${normalSub && !normalSub.startsWith('Round ') ? ` · ${normalSub}` : ''}`
+    : normalSub;
   const edge = down ? 'bad' : summary.active.isPlayer ? 'gold' : 'teal';
   const titleClassName = down
     ? 'text-ir-hp-bad'
@@ -174,6 +183,7 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
       title={title}
       sub={sub}
       hpSentence={hpSentenceOf(hp)}
+      next={tableLook ? summary.nextLine : undefined}
       edge={edge}
       titleClassName={titleClassName}
     >

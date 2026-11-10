@@ -1063,3 +1063,76 @@ describe('#1143 a Cast chosen from the ActionBar, through the real route and res
     expect(types).toContain('flee');
   });
 });
+
+describe('#1428 sheet save prompt through the real proposal route', () => {
+  it('presents the save card before a cast or slot is committed', async () => {
+    extraSpellIds = ['acid-splash'];
+    const holdModule = `${CLIENT}/services/combat/sheet-cast-save-hold`;
+    const progressModule = `${CLIENT}/services/combat/sheet-cast-progress`;
+    const bridgeModule = `${CLIENT}/services/combat/spell-target-save-bridge`;
+    const { holdSaveCardBeforeDm, clearHeldSaveCard } = await import(holdModule);
+    const { beginSheetCast, resetSheetCastProgress } = await import(progressModule);
+    const { setSpellTargetSaveHost, settlePendingSpellTargetSave } = await import(bridgeModule);
+    let releaseCard: (() => void) | undefined;
+    let presentCard: (spec: Record<string, unknown>) => void = () => {};
+    const card = new Promise<Record<string, unknown>>((resolve) => {
+      presentCard = resolve;
+    });
+    setSpellTargetSaveHost({
+      present: (spec: Record<string, unknown>, settle: () => void) => {
+        releaseCard = settle;
+        presentCard(spec);
+        return () => {};
+      },
+    });
+    beginSheetCast('Acid Splash');
+    try {
+      const hold = holdSaveCardBeforeDm({
+        origin: 'sheet_cast',
+        spellId: 'acid-splash',
+        activeEncounter: {
+          id: ENCOUNTER_ID,
+          currentTurnParticipantId: MERLIN_ID,
+          participants: PARTICIPANTS,
+        },
+      });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const spec = await Promise.race([
+        card,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('save card did not open')), 5000);
+        }),
+      ]).finally(() => clearTimeout(timer));
+      expect(spec).toMatchObject({
+        targetLabel: 'Head Chef Balthazar',
+        spellName: 'Acid Splash',
+        saveAbility: 'DEX',
+        saveDc: expect.any(Number),
+      });
+      expect(intentExchanges()).toEqual([
+        expect.objectContaining({
+          body: expect.objectContaining({
+            phase: 'propose',
+            intent: expect.objectContaining({
+              actorId: MERLIN_ID,
+              targetIds: [BALTHAZAR_ID],
+              spellId: 'acid-splash',
+            }),
+          }),
+          status: 200,
+        }),
+      ]);
+      expect(actionClaims).toHaveLength(0);
+      expect(slotSpends).toHaveLength(0);
+      expect(damageCalls).toHaveLength(0);
+      expect(releaseCard).toBeDefined();
+      releaseCard?.();
+      await hold;
+    } finally {
+      settlePendingSpellTargetSave('cancel');
+      setSpellTargetSaveHost(null);
+      resetSheetCastProgress();
+      clearHeldSaveCard();
+    }
+  }, 10000);
+});

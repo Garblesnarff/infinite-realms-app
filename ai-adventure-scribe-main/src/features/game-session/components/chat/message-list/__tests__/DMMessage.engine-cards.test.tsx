@@ -18,6 +18,7 @@ import { MessageRenderer } from '../MessageRenderer';
 
 import type { CombatEngineBlock } from '@/utils/combat-engine-blocks';
 
+import { EngineResultCardView } from '@/features/game-session/components/game/EngineResultCardView';
 import { TargetNumbersToggle } from '@/features/game-session/components/game/game-content/TargetNumbersToggle';
 import {
   formatCombatEngineParts,
@@ -196,6 +197,17 @@ describe('engine result cards in the chat (#2417)', () => {
     const hp = screen.getByTestId('engine-card-hp');
     expect(hp.textContent).toContain('The Scholar · HP 4 of 7');
     expect(hp.textContent).toContain('−3');
+  });
+
+  it('keeps the engine HP wording when temporary HP absorbs a hit', () => {
+    const [part] = formatCombatEngineParts(
+      attackAction(REEVES, SCHOLAR),
+      { ...ENEMY_HITS_PLAYER, targetNewHp: 7 },
+      FIGHT_ROSTER,
+      ON_YOU,
+    );
+    render(<EngineResultCardView card={part.card} showTargetNumbers />);
+    expect(screen.getByTestId('engine-card-hp')).toHaveTextContent('HP 7 of 7');
   });
 
   describe('Show target numbers', () => {

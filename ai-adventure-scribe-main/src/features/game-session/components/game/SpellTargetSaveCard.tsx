@@ -71,7 +71,7 @@ const SaveCard: React.FC<{
     <RollTray>
       <section
         data-testid="spell-target-save-card"
-        className="border-t-2 border-infinite-gold bg-card px-4 py-3"
+        className="border-t-2 border-infinite-gold bg-card px-4 py-3 [body.ir-table-look_&]:rounded-[14px] [body.ir-table-look_&]:border-2 [body.ir-table-look_&]:border-[#d5b070] [body.ir-table-look_&]:bg-[#0c1220] [body.ir-table-look_&]:p-4"
         role="alertdialog"
         aria-labelledby={`${id}-title`}
         aria-describedby={`${id}-body`}
@@ -81,20 +81,28 @@ const SaveCard: React.FC<{
           pending.cancel();
         }}
       >
-        <h2 id={`${id}-title`} className="font-display text-xl font-semibold text-infinite-gold">
+        <h2
+          id={`${id}-title`}
+          className="font-display text-xl font-semibold text-infinite-gold [body.ir-table-look_&]:text-[#f6e3b8]"
+        >
           {targetName} must save
         </h2>
-        <p id={`${id}-body`} className="mt-1 text-sm text-card-foreground">
+        <p
+          id={`${id}-body`}
+          className="mt-1 text-sm text-card-foreground [body.ir-table-look_&]:text-base [body.ir-table-look_&]:text-[#d4dbef]"
+        >
           {targetName} makes a {abilityName(spec.saveAbility)} saving throw against {spec.spellName}
           .
         </p>
-        <p className="mt-1 text-sm font-medium text-card-foreground">{youDoNotRoll}</p>
+        <p className="mt-1 text-sm font-medium text-card-foreground [body.ir-table-look_&]:text-base [body.ir-table-look_&]:text-[#eaeefa]">
+          {youDoNotRoll}
+        </p>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <Button
             ref={continueRef}
             type="button"
             variant="fantasy"
-            className="h-[52px] w-full sm:w-auto sm:min-w-40"
+            className="ir-brass-btn h-[52px] w-full sm:w-auto sm:min-w-40"
             onClick={pending.continue}
           >
             Continue

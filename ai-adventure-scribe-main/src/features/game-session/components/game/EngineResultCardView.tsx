@@ -218,6 +218,8 @@ export const EngineResultCardView: React.FC<{
           ? 'border-l-[#4fb6c4] [body.ir-table-look_&]:border-l-[#4fb6c4]'
           : 'border-l-red-500 [body.ir-table-look_&]:border-l-[#ef8a8a]',
         light ? 'py-2' : 'py-3',
+        card.kind === 'move' &&
+          '[body.ir-table-look_&]:border-l [body.ir-table-look_&]:border-l-white/10',
       )}
     >
       {/* The sentence is page text, so a screen reader in browse mode reads it; the visual
