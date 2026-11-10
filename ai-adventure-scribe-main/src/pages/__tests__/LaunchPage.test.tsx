@@ -126,7 +126,9 @@ describe('LaunchPage', () => {
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'audio/mpeg' : null) },
+        headers: {
+          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'audio/mpeg' : null),
+        },
       }),
     );
     renderPage();
@@ -144,7 +146,9 @@ describe('LaunchPage', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null) },
+      headers: {
+        get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html' : null),
+      },
     });
     vi.stubGlobal('fetch', fetchMock);
     renderPage();
@@ -164,7 +168,9 @@ describe('LaunchPage', () => {
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'Audio/MPEG' : null) },
+        headers: {
+          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'Audio/MPEG' : null),
+        },
       }),
     );
     renderPage();
@@ -208,7 +214,9 @@ describe('LaunchPage', () => {
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'audio/mpeg' : null) },
+        headers: {
+          get: (name: string) => (name.toLowerCase() === 'content-type' ? 'audio/mpeg' : null),
+        },
       }),
     );
     const playMock = vi.fn().mockResolvedValue(undefined);
