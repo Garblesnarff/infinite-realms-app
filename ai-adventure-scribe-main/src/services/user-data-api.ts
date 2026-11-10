@@ -746,6 +746,16 @@ export const userDataApi = {
       body: JSON.stringify({ amount }),
     }),
   /**
+   * #1414: spend Inspiration server-side. The client arms advantage locally; the roll that
+   * consumes it pays here. Throws UserDataApiRequestError (409) when the flag is already
+   * false — the caller disarms and rolls without advantage instead of losing the roll.
+   */
+  spendInspiration: (characterId: string): Promise<{ inspiration: boolean }> =>
+    request(`/v1/characters/${encodeURIComponent(characterId)}/spend-inspiration`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  /**
    * #214: 2014 5e temp HP do not stack — the server keeps the higher of the
    * current and the new value.
    */

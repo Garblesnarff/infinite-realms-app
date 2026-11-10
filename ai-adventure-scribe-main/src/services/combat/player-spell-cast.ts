@@ -19,6 +19,8 @@ export interface PlayerSpellCastParams {
   participants?: Array<{ id: string; name?: string }>;
   /** The cast was pressed on the sheet, so the casting dock follows it (#2418). */
   fromSheetCast?: boolean;
+  /** #1414: the player armed Inspiration for this roll — advantage from the player, not the rules. */
+  inspirationArmed?: boolean;
 }
 
 export interface PlayerSpellCastResult {
@@ -134,9 +136,17 @@ export async function askPlayerForSpellCast(
         bless: proposal.bless,
         attackBonus: proposal.attackBonus,
         targetAc: proposal.targetAc,
+        // #1414 round 2 (B1): same as the weapon dialog — the proposal's advantage is
+        // the rules' alone. The armed advantage lives in the popup's context, not here:
+        // a failed spend disarms there, and a baked-in proposal advantage would survive
+        // the disarm and roll two dice for free. The sources record Inspiration on the
+        // request, but the edge label only renders for proposal advantage.
         advantage: proposal.advantage,
         disadvantage: proposal.disadvantage,
-        advantageSources: proposal.advantageSources,
+        advantageSources: [
+          ...(proposal.advantageSources ?? []),
+          ...(params.inspirationArmed === true ? ['Inspiration'] : []),
+        ],
         disadvantageSources: proposal.disadvantageSources,
       };
     } catch (error) {

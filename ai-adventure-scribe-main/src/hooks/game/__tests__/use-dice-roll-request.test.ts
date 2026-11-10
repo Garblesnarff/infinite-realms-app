@@ -13,6 +13,37 @@ vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: vi.fn(),
 }));
 
+const inspirationHolder = vi.hoisted(() => {
+  const holder = {
+    armed: false,
+    spendResult: true as boolean | Error,
+    arm: vi.fn(),
+    disarm: vi.fn(),
+    spendInspiration: vi.fn(),
+  };
+  // Mirror the real useInspirationSpend: arm/disarm are stable callbacks, and
+  // spendInspiration never throws — a failed spend resolves false.
+  holder.arm.mockImplementation(() => {
+    holder.armed = true;
+  });
+  holder.disarm.mockImplementation(() => {
+    holder.armed = false;
+  });
+  holder.spendInspiration.mockImplementation(async (..._args: unknown[]) => {
+    if (holder.spendResult instanceof Error) return false;
+    return holder.spendResult;
+  });
+  return holder;
+});
+vi.mock('@/features/game-session/hooks/use-inspiration-spend', () => ({
+  useInspirationSpend: () => ({
+    armed: inspirationHolder.armed,
+    arm: inspirationHolder.arm,
+    disarm: inspirationHolder.disarm,
+    spendInspiration: inspirationHolder.spendInspiration,
+  }),
+}));
+
 vi.mock('@/utils/characterModifiers', () => ({
   calculateRollWithBreakdown: vi.fn(),
   SKILL_ABILITIES: {
@@ -37,6 +68,7 @@ vi.mock('@/lib/logger', () => ({
 describe('useDiceRollRequest', () => {
   const mockOnManualResult = vi.fn();
   const mockCharacter = {
+    id: 'character-1',
     name: 'Test Hero',
     level: 1,
     abilityScores: {
@@ -214,7 +246,13 @@ describe('useDiceRollRequest', () => {
       result.current.handleDiceRollComplete({ total: 18, naturalRoll: 13 });
     });
 
-    expect(mockOnManualResult).toHaveBeenCalledWith(18, { naturalRoll: 13 });
+    expect(mockOnManualResult).toHaveBeenCalledWith(18, {
+      naturalRoll: 13,
+      // #1414 round 2 (B4): the details always carry what the dice rolled with, so the
+      // settle path can prefer them over the queued config — including an explicit false.
+      advantage: false,
+      disadvantage: false,
+    });
   });
 
   it('passes every animated advantage/disadvantage face to the message producer', () => {
@@ -237,6 +275,9 @@ describe('useDiceRollRequest', () => {
       naturalRoll: 5,
       results: [18, 5],
       keptResults: [5],
+      // #1414 round 2 (B4): see the test above — the details always carry advantage.
+      advantage: false,
+      disadvantage: false,
     });
   });
 
@@ -537,6 +578,274 @@ describe('useDiceRollRequest', () => {
       expect(result.current.handleManualSubmit).toBe(firstRenderResult.handleManualSubmit);
       expect(result.current.toggleAdvantage).toBe(firstRenderResult.toggleAdvantage);
       expect(result.current.toggleDisadvantage).toBe(firstRenderResult.toggleDisadvantage);
+    });
+  });
+
+  describe('inspiration spend (#1414)', () => {
+    beforeEach(() => {
+      inspirationHolder.armed = false;
+      inspirationHolder.spendResult = true;
+      inspirationHolder.arm.mockClear();
+      inspirationHolder.disarm.mockClear();
+      inspirationHolder.spendInspiration.mockClear();
+    });
+
+    it('an armed inspiration forces advantage and cancels disadvantage', () => {
+      inspirationHolder.armed = true;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({
+          request: { ...defaultRequest, disadvantage: true },
+          onResult: mockOnManualResult,
+        }),
+      );
+      expect(result.current.hasAdvantage).toBe(true);
+      expect(result.current.hasDisadvantage).toBe(false);
+    });
+
+    it('spends before the animation and keeps advantage through the roll', async () => {
+      inspirationHolder.armed = true;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+      });
+      expect(inspirationHolder.spendInspiration).toHaveBeenCalledWith('character-1');
+      expect(result.current.showDiceAnimation).toBe(true);
+      expect(result.current.hasAdvantage).toBe(true);
+
+      await act(async () => {
+        await result.current.handleDiceRollComplete(15);
+      });
+      expect(mockOnManualResult).toHaveBeenCalledWith(15);
+      expect(inspirationHolder.disarm).toHaveBeenCalled();
+    });
+
+    it('a failed spend disarms and rolls without advantage', async () => {
+      inspirationHolder.armed = true;
+      inspirationHolder.spendResult = new Error('No inspiration to spend');
+      const { result, rerender } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+      });
+      expect(inspirationHolder.spendInspiration).toHaveBeenCalledWith('character-1');
+      // The roll still happens — never lose a roll because the spend failed.
+      expect(result.current.showDiceAnimation).toBe(true);
+      rerender();
+      expect(result.current.hasAdvantage).toBe(false);
+    });
+
+    it('a manual entry disarms without spending', () => {
+      inspirationHolder.armed = true;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+
+      act(() => {
+        result.current.setManualResult('12');
+      });
+      act(() => {
+        result.current.handleManualSubmit();
+      });
+      expect(mockOnManualResult).toHaveBeenCalledWith(12);
+      expect(inspirationHolder.disarm).toHaveBeenCalled();
+      expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
+    });
+
+    it('an armed roll reports advantage in the result details (round 2, B4)', async () => {
+      inspirationHolder.armed = true;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+      });
+      await act(async () => {
+        await result.current.handleDiceRollComplete({
+          total: 17,
+          naturalRoll: 15,
+          rolls: [
+            { value: 15, useInTotal: true },
+            { value: 8, useInTotal: false },
+          ],
+        });
+      });
+      expect(mockOnManualResult).toHaveBeenCalledWith(
+        17,
+        expect.objectContaining({ advantage: true, disadvantage: false, naturalRoll: 15 }),
+      );
+    });
+
+    it('an armed roll with no character disarms instead of rolling a free advantage', async () => {
+      inspirationHolder.armed = true;
+      (useCharacter as any).mockReturnValue({ state: { character: null } });
+      const { result, rerender } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+      });
+      expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
+      expect(inspirationHolder.disarm).toHaveBeenCalled();
+      rerender();
+      expect(result.current.hasAdvantage).toBe(false);
+    });
+
+    it('toggling advantage off while armed disarms instead of doing nothing', () => {
+      inspirationHolder.armed = true;
+      const { result, rerender } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+      expect(result.current.hasAdvantage).toBe(true);
+
+      act(() => {
+        result.current.toggleAdvantage();
+      });
+      expect(inspirationHolder.disarm).toHaveBeenCalled();
+      // The mock's disarm flips a plain boolean, not React state — the real provider's
+      // disarm is a setState and re-renders; force the re-read here, as the failed-spend
+      // test does.
+      rerender();
+      expect(result.current.hasAdvantage).toBe(false);
+    });
+
+    it('toggling disadvantage on while armed disarms and goes disadvantaged', () => {
+      inspirationHolder.armed = true;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+
+      act(() => {
+        result.current.toggleDisadvantage();
+      });
+      expect(inspirationHolder.disarm).toHaveBeenCalled();
+      expect(result.current.hasAdvantage).toBe(false);
+      expect(result.current.hasDisadvantage).toBe(true);
+    });
+
+    it('entering manually is a no-op while a roll is in flight (round 2, B3)', async () => {
+      const { result } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+      });
+      act(() => {
+        result.current.handleEnterManually();
+      });
+      expect(result.current.manualMode).toBe(false);
+    });
+
+    it('does not mount the dice until the spend resolves — a failed spend rolls one die (round 3, B-1)', async () => {
+      inspirationHolder.armed = true;
+      let resolveSpend: (value: boolean) => void = () => {};
+      const spendPending = new Promise<boolean>((resolve) => {
+        resolveSpend = resolve;
+      });
+      inspirationHolder.spendInspiration.mockImplementationOnce(() => spendPending);
+      const { result, rerender } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+
+      let rollPromise: Promise<void> = Promise.resolve();
+      act(() => {
+        rollPromise = result.current.handleAutoRoll();
+      });
+      // The prompt is locked down, but the dice are NOT mounted (showDiceAnimation gates
+      // the embed, which rolls with whatever advantage it mounts with) while the spend is
+      // pending — so a failed spend cannot have already rolled two dice.
+      expect(result.current.isRolling).toBe(true);
+      expect(result.current.showDiceAnimation).toBe(false);
+
+      await act(async () => {
+        resolveSpend(false);
+        await rollPromise;
+      });
+      expect(inspirationHolder.disarm).toHaveBeenCalled();
+      expect(result.current.showDiceAnimation).toBe(true);
+      rerender();
+      expect(result.current.hasAdvantage).toBe(false);
+    });
+
+    it('does not spend on a damage roll — the arm survives for the next d20 roll (round 3, B-2)', async () => {
+      inspirationHolder.armed = true;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({
+          request: { type: 'damage' as const, formula: '2d6+5', purpose: 'Fireball' },
+          onResult: mockOnManualResult,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+      });
+      // Advantage is a d20 mechanic — a damage roll has nothing to advantage, so the flag
+      // is neither spent nor disarmed here.
+      expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
+      expect(inspirationHolder.disarm).not.toHaveBeenCalled();
+      expect(result.current.showDiceAnimation).toBe(true);
+    });
+
+    it('an armed damage request reports no advantage anywhere — display and record agree (round 5, FIX at 7df1690a item 1)', async () => {
+      inspirationHolder.armed = true;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({
+          request: { type: 'damage' as const, formula: '2d6+5', purpose: 'Fireball' },
+          onResult: mockOnManualResult,
+        }),
+      );
+
+      // The popup reads the returned values — a damage roll must not show advantage
+      // while armed, or the display would claim a benefit the record does not carry.
+      expect(result.current.hasAdvantage).toBe(false);
+      expect(result.current.hasDisadvantage).toBe(false);
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+      });
+      await act(async () => {
+        await result.current.handleDiceRollComplete({
+          total: 9,
+          naturalRoll: 4,
+          rolls: [{ value: 4, useInTotal: true }],
+        });
+      });
+      // The record carries the same values the popup reported — no advantage, and the
+      // flag was not spent.
+      expect(mockOnManualResult).toHaveBeenCalledWith(
+        9,
+        expect.objectContaining({ advantage: false, disadvantage: false, naturalRoll: 4 }),
+      );
+      expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
+    });
+
+    it('toggling advantage off while armed restores the underlying disadvantage (round 3, nit 1)', () => {
+      inspirationHolder.armed = true;
+      const { result, rerender } = renderHook(() =>
+        useDiceRollRequest({
+          request: { ...defaultRequest, disadvantage: true },
+          onResult: mockOnManualResult,
+        }),
+      );
+      expect(result.current.hasAdvantage).toBe(true);
+      expect(result.current.hasDisadvantage).toBe(false);
+
+      act(() => {
+        result.current.toggleAdvantage();
+      });
+      expect(inspirationHolder.disarm).toHaveBeenCalled();
+      rerender();
+      // Withdrawing Inspiration restores the disadvantage the request always carried —
+      // the arm masked it, it did not remove it.
+      expect(result.current.hasAdvantage).toBe(false);
+      expect(result.current.hasDisadvantage).toBe(true);
     });
   });
 });

@@ -7,6 +7,7 @@ import { MemoryProvider } from '@/contexts/MemoryContext';
 import { MessageProvider } from '@/contexts/MessageContext';
 import { SceneBackgroundProvider } from '@/contexts/SceneBackgroundContext';
 import { VoiceProvider } from '@/contexts/VoiceContext';
+import { InspirationArmedProvider } from '@/features/game-session/contexts/inspiration-armed-context';
 import { ErrorBoundary } from '@/shared/components/error/ErrorBoundary';
 import { WebMcpCompanionBridge } from '@/webmcp/companion-tools';
 
@@ -38,8 +39,10 @@ const GameProviders: React.FC<GameProvidersProps> = ({
             <MessageProvider sessionId={sessionId}>
               <MemoryProvider sessionId={sessionId}>
                 <VoiceProvider sessionId={sessionId}>
-                  <WebMcpCompanionBridge sessionId={sessionId} />
-                  {children}
+                  <InspirationArmedProvider>
+                    <WebMcpCompanionBridge sessionId={sessionId} />
+                    {children}
+                  </InspirationArmedProvider>
                 </VoiceProvider>
               </MemoryProvider>
             </MessageProvider>

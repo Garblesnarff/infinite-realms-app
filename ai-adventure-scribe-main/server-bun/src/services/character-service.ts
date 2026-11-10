@@ -218,6 +218,54 @@ async function recomputeServerDerivedStats(
   await db.update(characterStats).set(updates).where(eq(characterStats.characterId, characterId));
 }
 
+/**
+ * The write gate `update()` enforces, shared with `spendInspiration` (#1414): the row
+ * itself plus an editor/owner permission share. A reader with view-only access reads
+ * through `getById` but must not write.
+ */
+function characterWriteCondition(
+  characterId: string,
+  userId: string,
+): ReturnType<typeof and> {
+  return and(
+    eq(characters.id, characterId),
+    or(
+      eq(characters.userId, userId),
+      eq(characters.ownerId, userId),
+      exists(
+        db
+          .select({ one: sql`1` })
+          .from(characterPermissions)
+          .where(
+            and(
+              eq(characterPermissions.characterId, characters.id),
+              eq(characterPermissions.userId, userId),
+              inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
+            ),
+          ),
+      ),
+    ),
+  );
+}
+
+/**
+ * #1414: the `inspiration` flag out of the personality envelope persisted in the
+ * `personality_notes` column. The client module `src/utils/character/personality-envelope.ts`
+ * owns the envelope shape; the server only ever reads this one flag. A column that is
+ * not an envelope (legacy free text, unparseable JSON) reads as unknown, never as true.
+ */
+function inspirationFromEnvelope(personalityNotes: string | null): boolean | undefined {
+  if (!personalityNotes) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(personalityNotes);
+    if (!parsed || typeof parsed !== 'object') return undefined;
+    const inspiration = (parsed as Record<string, unknown>).inspiration;
+    return typeof inspiration === 'boolean' ? inspiration : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export class CharacterService {
   /**
    * List all characters for a user
@@ -291,6 +339,73 @@ export class CharacterService {
     }
 
     return character;
+  }
+
+  /**
+   * #1414: whether the character currently holds Inspiration, read through the same
+   * owner-filtered load as the sheet GET. The legal-actions offering calls this; it
+   * spends nothing.
+   */
+  static async characterHasInspiration(characterId: string, userId: string): Promise<boolean> {
+    const character = await CharacterService.getById(characterId, userId);
+    return inspirationFromEnvelope(character?.personalityNotes ?? null) === true;
+  }
+
+  /**
+   * #1414: spend Inspiration server-side. The client arms advantage locally; the roll
+   * that consumes it pays here by clearing the flag in the personality envelope, keeping
+   * every other envelope key (traits, history) intact. The write is conditional on the
+   * envelope still holding the flag, so two spends racing each other cannot both succeed
+   * — the loser is refused, not double-spent.
+   */
+  static async spendInspiration(
+    characterId: string,
+    userId: string,
+  ): Promise<
+    | { success: true; inspiration: false }
+    | { success: false; reason: 'not_found' | 'no_inspiration' | 'forbidden' }
+  > {
+    const character = await CharacterService.getById(characterId, userId);
+    if (!character) return { success: false, reason: 'not_found' };
+    // #1414 round 2: getById admits any permission level, but the write gate needs
+    // editor/owner — a view-only reader with a true flag gets a 403, not a 409 that
+    // claims the flag is gone.
+    const [writable] = await db
+      .select({ one: sql`1` })
+      .from(characters)
+      .where(characterWriteCondition(characterId, userId))
+      .limit(1);
+    if (!writable) return { success: false, reason: 'forbidden' };
+    const attempt = async (raw: string): Promise<boolean> => {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const next = JSON.stringify({ ...parsed, inspiration: false });
+      const [updated] = await db
+        .update(characters)
+        .set({ personalityNotes: next, updatedAt: new Date() })
+        .where(
+          and(
+            characterWriteCondition(characterId, userId),
+            eq(characters.personalityNotes, raw),
+          ),
+        )
+        .returning({ id: characters.id });
+      return updated !== undefined;
+    };
+    const raw = character.personalityNotes ?? null;
+    if (!raw || inspirationFromEnvelope(raw) !== true) {
+      return { success: false, reason: 'no_inspiration' };
+    }
+    if (await attempt(raw)) return { success: true, inspiration: false };
+    // #1414 round 2: the conditional write also fails when an unrelated envelope key
+    // changed between the read and the write (a trait edit racing the spend). The flag
+    // survives that, so re-read once and retry with the fresh envelope — a true race
+    // still refuses, because the re-read sees the flag already false.
+    const reread = await CharacterService.getById(characterId, userId);
+    const freshRaw = reread?.personalityNotes ?? null;
+    if (freshRaw && inspirationFromEnvelope(freshRaw) === true && (await attempt(freshRaw))) {
+      return { success: true, inspiration: false };
+    }
+    return { success: false, reason: 'no_inspiration' };
   }
 
   /**
@@ -756,27 +871,7 @@ export class CharacterService {
           ...safeUpdates,
           updatedAt: new Date(),
         })
-        .where(
-          and(
-            eq(characters.id, characterId),
-            or(
-              eq(characters.userId, userId),
-              eq(characters.ownerId, userId),
-              exists(
-                db
-                  .select({ one: sql`1` })
-                  .from(characterPermissions)
-                  .where(
-                    and(
-                      eq(characterPermissions.characterId, characters.id),
-                      eq(characterPermissions.userId, userId),
-                      inArray(characterPermissions.permissionLevel, ['editor', 'owner']),
-                    ),
-                  ),
-              ),
-            ),
-          ),
-        )
+        .where(characterWriteCondition(characterId, userId))
         .returning();
 
       if (!updated || !equipment) return updated || null;

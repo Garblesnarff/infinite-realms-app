@@ -95,6 +95,31 @@ describe('the player attack die', () => {
       });
     });
 
+    it('an armed Inspiration names itself in the sources but does not change the proposal advantage (round 2, B1)', async () => {
+      vi.mocked(proposeAuthoritativeAttack).mockResolvedValue({
+        ...LEGAL_PROPOSAL,
+        advantage: false,
+        disadvantage: false,
+      } as any);
+      vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 18 });
+
+      await askPlayerForAttackDie({
+        encounterId: 'enc-1',
+        action: ATTACK,
+        actorLabel: 'The Seeker',
+        inspirationArmed: true,
+      });
+      // The popup rolls with advantage from the armed context; a failed spend disarms
+      // there. Baking the arm into the proposal would survive the disarm and roll two
+      // dice for free — so the proposal stays the rules' own, and only the sources
+      // name Inspiration.
+      expect(vi.mocked(requestPlayerAttackRoll).mock.calls[0][0]).toMatchObject({
+        advantage: false,
+        disadvantage: false,
+        advantageSources: ['Inspiration'],
+      });
+    });
+
     it('carries the popup’s dropped die with the kept one (#263 CB-028)', async () => {
       vi.mocked(proposeAuthoritativeAttack).mockResolvedValue(LEGAL_PROPOSAL as any);
       vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 8, d20Rolls: [8, 14] });

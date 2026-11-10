@@ -448,6 +448,11 @@ describe('CombatActionBar', () => {
         action_surge: actionSurgeAction,
         divine_sense: { type: 'divine_sense', label: 'Divine Sense' },
         divine_smite: smiteAction,
+        // #1414: the Inspiration chip arms advantage; it rides the More menu.
+        inspiration: {
+          type: 'inspiration',
+          label: 'Spend Inspiration — advantage on your next roll',
+        },
         flee: fleeAction,
         yield: yieldAction,
         use_item: useItemAction,

@@ -78,6 +78,9 @@ export const LEGAL_ACTION_PLACEMENT = {
   second_wind: 'more',
   action_surge: 'more',
   divine_sense: 'more',
+  // #1414: Inspiration arms advantage on the next roll; it spends no Action, so it rides More
+  // with the other non-action options.
+  inspiration: 'more',
   use_item: 'more',
   flee: 'more',
   yield: 'more',

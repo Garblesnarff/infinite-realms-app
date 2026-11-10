@@ -15,6 +15,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import {
   campaigns,
   characterFeatures,
+  characterPermissions,
   characterSpellSlots,
   characters,
   classFeaturesLibrary,
@@ -714,5 +715,98 @@ describeWithDb('limited class features are counted, never unlimited (#1225)', ()
     for (let level = 2; level <= 20; level++) {
       expect(shared({ classLevel: level, abilityModifiers: null })).toBe(fighter(level));
     }
+  });
+
+  test('the character Inspiration flag spends once through the real route, then is refused (#1414)', async () => {
+    // The envelope the client writes (personality-envelope.ts): the flag rides with the
+    // traits/ideals/bonds/flaws, and the create route persists it through the real POST.
+    const envelope = {
+      traits: [],
+      ideals: [],
+      bonds: [],
+      flaws: [],
+      inspiration: true,
+      lastInspiration: null,
+      inspirationHistory: [],
+    };
+    const inspiredId = await create({
+      ...body(campaignId, { name: 'Inspired', className: 'Fighter', level: 1, stats: STATS }),
+      personality_notes: JSON.stringify(envelope),
+    });
+
+    const spent = await api(`/v1/characters/${inspiredId}/spend-inspiration`, 'POST', {});
+    expect(spent.status).toBe(200);
+    expect(spent.body.inspiration).toBe(false);
+
+    // The envelope survives the spend with every other key intact; only the flag cleared.
+    const [row] = await db
+      .select({ personalityNotes: characters.personalityNotes })
+      .from(characters)
+      .where(eq(characters.id, inspiredId));
+    const saved = JSON.parse(row.personalityNotes as string) as Record<string, unknown>;
+    expect(saved.inspiration).toBe(false);
+    expect(saved.traits).toEqual([]);
+
+    const again = await api(`/v1/characters/${inspiredId}/spend-inspiration`, 'POST', {});
+    expect(again.status).toBe(409);
+    expect(again.body.reason).toBe('no_inspiration');
+  });
+
+  test('two concurrent Inspiration spends accept exactly one (#1414)', async () => {
+    const inspiredId = await create({
+      ...body(campaignId, { name: 'Twice', className: 'Fighter', level: 1, stats: STATS }),
+      personality_notes: JSON.stringify({
+        traits: [],
+        ideals: [],
+        bonds: [],
+        flaws: [],
+        inspiration: true,
+        lastInspiration: null,
+        inspirationHistory: [],
+      }),
+    });
+    const results = await Promise.all([
+      api(`/v1/characters/${inspiredId}/spend-inspiration`, 'POST', {}),
+      api(`/v1/characters/${inspiredId}/spend-inspiration`, 'POST', {}),
+    ]);
+    expect(results.map((result) => result.status).sort()).toEqual([200, 409]);
+  });
+
+  test('a view-only reader is refused with 403 and the flag survives (round 2, #1414)', async () => {
+    const ownerId = userId;
+    const inspiredId = await create({
+      ...body(campaignId, { name: 'Shared', className: 'Fighter', level: 1, stats: STATS }),
+      personality_notes: JSON.stringify({
+        traits: [],
+        ideals: [],
+        bonds: [],
+        flaws: [],
+        inspiration: true,
+        lastInspiration: null,
+        inspirationHistory: [],
+      }),
+    });
+    const readerId = testId('reader-1225');
+    const [share] = await db
+      .insert(characterPermissions)
+      .values({
+        characterId: inspiredId,
+        userId: readerId,
+        permissionLevel: 'viewer',
+        grantedBy: ownerId,
+      })
+      .returning({ id: characterPermissions.id });
+    try {
+      userId = readerId;
+      const refused = await api(`/v1/characters/${inspiredId}/spend-inspiration`, 'POST', {});
+      expect(refused.status).toBe(403);
+      expect(refused.body.reason).toBe('forbidden');
+    } finally {
+      userId = ownerId;
+      await db.delete(characterPermissions).where(eq(characterPermissions.id, share.id));
+    }
+    // The flag survives the refused spend — the owner can still spend it.
+    const spent = await api(`/v1/characters/${inspiredId}/spend-inspiration`, 'POST', {});
+    expect(spent.status).toBe(200);
   });
 });
