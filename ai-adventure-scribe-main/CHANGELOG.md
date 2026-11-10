@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.44.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.43.0...v0.44.0) (2026-11-10)
+
+
+### Features
+
+* **table:** inspiration spend, coin un-hides when the flag is known ([#1414](https://github.com/Garblesnarff/infinite-realms-app/issues/1414)) ([b43dd0b](https://github.com/Garblesnarff/infinite-realms-app/commit/b43dd0b09649becb37d80bb32065937443442f1f))
+
+
+### Bug Fixes
+
+* **combat:** advance the round with one combatant ([#1424](https://github.com/Garblesnarff/infinite-realms-app/issues/1424)) ([8c36bbb](https://github.com/Garblesnarff/infinite-realms-app/commit/8c36bbbdd7e26e94d8013a1be9d0e074ce6906af))
+* **table:** legible system lines, title-case difficulty, no dead foe in the turn bar ([#1458](https://github.com/Garblesnarff/infinite-realms-app/issues/1458) [#1459](https://github.com/Garblesnarff/infinite-realms-app/issues/1459) [#1460](https://github.com/Garblesnarff/infinite-realms-app/issues/1460)) ([3dd1db7](https://github.com/Garblesnarff/infinite-realms-app/commit/3dd1db7128dae01dd495e20fc6cc3e22f9b473bb))
+
 ## [0.43.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.42.0...v0.43.0) (2026-11-10)
 
 
