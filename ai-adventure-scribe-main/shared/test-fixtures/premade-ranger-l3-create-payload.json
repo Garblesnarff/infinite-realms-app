@@ -13,9 +13,8 @@
   "background_image": null,
   "campaign_id": "10191019-0000-4000-8000-000000000000",
   "skill_proficiencies": "Athletics, Perception, Stealth, Survival",
-  "languages": [
-    "Common"
-  ],
+  "starter_template_id": "1019-tavo-brejo",
+  "languages": ["Common"],
   "cantrips": "",
   "known_spells": "alarm, animal-friendship, cure-wounds",
   "prepared_spells": "",

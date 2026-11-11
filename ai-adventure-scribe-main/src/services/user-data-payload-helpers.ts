@@ -43,6 +43,7 @@ export const CHARACTER_FIELDS = [
   'theme',
   'session_notes',
   'campaign_id',
+  'starter_template_id',
   'skill_proficiencies',
   'expertise_proficiencies',
   'tool_proficiencies',

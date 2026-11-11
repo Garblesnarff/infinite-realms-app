@@ -621,9 +621,10 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         try {
           origin = await originForCreateBody(body);
         } catch (error) {
+          // The starter catalog, not the plan: its own code, so a client can tell them apart.
           logger.error({ msg: 'CHARACTER_CREATE starter lookup failed', error });
           set.status = 503;
-          return { error: 'Plan unavailable. Try again.', code: 'PLAN_UNAVAILABLE' };
+          return { error: 'Starter catalog unavailable. Try again.', code: 'CATALOG_UNAVAILABLE' };
         }
         const refusal = await legendGateRefusal(user!.userId, origin);
         if (refusal) {
