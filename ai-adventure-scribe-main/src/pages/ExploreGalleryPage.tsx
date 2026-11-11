@@ -5,21 +5,18 @@
  * Route: /explore
  */
 
-import { Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles } from 'lucide-react';
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 
-import { StarterCampaignCard } from '@/components/campaigns/StarterCampaignCard';
 import { Button } from '@/components/ui/button';
 import { Z_INDEX } from '@/constants/z-index';
 import { BoxedCampaign } from '@/features/campaigns/table/BoxedCampaign';
-import { useTableLookActive } from '@/features/campaigns/table/useTableLookActive';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 
 export const ExploreGalleryPage: React.FC = () => {
   const { campaigns, isLoading, error } = useStarterCampaigns();
-  const tableLook = useTableLookActive();
 
   return (
     <>
@@ -52,42 +49,28 @@ export const ExploreGalleryPage: React.FC = () => {
       </Helmet>
 
       <div className="ir-table-walnut ir-app min-h-screen max-w-full overflow-x-hidden bg-background text-foreground">
-        {/* Header: top nav */}
+        {/* Header: PublicExplore board (back link left, INFINITE REALMS wordmark right) */}
         <header
-          className="sticky top-0 border-b border-white/10 bg-infinite-dark/90 backdrop-blur-lg"
+          className="sticky top-0 border-b border-[#d5b070]/20 bg-[#0a0f1c]/90 backdrop-blur-lg"
           style={{ zIndex: Z_INDEX.STICKY }}
         >
           <nav
             aria-label="Main"
             className="max-w-7xl mx-auto px-4 sm:px-6 min-h-14 py-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1"
           >
-            <Link to="/" className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-infinite-gold" aria-hidden="true" />
-              <span className="font-heading text-lg font-semibold uppercase tracking-[1.5px] text-infinite-gold">
-                InfiniteRealms
+            <Link
+              to="/"
+              className="inline-flex min-h-11 items-center gap-2 text-[#eaeefa] no-underline"
+            >
+              <ArrowLeft className="h-[18px] w-[18px] text-[#d5b070]" aria-hidden="true" />
+              Back to home
+            </Link>
+            <Link to="/" aria-label="Infinite Realms, home" className="flex items-center gap-3">
+              <Sparkles className="w-5 h-5 text-[#4fb6c4]" aria-hidden="true" />
+              <span className="font-heading text-xl tracking-[0.2em] text-[#eaeefa]">
+                INFINITE <span className="text-[#d5b070]">REALMS</span>
               </span>
             </Link>
-            <div className="flex items-center gap-1 text-sm font-medium">
-              <Link
-                to="/"
-                className="rounded-md px-3 py-2 text-muted-foreground hover:text-infinite-gold transition-colors"
-              >
-                Home
-              </Link>
-              <Link
-                to="/explore"
-                aria-current="page"
-                className="rounded-md px-3 py-2 text-infinite-gold bg-infinite-gold/10"
-              >
-                Campaigns
-              </Link>
-              <Link
-                to="/app/characters"
-                className="rounded-md px-3 py-2 text-muted-foreground hover:text-infinite-gold transition-colors"
-              >
-                Characters
-              </Link>
-            </div>
           </nav>
         </header>
 
@@ -163,17 +146,9 @@ export const ExploreGalleryPage: React.FC = () => {
           {/* Campaigns Grid */}
           {!isLoading && !error && campaigns.length > 0 && (
             <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-3 lg:gap-10">
-              {campaigns.map((campaign, index) =>
-                tableLook ? (
-                  <BoxedCampaign key={campaign.id} campaign={campaign} isFirst={index === 0} />
-                ) : (
-                  <StarterCampaignCard
-                    key={campaign.id}
-                    campaign={campaign}
-                    isFirst={index === 0}
-                  />
-                ),
-              )}
+              {campaigns.map((campaign, index) => (
+                <BoxedCampaign key={campaign.id} campaign={campaign} isFirst={index === 0} />
+              ))}
             </div>
           )}
 
