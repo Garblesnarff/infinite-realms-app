@@ -37,7 +37,9 @@ export type EngineBadgeWord =
   | 'REFUSED'
   | 'CAST'
   | 'FAILED'
-  | 'PASSED';
+  | 'PASSED'
+  | 'SUCCESS'
+  | 'FAIL';
 export type EngineBadgeTone = 'gold' | 'red' | 'grey';
 export type EngineBadgeIcon = 'check' | 'alert' | 'dash';
 
@@ -57,7 +59,8 @@ export type EngineCardKind =
   | 'weapon_swap'
   | 'death_save'
   | 'initiative'
-  | 'refused';
+  | 'refused'
+  | 'check';
 
 export interface EngineCardArmorClass {
   targetAC?: number | null;

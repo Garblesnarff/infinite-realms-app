@@ -244,6 +244,76 @@ export class SessionMessageService {
   }
 
   /**
+   * #1477: the roll request the DM row issued in this session under `rollRequestId`, or null.
+   * Owner-scoped: a session the user does not own resolves to null, so no card is written for it.
+   * The id is `<dmRowId>:roll:<index>` (the client's reservation, `dm-roll-recovery.ts`), or an
+   * explicit `rollRequestId` the DM row stored on the request.
+   */
+  static async findIssuedRollRequest(
+    sessionId: string,
+    userId: string,
+    rollRequestId: string,
+  ): Promise<Record<string, unknown> | null> {
+    const session = await db.query.gameSessions.findFirst({
+      where: (session, { and, eq }) =>
+        and(eq(session.id, sessionId), getOwnershipCondition(userId, session)),
+      columns: { id: true },
+    });
+    if (!session) return null;
+
+    const requestFrom = (context: unknown): Record<string, unknown> | undefined => {
+      const list = (context as { rollRequests?: unknown } | null)?.rollRequests;
+      if (!Array.isArray(list)) return undefined;
+      const explicit = list.find(
+        (request): request is Record<string, unknown> =>
+          !!request &&
+          typeof request === 'object' &&
+          (request as { rollRequestId?: unknown }).rollRequestId === rollRequestId,
+      );
+      if (explicit) return explicit;
+      const match = rollRequestId.match(/^(.+):roll:(\d+)$/);
+      if (!match) return undefined;
+      const request = list[Number(match[2])] as Record<string, unknown> | undefined;
+      if (!request || typeof request !== 'object') return undefined;
+      const stored = (request as { rollRequestId?: unknown }).rollRequestId;
+      return stored === undefined || stored === rollRequestId ? request : undefined;
+    };
+
+    // The DM row whose id the reservation carries.
+    const match = rollRequestId.match(/^(.+):roll:\d+$/);
+    if (match) {
+      const [row] = await db
+        .select({ context: dialogueHistory.context })
+        .from(dialogueHistory)
+        .where(
+          and(
+            eq(dialogueHistory.id, match[1]!),
+            eq(dialogueHistory.sessionId, sessionId),
+            eq(dialogueHistory.speakerType, 'dm'),
+          ),
+        )
+        .limit(1);
+      const request = requestFrom(row?.context);
+      if (request) return request;
+    }
+
+    // A DM row that stored the request under an explicit id.
+    const [row] = await db
+      .select({ context: dialogueHistory.context })
+      .from(dialogueHistory)
+      .where(
+        and(
+          eq(dialogueHistory.sessionId, sessionId),
+          eq(dialogueHistory.speakerType, 'dm'),
+          sql`${dialogueHistory.context} @> ${JSON.stringify({ rollRequests: [{ rollRequestId }] })}::jsonb`,
+        ),
+      )
+      .orderBy(desc(dialogueHistory.timestamp))
+      .limit(1);
+    return requestFrom(row?.context) ?? null;
+  }
+
+  /**
    * Add message to session
    */
   static async addMessage(
@@ -505,7 +575,10 @@ export class SessionMessageService {
           .select()
           .from(dialogueHistory)
           .where(
-            and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'player')),
+            and(
+              eq(dialogueHistory.sessionId, sessionId),
+              eq(dialogueHistory.speakerType, 'player'),
+            ),
           )
           .orderBy(desc(dialogueHistory.createdAt))
           .limit(1)
@@ -514,7 +587,8 @@ export class SessionMessageService {
         // 55P03: the row lock is held by another turn that is still generating. Drizzle wraps
         // the postgres.js error, so the code lives on `cause`.
         const code =
-          (error as { code?: string })?.code ?? (error as { cause?: { code?: string } })?.cause?.code;
+          (error as { code?: string })?.code ??
+          (error as { cause?: { code?: string } })?.cause?.code;
         if (code === '55P03')
           throw new ConflictError('Another turn is in progress. Retry to pick up its result.');
         throw error;
