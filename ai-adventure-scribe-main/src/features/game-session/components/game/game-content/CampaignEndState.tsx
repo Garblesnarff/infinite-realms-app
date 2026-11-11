@@ -53,7 +53,7 @@ export interface CampaignEndStateProps {
 }
 
 export const displayFinalLine = (line: string): string =>
-  line.replace(/^⚙️?\s*Engine:\s*/, '');
+  line.replace(/^⚙\\uFE0F?\s*Engine:\s*/, '');
 
 /** #1239: the offer is for a hero the player owns, or a premade they chose to keep. */
 function offerTakeHero(premade: boolean | undefined, premadeKept: boolean | undefined): boolean {
