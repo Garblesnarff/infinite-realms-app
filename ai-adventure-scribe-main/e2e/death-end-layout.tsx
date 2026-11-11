@@ -255,7 +255,7 @@ createRoot(root).render(
               ? { turns: 16, fights: 1, monstersDefeated: 0, rounds: 4, fatalRoll: '2' }
               : undefined
           }
-          chooseHeroHref="/explore/abyssal-descent/choose-character?campaignId=camp-1"
+          chooseHeroHref="/explore/abyssal-descent?campaignId=camp-1#heroes"
           storyContent={
             <p>
               The saved log {`MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM`}

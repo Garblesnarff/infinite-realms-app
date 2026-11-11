@@ -99,9 +99,7 @@ describe('CharacterSheet fallen (#2517)', () => {
     });
     expect(screen.getByText(/Abyssal Descent goes on/)).toBeInTheDocument();
     fireEvent.click(chooseHero);
-    expect(navigate).toHaveBeenCalledWith(
-      '/explore/abyssal-descent/choose-character?campaignId=camp-1',
-    );
+    expect(navigate).toHaveBeenCalledWith('/explore/abyssal-descent?campaignId=camp-1#heroes');
     // #1239: the roster already holds this copy, so the take-hero offer
     // stays even though the dead run was a starter premade.
     expect(
@@ -196,9 +194,7 @@ describe('CharacterSheet fallen (#2517)', () => {
     });
     expect(screen.getByText(/The Gardener's Heir goes on/)).toBeInTheDocument();
     fireEvent.click(chooseHero);
-    expect(navigate).toHaveBeenCalledWith(
-      '/explore/the-gardeners-heir/choose-character?campaignId=camp-gh',
-    );
+    expect(navigate).toHaveBeenCalledWith('/explore/the-gardeners-heir?campaignId=camp-gh#heroes');
   });
 
   it('#1215: a fallen hero with no campaign at all gets no hero-pick offer', async () => {

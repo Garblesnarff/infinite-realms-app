@@ -296,10 +296,10 @@ describe('ChronicleViewer', () => {
       screen.getByText('Free summary: The heroes entered the cave and fought monsters.'),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Upgrade to Pro for illustrated novel-style chronicles/i),
+      screen.getByText(/Upgrade to Legend for illustrated novel-style chronicles/i),
     ).toBeInTheDocument();
 
-    const upgradeButton = screen.getByRole('button', { name: /Upgrade to Pro/i });
+    const upgradeButton = screen.getByRole('button', { name: /Upgrade to Legend/i });
     expect(upgradeButton).toBeInTheDocument();
 
     fireEvent.click(upgradeButton);
