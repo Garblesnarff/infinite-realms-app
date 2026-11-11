@@ -12,15 +12,12 @@ describe('Table look', () => {
   beforeEach(() => window.localStorage.clear());
   afterEach(() => document.body.classList.remove('ir-table-look'));
 
-  it('defaults on and updates without a reload when the setting changes', () => {
+  it('is always on, even when an old saved choice says off', () => {
+    writeTableSettings('table-user', { ...DEFAULT_TABLE_SETTINGS, tableLook: false });
     const { unmount } = renderHook(() => useTableLook());
     expect(document.body).toHaveClass('ir-table-look');
     act(() => {
-      writeTableSettings('table-user', { ...DEFAULT_TABLE_SETTINGS, tableLook: false });
-    });
-    expect(document.body).not.toHaveClass('ir-table-look');
-    act(() => {
-      writeTableSettings('table-user', { ...DEFAULT_TABLE_SETTINGS, tableLook: true });
+      window.dispatchEvent(new Event('ir-table-settings'));
     });
     expect(document.body).toHaveClass('ir-table-look');
     unmount();
