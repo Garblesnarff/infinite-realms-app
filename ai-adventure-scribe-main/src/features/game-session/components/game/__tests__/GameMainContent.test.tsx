@@ -62,6 +62,10 @@ const state = vi.hoisted(() => ({
 let mockStoryMessages: Array<Record<string, unknown>> = [];
 vi.mock('@/contexts/MessageContext', () => ({
   useMessageContext: () => ({ queueStatus: state.queueStatus, messages: mockStoryMessages }),
+  useOptionalMessageContext: () => ({
+    queueStatus: state.queueStatus,
+    messages: mockStoryMessages,
+  }),
 }));
 // #2517: the fallen end state reads the campaign name and the starter slug.
 vi.mock('@/contexts/CampaignContext', () => ({
