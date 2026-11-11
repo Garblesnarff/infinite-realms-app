@@ -58,7 +58,9 @@ describe('PlayerSettings (#1347)', () => {
     const toggle = screen.getByRole('switch', { name: 'Show target numbers' });
     expect(toggle).toHaveAttribute('aria-checked', 'false');
     expect(
-      screen.getByText('Shows the DC and AC on checks and attacks. Default for this campaign: off (Hard).'),
+      screen.getByText(
+        'Shows the DC and AC on checks and attacks. Default for this campaign: off (Hard).',
+      ),
     ).toBeInTheDocument();
     fireEvent.click(toggle);
     expect(toggle).toHaveAttribute('aria-checked', 'true');
@@ -72,7 +74,9 @@ describe('PlayerSettings (#1347)', () => {
     campaign.rules = { levelingMode: 'xp', show_target_numbers: true };
     render(<PlayerSettings />);
     expect(
-      screen.getByText('Shows the DC and AC on checks and attacks. Default for this campaign: on (Hard).'),
+      screen.getByText(
+        'Shows the DC and AC on checks and attacks. Default for this campaign: on (Hard).',
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Show target numbers' })).toHaveAttribute(
       'aria-checked',
@@ -80,13 +84,10 @@ describe('PlayerSettings (#1347)', () => {
     );
   });
 
-  it('defaults the Table look on and saves the off choice', () => {
+  it('has no Table look switch; the table look is always on', () => {
     render(<PlayerSettings />);
-    const toggle = screen.getByRole('switch', { name: 'Table look' });
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-    fireEvent.click(toggle);
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-    expect(readStored()).toMatchObject({ tableLook: false });
+    expect(screen.queryByRole('switch', { name: 'Table look' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Table look')).not.toBeInTheDocument();
   });
 
   it('turns Dice sound off', () => {
@@ -112,7 +113,10 @@ describe('PlayerSettings (#1347)', () => {
   });
 
   it('shows Reduce motion off for a stored off choice; toggling on then off writes system', () => {
-    window.localStorage.setItem(tableSettingsKey('user-a'), JSON.stringify({ reduceMotion: 'off' }));
+    window.localStorage.setItem(
+      tableSettingsKey('user-a'),
+      JSON.stringify({ reduceMotion: 'off' }),
+    );
     render(<PlayerSettings />);
     const motion = screen.getByRole('switch', { name: 'Reduce motion' });
     expect(motion).toHaveAttribute('aria-checked', 'false');
@@ -172,15 +176,6 @@ describe('PlayerSettings (#1347)', () => {
     expect(readStored()).toMatchObject({ showNPCRolls: false });
   });
 
-  it('starts Table look on by default and turns it off', () => {
-    render(<PlayerSettings />);
-    const toggle = screen.getByRole('switch', { name: 'Table look' });
-    expect(toggle).toHaveAttribute('aria-checked', 'true');
-    fireEvent.click(toggle);
-    expect(toggle).toHaveAttribute('aria-checked', 'false');
-    expect(readStored()).toMatchObject({ tableLook: false });
-  });
-
   it('saves Level Advancement to the open campaign', () => {
     render(<PlayerSettings />);
     fireEvent.change(screen.getByLabelText('Level Advancement'), {
@@ -196,7 +191,6 @@ describe('PlayerSettings (#1347)', () => {
     for (const name of [
       'Show target numbers',
       'Show NPC Rolls',
-      'Table look',
       'Dice sound',
       'Reduce motion',
       'Read new DM messages aloud',
