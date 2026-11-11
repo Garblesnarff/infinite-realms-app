@@ -11,7 +11,7 @@
 
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { buildSavedPlaythroughs, loadPlaythroughCharacters } from './saved-playthroughs';
 import { SavedPlaythroughList } from './SavedPlaythroughList';
@@ -207,6 +207,10 @@ const CampaignDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const tableLook = useTableLookActive();
+  const [searchParams] = useSearchParams();
+  // The death screen's "Choose a new hero" names the campaign it came from.
+  // Play in that campaign instead of resolving the starter by its title.
+  const requestedCampaignId = searchParams.get('campaignId');
   const { campaign, isLoading: campaignLoading, error: campaignError } = useStarterCampaign(slug);
   const {
     templates,
@@ -273,7 +277,10 @@ const CampaignDetailPage: React.FC = () => {
           // cannot resume afterwards.
         }
         const apiUrl = import.meta.env?.VITE_API_URL || '';
-        window.location.href = `${apiUrl}/v1/auth/login?returnTo=${encodeURIComponent(`/explore/${slug}#heroes`)}`;
+        const query = requestedCampaignId
+          ? `?campaignId=${encodeURIComponent(requestedCampaignId)}`
+          : '';
+        window.location.href = `${apiUrl}/v1/auth/login?returnTo=${encodeURIComponent(`/explore/${slug}${query}#heroes`)}`;
         return;
       }
 
@@ -284,9 +291,11 @@ const CampaignDetailPage: React.FC = () => {
       setSessionExpired(false);
 
       try {
-        const campaignId = await resolveOrCreateStarterCampaign(campaign, userDataApi, (message) =>
-          logger.info(message),
-        );
+        const campaignId =
+          requestedCampaignId ??
+          (await resolveOrCreateStarterCampaign(campaign, userDataApi, (message) =>
+            logger.info(message),
+          ));
         if (!fresh) {
           const sessions: unknown[] = [];
           const pageSize = 100;
@@ -348,7 +357,7 @@ const CampaignDetailPage: React.FC = () => {
         setStartingTemplate(null);
       }
     },
-    [campaign, navigate, slug, user],
+    [campaign, navigate, requestedCampaignId, slug, user],
   );
 
   const playAsRef = React.useRef(playAs);
