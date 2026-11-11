@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.44.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.44.0...v0.44.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* **chat:** send an option as the message when clicked ([#1407](https://github.com/Garblesnarff/infinite-realms-app/issues/1407)) ([6cf8bd6](https://github.com/Garblesnarff/infinite-realms-app/commit/6cf8bd69693eaf6653cf350f6e5416a327c194ec))
+* **table:** do not spend inspiration on a roll that already has advantage ([#1471](https://github.com/Garblesnarff/infinite-realms-app/issues/1471)) ([a3d34d9](https://github.com/Garblesnarff/infinite-realms-app/commit/a3d34d92628acfb5b50d91e0ca0f78a9b02afe09))
+
 ## [0.44.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.43.0...v0.44.0) (2026-11-10)
 
 
