@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { ActionOptions } from '../ActionOptions';
 
+import type { ActionOption } from '@/utils/parseMessageOptions';
+
 // Mock logger
 vi.mock('@/lib/logger', () => ({
   default: {
@@ -422,6 +424,56 @@ describe('ActionOptions', () => {
       }
       expect(onOptionSelect).toHaveBeenCalledTimes(1);
       expect(onOptionSelect).toHaveBeenCalledWith(freshOptions[0]);
+    });
+  });
+
+  describe('#1407: an option click sends once and locks the row while the send is in flight', () => {
+    it('sends once on a double click and disables every option while the send is pending', () => {
+      const pending = vi.fn(() => new Promise<void>(() => {}));
+      render(<ActionOptions options={mockOptions} onOptionSelect={pending} delay={0} />);
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      const first = screen.getByRole('button', { name: /Option 1 - Attack the goblin/i });
+      fireEvent.click(first);
+      fireEvent.click(first);
+
+      expect(pending).toHaveBeenCalledTimes(1);
+      expect(pending).toHaveBeenCalledWith(mockOptions[0]);
+      for (const option of mockOptions) {
+        const button = screen.getByRole('button', {
+          name: new RegExp(`Option ${option.number} - ${option.text}`, 'i'),
+        });
+        expect(button).toBeDisabled();
+      }
+    });
+
+    it('re-enables the row when the send fails, so the player can choose again', async () => {
+      const failing = vi
+        .fn<(option: ActionOption) => Promise<void>>()
+        .mockRejectedValueOnce(new Error('send failed'))
+        .mockResolvedValue(undefined);
+      render(<ActionOptions options={mockOptions} onOptionSelect={failing} delay={0} />);
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      const first = screen.getByRole('button', { name: /Option 1 - Attack the goblin/i });
+      await act(async () => {
+        fireEvent.click(first);
+      });
+
+      expect(first).not.toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: /Option 2 - Talk to the merchant/i }),
+      ).not.toBeDisabled();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Option 2 - Talk to the merchant/i }));
+      });
+      expect(failing).toHaveBeenCalledTimes(2);
+      expect(failing).toHaveBeenLastCalledWith(mockOptions[1]);
     });
   });
 });

@@ -17,8 +17,8 @@ interface ActionOptionsProps {
   disabled?: boolean;
   className?: string;
   /**
-   * Replaces the default "submit it immediately" line. Free-text options fill
-   * the composer and wait for Send (#760). Combat chips keep the default.
+   * Replaces the default "submit it immediately" line. Every option click sends
+   * its text at once (#1407).
    */
   instructions?: string;
   /**
@@ -123,6 +123,10 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
   }) => {
     const [visible, setVisible] = useState(false);
     const [selectedOption, setSelectedOption] = useState<string | null>(null);
+    // #1407: true while a clicked option's send is in flight. The ref closes the
+    // gap before React re-renders, so a double click cannot send twice.
+    const [isSending, setIsSending] = useState(false);
+    const sendingRef = useRef(false);
     const [displayedOptions, setDisplayedOptions] = useState<ActionOption[]>(incomingOptions);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const instructionsId = useId();
@@ -181,16 +185,25 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
 
     // Handle option selection
     const handleOptionClick = (option: ActionOption): void => {
-      if (disabled || isRefreshing || selectedOption) return;
+      if (disabled || isRefreshing || selectedOption || sendingRef.current) return;
       logger.info('[ActionOptions] Option clicked:', option.text);
+      sendingRef.current = true;
+      setIsSending(true);
       setSelectedOption(option.id);
       const completion = onOptionSelect(option);
-      if (resetSelectionAfterCompletion) {
-        void Promise.resolve(completion).then(
-          () => setSelectedOption(null),
-          () => setSelectedOption(null),
-        );
-      }
+      void Promise.resolve(completion).then(
+        () => {
+          sendingRef.current = false;
+          setIsSending(false);
+          if (resetSelectionAfterCompletion) setSelectedOption(null);
+        },
+        () => {
+          // A failed send re-enables the row (#1407).
+          sendingRef.current = false;
+          setIsSending(false);
+          setSelectedOption(null);
+        },
+      );
     };
 
     const optionsToRender = displayedOptions.length > 0 ? displayedOptions : incomingOptions;
@@ -235,7 +248,10 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                   const IconComponent = getOptionIcon(option.text);
                   const isSelected = selectedOption === option.id;
                   const isDisabled =
-                    disabled || isRefreshing || (selectedOption && selectedOption !== option.id);
+                    disabled ||
+                    isRefreshing ||
+                    isSending ||
+                    (selectedOption && selectedOption !== option.id);
                   // Numbered by position: the model's own numbers can repeat or be missing (#2256).
                   const displayNumber = index + 1;
 

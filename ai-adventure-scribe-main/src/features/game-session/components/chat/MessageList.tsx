@@ -191,6 +191,8 @@ export const MessageList: React.FC<MessageListProps> = React.memo(
             userMessage: 'Failed to send option selection',
             context: { location: 'MessageList.handleOptionSelect' },
           });
+          // #1407: rethrow so the option row can re-enable after a failed send.
+          throw error;
         }
       },
       [onSendFullMessage, sendMessage],
