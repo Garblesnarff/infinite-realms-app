@@ -515,9 +515,9 @@ export function LandingDocument({
 
 function serializeJson(value: unknown): string {
   return JSON.stringify(value)
-    .replace(/</g, '\\u005cu003C')
-    .replace(/>/g, '\\u005cu003E')
-    .replace(/&/g, '\\u005cu0026')
-    .replace(/ /g, '\\u005cu2028')
-    .replace(/ /g, '\\u005cu2029');
+    .replace(/</g, '\\u003C')
+    .replace(/>/g, '\\u003E')
+    .replace(/&/g, '\\u0026')
+    .replace(/ /g, '\\u2028')
+    .replace(/ /g, '\\u2029');
 }
