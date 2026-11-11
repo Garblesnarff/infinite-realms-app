@@ -91,7 +91,7 @@ export function createSoftwareAppSchema(site: SiteConfig): object {
       '@type': 'Offer',
       price: site.softwareApplication.offers.price,
       priceCurrency: site.softwareApplication.offers.priceCurrency,
-      description: 'Free beta access - join the waitlist',
+      description: 'Free to play - open beta',
       availability: 'https://schema.org/PreOrder',
     },
     publisher: {
@@ -105,7 +105,6 @@ export function createSoftwareAppSchema(site: SiteConfig): object {
     },
   };
 }
-
 
 /**
  * Combines multiple schema objects into a graph
