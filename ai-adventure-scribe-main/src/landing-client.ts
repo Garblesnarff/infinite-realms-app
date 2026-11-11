@@ -2,7 +2,6 @@
  * Landing Page Client Bundle
  *
  * Handles client-side hydration for SSR landing pages:
- * - Waitlist form submission
  * - Smooth scroll behavior
  * - Analytics tracking
  * - FAQ accordion interactions
@@ -14,7 +13,6 @@ import logger from '@/lib/logger';
 
 // Initialize when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  initWaitlistForms();
   initSmoothScroll();
   initAnalytics();
   initFAQAccordions();
