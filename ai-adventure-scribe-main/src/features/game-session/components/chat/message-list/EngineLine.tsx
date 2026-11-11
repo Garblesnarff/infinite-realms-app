@@ -1,6 +1,7 @@
 import React, { useId, useState } from 'react';
 
 import type { EngineLineModel, EngineLineOutcome } from './engine-line-model';
+import type { ResultSealTone } from '@/components/game/result-seal';
 
 import { ResultWaxSeal } from '@/components/game/ResultWaxSeal';
 import { useTableLookActive } from '@/features/campaigns/table/useTableLookActive';
@@ -24,6 +25,26 @@ const PILL_CLASS: Record<EngineLineOutcome, string> = {
 
 const KICKER_CLASS =
   'block text-[11px] font-semibold uppercase tracking-[.1em] text-muted-foreground';
+
+/**
+ * The card badge's groups, read off the structured outcome rather than the word.
+ * Gold helps you (your hit or crit, or the enemy failing a save). Red hurts you
+ * (an enemy hit, or you failing their save). Slate is a miss or no change, which
+ * is the card's grey badge.
+ */
+function sealToneForOutcome(outcome: EngineLineOutcome): ResultSealTone {
+  switch (outcome) {
+    case 'hit':
+    case 'critical':
+    case 'failed-save':
+      return 'gold';
+    case 'enemy-hit':
+    case 'fail':
+      return 'red';
+    default:
+      return 'slate';
+  }
+}
 
 interface EngineLineProps {
   model: EngineLineModel;
@@ -93,7 +114,7 @@ export const EngineLine: React.FC<EngineLineProps> = ({ model, showLabel = true 
           </span>
         </span>
         {tableLook && model.sealWord ? (
-          <ResultWaxSeal word={model.sealWord} />
+          <ResultWaxSeal word={model.sealWord} tone={sealToneForOutcome(model.outcome)} />
         ) : (
           <span
             data-testid="engine-line-pill"

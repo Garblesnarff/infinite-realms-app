@@ -3,12 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ENEMY_FAILS_SAVE,
   ENEMY_HITS_PLAYER,
   FIGHT_ROSTER,
   PLAYER_HITS_ENEMY,
   REEVES,
   SCHOLAR,
   attackAction,
+  spellAction,
 } from '../../../../../../../shared/test-fixtures/engine-results';
 import { parseEngineLine } from '../engine-line-model';
 import { EngineLine } from '../EngineLine';
@@ -41,6 +43,33 @@ describe('EngineLine (#87)', () => {
     render(<EngineLine model={parseEngineLine(enemyHit, { side: 'npc' })} />);
     expect(screen.getByTestId('engine-line-badge').className).toContain('bg-infinite-teal');
     expect(screen.getAllByTestId('engine-line-pill')).toHaveLength(1);
+  });
+
+  it('seals an enemy hit red and an enemy failed save gold, matching the card (#1457)', () => {
+    document.body.classList.add('ir-table-look');
+    const enemyHit = formatCombatEngineParts(
+      attackAction(REEVES, SCHOLAR),
+      ENEMY_HITS_PLAYER,
+      FIGHT_ROSTER,
+      { targetHp: true, targetMaxHp: 7 },
+    )[0];
+    const failedSave = formatCombatEngineParts(
+      spellAction(SCHOLAR, REEVES),
+      ENEMY_FAILS_SAVE,
+      FIGHT_ROSTER,
+    )[0];
+    const { unmount } = render(
+      <EngineLine model={parseEngineLine(enemyHit.line, { roster: FIGHT_ROSTER })} />,
+    );
+    expect(screen.getByTestId('engine-line')).toHaveAttribute('data-outcome', 'enemy-hit');
+    expect(screen.getByTestId('engine-roll-seal')).toHaveAttribute('data-seal-tone', 'red');
+    expect(enemyHit.card.badge?.tone).toBe('red');
+    unmount();
+    render(<EngineLine model={parseEngineLine(failedSave.line, { roster: FIGHT_ROSTER })} />);
+    expect(screen.getByTestId('engine-line')).toHaveAttribute('data-outcome', 'failed-save');
+    expect(screen.getByTestId('engine-roll-seal')).toHaveAttribute('data-seal-tone', 'gold');
+    expect(failedSave.card.badge?.tone).toBe('gold');
+    document.body.classList.remove('ir-table-look');
   });
 
   it('prints no "Rules engine" label when showLabel is false', () => {
