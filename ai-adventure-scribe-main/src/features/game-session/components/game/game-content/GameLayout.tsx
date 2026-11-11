@@ -105,6 +105,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
   }) => {
     const tableLook = useSyncExternalStore(subscribeTableLook, tableLookSnapshot, () => false);
     const [tableHeaderSlot, setTableHeaderSlot] = useState<HTMLDivElement | null>(null);
+    const [tableControlsSlot, setTableControlsSlot] = useState<HTMLDivElement | null>(null);
     const [tableRollSlot, setTableRollSlot] = useState<HTMLDivElement | null>(null);
     const [tableDrawerOpen, setTableDrawerOpen] = useState(false);
     const [tableDrawerRequest, setTableDrawerRequest] = useState(0);
@@ -229,7 +230,14 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
           style={{ zIndex: Z_INDEX.DROPDOWN }}
         >
           {(tableLook || !isCombatDetected) && !isFallen && (
-            <div className="flex justify-end px-2 py-1">
+            <div className="flex items-center justify-end gap-1 px-2 py-0">
+              {tableLook && (
+                <div
+                  ref={setTableControlsSlot}
+                  data-testid="table-controls-slot"
+                  className="flex items-center gap-1"
+                />
+              )}
               <EndSessionButton
                 sessionId={sessionId}
                 campaignId={campaignIdForHandler}
@@ -273,6 +281,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                 sessionId={sessionId}
                 tableLook={tableLook}
                 tableHeaderSlot={tableHeaderSlot}
+                tableControlsSlot={tableControlsSlot}
                 tableRollSlot={tableRollSlot}
                 onOpenTablePanel={openTablePanel}
                 campaignIdForHandler={campaignIdForHandler}
@@ -382,7 +391,8 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
             </div>
           </TacticalMapProvider>
           {tableLook && !isFallen && (
-            <div className="shrink-0 text-right">
+            // Out of flow: the build line takes no height. Only the copy button takes clicks.
+            <div className="pointer-events-none absolute bottom-0 right-1 z-10 text-[10px] leading-none [&>button]:pointer-events-auto [&>button]:!text-[10px] [&>button]:!min-h-0 [&>button]:!min-w-0">
               <BuildSessionStatus sessionId={sessionId} />
             </div>
           )}
