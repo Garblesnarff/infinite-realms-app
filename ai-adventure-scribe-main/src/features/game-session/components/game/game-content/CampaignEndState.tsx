@@ -3,6 +3,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { planHasPaidFeatures } from '../../../../../../shared/plan-features';
+import './campaign-end-state.css';
 
 import { Button } from '@/components/ui/button';
 import { useOptionalAuth } from '@/contexts/AuthContext';
@@ -47,10 +48,12 @@ export interface CampaignEndStateProps {
    */
   premade?: boolean;
   premadeKept?: boolean;
+  /** A live death fades the screen in over 400 ms. A reload does not. */
+  fadeIn?: boolean;
 }
 
 export const displayFinalLine = (line: string): string =>
-  line.replace(/^⚙\uFE0F?\s*Engine:\s*/, '');
+  line.replace(/^⚙️?\s*Engine:\s*/, '');
 
 /** #1239: the offer is for a hero the player owns, or a premade they chose to keep. */
 function offerTakeHero(premade: boolean | undefined, premadeKept: boolean | undefined): boolean {
@@ -241,7 +244,7 @@ export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
   return (
     <main
       data-testid={isFallen ? 'death-screen' : 'completion-screen'}
-      className="ir-end-screen relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-infinite-dark text-foreground"
+      className={`ir-end-screen relative flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-infinite-dark text-foreground${props.fadeIn ? ' ir-end-fade-in' : ''}`}
     >
       <div aria-hidden="true" className="ir-end-glow pointer-events-none absolute inset-0" />
       <div className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
