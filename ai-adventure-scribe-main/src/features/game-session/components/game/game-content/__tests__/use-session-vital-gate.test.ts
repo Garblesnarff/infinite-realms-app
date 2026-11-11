@@ -5,7 +5,7 @@
  * dead character); the single truth is `character_stats.vital_state` in
  * the session load payload.
  */
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useSessionVitalGate } from '../use-session-vital-gate';
@@ -71,13 +71,40 @@ describe('useSessionVitalGate (#2517)', () => {
     });
   });
 
-  it('fails open to the game when the read errors', async () => {
-    vi.mocked(userDataApi.fetchSessionFallenState).mockRejectedValue(new Error('offline'));
+  it('reports error, not alive, when the read fails; retry then reports alive', async () => {
+    vi.mocked(userDataApi.fetchSessionFallenState)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(null as any);
 
     const { result } = renderHook(() => useSessionVitalGate('session-1'));
 
     await waitFor(() => {
+      expect(result.current.status).toBe('error');
+    });
+    act(() => {
+      if (result.current.status === 'error') result.current.retry();
+    });
+    await waitFor(() => {
       expect(result.current.status).toBe('alive');
+    });
+    expect(userDataApi.fetchSessionFallenState).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports error, then retry reports dead when the retried read finds a fallen hero', async () => {
+    vi.mocked(userDataApi.fetchSessionFallenState)
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(fallenState as any);
+
+    const { result } = renderHook(() => useSessionVitalGate('session-1'));
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('error');
+    });
+    act(() => {
+      if (result.current.status === 'error') result.current.retry();
+    });
+    await waitFor(() => {
+      expect(result.current).toEqual({ status: 'dead', fallen: fallenState });
     });
   });
 
