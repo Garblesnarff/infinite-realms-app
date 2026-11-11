@@ -1,9 +1,19 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CampaignEndState } from '../CampaignEndState';
-import { buildChooseHeroHref, FallenEndState } from '../DeathScreen';
+import { buildChooseHeroHref, finalEngineLines, FallenEndState } from '../DeathScreen';
+
+const messageState = vi.hoisted(() => ({ messages: undefined as unknown[] | undefined }));
+vi.mock('@/contexts/MessageContext', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return {
+    ...actual,
+    useOptionalMessageContext: () =>
+      messageState.messages ? { messages: messageState.messages } : undefined,
+  };
+});
 
 import type { RenderResult } from '@testing-library/react';
 
@@ -174,7 +184,7 @@ describe('FallenEndState (#2456, #2517)', () => {
 describe('buildChooseHeroHref (#2517)', () => {
   it('routes a starter campaign through its hero pick', () => {
     expect(buildChooseHeroHref({ starterSlug: 'abyssal-descent', campaignId: 'camp-1' })).toBe(
-      '/explore/abyssal-descent/choose-character?campaignId=camp-1',
+      '/explore/abyssal-descent?campaignId=camp-1#heroes',
     );
   });
 
@@ -187,5 +197,82 @@ describe('buildChooseHeroHref (#2517)', () => {
   it('never emits the bare character-create route', () => {
     expect(buildChooseHeroHref({})).toBe('/explore');
     expect(buildChooseHeroHref({ starterSlug: 'x' })).not.toBe('/app/characters/create');
+  });
+});
+
+const engineMessage = (
+  round: number,
+  lines: string[],
+): { sender: string; context: Record<string, unknown> } => ({
+  sender: 'system',
+  context: {
+    combatEngineBlocks: [{ sequence: round, round, source: 'npc', lines }],
+  },
+});
+
+describe('finalEngineLines (#2517 reload)', () => {
+  it('takes the last round of engine lines, newest last, at most three', () => {
+    const messages = [
+      engineMessage(1, ['⚙️ Engine: round one']),
+      engineMessage(2, ['⚙️ Engine: round two, first', '⚙️ Engine: round two, second']),
+      { sender: 'dm', context: {} },
+      engineMessage(3, ['⚙️ Engine: a', '⚙️ Engine: b', '⚙️ Engine: c', '⚙️ Engine: d']),
+    ];
+    expect(finalEngineLines(messages)).toEqual(['⚙️ Engine: b', '⚙️ Engine: c', '⚙️ Engine: d']);
+  });
+
+  it('reads the same round across messages and ignores other senders', () => {
+    const messages = [
+      engineMessage(4, ['⚙️ Engine: first half']),
+      { sender: 'player', context: { combatEngineBlocks: [{ round: 9, lines: ['nope'] }] } },
+      engineMessage(4, ['⚙️ Engine: second half']),
+    ];
+    expect(finalEngineLines(messages)).toEqual(['⚙️ Engine: first half', '⚙️ Engine: second half']);
+  });
+
+  it('returns nothing when the log holds no engine blocks', () => {
+    expect(finalEngineLines([{ sender: 'dm', context: {} }])).toEqual([]);
+    expect(finalEngineLines([])).toEqual([]);
+  });
+});
+
+describe('FallenEndState restored and fade (#2517, board Death)', () => {
+  afterEach(() => {
+    messageState.messages = undefined;
+  });
+
+  it('shows the engine final lines from the saved log after a reload', () => {
+    messageState.messages = [engineMessage(2, ['⚙️ Engine: The Scholar is dead.'])];
+    renderEndState({ characterName: 'The Scholar' });
+    expect(screen.getByText('HOW THEY FELL')).toBeInTheDocument();
+    expect(screen.getByTestId('death-screen-final-lines')).toHaveTextContent(
+      'The Scholar is dead.',
+    );
+    expect(screen.queryByText(/Dungeon Master/)).not.toBeInTheDocument();
+  });
+
+  it('renders no How They Fell section when the saved log has no engine lines', () => {
+    messageState.messages = [{ sender: 'dm', context: {} }];
+    renderEndState({ characterName: 'The Scholar' });
+    expect(screen.queryByText('HOW THEY FELL')).not.toBeInTheDocument();
+  });
+
+  it('prefers the live final lines over the saved log', () => {
+    messageState.messages = [engineMessage(2, ['⚙️ Engine: from the log'])];
+    renderEndState({ characterName: 'The Scholar', finalLines: ['⚙️ Engine: from the death'] });
+    expect(screen.getByTestId('death-screen-final-lines')).toHaveTextContent('from the death');
+    expect(screen.queryByText('from the log')).not.toBeInTheDocument();
+  });
+
+  it('fades the screen in only when asked (a live death)', () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <FallenEndState characterName="The Scholar" chooseHeroHref={null} fadeIn />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('death-screen')).toHaveClass('ir-end-fade-in');
+    unmount();
+    renderEndState({ characterName: 'The Scholar' });
+    expect(screen.getByTestId('death-screen')).not.toHaveClass('ir-end-fade-in');
   });
 });
