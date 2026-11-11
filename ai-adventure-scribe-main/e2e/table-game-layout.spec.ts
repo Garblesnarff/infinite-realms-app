@@ -42,15 +42,29 @@ async function stubSession(page: Page): Promise<void> {
   });
 }
 
-for (const width of [1280, 390]) {
-  test(`the Table game screen fits ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 800 });
+// The story box gets a share of the viewport, and the page never scrolls (the table is 100dvh).
+const screens = [
+  { width: 1440, height: 900, share: 0.55 },
+  { width: 1280, height: 800, share: 0.55 },
+  { width: 390, height: 844, share: 0.4 },
+];
+for (const { width, height, share } of screens) {
+  test(`the Table game screen fits ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
     await stubSession(page);
     await page.goto(new URL('/e2e/table-game-layout.html', layoutUrl).toString());
     await expect(page.getByTestId('story-box')).toBeVisible();
     await expect(page.getByText('The ledge comes into view.')).toBeVisible();
     const story = await page.getByTestId('story-box').boundingBox();
-    expect(story?.height).toBeGreaterThanOrEqual(100);
+    expect(story!.height).toBeGreaterThanOrEqual(height * share);
+    expect(
+      await page.evaluate(() => document.scrollingElement!.scrollHeight <= window.innerHeight),
+    ).toBe(true);
+    const plaque = page.getByTestId('table-screen-header');
+    // Heading role skips the hidden non-table header, so this counts what a player sees.
+    await expect(plaque.getByRole('heading', { name: /abyssal descent/i })).toHaveCount(1);
+    await expect(plaque.getByText(/Chapter 1/)).toHaveCount(0);
+    await expect(page.getByText(/coming soon/i)).toHaveCount(0);
     const geometry = await page.evaluate(() => ({
       viewport: document.documentElement.clientWidth,
       width: document.documentElement.scrollWidth,
