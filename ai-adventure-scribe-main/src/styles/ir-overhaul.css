@@ -113,7 +113,7 @@
   --parchment-text: #e8dcc8;
   --parchment-border: rgba(213, 176, 112, 0.35);
 
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'DM Sans', system-ui, sans-serif;
   color: rgb(var(--foreground));
 }
 
