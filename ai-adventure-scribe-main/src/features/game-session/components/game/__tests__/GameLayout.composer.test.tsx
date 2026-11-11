@@ -26,7 +26,7 @@ vi.mock('@/contexts/SceneBackgroundContext', () => ({
   useSceneBackground: () => ({ currentBackgroundUrl: null, isTransitioning: false }),
 }));
 vi.mock('@/contexts/MessageContext', () => ({
-  useMessageContext: () => ({ queueStatus: 'idle' }),
+  useMessageContext: () => ({ queueStatus: 'idle', messages: [] }),
 }));
 vi.mock('@/contexts/GameContext', () => ({
   useGame: () => ({
