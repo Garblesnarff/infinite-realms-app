@@ -145,39 +145,6 @@ describe('useMessageQueue', () => {
     );
   });
 
-  it('keeps the dice roll on the saved row so the result card survives refetch (#1457)', async () => {
-    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
-    const diceRoll = {
-      formula: '1d20+5',
-      count: 1,
-      dieType: 20,
-      modifier: 5,
-      advantage: false,
-      disadvantage: false,
-      results: [12],
-      total: 17,
-      naturalRoll: 12,
-      requestType: 'skill_check',
-      description: 'Athletics check',
-      dc: 12,
-      success: true,
-      verdict: 'SUCCESS',
-      timestamp: '2026-11-08T00:00:00.000Z',
-    };
-    await act(async () => {
-      await result.current.messageMutation.mutateAsync({
-        text: 'Athletics check: 17 (nat 12+5) success',
-        sender: 'player',
-        context: { intent: 'dice_roll', diceRoll },
-      } as any);
-    });
-    expect(mockInsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        context: expect.objectContaining({ diceRoll }),
-      }),
-    );
-  });
-
   it('should successfully persist a message', async () => {
     const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
     const message: any = {

@@ -210,6 +210,8 @@ export const EngineResultCardView: React.FC<{
   showTargetNumbers: boolean;
 }> = ({ card, showTargetNumbers }) => {
   const light = isLight(card);
+  const sentence = engineCardAriaLabel(card, showTargetNumbers);
+  const sentenceId = React.useId();
   const deathMath = card.kind === 'death_save' && card.math?.kind === 'save' ? card.math : null;
   const revived = deathMath?.roll === 20;
   const showDetail = !deathMath;
@@ -218,6 +220,8 @@ export const EngineResultCardView: React.FC<{
       data-testid="engine-result-card"
       data-kind={card.kind}
       data-side={card.side}
+      role="group"
+      aria-labelledby={sentenceId}
       className={cn(
         'mb-3 rounded-lg border border-white/10 bg-black/35 px-3 backdrop-blur-sm [body.ir-table-look_&]:rounded-xl [body.ir-table-look_&]:bg-[#0c1220] [body.ir-table-look_&]:px-4',
         'border-l-[5px]',
@@ -230,9 +234,11 @@ export const EngineResultCardView: React.FC<{
       )}
     >
       {/* The sentence is page text, so a screen reader in browse mode reads it; the visual
-          card below repeats it piece by piece and is hidden from assistive technology. */}
-      <p className="sr-only" data-testid="engine-card-sentence">
-        {engineCardAriaLabel(card, showTargetNumbers)}
+          card below repeats it piece by piece and is hidden from assistive technology.
+          The wax seal and the badge sit in that hidden visual, so this sentence is the
+          accessible name and still carries the engine verdict. */}
+      <p id={sentenceId} className="sr-only" data-testid="engine-card-sentence">
+        {sentence}
       </p>
       <div aria-hidden="true">
         <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">

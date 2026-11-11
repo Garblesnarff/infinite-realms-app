@@ -39,7 +39,6 @@ export interface DiceRollContext {
     dc?: number;
     ac?: number;
     success?: boolean;
-    verdict?: string;
     timestamp?: string;
   };
 }

@@ -57,8 +57,6 @@ export interface MessageContext {
     dc?: number;
     ac?: number;
     success?: boolean;
-    /** The verdict word stored with the roll. The seal prints this and does not compare totals. */
-    verdict?: string;
     timestamp: string;
   };
   combatData?: {

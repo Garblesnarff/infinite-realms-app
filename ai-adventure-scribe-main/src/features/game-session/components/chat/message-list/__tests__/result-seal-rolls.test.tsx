@@ -14,13 +14,9 @@ import {
 import { DMMessage } from '../DMMessage';
 import { MessageRenderer } from '../MessageRenderer';
 import { SystemMessage } from '../SystemMessage';
-import { formatDiceRoll } from '../utils/dice-roll-formatter';
-
-import type { DiceRollRequest } from '@/types/combat';
 
 import { formatCombatEngineParts } from '@/services/combat/combat-outcome-transcript';
-import { initiativeCard } from '@/services/combat/engine-result-card';
-import { outcomeForRoll } from '@/services/dice/roll-outcome';
+import { engineCardAriaLabel, initiativeCard } from '@/services/combat/engine-result-card';
 
 const campaign = vi.hoisted(() => ({ difficulty: 'medium' as string | undefined }));
 
@@ -37,79 +33,29 @@ vi.mock('../MessageAssetDisplay', () => ({ MessageAssetDisplay: () => null }));
 vi.mock('../MessageVoicePlayer', () => ({ MessageVoicePlayer: () => null }));
 vi.mock('../MessageMetadata', () => ({ MessageMetadata: () => null }));
 
-const rollOf = (
-  requestType: DiceRollRequest['requestType'],
-  naturalRoll: number,
-  modifier: number,
-  target: { dc?: number; ac?: number },
-): DiceRollRequest => ({
-  id: 'roll-1457',
-  requestType,
-  description: requestType === 'skill_check' ? 'Athletics check' : 'Wisdom saving throw',
-  rollConfig: { dieType: 20, count: 1, modifier },
-  timestamp: new Date('2026-11-08T00:00:00Z'),
-  status: 'completed',
-  ...target,
-  result: {
-    dieType: 20,
-    count: 1,
-    modifier,
-    results: [naturalRoll],
-    keptResults: [naturalRoll],
-    total: naturalRoll + modifier,
-    naturalRoll,
-    critical: naturalRoll === 20,
+/** The row useMessageQueue writes for a narrative check: text plus intent, no diceRoll. */
+const persistedCheck = {
+  text: 'Athletics check: 17 (nat 12+5) success',
+  sender: 'player' as const,
+  context: {
+    location: null,
+    emotion: null,
+    intent: 'dice_roll',
+    rollRequestId: '11111111-1111-4111-8111-111111111111:roll:0',
+    handouts: null,
+    combat_transition: null,
+    scene_spec: false,
+    combat_engine_blocks: null,
+    combat_ended: false,
+    narration_segments: null,
   },
-});
+};
 
-const renderCheck = (roll: DiceRollRequest) => {
-  const outcome = outcomeForRoll(roll);
-  const verdict =
-    outcome?.targetType === 'dc' ? (outcome.success ? 'SUCCESS' : 'FAILED') : undefined;
-  render(
-    <MessageRenderer
-      message={{
-        text: formatDiceRoll(roll),
-        sender: 'player',
-        context: {
-          intent: 'dice_roll',
-          diceRoll: {
-            formula: '1d20+5',
-            count: 1,
-            dieType: 20,
-            modifier: roll.rollConfig.modifier,
-            advantage: false,
-            disadvantage: false,
-            results: roll.result?.results,
-            total: roll.result?.total ?? 0,
-            naturalRoll: roll.result?.naturalRoll,
-            requestType: roll.requestType,
-            description: roll.description,
-            dc: roll.dc,
-            success: outcome?.success,
-            verdict,
-            timestamp: '2026-11-08T00:00:00.000Z',
-          },
-        },
-      }}
-      messageId="check-1"
-      groupIndex={0}
-      msgIndex={0}
-      isFirstInGroup
-      isLastInGroup
-      isPlayer={false}
-      isDM={false}
-      isCompanion={false}
-      expandedMessages={new Set()}
-      setExpandedMessages={vi.fn() as never}
-      imageByMessage={{}}
-      generatingFor={new Set()}
-      genErrorByMessage={{}}
-      onGenerateScene={vi.fn()}
-      onOptionSelect={vi.fn()}
-    />,
+const expectCardVerdict = (token: RegExp | string) => {
+  expect(screen.getByTestId('engine-result-card')).toHaveAccessibleName(
+    expect.stringMatching(token),
   );
-  return verdict;
+  expect(screen.getByTestId('engine-roll-seal').closest('[aria-hidden="true"]')).toBeTruthy();
 };
 
 describe('result seal on the mounted card (#1457)', () => {
@@ -122,14 +68,30 @@ describe('result seal on the mounted card (#1457)', () => {
     document.body.classList.remove('ir-table-look');
   });
 
-  it('gives an ability check a result card whose seal is the stored verdict', () => {
-    const roll = rollOf('skill_check', 12, 5, { dc: 12 });
-    const verdict = renderCheck(roll);
-    expect(verdict).toBe('SUCCESS');
-    expect(screen.getByTestId('engine-line')).toBeTruthy();
-    const seal = screen.getByTestId('engine-roll-seal');
-    expect(seal).toHaveTextContent('SUCCESS');
-    expect(seal).toHaveAttribute('data-seal-tone', 'gold');
+  it('a persisted ability check has no structured outcome, so it has no seal', () => {
+    render(
+      <MessageRenderer
+        message={persistedCheck}
+        messageId="check-1"
+        groupIndex={0}
+        msgIndex={0}
+        isFirstInGroup
+        isLastInGroup
+        isPlayer={false}
+        isDM={false}
+        isCompanion={false}
+        expandedMessages={new Set()}
+        setExpandedMessages={vi.fn() as never}
+        imageByMessage={{}}
+        generatingFor={new Set()}
+        genErrorByMessage={{}}
+        onGenerateScene={vi.fn()}
+        onOptionSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(persistedCheck.text)).toBeTruthy();
+    expect(screen.queryByTestId('engine-roll-seal')).toBeNull();
+    expect(screen.queryByTestId('engine-result-card')).toBeNull();
   });
 
   it('seals a failed save with the engine line token', () => {
@@ -154,6 +116,10 @@ describe('result seal on the mounted card (#1457)', () => {
     const seal = screen.getByTestId('engine-roll-seal');
     expect(seal).toHaveTextContent(card.badge?.word ?? '');
     expect(seal).toHaveAttribute('data-seal-tone', 'gold');
+    expectCardVerdict(/FAIL/);
+    expect(screen.getByTestId('engine-result-card')).toHaveAccessibleName(
+      engineCardAriaLabel(card, true),
+    );
   });
 
   it('seals a player attack with the card badge word', () => {
@@ -195,6 +161,7 @@ describe('result seal on the mounted card (#1457)', () => {
     expect(seal).toHaveTextContent('HIT');
     expect(seal).toHaveAttribute('data-seal-tone', 'gold');
     expect(card.badge?.word).toBe('HIT');
+    expectCardVerdict(/HIT/);
   });
 
   it('seals initiative with the seated player total', () => {
@@ -227,6 +194,7 @@ describe('result seal on the mounted card (#1457)', () => {
     const seal = screen.getByTestId('engine-roll-seal');
     expect(seal).toHaveTextContent('9');
     expect(seal).toHaveAttribute('data-seal-tone', 'slate');
+    expectCardVerdict(/\b9\b/);
   });
 
   it('seals an NPC hit with the engine badge word and the enemy tone', () => {
@@ -252,5 +220,6 @@ describe('result seal on the mounted card (#1457)', () => {
     const seal = screen.getByTestId('engine-roll-seal');
     expect(seal).toHaveTextContent(card.badge?.word ?? '');
     expect(seal).toHaveAttribute('data-seal-tone', 'red');
+    expectCardVerdict(/HIT/);
   });
 });

@@ -171,9 +171,6 @@ export const useMessageQueue = (sessionId: string | null) => {
   const persistableCombatData = (context: ChatMessage['context']) =>
     context?.combatData ? { combatData: context.combatData } : {};
 
-  const persistableDiceRoll = (context: ChatMessage['context']) =>
-    context?.diceRoll && typeof context.diceRoll === 'object' ? { diceRoll: context.diceRoll } : {};
-
   const messageMutation = useMutation({
     onMutate: async (newMessage: ChatMessage) => {
       if (!sessionId) return;
@@ -263,7 +260,6 @@ export const useMessageQueue = (sessionId: string | null) => {
                 ...(Array.isArray(message.context.engineCards)
                   ? { engineCards: message.context.engineCards }
                   : {}),
-                ...persistableDiceRoll(message.context),
                 ...persistableCombatData(message.context),
                 ...persistableStoryTrackers(message.context),
               }
@@ -438,7 +434,6 @@ export const useMessageQueue = (sessionId: string | null) => {
                 ...(Array.isArray(message.context.engineCards)
                   ? { engineCards: message.context.engineCards }
                   : {}),
-                ...persistableDiceRoll(message.context),
                 ...persistableCombatData(message.context),
                 ...persistableStoryTrackers(message.context),
               }

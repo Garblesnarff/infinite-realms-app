@@ -367,18 +367,6 @@ export function engineLineFromDiceRoll(roll: DiceRollData): EngineLineModel {
           ? 'pass'
           : 'fail';
   const math = `${die} ${signed(roll.modifier)} = ${roll.total}`;
-  const storedVerdict = typeof roll.verdict === 'string' ? roll.verdict.trim() : '';
-  const sealWord =
-    storedVerdict ||
-    (typeof roll.success !== 'boolean'
-      ? undefined
-      : isAttack
-        ? roll.success
-          ? 'HIT'
-          : 'MISS'
-        : roll.success
-          ? 'SUCCESS'
-          : 'FAILED');
   return {
     badge: String(die),
     side: 'player',
@@ -387,7 +375,6 @@ export function engineLineFromDiceRoll(roll: DiceRollData): EngineLineModel {
     detail: target,
     outcome,
     pill: outcome === 'info' ? 'Rolled' : PILL[outcome],
-    ...(sealWord ? { sealWord } : {}),
     sentence: `${label}: ${math}${target ? ` ${target}` : ''}${outcome === 'info' ? '' : ` — ${PILL[outcome]}`}.`,
   };
 }

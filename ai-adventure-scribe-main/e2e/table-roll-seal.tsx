@@ -16,29 +16,8 @@ import { MessageRenderer } from '../src/features/game-session/components/chat/me
 import { SystemMessage } from '../src/features/game-session/components/chat/message-list/SystemMessage';
 import { formatCombatEngineParts } from '../src/services/combat/combat-outcome-transcript';
 import { initiativeCard } from '../src/services/combat/engine-result-card';
-import { outcomeForRoll } from '../src/services/dice/roll-outcome';
 import '../src/index.css';
 
-const athletics = {
-  id: 'roll-athletics',
-  requestType: 'skill_check' as const,
-  description: 'Athletics check',
-  rollConfig: { dieType: 20, count: 1, modifier: 5 },
-  timestamp: new Date('2026-11-08T00:00:00Z'),
-  status: 'completed' as const,
-  dc: 12,
-  result: {
-    dieType: 20,
-    count: 1,
-    modifier: 5,
-    results: [12],
-    keptResults: [12],
-    total: 17,
-    naturalRoll: 12,
-    critical: false,
-  },
-};
-const athleticsOutcome = outcomeForRoll(athletics);
 const saveCard = formatCombatEngineParts(
   spellAction(SCHOLAR, REEVES),
   ENEMY_FAILS_SAVE,
@@ -63,28 +42,21 @@ const seating = initiativeCard(
   '⚙️ Engine: Initiative — You: 9 + 0 = 9. Captain Sarah Reeves: 4 + 0 = 4.',
 )!;
 
+/** The saved narrative-check row: the formatter's text and the queue's context, no diceRoll. */
 const checkMessage = {
   text: 'Athletics check: 17 (nat 12+5) success',
   sender: 'player' as const,
   context: {
+    location: null,
+    emotion: null,
     intent: 'dice_roll',
-    diceRoll: {
-      formula: '1d20+5',
-      count: 1,
-      dieType: 20,
-      modifier: 5,
-      advantage: false,
-      disadvantage: false,
-      results: [12],
-      total: 17,
-      naturalRoll: 12,
-      requestType: 'skill_check',
-      description: 'Athletics check',
-      dc: 12,
-      success: athleticsOutcome?.success,
-      verdict: athleticsOutcome?.success ? 'SUCCESS' : 'FAILED',
-      timestamp: '2026-11-08T00:00:00.000Z',
-    },
+    rollRequestId: '11111111-1111-4111-8111-111111111111:roll:0',
+    handouts: null,
+    combat_transition: null,
+    scene_spec: false,
+    combat_engine_blocks: null,
+    combat_ended: false,
+    narration_segments: null,
   },
 };
 
