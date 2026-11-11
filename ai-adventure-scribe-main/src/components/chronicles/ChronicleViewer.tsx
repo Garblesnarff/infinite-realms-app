@@ -115,11 +115,11 @@ const ChronicleViewer: React.FC<ChronicleViewerProps> = ({ sessionId, open, onCl
           )}
           <div className="rounded-lg border border-border bg-muted/40 p-4 space-y-3">
             <p className="text-sm text-muted-foreground">
-              Upgrade to Pro for illustrated novel-style chronicles, voiced recaps, and shareable
+              Upgrade to Legend for illustrated novel-style chronicles, voiced recaps, and shareable
               links.
             </p>
             <Button size="sm" onClick={() => navigate('/account')}>
-              Upgrade to Pro
+              Upgrade to Legend
             </Button>
           </div>
         </div>

@@ -160,3 +160,6 @@ export const useMessageContext = () => {
   }
   return context;
 };
+
+/** The same context as useMessageContext, or undefined outside a MessageProvider. */
+export const useOptionalMessageContext = () => useContext(MessageContext);
