@@ -77,20 +77,27 @@ const DeathSaveBadgeView: React.FC<{ badge: EngineBadge; roll: number }> = ({ ba
 };
 
 const HpLine: React.FC<{ hp: NonNullable<EngineResultCard['hp']> }> = ({ hp }) => {
-  const max = hp.maxHp;
-  const left = max && max > 0 ? Math.max(0, Math.min(100, (hp.newHp / max) * 100)) : undefined;
+  const max = hp.maxHp && hp.maxHp > 0 ? hp.maxHp : undefined;
+  const pct = (value: number): number => Math.max(0, Math.min(100, (value / (max ?? 1)) * 100));
+  // The payload carries the damage, not the old HP: from = to + damage, capped at the maximum.
+  // When that adds nothing (temporary HP absorbed the hit), keep the plain wording.
+  const from = max ? Math.min(max, hp.newHp + hp.lost) : hp.newHp + hp.lost;
+  const dropped = from > hp.newHp;
   return (
     <div className="mt-2" data-testid="engine-card-hp">
       <div className="flex items-baseline justify-between gap-2 text-sm text-white/90">
         <span>
-          {hp.name} · HP {hp.newHp}
+          {hp.name} · HP {dropped ? `${from} → ${hp.newHp}` : hp.newHp}
           {max ? ` of ${max}` : ''}
         </span>
         <span className="font-bold tabular-nums text-red-300">−{hp.lost}</span>
       </div>
-      {left !== undefined && (
-        <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-red-950" aria-hidden="true">
-          <div className="bg-[#e8c36a]" style={{ width: `${left}%` }} />
+      {max && (
+        <div className="mt-1 flex h-2 overflow-hidden rounded-full bg-[#3a0d10]" aria-hidden="true">
+          <div className="bg-[#e8c36a]" style={{ width: `${pct(hp.newHp)}%` }} />
+          {dropped && (
+            <div className="bg-[#7a1016]" style={{ width: `${pct(from) - pct(hp.newHp)}%` }} />
+          )}
         </div>
       )}
     </div>
