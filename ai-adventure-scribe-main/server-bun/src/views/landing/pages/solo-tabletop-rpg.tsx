@@ -20,7 +20,7 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
             radial-gradient(ellipse 100% 70% at 30% -10%, rgba(234, 88, 12, 0.18) 0%, transparent 60%),
             radial-gradient(ellipse 70% 50% at 80% 60%, rgba(184, 134, 11, 0.1) 0%, transparent 50%),
             radial-gradient(ellipse 60% 50% at 10% 80%, rgba(127, 29, 29, 0.08) 0%, transparent 50%),
-            linear-gradient(180deg, #050505 0%, #0a0a0a 50%, #050505 100%)
+            linear-gradient(180deg, #070b14 0%, #070b14 50%, #070b14 100%)
           `,
         }}
       />
@@ -71,7 +71,7 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
               {site.name}
             </a>
             <span style={{ color: 'var(--text-muted)' }}>→</span>
-            <span style={{ color: '#fb923c' }}>Solo Tabletop RPG</span>
+            <span style={{ color: 'var(--gold)' }}>Solo Tabletop RPG</span>
           </nav>
 
           {/* Badge */}
@@ -93,7 +93,7 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
                 fontSize: '0.875rem',
                 letterSpacing: '0.1em',
                 textTransform: 'uppercase',
-                color: '#fb923c',
+                color: 'var(--gold)',
               }}
             >
               No Group Required
@@ -109,10 +109,7 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
               marginBottom: '1.5rem',
             }}
           >
-            <span
-              className="glow-gold"
-              style={{ color: '#fb923c' }}
-            >
+            <span className="glow-gold" style={{ color: 'var(--gold)' }}>
               Solo Tabletop RPG
             </span>
             <br />
@@ -139,9 +136,10 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
               maxWidth: '700px',
             }}
           >
-            <strong style={{ color: '#fb923c' }}>Yes, you can play tabletop RPG alone</strong> — and
-            it's incredible. With an AI Game Master like Infinite Realms, you get the full tabletop
-            experience: character creation, exploration, combat, and storytelling on your schedule.
+            <strong style={{ color: 'var(--gold)' }}>Yes, you can play tabletop RPG alone</strong> —
+            and it's incredible. With an AI Game Master like Infinite Realms, you get the full
+            tabletop experience: character creation, exploration, combat, and storytelling on your
+            schedule.
           </p>
 
           <p
@@ -158,39 +156,16 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
           </p>
 
           {/* CTA Form */}
-          <form
-            data-waitlist-form
-            data-source="solo-rpg-hero"
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: '1rem',
-              marginBottom: '1rem',
-              maxWidth: '500px',
-            }}
+          <a
+            href="/explore"
+            data-track-cta="solo-rpg-hero"
+            className="btn-primary"
+            style={{ textDecoration: 'none', marginBottom: '1rem' }}
           >
-            <input
-              type="email"
-              name="email"
-              placeholder="Enter your email..."
-              required
-              className="input-arcane"
-              style={{ flex: '1 1 250px' }}
-            />
-            <button
-              type="submit"
-              data-track-cta="solo-rpg-hero"
-              className="btn-primary"
-              style={{
-                background: 'linear-gradient(135deg, #fb923c 0%, #ea580c 100%)',
-              }}
-            >
-              Start Solo Adventure
-            </button>
-          </form>
-          <p data-form-message style={{ fontSize: '0.875rem' }} />
+            Play free
+          </a>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-            Free beta access — no credit card required
+            Open beta · Free to play · No waitlist
           </p>
         </div>
       </section>
@@ -198,12 +173,12 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
       {/* ========== ANSWER BOX (AEO) ========== */}
       <section className="section" style={{ paddingTop: 0, position: 'relative', zIndex: 2 }}>
         <div className="container" style={{ maxWidth: '800px' }}>
-          <div className="answer-box" style={{ borderLeftColor: '#ea580c' }}>
+          <div className="answer-box" style={{ borderLeftColor: '#a8854f' }}>
             <h2
               className="font-display"
               style={{
                 fontSize: '1.5rem',
-                color: '#fb923c',
+                color: 'var(--gold)',
                 marginBottom: '1.25rem',
               }}
             >
@@ -217,8 +192,8 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
                 lineHeight: 1.7,
               }}
             >
-              Solo tabletop RPG is a growing hobby with thousands of players worldwide.
-              Here's what you need to know:
+              Solo tabletop RPG is a growing hobby with thousands of players worldwide. Here's what
+              you need to know:
             </p>
             <ul style={{ listStyle: 'none', padding: 0 }}>
               {[
@@ -238,7 +213,7 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
                     color: 'var(--text-secondary)',
                   }}
                 >
-                  <span style={{ color: '#ea580c', marginTop: '0.2rem' }}>✓</span>
+                  <span style={{ color: '#a8854f', marginTop: '0.2rem' }}>✓</span>
                   <span>{item}</span>
                 </li>
               ))}
@@ -323,7 +298,9 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
                 >
                   {item.title}
                 </h3>
-                <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>{item.description}</p>
+                <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  {item.description}
+                </p>
               </div>
             ))}
           </div>
@@ -392,11 +369,14 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    border: '2px solid #fb923c',
+                    border: '2px solid var(--gold)',
                     background: 'rgba(251, 146, 60, 0.1)',
                   }}
                 >
-                  <span className="font-display" style={{ fontSize: '1.25rem', color: '#fb923c' }}>
+                  <span
+                    className="font-display"
+                    style={{ fontSize: '1.25rem', color: 'var(--gold)' }}
+                  >
                     {item.step}
                   </span>
                 </div>
@@ -411,7 +391,9 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
                   >
                     {item.title}
                   </h3>
-                  <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>{item.description}</p>
+                  <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                    {item.description}
+                  </p>
                 </div>
               </div>
             ))}
@@ -427,7 +409,8 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
             style={{
               textAlign: 'center',
               padding: '2.5rem 2rem',
-              background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.08) 0%, rgba(26, 26, 26, 0.6) 100%)',
+              background:
+                'linear-gradient(135deg, rgba(251, 146, 60, 0.08) 0%, rgba(26, 26, 26, 0.6) 100%)',
             }}
           >
             <p
@@ -440,12 +423,12 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
                 lineHeight: 1.6,
               }}
             >
-              "Solo RPG isn't a compromise — it's a different kind of magic. A chance to lose yourself
-              completely in another world, on your terms."
+              "Solo RPG isn't a compromise — it's a different kind of magic. A chance to lose
+              yourself completely in another world, on your terms."
             </p>
             <cite
               style={{
-                color: '#fb923c',
+                color: 'var(--gold)',
                 fontStyle: 'normal',
                 fontSize: '0.9rem',
                 letterSpacing: '0.05em',
@@ -471,14 +454,19 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
             >
               Solo Tabletop RPG FAQ
             </h2>
-            <p style={{ color: 'var(--text-muted)' }}>Everything you need to know about playing alone</p>
+            <p style={{ color: 'var(--text-muted)' }}>
+              Everything you need to know about playing alone
+            </p>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {faqItems.map((item, index) => (
               <details key={index} className="faq-item">
                 <summary>
-                  <span className="font-elegant" style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+                  <span
+                    className="font-elegant"
+                    style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}
+                  >
                     {item.question}
                   </span>
                   <svg
@@ -489,7 +477,7 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
                     fill="none"
                     stroke="currentColor"
                     strokeWidth="2"
-                    style={{ color: '#fb923c' }}
+                    style={{ color: 'var(--gold)' }}
                   >
                     <path d="M6 9l6 6 6-6" />
                   </svg>
@@ -502,14 +490,18 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
       </section>
 
       {/* ========== FINAL CTA ========== */}
-      <section className="section" style={{ position: 'relative', zIndex: 2, paddingBottom: '8rem' }}>
+      <section
+        className="section"
+        style={{ position: 'relative', zIndex: 2, paddingBottom: '8rem' }}
+      >
         <div className="container" style={{ maxWidth: '700px' }}>
           <div
             className="tome-border"
             style={{
               textAlign: 'center',
               padding: '3rem 2rem',
-              background: 'linear-gradient(135deg, rgba(251, 146, 60, 0.1) 0%, rgba(234, 88, 12, 0.05) 100%)',
+              background:
+                'linear-gradient(135deg, rgba(251, 146, 60, 0.1) 0%, rgba(234, 88, 12, 0.05) 100%)',
             }}
           >
             <h2
@@ -532,43 +524,18 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
                 margin: '0 auto 2rem',
               }}
             >
-              Join the beta waitlist and start your solo tabletop RPG journey with an AI Game Master
-              that's always ready to play.
+              Start your solo tabletop RPG journey with an AI Game Master that's always ready to
+              play.
             </p>
 
-            <form
-              data-waitlist-form
-              data-source="solo-rpg-footer"
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                justifyContent: 'center',
-                gap: '1rem',
-                maxWidth: '450px',
-                margin: '0 auto 1rem',
-              }}
+            <a
+              href="/explore"
+              data-track-cta="solo-rpg-footer"
+              className="btn-primary"
+              style={{ textDecoration: 'none', marginBottom: '1rem' }}
             >
-              <input
-                type="email"
-                name="email"
-                placeholder="your@email.com"
-                required
-                className="input-arcane"
-                style={{ flex: '1 1 200px' }}
-              />
-              <button
-                type="submit"
-                data-track-cta="solo-rpg-footer"
-                className="btn-primary"
-                style={{
-                  background: 'linear-gradient(135deg, #fb923c 0%, #ea580c 100%)',
-                }}
-              >
-                Join Waitlist
-              </button>
-            </form>
-            <p data-form-message style={{ fontSize: '0.875rem' }} />
-
+              Play free
+            </a>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '1rem' }}>
               No group required. No experience needed.
             </p>
@@ -595,7 +562,11 @@ export function SoloTabletopRPGPage({ site, faqItems }: SoloTabletopRPGPageProps
               gap: '1.5rem',
             }}
           >
-            <a href="/" className="font-display" style={{ fontSize: '1.25rem', color: 'var(--parchment)', textDecoration: 'none' }}>
+            <a
+              href="/"
+              className="font-display"
+              style={{ fontSize: '1.25rem', color: 'var(--parchment)', textDecoration: 'none' }}
+            >
               {site.name}
             </a>
 
