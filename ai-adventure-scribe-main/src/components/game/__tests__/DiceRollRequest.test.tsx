@@ -7,13 +7,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { describeAttackRoll } from '../../../../shared/describe-attack-roll';
 import { DiceRollRequest } from '../DiceRollRequest';
 
-import { useCharacter } from '@/contexts/CharacterContext';
+import { useCharacter, useOptionalCharacter } from '@/contexts/CharacterContext';
 import logger from '@/lib/logger';
 import { calculateRollWithBreakdown } from '@/utils/characterModifiers';
 
 // Mock dependencies
 vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: vi.fn(),
+  useOptionalCharacter: vi.fn(),
 }));
 
 vi.mock('@/features/game-session/components', () => ({
@@ -418,6 +419,40 @@ describe('DiceRollRequest', () => {
 
     expect(screen.getByText('1d20+2')).toBeInTheDocument();
     expect(calculateRollWithBreakdown).toHaveBeenCalled();
+  });
+
+  it('shows the Inspiration spend line when the character has inspiration', () => {
+    (useOptionalCharacter as any).mockReturnValue({
+      state: { character: { ...mockCharacter, inspiration: true } },
+    });
+    render(
+      <DiceRollRequest request={{ ...defaultRequest, dc: 15 }} onResult={mockOnManualResult} />,
+    );
+    expect(
+      screen.getByText('Spend Inspiration for advantage (roll 2d20, keep the higher).'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
+  });
+
+  it('shows no Inspiration row without inspiration, and never "coming soon"', () => {
+    (useOptionalCharacter as any).mockReturnValue({
+      state: { character: { ...mockCharacter, inspiration: false } },
+    });
+    render(
+      <DiceRollRequest request={{ ...defaultRequest, dc: 15 }} onResult={mockOnManualResult} />,
+    );
+    expect(screen.queryByText(/Spend Inspiration/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
+  });
+
+  it('shows the Inspiration spend line on a check with no DC or AC when the character has inspiration', () => {
+    (useOptionalCharacter as any).mockReturnValue({
+      state: { character: { ...mockCharacter, inspiration: true } },
+    });
+    render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
+    expect(
+      screen.getByText('Spend Inspiration for advantage (roll 2d20, keep the higher).'),
+    ).toBeInTheDocument();
   });
 
   it('handles DC and AC display', () => {
