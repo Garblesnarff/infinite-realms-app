@@ -19,6 +19,7 @@ import type { RollRequest } from '@/types/roll-request';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { useOptionalCharacter } from '@/contexts/CharacterContext';
 import { DiceRollEmbed } from '@/features/game-session/components';
 import { useShowTargetNumbers } from '@/features/game-session/hooks/use-show-target-numbers';
 import { useDiceRollRequest, type RollResultHandler } from '@/hooks/game/use-dice-roll-request';
@@ -91,6 +92,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       toggleDisadvantage,
     } = useDiceRollRequest({ request, onResult, onRollCommit });
     const { showTargetNumbers, setShowTargetNumbers } = useShowTargetNumbers();
+    const hasInspiration = useOptionalCharacter()?.state.character?.inspiration === true;
 
     const config = ROLL_TYPE_CONFIG[request.type] || DEFAULT_TYPE_CONFIG;
     const isRollPending = Boolean(requestId && pendingRollId === requestId);
@@ -184,22 +186,20 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                 >
                   Show target numbers: {showTargetNumbers ? 'On' : 'Off'}
                 </button>
-                {request.type !== 'damage' && request.type !== 'damage_taken' && (
-                  <span
-                    className="text-sm [body.ir-table-look_&]:!text-[#2a1a0c]"
-                    aria-disabled="true"
-                  >
-                    Inspiration: coming soon
+                {hasInspiration && request.type !== 'damage' && request.type !== 'damage_taken' && (
+                  <span className="text-sm [body.ir-table-look_&]:!text-[#2a1a0c]">
+                    Spend Inspiration for advantage (roll 2d20, keep the higher).
                   </span>
                 )}
               </div>
             )}
-            {request.dc == null &&
+            {hasInspiration &&
+              request.dc == null &&
               request.ac == null &&
               request.type !== 'damage' &&
               request.type !== 'damage_taken' && (
-                <p className="text-sm [body.ir-table-look_&]:!text-[#2a1a0c]" aria-disabled="true">
-                  Inspiration: coming soon
+                <p className="text-sm [body.ir-table-look_&]:!text-[#2a1a0c]">
+                  Spend Inspiration for advantage (roll 2d20, keep the higher).
                 </p>
               )}
 
