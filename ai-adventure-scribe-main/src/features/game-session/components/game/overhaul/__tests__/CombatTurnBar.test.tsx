@@ -75,13 +75,13 @@ const bar = (round: number, turnIndex: number, busy: 'casting' | 'acting' | null
 };
 
 describe('turn bar (#2417, copy #85)', () => {
-  it('names whose turn it is and the round, and drops the next line', () => {
+  it('names whose turn it is and the round, and shows the next line', () => {
     bar(2, 0);
 
     expect(screen.getByTestId('combat-turn-text').textContent).toBe('Your turn');
     expect(screen.getByTestId('combat-turn-sub').textContent).toBe('Round 2');
-    expect(screen.getByText('Your turn. Round 2.')).toBeTruthy();
-    expect(screen.queryByText('Next: Captain Sarah Reeves.')).toBeNull();
+    expect(screen.getByTestId('combat-turn-sentence').textContent).toContain('Your turn. Round 2.');
+    expect(screen.getByTestId('combat-turn-next').textContent).toBe('Next: Captain Sarah Reeves.');
   });
 
   it('says You are down on the turn of a player at 0 HP whose saves are owed (#2518)', () => {
@@ -117,7 +117,9 @@ describe('turn bar (#2417, copy #85)', () => {
     expect(screen.getByTestId('combat-turn-sub').textContent).toBe(
       '0 HP · roll a death saving throw',
     );
-    expect(screen.getByText('You are down. 0 HP · roll a death saving throw.')).toBeTruthy();
+    expect(screen.getByTestId('combat-turn-sentence').textContent).toContain(
+      'You are down. 0 HP · roll a death saving throw.',
+    );
   });
 
   it('names an enemy turn in teal and says to wait', () => {
@@ -132,7 +134,7 @@ describe('turn bar (#2417, copy #85)', () => {
   it('reads as one sentence for a screen reader', () => {
     bar(2, 0);
 
-    expect(screen.getByText('Your turn. Round 2.')).toBeTruthy();
+    expect(screen.getByTestId('combat-turn-sentence').textContent).toContain('Your turn. Round 2.');
   });
 
   it('puts that sentence in page text, with the visual bar hidden from a screen reader', () => {
@@ -149,23 +151,23 @@ describe('turn bar (#2417, copy #85)', () => {
 
   it('reads an enemy turn, a cast and an enemy acting as one sentence too', () => {
     const enemy = bar(2, 1);
-    expect(
-      screen.getByText("Captain Sarah Reeves's turn. Round 2 · wait for it to act."),
-    ).toBeTruthy();
+    expect(screen.getByTestId('combat-turn-sentence').textContent).toContain(
+      "Captain Sarah Reeves's turn. Round 2 · wait for it to act.",
+    );
     enemy.unmount();
 
     const acting = bar(2, 1, 'acting');
     expect(screen.getByTestId('combat-turn-text').textContent).toContain(
       'Captain Sarah Reeves is acting…',
     );
-    expect(
-      screen.getByText('Captain Sarah Reeves is acting. Round 2 · wait for it to act.'),
-    ).toBeTruthy();
+    expect(screen.getByTestId('combat-turn-sentence').textContent).toContain(
+      'Captain Sarah Reeves is acting. Round 2 · wait for it to act.',
+    );
     acting.unmount();
 
     bar(2, 0, 'casting');
     expect(screen.getByTestId('combat-turn-text').textContent).toContain('Casting…');
-    expect(screen.getByText('Casting. Round 2.')).toBeTruthy();
+    expect(screen.getByTestId('combat-turn-sentence').textContent).toContain('Casting. Round 2.');
   });
 
   it('leaves out a participant the server has taken out of the order', () => {
