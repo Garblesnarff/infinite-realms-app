@@ -110,7 +110,7 @@ body.ir-table-look .ir-candle {
   height: 46px;
   border-radius: 5px 5px 2px 2px;
   background: linear-gradient(90deg, #9a8157, #eadbb6 25%, #fff4d4 50%, #c6af81 80%, #91784e);
-  position: relative;
+  position: absolute;
   box-shadow:
     0 6px 0 4px var(--ir-brass-4),
     0 7px 0 6px var(--ir-brass-2),
