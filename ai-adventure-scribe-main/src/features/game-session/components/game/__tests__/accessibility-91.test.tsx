@@ -24,7 +24,10 @@ vi.mock('@/utils/diceCommandParser', () => ({
   mightBeDiceCommand: vi.fn(() => false),
   getDiceCommandSuggestions: vi.fn(() => []),
 }));
-vi.mock('@/contexts/CharacterContext', () => ({ useCharacter: vi.fn() }));
+vi.mock('@/contexts/CharacterContext', () => ({
+  useCharacter: vi.fn(),
+  useOptionalCharacter: () => null,
+}));
 vi.mock('@/features/game-session/components', () => ({
   DiceRollEmbed: ({
     autoRoll,

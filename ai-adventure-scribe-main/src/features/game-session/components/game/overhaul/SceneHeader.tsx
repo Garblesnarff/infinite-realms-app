@@ -35,25 +35,29 @@ export const SceneHeader: React.FC<{
         {right}
       </div>
     </div>
-    <div className="hidden min-w-0 gap-1 p-2 max-[699px]:gap-0 max-[699px]:p-1 [body.ir-table-look_&]:grid [body.ir-table-look_&]:grid-cols-1 sm:[body.ir-table-look_&]:grid-cols-3">
-      <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] p-3 text-center text-[#f6e3b8] max-[699px]:flex max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:px-2 max-[699px]:py-0">
-        <h1 className="ir-display break-words text-lg font-bold max-[699px]:text-sm">{title}</h1>
+    <div className="hidden min-w-0 gap-1 p-2 max-[699px]:gap-0 max-[699px]:p-1 [body.ir-table-look_&]:grid [body.ir-table-look_&]:grid-cols-2 min-[700px]:[body.ir-table-look_&]:grid-cols-3">
+      <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] px-3 py-2 text-center text-[#f6e3b8] max-[699px]:flex max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:px-2 max-[699px]:py-1">
+        <h1 className="ir-display truncate text-lg font-bold max-[699px]:text-sm">{title}</h1>
         {chapter && <p className="text-sm">{chapter}</p>}
       </section>
-      <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] p-3 text-center text-[#f6e3b8] max-[699px]:flex max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:px-2 max-[699px]:py-0">
-        <p className="ir-display text-sm">
-          {combat?.active ? `Round ${combat.round}` : 'Exploring'}
+      <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] px-3 py-2 text-center text-[#f6e3b8] max-[699px]:flex max-[699px]:items-baseline max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:px-2 max-[699px]:py-1">
+        <p className="ir-display shrink-0 text-sm">
+          {combat?.active ? `Round ${combat.round}` : 'EXPLORING'}
         </p>
-        <p className="ir-display break-words text-lg font-bold max-[699px]:text-sm">
-          {combat?.active
-            ? (combat.combatants.find((actor) => actor.isActive)?.name ?? 'Combat')
-            : location || title}
-        </p>
-        {blurb && <p className="break-words text-sm max-[699px]:hidden">{blurb}</p>}
+        {(combat?.active || location) && (
+          <p className="ir-display min-w-0 truncate text-lg font-bold max-[699px]:text-sm">
+            {combat?.active
+              ? (combat.combatants.find((actor) => actor.isActive)?.name ?? 'Combat')
+              : location}
+          </p>
+        )}
+        {blurb && <p className="truncate text-sm max-[699px]:hidden">{blurb}</p>}
       </section>
-      <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] p-3 text-[#f6e3b8] max-[699px]:flex max-[699px]:max-h-24 max-[699px]:flex-wrap max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:overflow-y-auto max-[699px]:px-2 max-[699px]:py-1">
-        <p className="ir-display text-sm">The Table</p>
-        {tableExtra}
+      <section className="min-w-0 border border-[#d5b070] bg-[#0e1a36] px-3 py-2 text-[#f6e3b8] max-[699px]:col-span-2 max-[699px]:flex max-[699px]:max-h-24 max-[699px]:flex-wrap max-[699px]:items-center max-[699px]:justify-between max-[699px]:gap-2 max-[699px]:overflow-y-auto max-[699px]:px-2 max-[699px]:py-1">
+        <div className="flex items-center justify-between gap-2 max-[699px]:contents">
+          <p className="ir-display text-sm max-[699px]:hidden">The Table</p>
+          {tableExtra}
+        </div>
         {party.map((member) => (
           <div
             key={member.id}
