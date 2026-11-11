@@ -232,6 +232,31 @@ const GameContent: React.FC = () => {
     );
   }
 
+  if (vitalGate.status === 'error') {
+    // The vital read failed: the game does not render until it succeeds, so a dead
+    // hero never reaches the live composer. Retry re-runs the read.
+    return (
+      <div
+        role="alert"
+        className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background p-6 text-center"
+      >
+        {characterState.character?.name && (
+          <p className="ir-display text-[22px] text-infinite-gold-light">
+            {characterState.character.name}
+          </p>
+        )}
+        <p className="text-muted-foreground">We could not load your story.</p>
+        <Button
+          type="button"
+          onClick={vitalGate.retry}
+          className="min-h-11 min-w-11 border border-[color:var(--ir-brass-3)] bg-[linear-gradient(var(--ir-brass-1),var(--ir-brass-2))] text-[color:var(--ir-brass-ink)] hover:opacity-90"
+        >
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
   if (vitalGate.status === 'dead') {
     const fallen = vitalGate.fallen;
     const starterSlug = fallen.starterCampaignId
