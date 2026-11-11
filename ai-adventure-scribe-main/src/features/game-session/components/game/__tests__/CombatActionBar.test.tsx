@@ -448,6 +448,14 @@ describe('CombatActionBar', () => {
         action_surge: actionSurgeAction,
         divine_sense: { type: 'divine_sense', label: 'Divine Sense' },
         divine_smite: smiteAction,
+        // #1233: Flexible Casting rides the More menu, like the other bonus-action options.
+        flexible_casting: {
+          type: 'flexible_casting',
+          label: 'Convert a 1st-level slot into 1 sorcery point',
+          direction: 'convert',
+          slotLevel: 1,
+          pointsGained: 1,
+        },
         // #1414: the Inspiration chip arms advantage; it rides the More menu.
         inspiration: {
           type: 'inspiration',

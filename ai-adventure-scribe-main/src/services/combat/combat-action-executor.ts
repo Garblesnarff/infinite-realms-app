@@ -121,6 +121,18 @@ export type ClientCombatIntent =
     }
   /** #1147: drinking a healing consumable; the server heals, then spends the item. */
   | { type: 'use_item'; actorId: string; itemId: string; expectedVersion?: number }
+  /**
+   * #1233: Flexible Casting, a bonus action. `convert` turns a spell slot of `slotLevel` into
+   * sorcery points; `create` spends sorcery points on a spell slot of `slotLevel`. The server
+   * resolves the cost and the table.
+   */
+  | {
+      type: 'flexible_casting';
+      actorId: string;
+      direction: 'convert' | 'create';
+      slotLevel: number;
+      expectedVersion?: number;
+    }
   /** #2580: the player's own exits — the way out of a fight nothing else can end. */
   | { type: 'flee' | 'yield'; actorId: string; expectedVersion?: number }
   /**
@@ -162,6 +174,7 @@ const INTENT_TYPES_REQUIRING_VERSION = new Set([
   'action_surge',
   'divine_sense',
   'use_item',
+  'flexible_casting',
 ]);
 
 type VersionedClientIntent = Extract<ClientCombatIntent, { expectedVersion?: number }>;
