@@ -101,7 +101,7 @@ describe('Table start screens', () => {
     expect(screen.getByText(label, { exact: true })).toHaveClass('normal-case');
   });
 
-  it('renders the difficulty word in title case outside the uppercase genre row', () => {
+  it('renders the difficulty tag in title case and genres in uppercase', () => {
     render(
       <MemoryRouter>
         <BoxedCampaign campaign={campaign} />
@@ -109,8 +109,24 @@ describe('Table start screens', () => {
     );
     const word = screen.getByText('Hard', { exact: true });
     expect(word).toHaveClass('normal-case');
-    expect(word.parentElement).toHaveClass('uppercase');
-    expect(word.parentElement).toHaveTextContent('horror · Hard');
+    expect(screen.getByText('horror')).toHaveClass('uppercase');
+  });
+
+  it('prints the level only when the campaign has one', () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <BoxedCampaign campaign={campaign} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Level 1 · Ready-made heroes')).toBeInTheDocument();
+    unmount();
+    render(
+      <MemoryRouter>
+        <BoxedCampaign campaign={{ ...campaign, levelRange: null }} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Ready-made heroes')).toBeInTheDocument();
+    expect(screen.queryByText(/Level/)).toBeNull();
   });
 
   it('moves the hero selection with arrows and starts the selected hero once', () => {
@@ -145,6 +161,33 @@ describe('Table start screens', () => {
     expect(onPlay).toHaveBeenCalledTimes(1);
     expect(onPlay).toHaveBeenCalledWith(second);
   });
+  it('states the real hero count under the fan', () => {
+    const render1 = render(
+      <HeroFan
+        vitals={() => ({ hp: 12, ac: 15 })}
+        templates={[hero('one', 'One')]}
+        disabled={false}
+        signedIn
+        onPlay={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('One ready-made hero.')).toBeInTheDocument();
+    render1.unmount();
+    render(
+      <HeroFan
+        vitals={() => ({ hp: 12, ac: 15 })}
+        templates={[hero('one', 'One'), hero('two', 'Two')]}
+        disabled={false}
+        signedIn
+        onPlay={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText('Two ready-made heroes. Tap a card to look at it.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('YOUR HERO')).toBeInTheDocument();
+  });
+
   it('keeps heroes available when a template cannot produce vitals', () => {
     const first = hero('one', 'One');
     const second = hero('two', 'Two');
