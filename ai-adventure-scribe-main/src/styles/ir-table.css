@@ -395,3 +395,71 @@ body.ir-table-look .ir-combat-summary {
 body.ir-table-look .ir-combat-summary .text-muted-foreground {
   color: var(--ir-ink) !important;
 }
+
+/* B4: table-look drop cap on the parchment DM story. */
+body.ir-table-look .ir-drop-cap::first-letter {
+  float: left;
+  font-family: Cinzel, serif;
+  font-size: 3.4em;
+  line-height: 0.9;
+  padding: 0.08em 0.1em 0 0;
+  color: #7a1016;
+}
+
+/* B4: engine outcome seal stamp, 350ms slam. Off under reduced motion. */
+@keyframes ir-seal-stamp {
+  0% {
+    transform: scale(1.4) rotate(-9deg);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(0.95) rotate(-9deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-9deg);
+    opacity: 1;
+  }
+}
+body.ir-table-look .ir-seal-stamp {
+  animation: ir-seal-stamp 350ms cubic-bezier(0.2, 0.9, 0.25, 1.2) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.ir-table-look .ir-seal-stamp {
+    animation: none;
+  }
+}
+
+/* B4: brass primary button, 4-stop gradient from the Materials board. */
+body.ir-table-look .ir-brass-btn {
+  background: linear-gradient(160deg, #f6e3b8 0%, #d5b070 38%, #a9823f 70%, #6e5226 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+/* B4: sheen band sweep over brass, 3.6s loop. Off under reduced motion. */
+@keyframes ir-brass-sheen {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  100% {
+    transform: translateX(260%) skewX(-18deg);
+  }
+}
+body.ir-table-look .ir-brass-sheen {
+  position: relative;
+  overflow: hidden;
+}
+body.ir-table-look .ir-brass-sheen::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  body.ir-table-look .ir-brass-sheen::after {
+    animation: ir-brass-sheen 3.6s ease-in-out infinite;
+  }
+}
