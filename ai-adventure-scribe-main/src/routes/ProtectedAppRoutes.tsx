@@ -1,6 +1,6 @@
 import React from 'react';
 import { Helmet } from 'react-helmet-async';
-import { useRoutes } from 'react-router-dom';
+import { matchPath, useLocation, useRoutes } from 'react-router-dom';
 
 import { getAppRoutes } from './app-routes';
 
@@ -9,6 +9,18 @@ import Breadcrumbs from '@/shared/components/layout/breadcrumbs';
 import Navigation from '@/shared/components/layout/navigation';
 
 const AppRouteTable: React.FC = () => useRoutes(getAppRoutes());
+
+/** The game table is full screen: no navigation bar or breadcrumbs on /app/game/:id. */
+const AppChrome: React.FC = () => {
+  const { pathname } = useLocation();
+  if (matchPath('/app/game/:id', pathname)) return null;
+  return (
+    <>
+      <Navigation />
+      <Breadcrumbs />
+    </>
+  );
+};
 
 /**
  * The authenticated /app/* subtree: app chrome (navigation, breadcrumbs)
@@ -46,8 +58,7 @@ export const ProtectedAppRoutes: React.FC = () => (
         />
         <meta name="twitter:image" content="https://infiniterealms.app/og-image.png" />
       </Helmet>
-      <Navigation />
-      <Breadcrumbs />
+      <AppChrome />
       <main id="main-content" tabIndex={-1}>
         <AppRouteTable />
       </main>

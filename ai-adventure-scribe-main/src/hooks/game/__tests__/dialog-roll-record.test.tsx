@@ -16,7 +16,10 @@ import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 import { useGame } from '@/contexts/GameContext';
 import { useMessageDiceRolls } from '@/features/game-session/components/chat/message-list/use-message-dice-rolls';
 
-vi.mock('@/contexts/CharacterContext', () => ({ useCharacter: vi.fn() }));
+vi.mock('@/contexts/CharacterContext', () => ({
+  useCharacter: vi.fn(),
+  useOptionalCharacter: () => null,
+}));
 vi.mock('@/contexts/GameContext', () => ({ useGame: vi.fn() }));
 vi.mock('@/hooks/combat/use-player-roll-host', () => ({
   settleCombatAttackRoll: vi.fn(() => false),
