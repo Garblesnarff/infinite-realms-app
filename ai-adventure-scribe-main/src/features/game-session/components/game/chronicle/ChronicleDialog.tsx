@@ -228,8 +228,8 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
             <div className="ir-chronicle-upgrade-text">
               <div className="ir-chronicle-upgrade-title">Read the full chronicle</div>
               <p className="ir-chronicle-upgrade-copy">
-                The Pro plan writes the full story of each session, with an illustration, and lets
-                you share it.
+                The Legend plan writes the full story of each session, with an illustration, and
+                lets you share it.
               </p>
             </div>
             <button
@@ -237,7 +237,7 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
               onClick={() => navigate('/account')}
               className="ir-chronicle-upgrade-button inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground disabled:opacity-60"
             >
-              Upgrade to Pro
+              Upgrade to Legend
             </button>
           </div>
         </div>
