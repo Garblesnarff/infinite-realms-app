@@ -78,6 +78,17 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
   // reports no advantage anywhere, armed or not, so the display and the record agree.
   const takesAdvantage = request.type !== 'damage' && request.type !== 'damage_taken';
 
+  // #1471: the arm pays for this roll only when the request does not already have
+  // advantage — 2014 5e advantage does not stack, so spending on an advantaged request
+  // buys nothing. Same shared-gate shape as takesAdvantage: the spend (handleAutoRoll)
+  // and the values the popup reads (below) key off it directly; the record follows
+  // through paidAdvantage. When the spend is skipped, the request's own
+  // advantage/disadvantage flow through untouched, and the engine's cancellation
+  // (DiceRollRequest nets advantage && !disadvantage; DiceEngine.roll cancels
+  // both-true to a plain d20) models an advantaged-and-disadvantaged request as a
+  // straight roll — no special case here.
+  const armedApplies = armed && takesAdvantage && !hasAdvantage;
+
   // One resolver turns the DM request into the formula this dialog rolls.
   const rollCalculation = useMemo(
     () => resolveDialogRollFormula(request, character),
@@ -111,11 +122,13 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
     setIsRolling(true);
     // #1414 round 3 (B-2): takesAdvantage is hoisted above — a damage roll never spends,
     // so the arm stays in place for the next d20 roll.
+    // #1471: armedApplies is hoisted above — a request that already has advantage never
+    // spends, so the arm stays in place for the next roll that needs it.
     // #1414: the armed advantage is paid for before the dice fly, so a roll can never land
     // with advantage the flag did not pay for. A failed spend rolls without advantage —
     // never lose a roll because the spend failed.
     let paidAdvantage = false;
-    if (armed && takesAdvantage) {
+    if (armedApplies) {
       if (!character?.id) {
         // No character to charge — clear the arm instead of rolling a free advantage.
         disarm();
@@ -134,7 +147,7 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
     rollDisadvantageRef.current = hasDisadvantage && !paidAdvantage;
     setShowDiceAnimation(true);
   }, [
-    armed,
+    armedApplies,
     character,
     disarm,
     hasAdvantage,
@@ -142,7 +155,6 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
     isRolling,
     onRollCommit,
     spendInspiration,
-    takesAdvantage,
   ]);
 
   const submitResult = useCallback(
@@ -305,14 +317,21 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
   // #1414 round 5 (FIX at 7df1690a, item 1): gated on takesAdvantage — a damage request
   // reports the raw request values even while armed, so the popup never shows advantage
   // the record does not carry.
+  // #1471: gated on armedApplies, not armed — when the spend is skipped because the
+  // request already has advantage, the popup shows the request's own disadvantage
+  // instead of hiding it behind an arm that is not paying. Otherwise the dice would
+  // roll with advantage for free (DiceRollRequest passes these values to the embed)
+  // while the record carried both flags. (hasAdvantage is unchanged: inside the
+  // takesAdvantage branch, hasAdvantage || armedApplies ≡ hasAdvantage || armed, and
+  // the damage branch returns the raw flag in both old and new code.)
   return useMemo(
     () => ({
       manualMode,
       setManualMode,
       manualResult,
       setManualResult,
-      hasAdvantage: takesAdvantage ? hasAdvantage || armed : hasAdvantage,
-      hasDisadvantage: takesAdvantage ? hasDisadvantage && !armed : hasDisadvantage,
+      hasAdvantage: takesAdvantage ? hasAdvantage || armedApplies : hasAdvantage,
+      hasDisadvantage: takesAdvantage ? hasDisadvantage && !armedApplies : hasDisadvantage,
       showDiceAnimation,
       isRolling,
       isSubmitting,
@@ -334,7 +353,7 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
       manualResult,
       hasAdvantage,
       hasDisadvantage,
-      armed,
+      armedApplies,
       takesAdvantage,
       showDiceAnimation,
       isRolling,

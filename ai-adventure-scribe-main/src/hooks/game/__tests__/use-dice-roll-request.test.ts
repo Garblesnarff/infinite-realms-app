@@ -847,5 +847,119 @@ describe('useDiceRollRequest', () => {
       expect(result.current.hasAdvantage).toBe(false);
       expect(result.current.hasDisadvantage).toBe(true);
     });
+
+    it('does not spend when the request already has advantage — the arm survives for the next roll (#1471)', async () => {
+      inspirationHolder.armed = true;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({
+          request: { ...defaultRequest, advantage: true },
+          onResult: mockOnManualResult,
+        }),
+      );
+
+      // The request already rolls with advantage, so Inspiration would buy nothing.
+      expect(result.current.hasAdvantage).toBe(true);
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+      });
+      expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
+      expect(inspirationHolder.disarm).not.toHaveBeenCalled();
+      expect(inspirationHolder.armed).toBe(true);
+      expect(result.current.showDiceAnimation).toBe(true);
+
+      await act(async () => {
+        await result.current.handleDiceRollComplete({
+          total: 19,
+          naturalRoll: 17,
+          rolls: [
+            { value: 17, useInTotal: true },
+            { value: 9, useInTotal: false },
+          ],
+        });
+      });
+      // The record carries the request's advantage — and the flag is still there.
+      expect(mockOnManualResult).toHaveBeenCalledWith(
+        19,
+        expect.objectContaining({ advantage: true, disadvantage: false, naturalRoll: 17 }),
+      );
+      expect(inspirationHolder.disarm).not.toHaveBeenCalled();
+
+      // The arm survived this roll — a second request spends it.
+      const second = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+      await act(async () => {
+        await second.result.current.handleAutoRoll();
+      });
+      expect(inspirationHolder.spendInspiration).toHaveBeenCalledWith('character-1');
+    });
+
+    it('does not spend when the request has advantage and disadvantage — the engine nets it to a straight roll (#1471)', async () => {
+      inspirationHolder.armed = true;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({
+          request: { ...defaultRequest, advantage: true, disadvantage: true },
+          onResult: mockOnManualResult,
+        }),
+      );
+
+      // The arm is not paying here, so the popup shows the request's own flags —
+      // DiceRollRequest nets both-true to a plain d20, the 5e cancellation.
+      expect(result.current.hasAdvantage).toBe(true);
+      expect(result.current.hasDisadvantage).toBe(true);
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+      });
+      expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
+      expect(inspirationHolder.disarm).not.toHaveBeenCalled();
+      expect(inspirationHolder.armed).toBe(true);
+      expect(result.current.showDiceAnimation).toBe(true);
+
+      await act(async () => {
+        await result.current.handleDiceRollComplete({
+          total: 12,
+          naturalRoll: 12,
+          rolls: [{ value: 12, useInTotal: true }],
+        });
+      });
+      // The record carries the request's own flags — the same as the not-armed case.
+      expect(mockOnManualResult).toHaveBeenCalledWith(
+        12,
+        expect.objectContaining({ advantage: true, disadvantage: true, naturalRoll: 12 }),
+      );
+    });
+
+    it('still spends on a disadvantaged request — the arm buys out the disadvantage (#1471)', async () => {
+      inspirationHolder.armed = true;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({
+          request: { ...defaultRequest, disadvantage: true },
+          onResult: mockOnManualResult,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+      });
+      expect(inspirationHolder.spendInspiration).toHaveBeenCalledWith('character-1');
+
+      await act(async () => {
+        await result.current.handleDiceRollComplete({
+          total: 16,
+          naturalRoll: 14,
+          rolls: [
+            { value: 14, useInTotal: true },
+            { value: 6, useInTotal: false },
+          ],
+        });
+      });
+      expect(mockOnManualResult).toHaveBeenCalledWith(
+        16,
+        expect.objectContaining({ advantage: true, disadvantage: false, naturalRoll: 14 }),
+      );
+      expect(inspirationHolder.disarm).toHaveBeenCalled();
+    });
   });
 });
