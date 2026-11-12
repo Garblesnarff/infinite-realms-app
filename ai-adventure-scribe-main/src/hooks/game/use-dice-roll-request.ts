@@ -211,8 +211,9 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
       // already spent elsewhere) leaves this roll standing and the coin shows spent. A failed
       // save never reaches here, so the flag stays true for the retry.
       if (recorded && spendCharacterId) {
-        await spendInspiration(spendCharacterId);
-        disarm();
+        // #1472 (foreman FIX): clear the arm only when the spend went through. A 409 already
+        // cleared it in useInspirationSpend; any other failure keeps the arm for the next roll.
+        if (await spendInspiration(spendCharacterId)) disarm();
       }
     },
     [disarm, spendInspiration, submitResult],

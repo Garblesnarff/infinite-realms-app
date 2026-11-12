@@ -630,7 +630,7 @@ describe('useDiceRollRequest', () => {
       expect(inspirationHolder.disarm).toHaveBeenCalled();
     });
 
-    it('a 409 after the save: the saved roll stands and the arm clears (#1472)', async () => {
+    it('a failed spend after the save: the saved roll stands and the arm stays (#1472)', async () => {
       inspirationHolder.armed = true;
       inspirationHolder.spendResult = new Error('No inspiration to spend');
       const { result } = renderHook(() =>
@@ -653,7 +653,8 @@ describe('useDiceRollRequest', () => {
         expect.objectContaining({ advantage: true, disadvantage: false }),
       );
       expect(inspirationHolder.spendInspiration).toHaveBeenCalledWith('character-1');
-      expect(inspirationHolder.disarm).toHaveBeenCalled();
+      // A failed spend keeps the arm: the server flag is still true, so the next roll pays.
+      expect(inspirationHolder.disarm).not.toHaveBeenCalled();
     });
 
     it('a manual entry disarms without spending', () => {

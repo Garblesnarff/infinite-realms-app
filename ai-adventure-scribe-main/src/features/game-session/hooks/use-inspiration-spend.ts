@@ -29,31 +29,36 @@ export function useInspirationSpend() {
 
   const spendInspiration = useCallback(
     async (characterId: string): Promise<boolean> => {
-      try {
-        await userDataApi.spendInspiration(characterId);
-      } catch (error) {
-        logger.warn('Inspiration spend failed', error);
-        if (error instanceof UserDataApiRequestError && error.status === 409) {
-          const character = characterContext?.state.character;
-          if (character && character.id === characterId) {
-            characterContext.dispatch({
-              type: 'UPDATE_CHARACTER',
-              payload: { ...character, inspiration: false },
-            });
-          }
+      const markSpent = (): void => {
+        const character = characterContext?.state.character;
+        if (character && character.id === characterId) {
+          characterContext.dispatch({
+            type: 'UPDATE_CHARACTER',
+            payload: { ...character, inspiration: false },
+          });
         }
-        return false;
+      };
+      // #1472 (foreman FIX on #1499): one retry on a non-409 failure. A 409 means the server
+      // already spent the flag, so the coin is set to spent and the arm is cleared here. Any
+      // other failure leaves the server flag true: the coin stays gold and the arm stays set,
+      // so the next roll that needs advantage pays for it.
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          await userDataApi.spendInspiration(characterId);
+          markSpent();
+          return true;
+        } catch (error) {
+          if (error instanceof UserDataApiRequestError && error.status === 409) {
+            markSpent();
+            disarm();
+            return false;
+          }
+          logger.warn(`Inspiration spend failed (attempt ${attempt} of 2)`, error);
+        }
       }
-      const character = characterContext?.state.character;
-      if (character && character.id === characterId) {
-        characterContext.dispatch({
-          type: 'UPDATE_CHARACTER',
-          payload: { ...character, inspiration: false },
-        });
-      }
-      return true;
+      return false;
     },
-    [characterContext],
+    [characterContext, disarm],
   );
 
   return { armed, arm, disarm, spendInspiration };
