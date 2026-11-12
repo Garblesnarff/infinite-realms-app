@@ -24,8 +24,16 @@ for (const width of [1280, 390]) {
     await expect(page.getByLabel('Ability check result')).toContainText(
       'Athletics check: 17 (nat 12+5) success',
     );
+    // #1477: the check card seals from the server badge (SUCCESS, gold). The assertion waits on the seal.
     await expect(
       page.getByLabel('Ability check result').getByTestId('engine-roll-seal'),
+    ).toHaveText('SUCCESS');
+    await expect(
+      page.getByLabel('Ability check result').getByTestId('engine-roll-seal'),
+    ).toHaveAttribute('data-seal-tone', 'gold');
+    // A check row with no server card shows no seal.
+    await expect(
+      page.getByLabel('Ability check without card').getByTestId('engine-roll-seal'),
     ).toHaveCount(0);
     const saveSeal = page.getByLabel('Save result').getByTestId('engine-roll-seal');
     await expect(saveSeal).toBeVisible();

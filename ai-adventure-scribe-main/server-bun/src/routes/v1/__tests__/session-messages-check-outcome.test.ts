@@ -8,6 +8,9 @@ import { beforeEach, describe, expect, it, mock } from 'bun:test';
  */
 
 import {
+  ABILITY_CHECK_CARD_FAIL,
+  ABILITY_CHECK_CARD_SUCCESS,
+  ABILITY_CHECK_ROW_SUCCESS,
   ABILITY_CHECK_SAVE_BODY,
   ATHLETICS_CHECK_LINE,
   ATHLETICS_DC,
@@ -187,6 +190,11 @@ describe('POST /v1/sessions/:id/messages — narrative ability check outcome (#1
       ],
     });
     expect(lookups).toEqual([ATHLETICS_ROLL_REQUEST_ID]);
+    // The client seal reads this same payload (shared fixture): it cannot drift from the server.
+    expect(row!.message).toBe(ABILITY_CHECK_ROW_SUCCESS.text);
+    expect((row!.context as Record<string, unknown>).engineCards).toEqual([
+      ABILITY_CHECK_CARD_SUCCESS,
+    ]);
   });
 
   it('writes a FAIL card when the reported total is under the issued DC, whatever word the client wrote', async () => {
@@ -198,6 +206,9 @@ describe('POST /v1/sessions/:id/messages — narrative ability check outcome (#1
     });
     // The DM reads the stored line: the client's "success" must not reach it.
     expect(row!.message).toBe('Athletics check: 9 (nat 4+5) fail');
+    expect((row!.context as Record<string, unknown>).engineCards).toEqual([
+      ABILITY_CHECK_CARD_FAIL,
+    ]);
   });
 
   it('a total equal to the DC is a SUCCESS, and the stored line says success', async () => {

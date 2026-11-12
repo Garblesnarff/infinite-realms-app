@@ -77,7 +77,9 @@ describe('result seal on the mounted card (#1457)', () => {
     document.body.classList.remove('ir-table-look');
   });
 
-  it('does not seal a narrative check card; that seal is #1477', () => {
+  // #1477: this expectation was "no seal" while the check seal was out of scope. The seal now
+  // reads the server's badge, so the card seals SUCCESS, gold.
+  it('seals a narrative check card from its server badge (#1477)', () => {
     const card: EngineResultCard = {
       kind: 'check',
       side: 'party',
@@ -97,7 +99,8 @@ describe('result seal on the mounted card (#1457)', () => {
         displayText={card.line}
       />,
     );
-    expect(screen.queryByTestId('engine-roll-seal')).toBeNull();
+    expect(screen.getByTestId('engine-roll-seal')).toHaveTextContent('SUCCESS');
+    expect(screen.getByTestId('engine-roll-seal')).toHaveAttribute('data-seal-tone', 'gold');
   });
 
   it('a persisted ability check has no structured outcome, so it has no seal', () => {

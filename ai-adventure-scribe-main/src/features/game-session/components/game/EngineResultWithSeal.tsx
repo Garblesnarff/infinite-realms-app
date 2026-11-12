@@ -26,8 +26,9 @@ export const EngineResultWithSeal: React.FC<{
   showTargetNumbers: boolean;
 }> = ({ card, showTargetNumbers }) => {
   const tableLook = useTableLookActive();
-  // A narrative check card is #1477. This PR seals saves, attacks, NPC rolls and initiative.
-  const word = card.kind === 'check' ? undefined : sealWordForCard(card);
+  // A narrative check card (#1477) seals from the server's badge, the same as the other kinds.
+  // The server writes the badge; the client never reads the die or the line text for the word.
+  const word = sealWordForCard(card);
   return (
     <div
       className={
