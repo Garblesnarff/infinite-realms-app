@@ -27,7 +27,7 @@ export const EngineResultWithSeal: React.FC<{
 }> = ({ card, showTargetNumbers }) => {
   const tableLook = useTableLookActive();
   // A narrative check card is #1477. This PR seals saves, attacks, NPC rolls and initiative.
-  const word = (card.kind as string) === 'check' ? undefined : sealWordForCard(card);
+  const word = card.kind === 'check' ? undefined : sealWordForCard(card);
   return (
     <div
       className={

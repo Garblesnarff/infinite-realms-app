@@ -78,13 +78,13 @@ describe('result seal on the mounted card (#1457)', () => {
   });
 
   it('does not seal a narrative check card; that seal is #1477', () => {
-    const card = {
+    const card: EngineResultCard = {
       kind: 'check',
       side: 'party',
       line: 'Athletics: 17 vs DC 15, SUCCESS',
       title: 'Athletics',
       badge: { word: 'SUCCESS', tone: 'gold', icon: 'check' },
-    } as unknown as EngineResultCard;
+    };
     render(
       <SystemMessage
         message={{
