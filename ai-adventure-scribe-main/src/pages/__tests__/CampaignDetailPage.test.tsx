@@ -453,6 +453,18 @@ describe('CampaignDetailPage heroes (#89)', () => {
     expect(navTarget.search).toContain('new=true');
   });
 
+  it('plays in the campaign the death screen names, without resolving it by title', async () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    renderPage('/explore/the-eternal-feast?campaignId=camp-7#heroes');
+    fireEvent.click(screen.getByText('Play as Bram'));
+    expect(await screen.findByText('game page')).toBeInTheDocument();
+    expect(state.resolveOrCreate).not.toHaveBeenCalled();
+    expect(state.seed.mock.calls[0][1]).toBe('camp-7');
+    expect(navTarget.pathname).toBe('/app/game/camp-7');
+  });
+
   it('continues the saved hero and offers a separate fresh playthrough', async () => {
     state.campaign = campaign({});
     state.user = { id: 'u1' };

@@ -54,7 +54,7 @@ const shareRoutes = new Elysia({ prefix: '/v1/chronicles' })
       }
       if (!planHasPaidFeatures(plan)) {
         set.status = 403;
-        return { error: 'Sharing needs the Pro plan' };
+        return { error: 'Sharing needs the Legend plan' };
       }
       const result = await db.transaction(async (tx) => {
         const lockedRows = await tx

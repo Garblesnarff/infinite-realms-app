@@ -246,13 +246,13 @@ describe('ChronicleDialog', () => {
     expect(screen.getByText('Read the full chronicle')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'The Pro plan writes the full story of each session, with an illustration, and lets you share it.',
+        'The Legend plan writes the full story of each session, with an illustration, and lets you share it.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Upgrade to Pro' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upgrade to Legend' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Share this chronicle' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Pro' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Legend' }));
     expect(mockNavigate).toHaveBeenCalledWith('/account');
   });
 

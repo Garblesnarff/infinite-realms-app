@@ -6,7 +6,7 @@ import { prepareChatDisplayText } from '../../chat/message-list/prepare-chat-dis
 
 import { chronicleRefetchInterval } from '@/components/chronicles/ChronicleViewer';
 import { Button } from '@/components/ui/button';
-import { useMessageContext } from '@/contexts/MessageContext';
+import { useMessageContext, useOptionalMessageContext } from '@/contexts/MessageContext';
 import { trpc } from '@/infrastructure/api';
 import { combatEngineBlocksFromContext } from '@/utils/combat-engine-blocks';
 
@@ -24,12 +24,45 @@ export function buildChooseHeroHref(input: {
   campaignId?: string | null;
 }): string {
   if (input.starterSlug && input.campaignId) {
-    return `/explore/${encodeURIComponent(input.starterSlug)}/choose-character?campaignId=${encodeURIComponent(input.campaignId)}`;
+    return `/explore/${encodeURIComponent(input.starterSlug)}?campaignId=${encodeURIComponent(input.campaignId)}#heroes`;
   }
   if (input.campaignId) {
     return `/app/characters/create?campaign=${encodeURIComponent(input.campaignId)}`;
   }
   return '/explore';
+}
+
+/**
+ * #2517: the engine's final lines of the run's last round, read back from the
+ * saved log. A live death carries them from the terminal state; a reload does
+ * not, so the screen reads them here with the same blocks the Log tab shows.
+ * Newest round only, at most `limit` lines, newest last.
+ */
+export function finalEngineLines(
+  messages: ReadonlyArray<{ sender?: string; context?: Record<string, unknown> }>,
+  limit = 3,
+): string[] {
+  const blocks: { round: number; lines: string[] }[] = [];
+  for (const message of messages) {
+    if (message.sender !== 'system') continue;
+    for (const block of combatEngineBlocksFromContext(message.context)) {
+      blocks.push({ round: block.round, lines: block.lines });
+    }
+  }
+  const last = blocks[blocks.length - 1];
+  if (!last) return [];
+  const lines: string[] = [];
+  for (
+    let index = blocks.length - 1;
+    index >= 0 && blocks[index].round === last.round;
+    index -= 1
+  ) {
+    lines.unshift(...blocks[index].lines);
+  }
+  return lines
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(-limit);
 }
 
 /**
@@ -74,6 +107,8 @@ interface FallenEndStateProps {
   characterId?: string | null;
   premade?: boolean;
   premadeKept?: boolean;
+  /** Fade the screen in (a live death). A reload stays still. */
+  fadeIn?: boolean;
 }
 
 /**
@@ -95,22 +130,32 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
   characterId,
   premade,
   premadeKept,
-}) => (
-  <CampaignEndState
-    mode="fallen"
-    characterName={characterName}
-    portraitUrl={portraitUrl}
-    identity={identity}
-    finalLines={finalLines}
-    campaignName={campaignName}
-    chooseHeroHref={chooseHeroHref}
-    chooseHeroPending={chooseHeroPending}
-    storyContent={storyContent}
-    characterId={characterId}
-    premade={premade}
-    premadeKept={premadeKept}
-  />
-);
+  fadeIn,
+}) => {
+  const messageContext = useOptionalMessageContext();
+  const messages = messageContext?.messages;
+  const restoredLines = React.useMemo(
+    () => (messages ? finalEngineLines(messages) : []),
+    [messages],
+  );
+  return (
+    <CampaignEndState
+      mode="fallen"
+      characterName={characterName}
+      portraitUrl={portraitUrl}
+      identity={identity}
+      finalLines={finalLines?.length ? finalLines : restoredLines}
+      campaignName={campaignName}
+      chooseHeroHref={chooseHeroHref}
+      chooseHeroPending={chooseHeroPending}
+      storyContent={storyContent}
+      characterId={characterId}
+      premade={premade}
+      premadeKept={premadeKept}
+      fadeIn={fadeIn}
+    />
+  );
+};
 
 /**
  * The chronicle tab of the story view. Reads the session's chronicle and writes one on request;

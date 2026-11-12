@@ -200,7 +200,7 @@ describe('GameChronicleButton integration', () => {
     expect(await screen.findByText('First paragraph only.')).toBeInTheDocument();
     expect(screen.queryByText('Second paragraph hidden.')).not.toBeInTheDocument();
     expect(screen.getByText('Read the full chronicle')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Upgrade to Pro' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Upgrade to Legend' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Share this chronicle' })).not.toBeInTheDocument();
     expect(vi.mocked(trpc.chronicles.getBySessionId.useQuery)).toHaveBeenCalledWith(
       { sessionId: SESSION_ID },
