@@ -42,12 +42,16 @@ export function LandingDocument({
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#0a0a0a" />
+        <meta name="theme-color" content="#070b14" />
         <title>{meta.title}</title>
         <meta name="description" content={meta.description} />
         {allKeywords.length > 0 ? <meta name="keywords" content={allKeywords.join(', ')} /> : null}
         <link rel="canonical" href={meta.canonicalUrl} />
-        {meta.noindex ? <meta name="robots" content="noindex, nofollow" /> : <meta name="robots" content="index, follow" />}
+        {meta.noindex ? (
+          <meta name="robots" content="noindex, nofollow" />
+        ) : (
+          <meta name="robots" content="index, follow" />
+        )}
 
         {/* Open Graph */}
         <meta property="og:site_name" content={site.name} />
@@ -82,12 +86,12 @@ export function LandingDocument({
         {/* Favicon */}
         <link rel="icon" href="/favicon.ico" />
 
-        {/* Distinctive Fonts - NOT generic Inter/Roboto */}
+        {/* Table fonts: Cinzel headings, EB Garamond prose, DM Sans UI */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Crimson+Pro:ital,wght@0,400;0,500;0,600;0,700;1,400&family=MedievalSharp&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&family=DM+Sans:wght@400;500;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap"
         />
 
         {/* Critical CSS - Dark Arcane Tome Aesthetic */}
@@ -102,33 +106,33 @@ export function LandingDocument({
 
               :root {
                 /* Deep darkness with warmth */
-                --void: #050505;
-                --obsidian: #0a0a0a;
-                --shadow: #121212;
-                --stone: #1a1a1a;
-                --ash: #2a2a2a;
+                --void: #070b14;
+                --obsidian: #070b14;
+                --shadow: #0c1220;
+                --stone: #111a2e;
+                --ash: #1e2a42;
 
                 /* Parchment tones */
-                --parchment: #f4e4c1;
-                --aged-paper: #d4c4a1;
+                --parchment: #f3deb0;
+                --aged-paper: #d5b070;
                 --ink: #2c2416;
 
                 /* Blood & Gold - the fantasy palette */
                 --blood: #7f1d1d;
                 --crimson: #991b1b;
                 --ember: #dc2626;
-                --gold: #b8860b;
-                --antique-gold: #d4a017;
-                --pale-gold: #f4d03f;
+                --gold: #d5b070;
+                --antique-gold: #e6c58a;
+                --pale-gold: #f3deb0;
 
                 /* Mystical accents */
-                --arcane: #4c1d95;
-                --mystic: #7c3aed;
+                --arcane: #1e2a42;
+                --mystic: #d5b070;
 
                 /* Text */
-                --text-primary: #e8e0d5;
-                --text-secondary: #a8a095;
-                --text-muted: #6b6560;
+                --text-primary: #eaeefa;
+                --text-secondary: #aab3cc;
+                --text-muted: #7f8aa8;
               }
 
               *, *::before, *::after {
@@ -143,7 +147,7 @@ export function LandingDocument({
               }
 
               body {
-                font-family: 'Crimson Pro', Georgia, 'Times New Roman', serif;
+                font-family: 'EB Garamond', Georgia, 'Times New Roman', serif;
                 background: var(--obsidian);
                 color: var(--text-primary);
                 line-height: 1.7;
@@ -154,12 +158,12 @@ export function LandingDocument({
 
               /* Typography */
               .font-display {
-                font-family: 'MedievalSharp', 'Luminari', fantasy;
+                font-family: 'Cinzel', 'Palatino Linotype', serif;
                 letter-spacing: 0.02em;
               }
 
               .font-elegant {
-                font-family: 'Cormorant Garamond', 'Palatino Linotype', serif;
+                font-family: 'EB Garamond', Georgia, serif;
                 font-weight: 500;
               }
 
@@ -189,7 +193,7 @@ export function LandingDocument({
               /* Decorative border corners */
               .tome-border {
                 position: relative;
-                border: 1px solid rgba(184, 134, 11, 0.2);
+                border: 1px solid rgba(213, 176, 112, 0.2);
               }
               .tome-border::before,
               .tome-border::after {
@@ -212,30 +216,30 @@ export function LandingDocument({
               /* Glowing text effect */
               .glow-gold {
                 text-shadow:
-                  0 0 10px rgba(184, 134, 11, 0.5),
-                  0 0 30px rgba(184, 134, 11, 0.3),
-                  0 0 60px rgba(184, 134, 11, 0.1);
+                  0 0 10px rgba(213, 176, 112, 0.5),
+                  0 0 30px rgba(213, 176, 112, 0.3),
+                  0 0 60px rgba(213, 176, 112, 0.1);
               }
 
               .glow-crimson {
                 text-shadow:
-                  0 0 10px rgba(127, 29, 29, 0.6),
-                  0 0 30px rgba(153, 27, 27, 0.4);
+                  0 0 10px rgba(213, 176, 112, 0.4),
+                  0 0 30px rgba(213, 176, 112, 0.25);
               }
 
               /* Hero gradient */
               .hero-gradient {
                 background:
-                  radial-gradient(ellipse 80% 50% at 50% 0%, rgba(127, 29, 29, 0.15) 0%, transparent 50%),
-                  radial-gradient(ellipse 60% 40% at 20% 80%, rgba(184, 134, 11, 0.08) 0%, transparent 50%),
-                  radial-gradient(ellipse 50% 50% at 80% 60%, rgba(76, 29, 149, 0.06) 0%, transparent 50%),
+                  radial-gradient(ellipse 80% 50% at 50% 0%, rgba(213, 176, 112, 0.08) 0%, transparent 50%),
+                  radial-gradient(ellipse 60% 40% at 20% 80%, rgba(213, 176, 112, 0.08) 0%, transparent 50%),
+                  radial-gradient(ellipse 50% 50% at 80% 60%, rgba(30, 42, 66, 0.25) 0%, transparent 50%),
                   linear-gradient(180deg, var(--void) 0%, var(--obsidian) 50%, var(--void) 100%);
               }
 
               /* Scroll/parchment card */
               .scroll-card {
                 background: linear-gradient(135deg, rgba(42, 42, 42, 0.8) 0%, rgba(26, 26, 26, 0.9) 100%);
-                border: 1px solid rgba(184, 134, 11, 0.15);
+                border: 1px solid rgba(213, 176, 112, 0.15);
                 border-radius: 4px;
                 position: relative;
                 overflow: hidden;
@@ -270,13 +274,13 @@ export function LandingDocument({
               /* FAQ Accordion */
               .faq-item {
                 background: rgba(26, 26, 26, 0.6);
-                border: 1px solid rgba(184, 134, 11, 0.1);
+                border: 1px solid rgba(213, 176, 112, 0.1);
                 border-radius: 4px;
                 overflow: hidden;
                 transition: border-color 0.3s ease;
               }
               .faq-item:hover {
-                border-color: rgba(184, 134, 11, 0.3);
+                border-color: rgba(213, 176, 112, 0.3);
               }
               .faq-item summary {
                 cursor: pointer;
@@ -313,13 +317,13 @@ export function LandingDocument({
                 justify-content: center;
                 gap: 0.5rem;
                 padding: 1rem 2.5rem;
-                font-family: 'Cormorant Garamond', serif;
+                font-family: 'DM Sans', system-ui, sans-serif;
                 font-size: 1.125rem;
                 font-weight: 600;
                 letter-spacing: 0.05em;
                 text-transform: uppercase;
                 color: var(--obsidian);
-                background: linear-gradient(135deg, var(--antique-gold) 0%, var(--gold) 50%, #8b6914 100%);
+                background: linear-gradient(135deg, var(--antique-gold) 0%, var(--gold) 50%, #a8854f 100%);
                 border: none;
                 border-radius: 2px;
                 cursor: pointer;
@@ -339,8 +343,8 @@ export function LandingDocument({
               .btn-primary:hover {
                 transform: translateY(-2px);
                 box-shadow:
-                  0 10px 40px rgba(184, 134, 11, 0.3),
-                  0 0 20px rgba(184, 134, 11, 0.2);
+                  0 10px 40px rgba(213, 176, 112, 0.3),
+                  0 0 20px rgba(213, 176, 112, 0.2);
               }
               .btn-primary:hover::before {
                 transform: translateX(100%);
@@ -352,7 +356,7 @@ export function LandingDocument({
                 justify-content: center;
                 gap: 0.5rem;
                 padding: 0.875rem 2rem;
-                font-family: 'Cormorant Garamond', serif;
+                font-family: 'DM Sans', system-ui, sans-serif;
                 font-size: 1rem;
                 font-weight: 600;
                 letter-spacing: 0.05em;
@@ -365,19 +369,19 @@ export function LandingDocument({
                 text-decoration: none;
               }
               .btn-secondary:hover {
-                background: rgba(184, 134, 11, 0.1);
-                box-shadow: 0 0 20px rgba(184, 134, 11, 0.2);
+                background: rgba(213, 176, 112, 0.1);
+                box-shadow: 0 0 20px rgba(213, 176, 112, 0.2);
               }
 
               /* Form inputs */
               .input-arcane {
                 width: 100%;
                 padding: 1rem 1.25rem;
-                font-family: 'Crimson Pro', serif;
+                font-family: 'DM Sans', system-ui, sans-serif;
                 font-size: 1rem;
                 color: var(--text-primary);
                 background: rgba(26, 26, 26, 0.8);
-                border: 1px solid rgba(184, 134, 11, 0.2);
+                border: 1px solid rgba(213, 176, 112, 0.2);
                 border-radius: 2px;
                 outline: none;
                 transition: all 0.3s ease;
@@ -388,13 +392,13 @@ export function LandingDocument({
               }
               .input-arcane:focus {
                 border-color: var(--gold);
-                box-shadow: 0 0 20px rgba(184, 134, 11, 0.15);
+                box-shadow: 0 0 20px rgba(213, 176, 112, 0.15);
               }
 
               /* Feature cards */
               .feature-card {
                 background: rgba(26, 26, 26, 0.5);
-                border: 1px solid rgba(184, 134, 11, 0.1);
+                border: 1px solid rgba(213, 176, 112, 0.1);
                 padding: 2rem;
                 position: relative;
                 transition: all 0.4s ease;
@@ -487,9 +491,7 @@ export function LandingDocument({
         ))}
       </head>
       <body className="parchment-noise vignette">
-        <div id="landing-root">
-          {children}
-        </div>
+        <div id="landing-root">{children}</div>
         {serializedState ? (
           <script
             id="__LANDING_DATA__"

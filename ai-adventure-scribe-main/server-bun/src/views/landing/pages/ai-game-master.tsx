@@ -20,7 +20,7 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
             radial-gradient(ellipse 120% 80% at 50% -30%, rgba(76, 29, 149, 0.2) 0%, transparent 60%),
             radial-gradient(ellipse 60% 50% at 90% 40%, rgba(184, 134, 11, 0.1) 0%, transparent 50%),
             radial-gradient(ellipse 80% 60% at 10% 70%, rgba(127, 29, 29, 0.08) 0%, transparent 50%),
-            linear-gradient(180deg, #050505 0%, #0a0a0a 50%, #050505 100%)
+            linear-gradient(180deg, #070b14 0%, #070b14 50%, #070b14 100%)
           `,
         }}
       />
@@ -77,14 +77,11 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
                   fontSize: '0.9rem',
                 }}
               >
-                <a
-                  href="/"
-                  style={{ color: 'var(--text-muted)', textDecoration: 'none' }}
-                >
+                <a href="/" style={{ color: 'var(--text-muted)', textDecoration: 'none' }}>
                   {site.name}
                 </a>
                 <span style={{ color: 'var(--text-muted)' }}>→</span>
-                <span style={{ color: 'var(--mystic)' }}>AI Game Master</span>
+                <span style={{ color: 'var(--gold)' }}>AI Game Master</span>
               </nav>
 
               {/* H1 - SEO Keyword Focus */}
@@ -98,10 +95,7 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
               >
                 <span style={{ color: 'var(--text-primary)' }}>What is an</span>
                 <br />
-                <span
-                  className="glow-gold"
-                  style={{ color: 'var(--gold)' }}
-                >
+                <span className="glow-gold" style={{ color: 'var(--gold)' }}>
                   AI Game Master?
                 </span>
               </h1>
@@ -118,7 +112,8 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
               >
                 An <strong style={{ color: 'var(--gold)' }}>AI Game Master</strong> is an artificial
                 intelligence system that runs tabletop roleplaying games. Unlike human GMs, an AI GM
-                is available 24/7, remembers every detail of your campaign, and never needs prep time.
+                is available 24/7, remembers every detail of your campaign, and never needs prep
+                time.
               </p>
 
               <p
@@ -129,38 +124,23 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
                   marginBottom: '2rem',
                 }}
               >
-                Infinite Realms creates an intelligent GM that understands classic fantasy RPG rules,
-                crafts adaptive narratives based on your choices, and brings NPCs to life with
-                distinct personalities. Perfect for solo players, busy schedules, or anyone craving
-                epic adventures.
+                Infinite Realms creates an intelligent GM that understands classic fantasy RPG
+                rules, crafts adaptive narratives based on your choices, and brings NPCs to life
+                with distinct personalities. Perfect for solo players, busy schedules, or anyone
+                craving epic adventures.
               </p>
 
               {/* CTA Form */}
-              <form
-                data-waitlist-form
-                data-source="ai-gm-hero"
-                style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '1rem',
-                  marginBottom: '1rem',
-                }}
+              <a
+                href="/explore"
+                data-track-cta="ai-gm-hero"
+                className="btn-primary"
+                style={{ textDecoration: 'none', marginBottom: '1rem' }}
               >
-                <input
-                  type="email"
-                  name="email"
-                  placeholder="Enter your email..."
-                  required
-                  className="input-arcane"
-                  style={{ flex: '1 1 250px' }}
-                />
-                <button type="submit" data-track-cta="ai-gm-hero" className="btn-primary">
-                  Try AI GM Free
-                </button>
-              </form>
-              <p data-form-message style={{ fontSize: '0.875rem' }} />
+                Play free
+              </a>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>
-                Join the beta waitlist — no credit card required
+                Open beta · Free to play · No waitlist
               </p>
             </div>
 
@@ -197,7 +177,8 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
                   style={{
                     position: 'absolute',
                     inset: '60px',
-                    background: 'radial-gradient(circle, rgba(76, 29, 149, 0.3) 0%, rgba(184, 134, 11, 0.1) 100%)',
+                    background:
+                      'radial-gradient(circle, rgba(76, 29, 149, 0.3) 0%, rgba(184, 134, 11, 0.1) 100%)',
                     borderRadius: '50%',
                     display: 'flex',
                     alignItems: 'center',
@@ -214,7 +195,7 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
                     top: '0',
                     left: '50%',
                     transform: 'translateX(-50%) translateY(-50%)',
-                    color: 'var(--mystic)',
+                    color: 'var(--gold)',
                     fontSize: '1.5rem',
                   }}
                 >
@@ -241,7 +222,7 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
                     top: '50%',
                     left: '0',
                     transform: 'translateY(-50%) translateX(-50%)',
-                    color: 'var(--mystic)',
+                    color: 'var(--gold)',
                     fontSize: '1.5rem',
                     animationDelay: '0.5s',
                   }}
@@ -271,15 +252,12 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
       {/* ========== QUICK ANSWER BOX (AEO) ========== */}
       <section className="section" style={{ paddingTop: 0, position: 'relative', zIndex: 2 }}>
         <div className="container" style={{ maxWidth: '800px' }}>
-          <div
-            className="answer-box"
-            style={{ borderLeftColor: 'var(--mystic)' }}
-          >
+          <div className="answer-box" style={{ borderLeftColor: 'var(--gold)' }}>
             <h2
               className="font-display"
               style={{
                 fontSize: '1.5rem',
-                color: 'var(--mystic)',
+                color: 'var(--gold)',
                 marginBottom: '1.25rem',
               }}
             >
@@ -303,7 +281,7 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
                     color: 'var(--text-secondary)',
                   }}
                 >
-                  <span style={{ color: 'var(--mystic)', marginTop: '0.2rem' }}>✓</span>
+                  <span style={{ color: 'var(--gold)', marginTop: '0.2rem' }}>✓</span>
                   <span style={{ fontWeight: item.bold ? 600 : 400 }}>{item.text}</span>
                 </li>
               ))}
@@ -338,11 +316,19 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
             <div
               style={{
                 padding: '2rem',
-                background: 'linear-gradient(135deg, rgba(184, 134, 11, 0.08) 0%, rgba(26, 26, 26, 0.6) 100%)',
+                background:
+                  'linear-gradient(135deg, rgba(184, 134, 11, 0.08) 0%, rgba(26, 26, 26, 0.6) 100%)',
                 border: '1px solid rgba(184, 134, 11, 0.2)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  marginBottom: '1.5rem',
+                }}
+              >
                 <span style={{ fontSize: '2rem' }}>🤖</span>
                 <h3 className="font-display" style={{ fontSize: '1.25rem', color: 'var(--gold)' }}>
                   AI Game Master
@@ -366,7 +352,7 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
                       color: 'var(--text-secondary)',
                     }}
                   >
-                    <span style={{ color: '#22c55e', marginTop: '0.2rem' }}>✓</span>
+                    <span style={{ color: 'var(--gold)', marginTop: '0.2rem' }}>✓</span>
                     <span>{item}</span>
                   </li>
                 ))}
@@ -377,13 +363,21 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
             <div
               style={{
                 padding: '2rem',
-                background: 'linear-gradient(135deg, rgba(76, 29, 149, 0.08) 0%, rgba(26, 26, 26, 0.6) 100%)',
+                background:
+                  'linear-gradient(135deg, rgba(76, 29, 149, 0.08) 0%, rgba(26, 26, 26, 0.6) 100%)',
                 border: '1px solid rgba(76, 29, 149, 0.2)',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  marginBottom: '1.5rem',
+                }}
+              >
                 <span style={{ fontSize: '2rem' }}>🧙</span>
-                <h3 className="font-display" style={{ fontSize: '1.25rem', color: 'var(--mystic)' }}>
+                <h3 className="font-display" style={{ fontSize: '1.25rem', color: 'var(--gold)' }}>
                   Human Game Master
                 </h3>
               </div>
@@ -405,7 +399,7 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
                       color: 'var(--text-secondary)',
                     }}
                   >
-                    <span style={{ color: 'var(--mystic)', marginTop: '0.2rem' }}>◆</span>
+                    <span style={{ color: 'var(--gold)', marginTop: '0.2rem' }}>◆</span>
                     <span>{item}</span>
                   </li>
                 ))}
@@ -424,8 +418,8 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
               margin: '2rem auto 0',
             }}
           >
-            AI Game Masters don't replace human GMs — they complement them. Perfect for solo adventures,
-            practice sessions, or when your group can't coordinate schedules.
+            AI Game Masters don't replace human GMs — they complement them. Perfect for solo
+            adventures, practice sessions, or when your group can't coordinate schedules.
           </p>
         </div>
       </section>
@@ -521,14 +515,19 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
             >
               AI Game Master FAQ
             </h2>
-            <p style={{ color: 'var(--text-muted)' }}>Common questions about AI-powered tabletop gaming</p>
+            <p style={{ color: 'var(--text-muted)' }}>
+              Common questions about AI-powered tabletop gaming
+            </p>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             {faqItems.map((item, index) => (
               <details key={index} className="faq-item">
                 <summary>
-                  <span className="font-elegant" style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+                  <span
+                    className="font-elegant"
+                    style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}
+                  >
                     {item.question}
                   </span>
                   <svg
@@ -551,14 +550,18 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
       </section>
 
       {/* ========== FINAL CTA ========== */}
-      <section className="section" style={{ position: 'relative', zIndex: 2, paddingBottom: '8rem' }}>
+      <section
+        className="section"
+        style={{ position: 'relative', zIndex: 2, paddingBottom: '8rem' }}
+      >
         <div className="container" style={{ maxWidth: '700px' }}>
           <div
             className="tome-border"
             style={{
               textAlign: 'center',
               padding: '3rem 2rem',
-              background: 'linear-gradient(135deg, rgba(76, 29, 149, 0.1) 0%, rgba(184, 134, 11, 0.05) 100%)',
+              background:
+                'linear-gradient(135deg, rgba(76, 29, 149, 0.1) 0%, rgba(184, 134, 11, 0.05) 100%)',
             }}
           >
             <h2
@@ -581,41 +584,17 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
                 margin: '0 auto 2rem',
               }}
             >
-              Join the beta waitlist and be among the first to experience the future of solo tabletop gaming.
+              Open beta. Free to play. Start a solo adventure with an AI Game Master.
             </p>
 
-            <form
-              data-waitlist-form
-              data-source="ai-gm-footer"
-              style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                justifyContent: 'center',
-                gap: '1rem',
-                maxWidth: '450px',
-                margin: '0 auto 1rem',
-              }}
+            <a
+              href="/explore"
+              data-track-cta="ai-gm-footer"
+              className="btn-primary"
+              style={{ textDecoration: 'none', marginBottom: '1rem' }}
             >
-              <input
-                type="email"
-                name="email"
-                placeholder="your@email.com"
-                required
-                className="input-arcane"
-                style={{ flex: '1 1 200px' }}
-              />
-              <button
-                type="submit"
-                data-track-cta="ai-gm-footer"
-                className="btn-primary"
-                style={{
-                  background: 'linear-gradient(135deg, var(--mystic) 0%, #6d28d9 100%)',
-                }}
-              >
-                Join Waitlist
-              </button>
-            </form>
-            <p data-form-message style={{ fontSize: '0.875rem' }} />
+              Play free
+            </a>
           </div>
         </div>
       </section>
@@ -639,7 +618,11 @@ export function AIGameMasterPage({ site, faqItems }: AIGameMasterPageProps) {
               gap: '1.5rem',
             }}
           >
-            <a href="/" className="font-display" style={{ fontSize: '1.25rem', color: 'var(--parchment)', textDecoration: 'none' }}>
+            <a
+              href="/"
+              className="font-display"
+              style={{ fontSize: '1.25rem', color: 'var(--parchment)', textDecoration: 'none' }}
+            >
               {site.name}
             </a>
 

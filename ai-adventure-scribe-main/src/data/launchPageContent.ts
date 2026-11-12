@@ -7,15 +7,6 @@
 
 import { ACCOUNT_UPGRADE_PRICE } from '@/hooks/use-account-billing';
 
-export interface RoadmapPhase {
-  phase: string;
-  title: string;
-  description: string;
-  timeline: string;
-  features: string[];
-  status: 'current' | 'upcoming' | 'completed';
-}
-
 export interface PlannedFeature {
   title: string;
   description: string;
@@ -45,17 +36,6 @@ export interface FAQItem {
 }
 
 export const launchPageContent = {
-  // Vision Section
-  vision: {
-    content: `Frustrated by campaigns that die from scheduling hell or forgetful AIs? Infinite Realms is your always-on Dungeon Master: persistent NPCs with memories, cinematic narratives that adapt to your style, and emotional depth that makes every session feel alive.
-
-We're building more than just a tool. We're creating a new way to experience tabletop RPGs—a cinematic adventure that adapts to your playstyle, remembers your story, and pushes the boundaries of what's possible in interactive storytelling.
-
-This isn't about replacing human Dungeon Masters. It's about giving every adventurer the chance to experience the magic of a truly responsive, intelligent storytelling partner that never gets tired, never forgets, and always has another twist ready.`,
-    quote:
-      'Build your legend in a world that waits for you – with characters who remember, react, and grow, turning solo play into an epic saga.',
-  },
-
   // Features Section
   features: {
     headline: 'What works today',
@@ -138,40 +118,6 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
     note: 'Daily limits reset at 00:00 UTC.',
   },
 
-  // Launch Roadmap
-  roadmap: {
-    headline: 'What is live, and what is next',
-    subtitle: 'No dates. We list what works today and what we plan to build.',
-    phases: [
-      {
-        phase: 'Now',
-        title: 'Open beta',
-        description:
-          'Anyone can sign up and play. The core game works today. We fix bugs and add features based on what players tell us.',
-        timeline: 'Live now',
-        status: 'current' as const,
-        features: [
-          'Memory for your story and your NPCs',
-          'AI character portraits and campaign cover art',
-          'Voice narration (standard voices free, premium voices with Legend)',
-          'D&D 5E rules, dice and a combat tracker',
-        ],
-      },
-      {
-        phase: 'Next',
-        title: 'Next up',
-        description: 'What we plan to build next. The order can change.',
-        timeline: 'Planned',
-        status: 'upcoming' as const,
-        features: [
-          'Storybook export: your campaign as a book',
-          'More ready-to-play campaigns',
-          'Fixes and polish from player feedback',
-        ],
-      },
-    ] as RoadmapPhase[],
-  },
-
   // Help Shape Offer
   helpShape: {
     headline: 'Help shape Infinite Realms',
@@ -251,13 +197,6 @@ This isn't about replacing human Dungeon Masters. It's about giving every advent
         link: { href: '/terms', label: 'Terms of Service' },
       },
     ] as FAQItem[],
-  },
-
-  // Final CTA
-  finalCTA: {
-    headline: 'Your Adventure Awaits',
-    description: 'Pick an adventure and start playing free. Or get news by email.',
-    cta: 'Play free',
   },
 
   // Footer

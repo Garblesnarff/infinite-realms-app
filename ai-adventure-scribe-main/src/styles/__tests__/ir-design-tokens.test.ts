@@ -18,6 +18,15 @@ const read = (relative: string): string =>
 const overhaulCss = read('../ir-overhaul.css');
 const indexCss = read('../../index.css');
 const componentsCss = read('../infinite-realms-components.css');
+/** Since #1483 the app loads its Google Fonts once, from `index.html` (one `<link>`). */
+const indexHtml = read('../../../index.html');
+
+/** The `family=` spec for one font in the index.html Google Fonts link. */
+const fontFamilySpec = (family: string): string => {
+  const match = indexHtml.match(new RegExp(`family=${family}(:[^&"]*)?`));
+  expect(match, `${family} is loaded in index.html`).not.toBeNull();
+  return match?.[0] ?? '';
+};
 
 /** Body of the first top-level `.ir-app { … }` rule (the token block). */
 const irAppBlock = (): string => {
@@ -140,8 +149,20 @@ describe('design token wiring (#2258)', () => {
   });
 
   it('loads EB Garamond for the narration font', () => {
-    expect(indexCss).toContain('family=EB+Garamond:ital,wght@0,400;0,500;1,400');
+    // #1483 moved the font load from index.css to the one index.html link. The guarantee is the
+    // same: EB Garamond loads with roman 400 and 500 and italic 400 (600 is added for headings).
+    const spec = fontFamilySpec('EB\\+Garamond');
+    expect(spec).toMatch(/^family=EB\+Garamond:ital,wght@/);
+    for (const axis of ['0,400', '0,500', '1,400']) expect(spec).toContain(axis);
+    expect(indexCss).not.toContain('fonts.googleapis.com');
     expect(overhaulCss).toMatch(/\.ir-narr\s*\{[^}]*'EB Garamond'/);
+  });
+
+  it('loads the Table fonts (Cinzel, EB Garamond, Caveat) and DM Sans in the one app font link', () => {
+    expect(fontFamilySpec('Cinzel')).toContain('400..900');
+    expect(fontFamilySpec('Caveat')).toContain('500');
+    expect(fontFamilySpec('DM\\+Sans')).toContain('400');
+    expect(indexHtml.match(/fonts\.googleapis\.com\/css2/g)).toHaveLength(1);
   });
 
   it('consolidates prefers-reduced-motion rules to exactly one block in index.css and none in components.css (#101)', () => {

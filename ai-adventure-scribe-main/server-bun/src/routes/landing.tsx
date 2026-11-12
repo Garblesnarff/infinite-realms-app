@@ -87,7 +87,7 @@ export const landingRoutes = new Elysia()
         {
           question: 'Is the AI Game Master free?',
           answer:
-            'We are currently in closed beta with free access for early adopters. Join the waitlist to be among the first to experience AI-powered tabletop gaming.',
+            'Yes. Infinite Realms is in open beta and free to play. There is no waitlist. Start an adventure at /explore.',
         },
         {
           question: 'How does the AI remember my campaign history?',
@@ -104,7 +104,7 @@ export const landingRoutes = new Elysia()
             dateModified: new Date().toISOString().split('T')[0],
           }),
           createSoftwareAppSchema(site),
-          createFAQSchema(faqItems)
+          createFAQSchema(faqItems),
         ),
       ];
 
@@ -116,7 +116,7 @@ export const landingRoutes = new Elysia()
         </LandingDocument>,
         {
           headers: cacheHeaders,
-        }
+        },
       );
     } catch (error) {
       // ⚡ Bolt: Use non-blocking structured logger for better performance and observability
@@ -186,7 +186,7 @@ export const landingRoutes = new Elysia()
             dateModified: new Date().toISOString().split('T')[0],
           }),
           createSoftwareAppSchema(site),
-          createFAQSchema(faqItems)
+          createFAQSchema(faqItems),
         ),
       ];
 
@@ -198,7 +198,7 @@ export const landingRoutes = new Elysia()
         </LandingDocument>,
         {
           headers: cacheHeaders,
-        }
+        },
       );
     } catch (error) {
       // ⚡ Bolt: Use non-blocking structured logger for better performance and observability

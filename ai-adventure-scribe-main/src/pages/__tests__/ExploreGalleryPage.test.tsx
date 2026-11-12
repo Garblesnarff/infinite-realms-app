@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { HelmetProvider } from 'react-helmet-async';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import ExploreGalleryPage from '../ExploreGalleryPage';
 
@@ -14,11 +14,20 @@ const state = vi.hoisted(() => ({
 vi.mock('@/hooks/use-starter-campaigns', () => ({
   useStarterCampaigns: () => state,
 }));
-vi.mock('@/components/campaigns/StarterCampaignCard', () => ({
-  StarterCampaignCard: () => <div data-testid="campaign-card" />,
+// The Table look is the only campaign card now (the boxed card); StarterCampaignCard is unreachable here.
+vi.mock('@/features/campaigns/table/BoxedCampaign', () => ({
+  BoxedCampaign: () => <div data-testid="campaign-card" />,
 }));
 
 describe('ExploreGalleryPage (#2343 item 16)', () => {
+  beforeEach(() => {
+    // Table look on, as the public pages now run it (the boxed card path).
+    document.body.classList.add('ir-table-look');
+  });
+  afterEach(() => {
+    document.body.classList.remove('ir-table-look');
+  });
+
   it('shows loading before revealing empty-state copy after an empty fetch', () => {
     const { rerender } = render(
       <HelmetProvider>
