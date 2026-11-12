@@ -24,6 +24,8 @@ import { dedupeDmOptions, stripOptionsRepeatedInText } from './dm-response-schem
 import { suspectsFabricatedOutcome } from '../../../../shared/narration-harm.js';
 import { logger } from '../../lib/logger.js';
 
+import type { SQL } from 'drizzle-orm';
+
 // Database imports stay inside the functions, as in combat-intent-roster.ts: /v1/llm/generate
 // imports this module, and its route contract tests load without an application database.
 
@@ -1035,27 +1037,22 @@ export async function expireStaleHeldReplies(
 }
 
 /**
- * The sessions this user owns, through a campaign or a character. game_sessions has no user_id, so
- * every held-record query limits itself to these sessions. Both the listing and the move use it.
+ * Whether this one session belongs to the user, through its campaign or its character. game_sessions
+ * has no user_id, so the session must reach a campaign or character the user owns. EXISTS is scoped to
+ * `sessionId`: it checks a single session and never lists the user's sessions. Both the listing and
+ * the conditional move use it.
  */
-async function ownedSessionIds(userId: string): Promise<string[]> {
-  const [{ db }, { gameSessions, campaigns, characters }, { eq, or }] = await Promise.all([
-    import('../../../../db/client.js'),
+async function sessionOwnedBy(sessionId: string, userId: string): Promise<SQL> {
+  const [{ gameSessions, campaigns, characters }, { sql }] = await Promise.all([
     import('../../../../db/schema/index.js'),
     import('drizzle-orm'),
   ]);
-  const rows = await db
-    .select({ id: gameSessions.id })
-    .from(gameSessions)
-    .leftJoin(campaigns, eq(campaigns.id, gameSessions.campaignId))
-    .leftJoin(characters, eq(characters.id, gameSessions.characterId))
-    .where(or(eq(campaigns.userId, userId), eq(characters.userId, userId)));
-  return rows.map((row) => row.id);
+  return sql`exists (select 1 from ${gameSessions} left join ${campaigns} on ${campaigns.id} = ${gameSessions.campaignId} left join ${characters} on ${characters.id} = ${gameSessions.characterId} where ${gameSessions.id} = ${sessionId} and (${campaigns.userId} = ${userId} or ${characters.userId} = ${userId}))`;
 }
 
 /** The session's held records older than the cutoff, owner-scoped. */
 async function listStaleHeldRecords(scope: StaleHeldScope): Promise<DmReplyRecord[]> {
-  const [{ db }, { dmReplyRecords }, { and, eq, inArray, lt }] = await Promise.all([
+  const [{ db }, { dmReplyRecords }, { and, eq, lt }] = await Promise.all([
     import('../../../../db/client.js'),
     import('../../../../db/schema/index.js'),
     import('drizzle-orm'),
@@ -1069,7 +1066,7 @@ async function listStaleHeldRecords(scope: StaleHeldScope): Promise<DmReplyRecor
         eq(dmReplyRecords.userId, scope.userId),
         eq(dmReplyRecords.state, 'held'),
         lt(dmReplyRecords.createdAt, scope.before),
-        inArray(dmReplyRecords.sessionId, await ownedSessionIds(scope.userId)),
+        await sessionOwnedBy(scope.sessionId, scope.userId),
       ),
     );
   return rows.map((record) => ({
@@ -1089,7 +1086,7 @@ async function moveHeldRecordForOwner(
   to: 'ready' | 'cancelled',
   scope: StaleHeldScope,
 ): Promise<boolean> {
-  const [{ db }, { dmReplyRecords }, { and, eq, inArray, lt }] = await Promise.all([
+  const [{ db }, { dmReplyRecords }, { and, eq, lt }] = await Promise.all([
     import('../../../../db/client.js'),
     import('../../../../db/schema/index.js'),
     import('drizzle-orm'),
@@ -1104,7 +1101,7 @@ async function moveHeldRecordForOwner(
         eq(dmReplyRecords.userId, scope.userId),
         eq(dmReplyRecords.state, 'held'),
         lt(dmReplyRecords.createdAt, scope.before),
-        inArray(dmReplyRecords.sessionId, await ownedSessionIds(scope.userId)),
+        await sessionOwnedBy(scope.sessionId, scope.userId),
       ),
     )
     .returning({ id: dmReplyRecords.id });
