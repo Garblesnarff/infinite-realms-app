@@ -5,7 +5,8 @@
 export type ReduceMotion = 'system' | 'on' | 'off';
 
 /** Playback rates the narration Speed control offers. 1 is the normal rate. */
-export const NARRATION_SPEEDS = [0.75, 1, 1.25, 1.5] as const;
+/** The three speeds PanelsSettings.dc.html draws. A stored speed outside this list maps to the nearest one. */
+export const NARRATION_SPEEDS = [0.75, 1, 1.25] as const;
 
 export interface TableSettings {
   showTargetNumbers: boolean;
@@ -41,8 +42,14 @@ const REDUCE_MOTION_VALUES: readonly ReduceMotion[] = ['system', 'on', 'off'];
 const isVolume = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1;
 
-const isSpeed = (value: unknown): value is number =>
-  typeof value === 'number' && (NARRATION_SPEEDS as readonly number[]).includes(value);
+/** The offered speed nearest to a stored value. Non-numbers fall back to the default (1). */
+export const nearestNarrationSpeed = (value: unknown): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    return DEFAULT_TABLE_SETTINGS.narrationSpeed;
+  return NARRATION_SPEEDS.reduce((best, speed) =>
+    Math.abs(speed - value) < Math.abs(best - value) ? speed : best,
+  );
+};
 
 /** Reads settings for one user. Missing or unreadable values fall back to the defaults. */
 export const readTableSettings = (userId: string): TableSettings => {
@@ -64,9 +71,7 @@ export const readTableSettings = (userId: string): TableSettings => {
       narrationVolume: isVolume(values.narrationVolume)
         ? values.narrationVolume
         : DEFAULT_TABLE_SETTINGS.narrationVolume,
-      narrationSpeed: isSpeed(values.narrationSpeed)
-        ? values.narrationSpeed
-        : DEFAULT_TABLE_SETTINGS.narrationSpeed,
+      narrationSpeed: nearestNarrationSpeed(values.narrationSpeed),
       diceSound:
         typeof values.diceSound === 'boolean' ? values.diceSound : DEFAULT_TABLE_SETTINGS.diceSound,
       tableLook:

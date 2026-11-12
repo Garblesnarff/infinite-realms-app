@@ -9,6 +9,8 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 
+import '@/styles/ir-table-parts.css';
+
 /**
  * The roll tray's place in the page: an element in the center column's normal flow, between
  * the story stream and the chat box (#2252). GameMainContent owns the element; the roll
@@ -20,19 +22,34 @@ const RollTraySlotContext = createContext<HTMLElement | null>(null);
 
 export const RollTraySlotProvider = RollTraySlotContext.Provider;
 
-/** Move one persistent portal target between layouts without unmounting a pending roll. */
+/** The closed lid's text, shown on the Table host only while no roll is pending. */
+export const TRAY_LID_TEXT = 'It opens when the DM asks for a roll.';
+
+/**
+ * Move one persistent portal target between layouts without unmounting a pending roll. On the
+ * Table host (`ir-table-roll-host`) the closed lid's text is a real element in front of the slot;
+ * CSS shows it only while the slot is empty, so screen readers get the text and it is hidden
+ * the rest of the time. Other hosts get the slot alone.
+ */
 export function useStableRollTraySlot(host: HTMLElement | null): HTMLElement | null {
-  const [slot] = useState(() => {
+  const [parts] = useState(() => {
     if (typeof document === 'undefined') return null;
-    const element = document.createElement('div');
-    element.className = 'ir-stable-roll-slot';
-    return element;
+    const slot = document.createElement('div');
+    slot.className = 'ir-stable-roll-slot';
+    const lid = document.createElement('p');
+    lid.className = 'ir-roll-tray-lid';
+    lid.textContent = TRAY_LID_TEXT;
+    return { slot, lid };
   });
   useLayoutEffect(() => {
-    if (host && slot) host.appendChild(slot);
-  }, [host, slot]);
-  useEffect(() => () => slot?.remove(), [slot]);
-  return slot;
+    if (!host || !parts) return undefined;
+    const withLid = host.classList.contains('ir-table-roll-host');
+    if (withLid) host.appendChild(parts.lid);
+    host.appendChild(parts.slot);
+    return () => parts.lid.remove();
+  }, [host, parts]);
+  useEffect(() => () => parts?.slot.remove(), [parts]);
+  return parts?.slot ?? null;
 }
 
 /**

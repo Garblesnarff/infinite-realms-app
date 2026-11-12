@@ -1,10 +1,10 @@
+import { nearestNarrationSpeed } from './table-settings';
+
 /** Same key `useVoiceAudioControl` already reads for the audio element's volume. */
 export const VOICE_VOLUME_KEY = 'progressive-voice-volume';
 
 /** Read at play time and applied as `HTMLAudioElement.playbackRate`. */
 export const VOICE_RATE_KEY = 'progressive-voice-rate';
-
-const SPEEDS = [0.75, 1, 1.25, 1.5] as const;
 
 /** Writes a number the voice hook already understands, and tells same-tab listeners. */
 export const writeVoiceNumber = (key: string, value: number): void => {
@@ -19,13 +19,16 @@ export const writeVoiceNumber = (key: string, value: number): void => {
   }
 };
 
-/** Narration speed. Anything else, including a missing key, plays at normal speed. */
+/**
+ * Narration speed. Offers the same three speeds as the Table settings, so a stored value that is
+ * not offered (an old 1.5, for example) plays at the nearest one. A missing key plays at 1.
+ */
 export const readVoiceRate = (): number => {
   try {
     const raw = window.localStorage.getItem(VOICE_RATE_KEY);
     if (!raw) return 1;
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed === 'number' && (SPEEDS as readonly number[]).includes(parsed)) return parsed;
+    return nearestNarrationSpeed(parsed);
   } catch {
     // Unreadable: play at normal speed.
   }

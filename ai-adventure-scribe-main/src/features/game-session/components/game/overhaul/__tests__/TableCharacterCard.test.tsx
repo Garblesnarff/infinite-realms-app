@@ -63,4 +63,16 @@ describe('Table character card', () => {
     fireEvent.error(images()[0]);
     expect(images()[0].src).toContain('/storage/v1/render/image/public/portraits/avatar.png');
   });
+
+  it('pins the portrait with a decorative paper clip and sets the plaques', () => {
+    const { container } = render(
+      <TableCharacterCard
+        character={{ ...buildCharacterSheet(null), attacks: [] }}
+        onOpenSheet={vi.fn()}
+      />,
+    );
+    const clip = container.querySelector('svg.ir-paper-clip');
+    expect(clip).toHaveAttribute('aria-hidden', 'true');
+    expect(container.querySelector('dl.ir-plaques')).toBeInTheDocument();
+  });
 });
