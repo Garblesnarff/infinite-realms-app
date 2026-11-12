@@ -77,14 +77,16 @@ export function isProviderKeyLimitError(result: KeyLimitSignal): boolean {
  * failure in the turn that triggered it.
  */
 export function alertProviderKeyLimit(
-  result: KeyLimitSignal & { provider?: string },
+  result: KeyLimitSignal & { provider?: string; model?: string | null },
 ): void {
   const provider = result.provider ?? 'unknown';
   const upstreamStatus = result.upstreamStatus ?? null;
+  const model = result.model ?? null;
   try {
     logger.error({
       msg: LLM_PROVIDER_KEY_LIMIT_CODE,
       provider,
+      model,
       upstreamStatus,
     });
   } catch {

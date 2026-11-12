@@ -3,11 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageHandler } from '../MessageHandler';
 import {
+  DM_KEY_LIMIT_MESSAGE,
   DM_NETWORK_ERROR_MESSAGE,
   DM_STILL_THINKING_TIMEOUT_MS,
   DM_TIMEOUT_MESSAGE,
   DM_TURN_TIMEOUT_MS,
 } from '../use-message-handler-logic';
+
+import { DmProviderKeyLimitError } from '@/infrastructure/api/rest-client';
 
 const { mockGetAIResponse, mockSendMessage, mockToast, mockMessages, mockValidateSession } =
   vi.hoisted(() => ({
@@ -418,5 +421,33 @@ describe('DM turn recovery (#2480)', () => {
     await act(async () => {
       await vi.advanceTimersByTimeAsync(DM_TURN_TIMEOUT_MS);
     });
+  });
+
+  it('shows the key-limit outage message and the retry control, keeps the text, and retries (#350)', async () => {
+    mockGetAIResponse.mockRejectedValueOnce(new DmProviderKeyLimitError());
+    renderHandler();
+
+    await act(async () => {
+      await send('Look around the hall').catch(() => {});
+    });
+
+    expect(state.isProcessing).toBe(false);
+    expect(state.sendError).toBe(DM_KEY_LIMIT_MESSAGE);
+    expect(state.onRetry).toEqual(expect.any(Function));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'DM unavailable', description: DM_KEY_LIMIT_MESSAGE }),
+    );
+    expect(mockSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Look around the hall', sender: 'player' }),
+    );
+
+    mockMessages.push({ text: 'Look around the hall', sender: 'player' });
+    mockGetAIResponse.mockResolvedValueOnce({ text: 'The DM answers.', rollRequests: [] });
+    await act(async () => {
+      await state.onRetry('Look around the hall');
+    });
+
+    expect(mockGetAIResponse).toHaveBeenCalledTimes(2);
+    expect(state.sendError).toBe(null);
   });
 });

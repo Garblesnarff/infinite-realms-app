@@ -191,10 +191,10 @@ const degradedGenerateEnvelope = (): {
 
 // #350: a turn degraded by a provider key/credit limit is not the player's
 // fault. The message says so plainly, and the route gives the consumed quota
-// unit back (see the degraded branch below) — "Your turn was not used."
+// unit back (see the degraded branch below) — "Your turn was not lost."
 const LLM_GENERATE_KEY_LIMIT_REASON = 'llm_provider_key_limit';
 const LLM_GENERATE_KEY_LIMIT_TEXT =
-  'The storyteller is offline for maintenance. Your turn was not used.';
+  'The Dungeon Master is unavailable right now. Your turn was not lost; try again in a few minutes.';
 
 const keyLimitDegradedEnvelope = (): {
   parsed: false;

@@ -330,6 +330,21 @@ export class PartyDefeatedError extends Error {
   }
 }
 
+/**
+ * #350: the DM turn was degraded because the provider key or credit is spent.
+ * The server gave the quota unit back; the caller shows the outage message and
+ * the composer's Retry control instead of a DM reply.
+ */
+export class DmProviderKeyLimitError extends Error {
+  constructor() {
+    super('DM unavailable — provider key limit');
+    this.name = 'DmProviderKeyLimitError';
+  }
+}
+
+/** The stable `reason` the server sends on a key-limit degraded turn (routes/v1/llm.ts). */
+const DM_PROVIDER_KEY_LIMIT_REASON = 'llm_provider_key_limit';
+
 function isV1Route(path: string): boolean {
   return path.startsWith('/v1/') || path.startsWith('/api/trpc/');
 }
@@ -935,7 +950,14 @@ class LlmApiClient {
         dmReplyMessageId?: string;
         terminalState?: string;
         encounterId?: string;
+        degraded?: boolean;
+        reason?: string;
       };
+      // #350: a key-limit degraded turn arrives as HTTP 200 with a stable reason.
+      // It is not a DM reply, so throw rather than save its text as prose.
+      if (data?.degraded === true && data?.reason === DM_PROVIDER_KEY_LIMIT_REASON) {
+        throw new DmProviderKeyLimitError();
+      }
       // #2456: the party was defeated. This is a handled terminal state, not a
       // DM reply — throw so callers can render the death screen instead of
       // treating it as ordinary text or an error.

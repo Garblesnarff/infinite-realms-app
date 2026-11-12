@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   createTurnPhaseReporter,
   isNetworkError,
+  DmProviderKeyLimitError,
   QuotaExceededError,
   SESSION_EXPIRED_MESSAGE,
   SessionExpiredError,
@@ -75,6 +76,9 @@ export const DM_TIMEOUT_MESSAGE = 'The DM did not respond in time. Your message 
 export const DM_NETWORK_ERROR_MESSAGE = 'The connection was lost. Your message is still here.';
 export const DM_PROCESSING_ERROR_MESSAGE =
   'The DM could not finish this turn. Your message is still here. Retry to continue.';
+// #350: a provider key/credit limit. Same words as the server's degraded text.
+export const DM_KEY_LIMIT_MESSAGE =
+  'The Dungeon Master is unavailable right now. Your turn was not lost; try again in a few minutes.';
 
 export { ATTACK_WAIT_RESOLVING, TURN_WAIT_WORKING };
 
@@ -1107,6 +1111,7 @@ export const useMessageHandlerLogic = ({
           (error as { status?: unknown }).status === 401);
       const networkError = isNetworkError(error);
       const quotaExceeded = error instanceof QuotaExceededError;
+      const keyLimitOutage = error instanceof DmProviderKeyLimitError;
       abortController.abort();
       settlePendingPlayerInput();
       handleAsyncError(error, {
@@ -1122,11 +1127,13 @@ export const useMessageHandlerLogic = ({
       // Provide user feedback and recovery options
       const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
       const combatIntentFailure = error instanceof CombatIntentRefusedError && !error.isRepairable;
-      const recoveryMessage = quotaExceeded
-        ? quotaExceededMessage(error.resetAt)
-        : combatIntentFailure
-          ? 'The server could not complete that combat action. Please try again.'
-          : 'I encountered an issue processing your message. Let me try again, or you can rephrase your action if needed.';
+      const recoveryMessage = keyLimitOutage
+        ? DM_KEY_LIMIT_MESSAGE
+        : quotaExceeded
+          ? quotaExceededMessage(error.resetAt)
+          : combatIntentFailure
+            ? 'The server could not complete that combat action. Please try again.'
+            : 'I encountered an issue processing your message. Let me try again, or you can rephrase your action if needed.';
 
       // Add a system error message to the conversation
       if (!sessionExpired && !networkError && !timedOut) {
@@ -1185,11 +1192,13 @@ export const useMessageHandlerLogic = ({
           ? DM_NETWORK_ERROR_MESSAGE
           : sessionExpired
             ? SESSION_EXPIRED_MESSAGE
-            : quotaExceeded
-              ? recoveryMessage
-              : combatIntentFailure
+            : keyLimitOutage
+              ? DM_KEY_LIMIT_MESSAGE
+              : quotaExceeded
                 ? recoveryMessage
-                : DM_PROCESSING_ERROR_MESSAGE;
+                : combatIntentFailure
+                  ? recoveryMessage
+                  : DM_PROCESSING_ERROR_MESSAGE;
       setSendError(displayErrorMessage);
       // #1315: a timeout after a pending entry arrived leaves the player with
       // no way forward but Retry on the same action. Unlock the previous DM
@@ -1219,16 +1228,20 @@ export const useMessageHandlerLogic = ({
       toast({
         title: sessionExpired
           ? 'Session expired'
-          : quotaExceeded
-            ? 'Daily AI limit reached'
-            : combatIntentFailure
-              ? 'Combat action failed'
-              : 'Processing Error',
+          : keyLimitOutage
+            ? 'DM unavailable'
+            : quotaExceeded
+              ? 'Daily AI limit reached'
+              : combatIntentFailure
+                ? 'Combat action failed'
+                : 'Processing Error',
         description: sessionExpired
           ? SESSION_EXPIRED_MESSAGE
-          : quotaExceeded || combatIntentFailure
-            ? recoveryMessage
-            : 'I had trouble responding to your message. The conversation has been restored and you can try again.',
+          : keyLimitOutage
+            ? DM_KEY_LIMIT_MESSAGE
+            : quotaExceeded || combatIntentFailure
+              ? recoveryMessage
+              : 'I had trouble responding to your message. The conversation has been restored and you can try again.',
         variant: 'destructive',
       });
 

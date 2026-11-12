@@ -86,6 +86,7 @@ vi.mock('@/infrastructure/api/rest-client', () => ({
   fetchWithAuth: (input: RequestInfo | URL, init?: RequestInit) => globalThis.fetch(input, init),
   isNetworkError: () => false,
   QuotaExceededError: class QuotaExceededError extends Error {},
+  DmProviderKeyLimitError: class DmProviderKeyLimitError extends Error {},
   SessionExpiredError: class SessionExpiredError extends Error {},
   SESSION_EXPIRED_MESSAGE: 'Session expired',
   subscribeToNetworkRetry: (cb: (reconnecting: boolean) => void) => {

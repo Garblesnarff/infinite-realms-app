@@ -85,6 +85,7 @@ vi.mock('@/infrastructure/api/rest-client', () => ({
   createTurnPhaseReporter: () => () => {},
   isNetworkError: () => false,
   QuotaExceededError: class QuotaExceededError extends Error {},
+  DmProviderKeyLimitError: class DmProviderKeyLimitError extends Error {},
   SessionExpiredError: class SessionExpiredError extends Error {},
   SESSION_EXPIRED_MESSAGE: 'Session expired',
   subscribeToNetworkRetry: () => (): void => {},
