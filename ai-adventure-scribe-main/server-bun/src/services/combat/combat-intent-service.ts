@@ -63,7 +63,7 @@ import {
   type OpportunityAttacker,
   type PlayerExitResult,
 } from './player-exit-service.js';
-import { spellSlotLedger, sorceryPointsLedger } from './resource-ledger.js';
+import { metamagicOptionsLedger, spellSlotLedger, sorceryPointsLedger } from './resource-ledger.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { showTargetNumbersForSession } from './session-target-numbers.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
@@ -93,6 +93,8 @@ import {
 import {
   divineSmiteDice,
   FLEXIBLE_CASTING_CREATE_COSTS,
+  METAMAGIC_COSTS,
+  METAMAGIC_OPTION_LABELS,
 } from '../../../../shared/limited-feature-counts';
 import {
   playerTextDeclares,
@@ -144,6 +146,8 @@ export type CombatIntent =
       spellId?: string;
       spellName: string;
       slotLevel?: number | null;
+      /** #1233: a known Metamagic option applied to this cast; the engine spends its points. */
+      metamagic?: string;
       /** The player's own attack die for attack-roll spells, when the popup rolled it. */
       d20?: number;
       /** Both popup dice `[kept, dropped]` when it rolled two for advantage/disadvantage (#263). */
@@ -1633,6 +1637,7 @@ export async function executeCombatIntent(
           slotLevel: intent.slotLevel,
           d20: intent.d20,
           d20Rolls: intent.d20Rolls,
+          metamagic: intent.metamagic,
           expectedVersion: intent.expectedVersion,
         } satisfies SpellAttackInput,
         userId,
@@ -2513,6 +2518,32 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
           label: `Create a ${slotOrdinal(Number(slotLevel))}-level slot (${pointsCost} sorcery points)`,
         });
       }
+    }
+  }
+  // #1233: Metamagic. A Sorcerer's known options come from the stored envelope (fail closed: none
+  // stored, no offer). Each option the sorcery-point pool can pay is offered as display data: the
+  // engine's cost, and the casting time it changes (Quickened makes the cast a bonus action). The
+  // client arms the option; the spell cast carries it and the engine spends the points then.
+  if (
+    actor.participantType === 'player' &&
+    actor.characterId &&
+    actor.characterClass?.toLowerCase().includes('sorcerer')
+  ) {
+    const known = await metamagicOptionsLedger(actor.characterId);
+    const metamagicPool = known.length
+      ? await sorceryPointsLedger({ characterId: actor.characterId, userId, className: 'Sorcerer' })
+      : null;
+    for (const option of known) {
+      // Twinned costs the spell's level, so only the cheapest possible (1) gates the offer here.
+      const pointsCost = option === 'twinned' ? 1 : METAMAGIC_COSTS[option];
+      if (!metamagicPool || metamagicPool.remaining < pointsCost) continue;
+      actions.push({
+        type: 'metamagic',
+        option,
+        label: `${METAMAGIC_OPTION_LABELS[option]}${option === 'twinned' ? '' : ` (${pointsCost} sorcery point${pointsCost === 1 ? '' : 's'})`}`,
+        pointsCost: option === 'twinned' ? null : pointsCost,
+        castingTime: option === 'quickened' ? 'bonus action' : 'as the spell',
+      });
     }
   }
   // #975: the Fighter's short-rest features, offered while a use remains on the sheet.

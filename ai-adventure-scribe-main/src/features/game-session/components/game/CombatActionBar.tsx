@@ -84,6 +84,8 @@ export const LEGAL_ACTION_PLACEMENT = {
   use_item: 'more',
   // #1233: Flexible Casting is a bonus action with no Action cost, so it rides More.
   flexible_casting: 'more',
+  // #1233: a Metamagic option is armed from More; the next spell cast carries it.
+  metamagic: 'more',
   flee: 'more',
   yield: 'more',
   death_save: 'hidden',

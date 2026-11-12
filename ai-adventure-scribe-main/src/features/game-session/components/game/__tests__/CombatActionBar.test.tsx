@@ -449,6 +449,13 @@ describe('CombatActionBar', () => {
         divine_sense: { type: 'divine_sense', label: 'Divine Sense' },
         divine_smite: smiteAction,
         // #1233: Flexible Casting rides the More menu, like the other bonus-action options.
+        metamagic: {
+          type: 'metamagic',
+          label: 'Quickened Spell (2 sorcery points)',
+          option: 'quickened',
+          pointsCost: 2,
+          castingTime: 'bonus action',
+        },
         flexible_casting: {
           type: 'flexible_casting',
           label: 'Convert a 1st-level slot into 1 sorcery point',

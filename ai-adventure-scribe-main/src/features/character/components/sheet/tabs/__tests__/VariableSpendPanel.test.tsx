@@ -55,7 +55,7 @@ const row = (featureId: string, className: string, featureName: string): Charact
 const renderPanel = (
   rows: CharacterFeatureRow[],
   spellSlots?: Character['spellSlots'],
-  extra: { sessionId?: string; onSpent?: () => void } = {},
+  extra: { sessionId?: string; onSpent?: () => void; knownMetamagic?: string[] } = {},
 ) => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -113,7 +113,10 @@ describe('VariableSpendPanel wire bodies (#1233)', () => {
 
   it('sends the Metamagic option the player picked', async () => {
     const user = userEvent.setup();
-    renderPanel([row('meta-1', 'Sorcerer', 'Metamagic')]);
+    // #1233: the list shows only the options the Sorcerer knows, so the test stores two.
+    renderPanel([row('meta-1', 'Sorcerer', 'Metamagic')], undefined, {
+      knownMetamagic: ['quickened', 'careful'],
+    });
 
     await pick(user, 'Metamagic choice', 'Quickened Spell (2 SP)');
     await user.click(screen.getByRole('button', { name: 'Spend' }));
@@ -125,6 +128,51 @@ describe('VariableSpendPanel wire bodies (#1233)', () => {
         quickenedMetamagicUseBody,
       ),
     );
+  });
+
+  it('with no stored list, shows the one-time picker and saves the chosen options (#1233)', async () => {
+    const user = userEvent.setup();
+    const onChooseMetamagic = vi.fn();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <VariableSpendPanel
+          characterId="char-1"
+          rows={[row('meta-1', 'Sorcerer', 'Metamagic')]}
+          sorcererLevel={3}
+          onChooseMetamagic={onChooseMetamagic}
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByText('Choose your Metamagic')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Metamagic choice' })).toBeNull();
+    await user.click(screen.getByRole('checkbox', { name: 'Know Quickened Spell' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Know Careful Spell' }));
+    await user.click(screen.getByRole('button', { name: 'Save Metamagic' }));
+
+    expect(onChooseMetamagic).toHaveBeenCalledWith(['careful', 'quickened']);
+  });
+
+  it('a third pick at Sorcerer 3 is not taken: the cap is two', async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <VariableSpendPanel
+          characterId="char-1"
+          rows={[row('meta-1', 'Sorcerer', 'Metamagic')]}
+          sorcererLevel={3}
+          onChooseMetamagic={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: 'Know Quickened Spell' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Know Careful Spell' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Know Subtle Spell' }));
+
+    expect(screen.getByRole('checkbox', { name: 'Know Subtle Spell' })).not.toBeChecked();
   });
 
   it('sends the Flexible Casting direction and slot level for both directions', async () => {

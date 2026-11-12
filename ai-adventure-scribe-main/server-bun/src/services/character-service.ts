@@ -19,6 +19,7 @@ import {
   syncArmorClassAfterEquipmentChange,
 } from './character/character-armor-class.js';
 import { CharacterSpellService } from './character/character-spell-service.js';
+import { checkEnvelopeMetamagic } from './character-metamagic.js';
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { ClassFeaturesService } from './class-features-service.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
@@ -49,7 +50,8 @@ import {
   findSrdClassForHitPoints,
 } from '../../../shared/level-1-hit-points';
 import { XP_TO_REACH_LEVEL } from '../../../shared/xp-tables';
-import { InternalServerError } from '../lib/errors.js';
+import { InternalServerError, ValidationError } from '../lib/errors.js';
+import { classLevelOf } from './progression/limited-feature-uses.js';
 import { AVAILABLE_SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '../types/class-features.js';
 import { parseClassLevels, SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 
@@ -223,10 +225,7 @@ async function recomputeServerDerivedStats(
  * itself plus an editor/owner permission share. A reader with view-only access reads
  * through `getById` but must not write.
  */
-function characterWriteCondition(
-  characterId: string,
-  userId: string,
-): ReturnType<typeof and> {
+function characterWriteCondition(characterId: string, userId: string): ReturnType<typeof and> {
   return and(
     eq(characters.id, characterId),
     or(
@@ -383,10 +382,7 @@ export class CharacterService {
         .update(characters)
         .set({ personalityNotes: next, updatedAt: new Date() })
         .where(
-          and(
-            characterWriteCondition(characterId, userId),
-            eq(characters.personalityNotes, raw),
-          ),
+          and(characterWriteCondition(characterId, userId), eq(characters.personalityNotes, raw)),
         )
         .returning({ id: characters.id });
       return updated !== undefined;
@@ -458,6 +454,13 @@ export class CharacterService {
     inventory?: Array<Record<string, unknown>>,
     subclassName?: string | null,
   ): Promise<Character> {
+    // #1233: a stored Metamagic list must be valid for the Sorcerer level being created.
+    const createdSorcererLevel = classLevelOf(
+      { class: data.class ?? null, level: data.level ?? 1, classLevels: data.classLevels ?? null },
+      'Sorcerer',
+    );
+    const createdMetamagic = checkEnvelopeMetamagic(data.personalityNotes, createdSorcererLevel);
+    if (!createdMetamagic.ok) throw new ValidationError(createdMetamagic.reason);
     // #1019: a create body can carry the character's subclass — the starter
     // template seeder sends the template's subclass column this way (the
     // wizard stores its pick in the classFeatures JSON instead). Resolve it
@@ -855,6 +858,28 @@ export class CharacterService {
     data: Partial<NewCharacter>,
     equipment?: Array<Record<string, unknown>>,
   ): Promise<Character | null> {
+    // #1233: a stored Metamagic list must be valid for the Sorcerer level the row will hold.
+    if (data.personalityNotes) {
+      const [current] = await db
+        .select({
+          class: characters.class,
+          level: characters.level,
+          classLevels: characters.classLevels,
+        })
+        .from(characters)
+        .where(eq(characters.id, characterId))
+        .limit(1);
+      const updatedSorcererLevel = classLevelOf(
+        {
+          class: data.class ?? current?.class ?? null,
+          level: data.level ?? current?.level ?? 1,
+          classLevels: data.classLevels ?? current?.classLevels ?? null,
+        },
+        'Sorcerer',
+      );
+      const updatedMetamagic = checkEnvelopeMetamagic(data.personalityNotes, updatedSorcererLevel);
+      if (!updatedMetamagic.ok) throw new ValidationError(updatedMetamagic.reason);
+    }
     // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
     const {
       id: _id,

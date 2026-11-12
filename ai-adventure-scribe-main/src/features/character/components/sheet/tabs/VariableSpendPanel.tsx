@@ -6,11 +6,17 @@ import {
   METAMAGIC_COSTS,
   METAMAGIC_OPTION_LABELS,
 } from '../../../../../../shared/limited-feature-counts';
+import {
+  METAMAGIC_OPTION_IDS,
+  metamagicOptionCap,
+  type MetamagicOptionId,
+} from '../../../../../../shared/metamagic-options';
 import { slotOrdinal } from '../../../../../../shared/slot-ordinal';
 
 import type { Character } from '@/types/character';
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -34,6 +40,15 @@ interface VariableSpendPanelProps {
   sessionId?: string;
   /** Called after a spend lands, so the sheet reloads the slot counts it shows. */
   onSpent?: () => void;
+  /**
+   * #1233: the Metamagic options the Sorcerer knows, from the stored envelope. Absent or empty
+   * means none stored: the panel offers the one-time picker instead of a list.
+   */
+  knownMetamagic?: string[] | null;
+  /** #1233: the Sorcerer's class level, which sets how many options the picker allows. */
+  sorcererLevel?: number;
+  /** #1233: saves the chosen Metamagic options (the sheet writes them to the envelope). */
+  onChooseMetamagic?: (options: MetamagicOptionId[]) => void;
 }
 
 /** One choice the player can pick, with the exact body the use route takes for it (#1233). */
@@ -57,6 +72,7 @@ const slotLevels = (spellSlots: Character['spellSlots'], minLevel: number, maxLe
 export const variableSpendOptions = (
   row: CharacterFeatureRow,
   spellSlots: Character['spellSlots'],
+  knownMetamagic?: string[] | null,
 ): SpendOption[] | null => {
   const feature = row.feature;
   if (!feature) return null;
@@ -71,9 +87,13 @@ export const variableSpendOptions = (
   }
 
   if (feature.className.toLowerCase() === 'sorcerer' && name === 'metamagic') {
-    return Object.keys(METAMAGIC_COSTS).map((option) => ({
+    // #1233: only the options the Sorcerer knows. None stored means no list here at all.
+    return (knownMetamagic ?? []).map((option) => ({
       value: option,
-      label: `${METAMAGIC_OPTION_LABELS[option]} (${METAMAGIC_COSTS[option]} SP)`,
+      label:
+        option === 'twinned'
+          ? `${METAMAGIC_OPTION_LABELS[option]} (spell level SP)`
+          : `${METAMAGIC_OPTION_LABELS[option]} (${METAMAGIC_COSTS[option]} SP)`,
       body: { option },
     }));
   }
@@ -114,17 +134,40 @@ export const VariableSpendPanel: React.FC<VariableSpendPanelProps> = ({
   spellSlots,
   sessionId,
   onSpent,
+  knownMetamagic,
+  sorcererLevel = 0,
+  onChooseMetamagic,
 }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [choice, setChoice] = useState<Record<string, string>>({});
   const [pending, setPending] = useState<string | null>(null);
+  const [picked, setPicked] = useState<MetamagicOptionId[]>([]);
+
+  const isMetamagicRow = (row: CharacterFeatureRow) =>
+    row.feature?.className.toLowerCase() === 'sorcerer' &&
+    row.feature?.featureName.toLowerCase() === 'metamagic';
+  // One picker for the sheet, however many Metamagic rows the character holds.
+  const noneStored = !knownMetamagic || knownMetamagic.length === 0;
+  const metamagicPickerRow = rows.find(isMetamagicRow);
+  const showPicker = Boolean(metamagicPickerRow) && noneStored;
+  const cap = metamagicOptionCap(sorcererLevel);
 
   const panels = rows.flatMap((row) => {
-    const options = variableSpendOptions(row, spellSlots);
+    if (isMetamagicRow(row) && noneStored) return [];
+    const options = variableSpendOptions(row, spellSlots, knownMetamagic);
     return options ? [{ row, options }] : [];
   });
-  if (panels.length === 0) return null;
+  if (panels.length === 0 && !showPicker) return null;
+
+  const togglePick = (option: MetamagicOptionId) =>
+    setPicked((current) =>
+      current.includes(option)
+        ? current.filter((id) => id !== option)
+        : current.length < cap
+          ? [...current, option]
+          : current,
+    );
 
   const spend = async (row: CharacterFeatureRow, options: SpendOption[]) => {
     const picked = options.find((option) => option.value === choice[row.featureId]);
@@ -150,6 +193,36 @@ export const VariableSpendPanel: React.FC<VariableSpendPanelProps> = ({
 
   return (
     <div className="space-y-4">
+      {showPicker && cap > 0 && (
+        <div className="border-l-4 border-infinite-teal pl-4 space-y-2">
+          <h4 className="font-semibold">Choose your Metamagic</h4>
+          <p className="text-sm text-muted-foreground">
+            Pick up to {cap} option{cap === 1 ? '' : 's'}. You can use only the options you know.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {METAMAGIC_OPTION_IDS.map((option) => (
+              <label key={option} className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={picked.includes(option)}
+                  onCheckedChange={() => togglePick(option)}
+                  aria-label={`Know ${METAMAGIC_OPTION_LABELS[option]}`}
+                />
+                {METAMAGIC_OPTION_LABELS[option]}
+              </label>
+            ))}
+          </div>
+          <Button
+            size="sm"
+            disabled={picked.length === 0 || !onChooseMetamagic}
+            // Saved in the canonical id order, so the stored list does not depend on click order.
+            onClick={() =>
+              onChooseMetamagic?.(METAMAGIC_OPTION_IDS.filter((id) => picked.includes(id)))
+            }
+          >
+            Save Metamagic
+          </Button>
+        </div>
+      )}
       {panels.map(({ row, options }) => (
         <div key={row.featureId} className="border-l-4 border-infinite-teal pl-4 space-y-2">
           <h4 className="font-semibold">{row.feature?.featureName}</h4>

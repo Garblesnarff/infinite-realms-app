@@ -123,6 +123,12 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
           onSpent={() => {
             void onUpdate(character);
           }}
+          // #1233: the known options come from the stored envelope; the picker saves them there.
+          knownMetamagic={character.metamagicOptions}
+          sorcererLevel={character.class?.name?.toLowerCase() === 'sorcerer' ? character.level : 0}
+          onChooseMetamagic={(options) => {
+            void onUpdate({ ...character, metamagicOptions: options });
+          }}
         />
       )}
 

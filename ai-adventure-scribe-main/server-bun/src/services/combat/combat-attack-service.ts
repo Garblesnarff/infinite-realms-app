@@ -51,12 +51,19 @@ import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { markPlayerDamageProvocation } from './npc-provocation.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
+import { metamagicOptionsLedger, sorceryPointsLedger } from './resource-ledger.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import {
   greatWeaponFightingApplies,
   rerollGreatWeaponFace,
 } from '../../../../shared/fighting-style';
+import {
+  METAMAGIC_COSTS,
+  METAMAGIC_OPTION_LABELS,
+  familyCountRule,
+} from '../../../../shared/limited-feature-counts';
+import { isMetamagicOptionId } from '../../../../shared/metamagic-options';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
 import {
   assessPlayerCombatSpell,
@@ -73,6 +80,7 @@ import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.j
 import { entitySlug } from '../../tactical/identity.js';
 import { CombatHPService } from '../combat-hp-service.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
+import { spendCountedFeatureUse } from '../progression/limited-feature-uses.js';
 import { SpellSlotsService } from '../spell-slots-service.js';
 
 import type { ConcentrationCheckResult } from './concentration-service.js';
@@ -1274,7 +1282,53 @@ export class CombatAttackService {
         );
       }
     }
-    const usesBonusAction = spell.castingTime.toLowerCase().includes('bonus action');
+    // #1233: Metamagic on this cast. The option is checked against the stored list and the pool
+    // before the claim, so a refusal spends nothing. Quickened needs a 1-action spell and makes
+    // the cast a bonus action; Twinned needs a single target and costs the spell level.
+    const metamagicOption = input.metamagic ?? null;
+    let metamagicCost = 0;
+    if (metamagicOption) {
+      const metamagicCharacterId = casterData.participant.characterId;
+      const known = metamagicCharacterId ? await metamagicOptionsLedger(metamagicCharacterId) : [];
+      if (!isMetamagicOptionId(metamagicOption) || !known.includes(metamagicOption)) {
+        throw new BusinessLogicError(
+          `Spell refused: ${spell.name} cannot use ${metamagicOption}, which this Sorcerer does not know`,
+          { reason: 'metamagic_not_known', spell: spell.name, option: metamagicOption },
+        );
+      }
+      if (metamagicOption === 'quickened' && !/^1 action\b/i.test(spell.castingTime.trim())) {
+        throw new BusinessLogicError(
+          `Spell refused: Quickened Spell needs a spell with a 1-action casting time, and ${spell.name} does not have one`,
+          { reason: 'metamagic_quickened_casting_time', spell: spell.name },
+        );
+      }
+      if (metamagicOption === 'twinned') {
+        if (targetIds.length !== 1) {
+          throw new BusinessLogicError(
+            `Spell refused: Twinned Spell needs exactly one target for ${spell.name}`,
+            { reason: 'metamagic_twinned_single_target', targetCount: targetIds.length },
+          );
+        }
+        metamagicCost = Math.max(1, spell.level);
+      } else {
+        metamagicCost = METAMAGIC_COSTS[metamagicOption];
+      }
+      const pool = casterData.participant.characterId
+        ? await sorceryPointsLedger({
+            characterId: casterData.participant.characterId,
+            userId,
+            className: 'Sorcerer',
+          })
+        : null;
+      if (!pool || pool.remaining < metamagicCost) {
+        throw new BusinessLogicError(
+          `Spell refused: ${METAMAGIC_OPTION_LABELS[metamagicOption]} costs ${metamagicCost} sorcery point${metamagicCost === 1 ? '' : 's'}, and this Sorcerer has ${pool?.remaining ?? 0}`,
+          { reason: 'metamagic_not_enough_points', cost: metamagicCost },
+        );
+      }
+    }
+    const usesBonusAction =
+      spell.castingTime.toLowerCase().includes('bonus action') || metamagicOption === 'quickened';
     // Same release-on-throw wrapper as resolveAttack. It matters more here: the
     // claim is made once and then damage is applied to every target in turn, so
     // a throw on target three would otherwise strand the caster after two
@@ -1316,6 +1370,32 @@ export class CombatAttackService {
       const healing = this.healingDice(spell.id, effectiveSlotLevel);
 
       const results: AttackResult[] = [];
+
+      // #1233: the points are spent after the slot and before the cast commits. A refusal here
+      // throws before commit, so the slot spent above is given back.
+      if (metamagicOption && casterData.participant.characterId) {
+        const metamagicRule = familyCountRule('sorcerer-sorcery-points');
+        if (!metamagicRule) {
+          throw new InternalServerError('Font of Magic has no counted rule');
+        }
+        const spentPoints = await spendCountedFeatureUse({
+          characterId: casterData.participant.characterId,
+          userId,
+          className: 'Sorcerer',
+          featureName: 'Font of Magic',
+          rule: metamagicRule,
+          spentBy: {
+            featureName: METAMAGIC_OPTION_LABELS[metamagicOption],
+            cost: metamagicCost,
+          },
+        });
+        if (!spentPoints.ok) {
+          throw new BusinessLogicError(spentPoints.reason, {
+            reason: 'metamagic_not_enough_points',
+            cost: metamagicCost,
+          });
+        }
+      }
 
       spellCommitted = true;
       // Parallelize spell resolution for all targets using the pre-fetched data map.

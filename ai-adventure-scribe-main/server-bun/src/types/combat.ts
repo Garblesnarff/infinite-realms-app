@@ -732,6 +732,8 @@ export interface SpellAttackInput {
   d20?: number;
   /** Both dice the popup rolled, `[kept, dropped]` (#263 CB-028). */
   d20Rolls?: [number, number];
+  /** #1233: a known Metamagic option applied to this cast; the engine spends its points. */
+  metamagic?: string;
 }
 
 /**

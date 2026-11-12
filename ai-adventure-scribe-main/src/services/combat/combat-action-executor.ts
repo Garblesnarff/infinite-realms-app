@@ -58,6 +58,8 @@ export interface StructuredCombatAction {
   movement_feet: number;
   /** #1362: for an attack, the Paladin's Divine Smite slot level, spent only if the attack hits. */
   divine_smite_slot_level?: number;
+  /** #1233: a Metamagic option armed for this cast; the server checks it and spends the points. */
+  metamagic?: string;
   x?: number;
   y?: number;
 }
@@ -111,6 +113,8 @@ export type ClientCombatIntent =
       d20?: number;
       /** Both popup dice `[kept, dropped]` when it rolled two for advantage/disadvantage (#263). */
       d20Rolls?: [number, number];
+      /** #1233: a Metamagic option armed for this cast. */
+      metamagic?: string;
     }
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion?: number }
   /** #975: the Fighter's short-rest features; the server spends the tracked use. */
@@ -423,6 +427,7 @@ export async function executeStructuredCombatActionWithBoundary(
           : {}),
         d20: providedD20,
         ...(providedD20Rolls ? { d20Rolls: providedD20Rolls } : {}),
+        ...(action.metamagic ? { metamagic: action.metamagic } : {}),
       },
       'dm',
       dmStartedAt,

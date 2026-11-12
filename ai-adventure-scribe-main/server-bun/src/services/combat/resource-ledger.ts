@@ -1,6 +1,13 @@
+import { eq } from 'drizzle-orm';
+
+import { db } from '../../../../db/client';
+import { characters } from '../../../../db/schema/index';
+import { metamagicOptionsFromEnvelope } from '../character-metamagic.js';
 import { remainingSpellSlots } from './data-access.js';
-import { countedFamilyPool } from '../progression/limited-feature-uses.js';
+import { classLevelOf, countedFamilyPool } from '../progression/limited-feature-uses.js';
 import { SpellSlotMechanics } from '../spell-slots/spell-slot-mechanics.js';
+
+import type { MetamagicOptionId } from '../../../../shared/metamagic-options';
 
 /**
  * The spell slots a character can spend, keyed by slot level. Stored rows win. A level with no
@@ -41,4 +48,25 @@ export async function sorceryPointsLedger(input: {
   className: string;
 }): Promise<{ max: number; remaining: number } | null> {
   return countedFamilyPool({ ...input, family: 'sorcerer-sorcery-points' });
+}
+
+/**
+ * The Metamagic options a Sorcerer knows, read from the stored personality envelope and checked
+ * against the 2014 cap for the level in the row (#1233). Fail closed: no list, an invalid list, or
+ * a non-Sorcerer reads as no options. Reads only.
+ */
+export async function metamagicOptionsLedger(characterId: string): Promise<MetamagicOptionId[]> {
+  const [row] = await db
+    .select({
+      personalityNotes: characters.personalityNotes,
+      class: characters.class,
+      level: characters.level,
+      classLevels: characters.classLevels,
+    })
+    .from(characters)
+    .where(eq(characters.id, characterId))
+    .limit(1);
+  if (!row) return [];
+  const sorcererLevel = classLevelOf(row, 'Sorcerer');
+  return metamagicOptionsFromEnvelope(row.personalityNotes, sorcererLevel);
 }
