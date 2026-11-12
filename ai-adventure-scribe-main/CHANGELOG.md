@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.45.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.44.1...v0.45.0) (2026-11-12)
+
+
+### Features
+
+* **combat:** offer Flexible Casting in a fight ([#1233](https://github.com/Garblesnarff/infinite-realms-app/issues/1233)) ([9f440bd](https://github.com/Garblesnarff/infinite-realms-app/commit/9f440bd09996862cbd13cef5401a62bfb86ead68))
+* **end-screen:** Legend plan name, hero pick stays in campaign, reload shows how they fell ([#1431](https://github.com/Garblesnarff/infinite-realms-app/issues/1431)) ([5fd9fd0](https://github.com/Garblesnarff/infinite-realms-app/commit/5fd9fd00768afe1af37538f7a22f9900ee14dcac))
+* **public:** one font load, DM Sans UI, SEO pages without waitlist, Table header and explore ([#1432](https://github.com/Garblesnarff/infinite-realms-app/issues/1432)) ([59181b8](https://github.com/Garblesnarff/infinite-realms-app/commit/59181b863eefd8236155130e719e0644f193c466))
+* **table:** clipped portrait, map sketch, dice-tray lid, phone settings sheet, three speeds ([#1421](https://github.com/Garblesnarff/infinite-realms-app/issues/1421) [#1429](https://github.com/Garblesnarff/infinite-realms-app/issues/1429)) ([07db9a2](https://github.com/Garblesnarff/infinite-realms-app/commit/07db9a21e3568b4a41044d1da5ac1fb708f3bfe8))
+* **table:** HP from → to, Next line, named tent cards, drop cap, seal stamp, brass ([#1428](https://github.com/Garblesnarff/infinite-realms-app/issues/1428) [#1408](https://github.com/Garblesnarff/infinite-realms-app/issues/1408)) ([03a6aee](https://github.com/Garblesnarff/infinite-realms-app/commit/03a6aee167387eb877e1c16c13520251bace15b9))
+* **table:** launch the Table look only; one top row, short plaque, coin, vital retry ([#1421](https://github.com/Garblesnarff/infinite-realms-app/issues/1421)) ([4241548](https://github.com/Garblesnarff/infinite-realms-app/commit/4241548a7a6b74ad48a615ea30b8ecb0c657b9a4))
+
+
+### Bug Fixes
+
+* **auth:** enforce the Legend gate for custom heroes on the server ([#1344](https://github.com/Garblesnarff/infinite-realms-app/issues/1344)) ([401e576](https://github.com/Garblesnarff/infinite-realms-app/commit/401e5763fc769847a9fde554aa8aa2a23c46d3d8))
+* **engine:** record the outcome of narrative ability checks ([#1477](https://github.com/Garblesnarff/infinite-realms-app/issues/1477)) ([f990d1f](https://github.com/Garblesnarff/infinite-realms-app/commit/f990d1fb196a1cd13485b7a0e08cf486042de8f8))
+* **table:** seal narrative checks from the server outcome ([#1477](https://github.com/Garblesnarff/infinite-realms-app/issues/1477)) ([42b9331](https://github.com/Garblesnarff/infinite-realms-app/commit/42b9331b2f210f555520b3e94c5376c41a514eea))
+* **table:** show the result seal for saves, attacks, NPC rolls and initiative ([#1457](https://github.com/Garblesnarff/infinite-realms-app/issues/1457)) ([e403b3f](https://github.com/Garblesnarff/infinite-realms-app/commit/e403b3f89b68489a35ca29fa1346c3fc9412ca2e))
+
 ## [0.44.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.44.0...v0.44.1) (2026-11-11)
 
 
