@@ -2487,15 +2487,20 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       className: 'Sorcerer',
     });
     if (pool) {
-      const slots = await spellSlotLedger(actor.characterId, actor);
+      // A convert gains the slot's level, capped at the room left in the pool. A full pool gains
+      // nothing, so no convert is offered (the engine refuses one before the slot is spent).
+      const room = Math.max(0, pool.max - pool.remaining);
+      const slots =
+        room > 0 ? await spellSlotLedger(actor.characterId, actor) : new Map<number, number>();
       for (const [slotLevel, remaining] of [...slots.entries()].sort(([a], [b]) => a - b)) {
         if (remaining <= 0 || slotLevel < 1 || slotLevel > 9) continue;
+        const pointsGained = Math.min(slotLevel, room);
         actions.push({
           type: 'flexible_casting',
           direction: 'convert',
           slotLevel,
-          pointsGained: slotLevel,
-          label: `Convert a ${slotOrdinal(slotLevel)}-level slot into ${slotLevel} sorcery point${slotLevel === 1 ? '' : 's'}`,
+          pointsGained,
+          label: `Convert a ${slotOrdinal(slotLevel)}-level slot into ${pointsGained} sorcery point${pointsGained === 1 ? '' : 's'}`,
         });
       }
       for (const [slotLevel, pointsCost] of Object.entries(FLEXIBLE_CASTING_CREATE_COSTS)) {

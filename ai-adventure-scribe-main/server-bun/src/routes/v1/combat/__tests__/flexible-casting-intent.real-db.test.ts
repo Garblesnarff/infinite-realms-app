@@ -334,11 +334,30 @@ describeWithDb('Flexible Casting bodies resolve through the real route (#1233)',
     expect(await bonusActionUsed()).toBe(true);
   });
 
+  test('convert at a full pool is refused with 422, spends no slot, and keeps the bonus action', async () => {
+    // reset(3): 3 of 3 points, the Font of Magic maximum at Sorcerer 3. A convert gains nothing.
+    const response = await post(flexibleCastingIntentBody('convert', 1));
+    expect(response.status).toBe(422);
+    expect((await slot(1))?.used).toBe(0);
+    expect(await points()).toBe(3);
+    expect(await bonusActionUsed()).toBe(false);
+  });
+
+  test('a partial convert gains only the points that fit, and spends the slot', async () => {
+    await reset(2);
+    // 2 of 3 points: a 2nd-level slot can gain only 1 point before the pool is full.
+    const response = await post(flexibleCastingIntentBody('convert', 2));
+    expect(response.status).toBe(200);
+    expect((await slot(2))?.used).toBe(1);
+    expect(await points()).toBe(3);
+    expect(await bonusActionUsed()).toBe(true);
+  });
+
   test('a create the points cannot pay for is refused, spends nothing, and keeps the bonus action', async () => {
     await reset(1);
     // A 2nd-level slot costs 3 points (2014 table): 1 point is not enough.
     const response = await post(flexibleCastingIntentBody('create', 2));
-    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBe(422);
     expect(await points()).toBe(1);
     expect((await slot(2))?.total).toBe(2);
     expect(await bonusActionUsed()).toBe(false);

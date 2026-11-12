@@ -328,6 +328,29 @@ describe('getLegalCombatActions Flexible Casting (#1233)', () => {
     ).toEqual([3]);
   });
 
+  test('a full sorcery-point pool offers no convert, because a convert would gain nothing', async () => {
+    sorceryPool = { max: 5, remaining: 5 };
+    const offers = flexibleOffers((await getLegalCombatActions('encounter-1', 'user-1')).actions);
+    expect(offers.filter((offer) => offer.direction === 'convert')).toHaveLength(0);
+  });
+
+  test('a convert near a full pool shows the points that fit, not the slot level', async () => {
+    sorceryPool = { max: 5, remaining: 4 };
+    ledgerSlots = new Map([
+      [1, 1],
+      [2, 1],
+    ]);
+    const offers = flexibleOffers((await getLegalCombatActions('encounter-1', 'user-1')).actions);
+    expect(
+      offers
+        .filter((offer) => offer.direction === 'convert')
+        .map((offer) => [offer.slotLevel, offer.pointsGained]),
+    ).toEqual([
+      [1, 1],
+      [2, 1],
+    ]);
+  });
+
   test('a created slot is never offered above 5th level, however many points', async () => {
     sorceryPool = { max: 20, remaining: 100 };
     const offers = flexibleOffers((await getLegalCombatActions('encounter-1', 'user-1')).actions);
