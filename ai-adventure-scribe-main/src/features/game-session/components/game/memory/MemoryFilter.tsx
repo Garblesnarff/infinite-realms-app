@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
  * Each chip maps to one memory type. Types with no chip (general, story_beat,
  * character_moment, dialogue_gem, atmosphere) appear only under All.
  */
-const BOARD_CHIPS: Array<{ type: string; label: string }> = [
+const BOARD_CHIPS: ReadonlyArray<{ type: Memory['type']; label: string }> = [
   { type: 'location', label: 'Locations' },
   { type: 'npc', label: 'Characters' },
   { type: 'event', label: 'Events' },
