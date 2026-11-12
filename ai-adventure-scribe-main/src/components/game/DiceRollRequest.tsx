@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { useOptionalCharacter } from '@/contexts/CharacterContext';
 import { DiceRollEmbed } from '@/features/game-session/components';
+import { useInspirationArmed } from '@/features/game-session/contexts/inspiration-armed-context';
 import { useShowTargetNumbers } from '@/features/game-session/hooks/use-show-target-numbers';
 import { useDiceRollRequest, type RollResultHandler } from '@/hooks/game/use-dice-roll-request';
 import logger from '@/lib/logger';
@@ -93,6 +94,9 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
     } = useDiceRollRequest({ request, onResult, onRollCommit });
     const { showTargetNumbers, setShowTargetNumbers } = useShowTargetNumbers();
     const hasInspiration = useOptionalCharacter()?.state.character?.inspiration === true;
+    const { armed: inspirationArmed } = useInspirationArmed();
+    // The hint teaches the coin. It is hidden once the coin is armed, or when advantage is already on.
+    const showInspirationHint = hasInspiration && !inspirationArmed && !hasAdvantage;
 
     const config = ROLL_TYPE_CONFIG[request.type] || DEFAULT_TYPE_CONFIG;
     const isRollPending = Boolean(requestId && pendingRollId === requestId);
@@ -186,20 +190,22 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
                 >
                   Show target numbers: {showTargetNumbers ? 'On' : 'Off'}
                 </button>
-                {hasInspiration && request.type !== 'damage' && request.type !== 'damage_taken' && (
-                  <span className="text-sm [body.ir-table-look_&]:!text-[#2a1a0c]">
-                    Spend Inspiration for advantage (roll 2d20, keep the higher).
-                  </span>
-                )}
+                {showInspirationHint &&
+                  request.type !== 'damage' &&
+                  request.type !== 'damage_taken' && (
+                    <span className="text-sm [body.ir-table-look_&]:!text-[#2a1a0c]">
+                      Tap the Inspiration coin to roll with advantage (2d20, keep the higher).
+                    </span>
+                  )}
               </div>
             )}
-            {hasInspiration &&
+            {showInspirationHint &&
               request.dc == null &&
               request.ac == null &&
               request.type !== 'damage' &&
               request.type !== 'damage_taken' && (
                 <p className="text-sm [body.ir-table-look_&]:!text-[#2a1a0c]">
-                  Spend Inspiration for advantage (roll 2d20, keep the higher).
+                  Tap the Inspiration coin to roll with advantage (2d20, keep the higher).
                 </p>
               )}
 
