@@ -5,7 +5,10 @@ import { PLAYER_INPUT_MAX_CHARS } from '../../../../shared/player-input-cap.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
-import { narrativeCheckCard } from '../../services/session/narrative-check-outcome.js';
+import {
+  narrativeCheckCard,
+  serverVerdictLine,
+} from '../../services/session/narrative-check-outcome.js';
 import { SessionMessageService } from '../../services/session/session-message-service.js';
 import { SessionService } from '../../services/session-service.js';
 
@@ -16,6 +19,8 @@ import type { DialogueHistory } from '../../../../db/schema/index';
  * formatter line and the `rollRequestId`. The DC comes from the DM row that issued the request in
  * this session, and the verdict is computed here. Any `engineCards` the client sent on this row
  * is dropped, so a client cannot plant a card. A request this session did not issue gets no card.
+ * The stored line's verdict word is then set to the server's verdict, because the DM reads the
+ * stored line and must not narrate the client's word.
  */
 async function withServerCheckOutcome<
   T extends { speaker_type: string; message: string; context?: Record<string, unknown> },
@@ -45,7 +50,9 @@ async function withServerCheckOutcome<
     );
     return { ...message, context: stored };
   }
-  return { ...message, context: { ...stored, engineCards: [card] } };
+  // The DM reads the stored line, so its verdict word is the server's, not the client's.
+  const line = serverVerdictLine(message.message, card.badge?.word === 'SUCCESS');
+  return { ...message, message: line, context: { ...stored, engineCards: [card] } };
 }
 
 // Fields shared by both message schemas below; the speaker type and the

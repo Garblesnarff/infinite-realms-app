@@ -184,10 +184,13 @@ describe('POST /v1/sessions/:id/messages — narrative ability check outcome (#1
     expect(row!.context).toMatchObject({
       engineCards: [{ badge: { word: 'FAIL', tone: 'red', icon: 'alert' } }],
     });
+    // The DM reads the stored line: the client's "success" must not reach it.
+    expect(row!.message).toBe('Athletics check: 9 (nat 4+5) fail');
   });
 
-  it('a total equal to the DC is a SUCCESS', async () => {
+  it('a total equal to the DC is a SUCCESS, and the stored line says success', async () => {
     await post(withLine('Athletics check: 15 (nat 10+5) fail'));
+    expect(saved[0]![0]!.message).toBe('Athletics check: 15 (nat 10+5) success');
     expect(saved[0]![0]!.context).toMatchObject({
       engineCards: [{ badge: { word: 'SUCCESS' } }],
     });

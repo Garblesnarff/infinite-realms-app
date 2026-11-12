@@ -66,3 +66,18 @@ export function narrativeCheckCard(input: {
     detail: numbers,
   };
 }
+
+/**
+ * The stored check line with its verdict word set to the server's verdict. The DM reads the
+ * stored `message`, so a client that writes `success` on a failed roll must not reach the DM with
+ * that word. The formatter puts the verdict last (`... success` / `... fail`), so the word is
+ * replaced there. A line with no trailing verdict gets the server's word appended.
+ */
+export function serverVerdictLine(text: string, success: boolean): string {
+  const verdict = success ? 'success' : 'fail';
+  const trimmed = text.trimEnd();
+  if (/\s(success|fail)$/i.test(trimmed)) {
+    return trimmed.replace(/\s(success|fail)$/i, ` ${verdict}`);
+  }
+  return `${trimmed} ${verdict}`;
+}
