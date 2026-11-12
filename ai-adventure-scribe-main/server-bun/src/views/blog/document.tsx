@@ -1,3 +1,5 @@
+import { APP_FONTS_HREF } from '../app-fonts.js';
+
 import type { SiteConfig } from '../../config/site.js';
 import type { ResolvedAssets } from '../../lib/manifest.js';
 import type { ReactNode } from 'react';
@@ -25,7 +27,14 @@ interface BlogDocumentProps {
   structuredData?: unknown[];
 }
 
-export function BlogDocument({ site, assets, meta, children, preloadState, structuredData }: BlogDocumentProps) {
+export function BlogDocument({
+  site,
+  assets,
+  meta,
+  children,
+  preloadState,
+  structuredData,
+}: BlogDocumentProps) {
   const scripts = assets?.scripts ?? [];
   const styles = assets?.styles ?? [];
   const preloads = assets?.preloads ?? [];
@@ -64,8 +73,12 @@ export function BlogDocument({ site, assets, meta, children, preloadState, struc
         <meta name="twitter:site" content={site.twitterHandle} />
         {meta.authorName ? <meta name="author" content={meta.authorName} /> : null}
         {meta.authorName ? <meta property="article:author" content={meta.authorName} /> : null}
-        {meta.publishedTime ? <meta property="article:published_time" content={meta.publishedTime} /> : null}
-        {meta.modifiedTime ? <meta property="article:modified_time" content={meta.modifiedTime} /> : null}
+        {meta.publishedTime ? (
+          <meta property="article:published_time" content={meta.publishedTime} />
+        ) : null}
+        {meta.modifiedTime ? (
+          <meta property="article:modified_time" content={meta.modifiedTime} />
+        ) : null}
         {meta.section ? <meta property="article:section" content={meta.section} /> : null}
         {tagMeta.map((tag) => (
           <meta key={tag} property="article:tag" content={tag} />
@@ -84,10 +97,7 @@ export function BlogDocument({ site, assets, meta, children, preloadState, struc
         <link rel="icon" href="/favicon.ico" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap"
-        />
+        <link rel="stylesheet" href={APP_FONTS_HREF} />
 
         <style
           dangerouslySetInnerHTML={{
@@ -210,11 +220,18 @@ export function BlogDocument({ site, assets, meta, children, preloadState, struc
               className="group flex items-center gap-3 transition-opacity hover:opacity-80"
             >
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 shadow-lg shadow-amber-900/30">
-                <svg className="h-5 w-5 text-slate-950" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <svg
+                  className="h-5 w-5 text-slate-950"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
                   <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
                 </svg>
               </div>
-              <span className="font-heading text-lg font-semibold text-amber-50">Infinite Realms</span>
+              <span className="font-heading text-lg font-semibold text-amber-50">
+                Infinite Realms
+              </span>
             </a>
             <div className="flex items-center gap-6">
               <a
@@ -228,8 +245,19 @@ export function BlogDocument({ site, assets, meta, children, preloadState, struc
                 className="inline-flex items-center gap-2 rounded-full border border-amber-600/40 bg-amber-950/40 px-4 py-2 text-sm font-medium text-amber-200 transition-all hover:border-amber-500 hover:bg-amber-900/40 hover:text-amber-100"
               >
                 <span>Play Now</span>
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                <svg
+                  className="h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 7l5 5m0 0l-5 5m5-5H6"
+                  />
                 </svg>
               </a>
             </div>

@@ -1,3 +1,5 @@
+import { APP_FONTS_HREF } from '../app-fonts.js';
+
 import type { SiteConfig } from '../../config/site.js';
 import type { ResolvedAssets } from '../../lib/manifest.js';
 import type { ReactNode } from 'react';
@@ -89,10 +91,7 @@ export function LandingDocument({
         {/* Table fonts: Cinzel headings, EB Garamond prose, DM Sans UI */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&family=DM+Sans:wght@400;500;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&display=swap"
-        />
+        <link rel="stylesheet" href={APP_FONTS_HREF} />
 
         {/* Critical CSS - Dark Arcane Tome Aesthetic */}
         <style
