@@ -5,6 +5,7 @@ import { PLAYER_INPUT_MAX_CHARS } from '../../../../shared/player-input-cap.js';
 import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
+import { expireStaleHeldReplies } from '../../services/dm/dm-reply-persistence.js';
 import {
   narrativeCheckCard,
   serverVerdictLine,
@@ -134,6 +135,9 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
   .get(
     '/:id/messages',
     async ({ params, query, user }) => {
+      // #1444: settle this session's held replies that nothing decided, before the messages are read,
+      // so a reply published here is in this response. Never throws.
+      await expireStaleHeldReplies({ sessionId: params.id, userId: user!.userId });
       const [result, session] = await Promise.all([
         SessionMessageService.getRecentMessages(params.id, user!.userId, query.limit, query.offset),
         SessionService.getSessionById(params.id, user!.userId),

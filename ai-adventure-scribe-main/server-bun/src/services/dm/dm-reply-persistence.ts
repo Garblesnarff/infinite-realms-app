@@ -949,3 +949,164 @@ export function scheduleDmReplyWatchdog(params: DmReplyWatchdogParams): Promise<
     if (typeof timer === 'object' && typeof timer.unref === 'function') timer.unref();
   });
 }
+
+/* ------------------------------------------------------------------------------------------------
+ * #1444: a `held` record that nothing ever decides.
+ *
+ * The watchdog decides a held record once, 120 s after generation. A record it leaves held (no
+ * fight, no expired entry, no decline, no harm claim) would stay held forever. The session load
+ * decides those instead. There is no timer or background loop here.
+ * ---------------------------------------------------------------------------------------------- */
+
+/**
+ * #1444: a `held` record older than this is decided when its session loads. Starting value:
+ * the pending-entry TTL (PENDING_ENTRY_TTL_MS) plus the encounter window, rounded to 30 minutes.
+ */
+export const DM_REPLY_RECORD_EXPIRY_MS = 30 * 60_000;
+
+/** The owner scope of one session's stale records. `before` is the cutoff: older records are stale. */
+export interface StaleHeldScope {
+  sessionId: string;
+  userId: string;
+  before: Date;
+}
+
+export interface StaleHeldReplyDeps {
+  store?: DmReplyRecordStore;
+  heldReplyDeps?: HeldReplyDeps;
+  writeRow?: (record: DmReplyRecord) => Promise<void>;
+  listStale?: (scope: StaleHeldScope) => Promise<DmReplyRecord[]>;
+  /** One conditional UPDATE on `state = 'held'`. Resolves true only when this call moved the row. */
+  moveHeld?: (id: string, to: 'ready' | 'cancelled', scope: StaleHeldScope) => Promise<boolean>;
+}
+
+/**
+ * Settles this session's held records older than DM_REPLY_RECORD_EXPIRY_MS. Each record goes
+ * through resolveHeldReply once more: a decline or harm claim cancels it, a confirmed fight or an
+ * expired entry publishes it, and anything still undecided is cancelled as expired.
+ *
+ * Idempotent: each move is a conditional UPDATE on `state = 'held'`, so two concurrent loads settle
+ * a record once and only the call that moved it logs. Never throws: a failure is logged and the
+ * session load carries on. Returns how many held records this call moved out of `held`.
+ */
+export async function expireStaleHeldReplies(
+  params: { sessionId: string; userId: string; now?: Date },
+  deps: StaleHeldReplyDeps = {},
+): Promise<number> {
+  const store = deps.store ?? postgresDmReplyRecordStore;
+  const listStale = deps.listStale ?? listStaleHeldRecords;
+  const moveHeld = deps.moveHeld ?? moveHeldRecordForOwner;
+  const scope: StaleHeldScope = {
+    sessionId: params.sessionId,
+    userId: params.userId,
+    before: new Date((params.now ?? new Date()).getTime() - DM_REPLY_RECORD_EXPIRY_MS),
+  };
+  let moved = 0;
+  try {
+    for (const record of await listStale(scope)) {
+      const verdict = await resolveHeldReply(record, params.userId, deps.heldReplyDeps);
+      if (verdict.action === 'publish') {
+        if (!(await moveHeld(record.id, 'ready', scope))) continue;
+        moved += 1;
+        await publishReadyDmReply({ ...record, state: 'ready' }, store, deps.writeRow);
+        continue;
+      }
+      if (!(await moveHeld(record.id, 'cancelled', scope))) continue;
+      moved += 1;
+      if (verdict.action === 'cancel') {
+        logger.warn({
+          msg: 'DM_REPLY_RECORD_CANCELLED',
+          recordId: record.id,
+          reason: verdict.reason,
+          source: 'session_load',
+        });
+      } else {
+        logger.warn({ msg: 'DM_REPLY_RECORD_EXPIRED', recordId: record.id });
+      }
+    }
+  } catch (error) {
+    logger.warn({
+      msg: 'DM_REPLY_EXPIRY_FAILED',
+      sessionId: params.sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  return moved;
+}
+
+/**
+ * The sessions this user owns, through a campaign or a character. game_sessions has no user_id, so
+ * every held-record query limits itself to these sessions. Both the listing and the move use it.
+ */
+async function ownedSessionIds(userId: string): Promise<string[]> {
+  const [{ db }, { gameSessions, campaigns, characters }, { eq, or }] = await Promise.all([
+    import('../../../../db/client.js'),
+    import('../../../../db/schema/index.js'),
+    import('drizzle-orm'),
+  ]);
+  const rows = await db
+    .select({ id: gameSessions.id })
+    .from(gameSessions)
+    .leftJoin(campaigns, eq(campaigns.id, gameSessions.campaignId))
+    .leftJoin(characters, eq(characters.id, gameSessions.characterId))
+    .where(or(eq(campaigns.userId, userId), eq(characters.userId, userId)));
+  return rows.map((row) => row.id);
+}
+
+/** The session's held records older than the cutoff, owner-scoped. */
+async function listStaleHeldRecords(scope: StaleHeldScope): Promise<DmReplyRecord[]> {
+  const [{ db }, { dmReplyRecords }, { and, eq, inArray, lt }] = await Promise.all([
+    import('../../../../db/client.js'),
+    import('../../../../db/schema/index.js'),
+    import('drizzle-orm'),
+  ]);
+  const rows = await db
+    .select()
+    .from(dmReplyRecords)
+    .where(
+      and(
+        eq(dmReplyRecords.sessionId, scope.sessionId),
+        eq(dmReplyRecords.userId, scope.userId),
+        eq(dmReplyRecords.state, 'held'),
+        lt(dmReplyRecords.createdAt, scope.before),
+        inArray(dmReplyRecords.sessionId, await ownedSessionIds(scope.userId)),
+      ),
+    );
+  return rows.map((record) => ({
+    id: record.id,
+    sessionId: record.sessionId,
+    userId: record.userId,
+    state: record.state as DmReplyRecordState,
+    text: record.text,
+    envelope: (record.envelope as Record<string, unknown> | null) ?? null,
+    createdAt: record.createdAt,
+  }));
+}
+
+/** One owner-scoped conditional move of a stale held record: it must still be held and stale. */
+async function moveHeldRecordForOwner(
+  id: string,
+  to: 'ready' | 'cancelled',
+  scope: StaleHeldScope,
+): Promise<boolean> {
+  const [{ db }, { dmReplyRecords }, { and, eq, inArray, lt }] = await Promise.all([
+    import('../../../../db/client.js'),
+    import('../../../../db/schema/index.js'),
+    import('drizzle-orm'),
+  ]);
+  const moved = await db
+    .update(dmReplyRecords)
+    .set({ state: to, updatedAt: new Date() })
+    .where(
+      and(
+        eq(dmReplyRecords.id, id),
+        eq(dmReplyRecords.sessionId, scope.sessionId),
+        eq(dmReplyRecords.userId, scope.userId),
+        eq(dmReplyRecords.state, 'held'),
+        lt(dmReplyRecords.createdAt, scope.before),
+        inArray(dmReplyRecords.sessionId, await ownedSessionIds(scope.userId)),
+      ),
+    )
+    .returning({ id: dmReplyRecords.id });
+  return moved.length > 0;
+}

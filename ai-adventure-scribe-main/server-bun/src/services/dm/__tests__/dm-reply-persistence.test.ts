@@ -45,7 +45,9 @@ mock.module('../dm-fallback-broadcast.js', () => ({
 
 const {
   canTransitionDmReply,
+  DM_REPLY_RECORD_EXPIRY_MS,
   dmReplySkipReason,
+  expireStaleHeldReplies,
   persistFallbackDmReply,
   persistGeneratedDmReply,
   provisionalDmText,
@@ -1218,5 +1220,242 @@ describe('#1416 held reply verdicts at the watchdog', () => {
     await run(store, { confirmedSince: async () => true }, writer);
     expect(rows.size).toBe(0);
     expect(addMessageCalls).toHaveLength(0);
+  });
+});
+
+// #1444: a held record that nothing decided is settled when its session loads.
+describe('#1444 expireStaleHeldReplies', () => {
+  const NOW = new Date('2026-11-12T12:00:00.000Z');
+  const heldRecord = (overrides: Partial<DmReplyRecord> = {}): DmReplyRecord => ({
+    id: ID,
+    sessionId: SESSION,
+    userId: USER,
+    state: 'held',
+    text: TEXT,
+    envelope: {
+      text: TEXT,
+      roll_requests: [{ type: 'initiative', formula: '1d20+2', purpose: 'Initiative' }],
+      combat_entry_pending: { combatants: [{ name: 'Head Chef Balthazar', count: 1 }] },
+    },
+    createdAt: new Date(NOW.getTime() - DM_REPLY_RECORD_EXPIRY_MS - 1000),
+    ...overrides,
+  });
+  const noFight = {
+    confirmedSince: async (_sessionId: string, _userId: string, _since: Date) => false,
+    pendingEntryExpired: async (_sessionId: string, _pending: Record<string, unknown>) => false,
+    declinedActorKeys: async (_sessionId: string): Promise<string[]> => [],
+  };
+  const expiryLines = (): Record<string, unknown>[] =>
+    warnings.filter((line) => line.msg === 'DM_REPLY_RECORD_EXPIRED');
+
+  /** Runs the sweep over an in-memory store; `listed` is what the owner-scoped listing returns. */
+  function sweep(
+    store: ReturnType<typeof memoryStore>,
+    listed: DmReplyRecord[],
+    options: {
+      deps?: Partial<typeof noFight>;
+      writeRow?: (record: DmReplyRecord) => Promise<void>;
+      userId?: string;
+      scopes?: { sessionId: string; userId: string; before: Date }[];
+    } = {},
+  ): Promise<number> {
+    return expireStaleHeldReplies(
+      { sessionId: SESSION, userId: options.userId ?? USER, now: NOW },
+      {
+        store,
+        heldReplyDeps: { ...noFight, ...options.deps },
+        writeRow: options.writeRow ?? (async () => {}),
+        listStale: async (scope) => {
+          options.scopes?.push(scope);
+          return listed;
+        },
+        // Mirrors the SQL guard: move only a row that is still `held`, check and set in one step.
+        moveHeld: async (id, to) => {
+          const row = store.rows.get(id);
+          if (!row || row.state !== 'held') return false;
+          store.rows.set(id, { ...row, state: to });
+          return true;
+        },
+      },
+    );
+  }
+
+  test('the cutoff is one named constant, 30 minutes, and records older than it are stale', async () => {
+    expect(DM_REPLY_RECORD_EXPIRY_MS).toBe(30 * 60_000);
+    const scopes: { sessionId: string; userId: string; before: Date }[] = [];
+    await sweep(memoryStore(), [], { scopes });
+    expect(scopes).toEqual([
+      {
+        sessionId: SESSION,
+        userId: USER,
+        before: new Date(NOW.getTime() - DM_REPLY_RECORD_EXPIRY_MS),
+      },
+    ]);
+  });
+
+  test('nothing stale means nothing moves and nothing is logged', async () => {
+    const store = memoryStore([heldRecord()]);
+    expect(await sweep(store, [])).toBe(0);
+    expect(store.rows.get(ID)?.state).toBe('held');
+    expect(warnings).toHaveLength(0);
+  });
+
+  test('an undecided stale record is cancelled, and the log names the record id only', async () => {
+    const store = memoryStore([heldRecord()]);
+    expect(await sweep(store, [heldRecord()])).toBe(1);
+    expect(store.rows.get(ID)?.state).toBe('cancelled');
+    expect(expiryLines()).toEqual([{ msg: 'DM_REPLY_RECORD_EXPIRED', recordId: ID }]);
+  });
+
+  test('a stale record whose fight was confirmed is published at load, timestamped at generation', async () => {
+    const store = memoryStore([heldRecord()]);
+    const { rows, writer } = rowWriter();
+    const written: DmReplyRecord[] = [];
+    expect(
+      await sweep(store, [heldRecord()], {
+        deps: { confirmedSince: async () => true },
+        writeRow: async (record) => {
+          written.push(record);
+          await writer(record);
+        },
+      }),
+    ).toBe(1);
+    expect(store.rows.get(ID)?.state).toBe('persisted');
+    expect(rows.get(ID)).toBe(TEXT);
+    expect(written[0]?.createdAt.getTime()).toBe(heldRecord().createdAt.getTime());
+    expect(expiryLines()).toHaveLength(0);
+  });
+
+  test('a stale record whose pending entry expired is published at load', async () => {
+    const store = memoryStore([heldRecord()]);
+    const { rows, writer } = rowWriter();
+    await sweep(store, [heldRecord()], {
+      deps: { pendingEntryExpired: async () => true },
+      writeRow: writer,
+    });
+    expect(store.rows.get(ID)?.state).toBe('persisted');
+    expect(rows.get(ID)).toBe(TEXT);
+  });
+
+  test('a cleared pending entry leaves the record undecidable, so it is cancelled as expired', async () => {
+    const store = memoryStore([heldRecord()]);
+    const { rows, writer } = rowWriter();
+    await sweep(store, [heldRecord()], {
+      deps: { pendingEntryExpired: async () => false },
+      writeRow: writer,
+    });
+    expect(store.rows.get(ID)?.state).toBe('cancelled');
+    expect(rows.size).toBe(0);
+    expect(expiryLines()).toHaveLength(1);
+  });
+
+  test('a declined fight cancels the stale record, with the decline reason and no expiry line', async () => {
+    const store = memoryStore([heldRecord()]);
+    const { rows, writer } = rowWriter();
+    await sweep(store, [heldRecord()], {
+      deps: {
+        confirmedSince: async () => true,
+        declinedActorKeys: async () => ['head chef balthazar'],
+      },
+      writeRow: writer,
+    });
+    expect(store.rows.get(ID)?.state).toBe('cancelled');
+    expect(rows.size).toBe(0);
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        msg: 'DM_REPLY_RECORD_CANCELLED',
+        recordId: ID,
+        reason: 'declined',
+        source: 'session_load',
+      }),
+    ]);
+  });
+
+  test('a stale claim of harm nobody ruled on cancels the record, even with a confirmed fight', async () => {
+    const fabricated = 'The goblin hits you for 9 damage and you collapse.';
+    const store = memoryStore([heldRecord({ text: fabricated })]);
+    const { rows, writer } = rowWriter();
+    await sweep(store, [heldRecord({ text: fabricated })], {
+      deps: { confirmedSince: async () => true },
+      writeRow: writer,
+    });
+    expect(store.rows.get(ID)?.state).toBe('cancelled');
+    expect(rows.size).toBe(0);
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        msg: 'DM_REPLY_RECORD_CANCELLED',
+        reason: 'unverified_harm_claim',
+      }),
+    ]);
+  });
+
+  test('two concurrent loads settle one record once: one cancel, one log line, no second write', async () => {
+    const store = memoryStore([heldRecord()]);
+    const { rows, writer } = rowWriter();
+    let writes = 0;
+    const counted = async (record: DmReplyRecord): Promise<void> => {
+      writes += 1;
+      await writer(record);
+    };
+    const results = await Promise.all([
+      sweep(store, [heldRecord()], {
+        writeRow: counted,
+        deps: { confirmedSince: async () => true },
+      }),
+      sweep(store, [heldRecord()], {
+        writeRow: counted,
+        deps: { confirmedSince: async () => true },
+      }),
+    ]);
+    expect(results.reduce((sum, n) => sum + n, 0)).toBe(1);
+    expect(writes).toBe(1);
+    expect(rows.get(ID)).toBe(TEXT);
+    expect(store.rows.get(ID)?.state).toBe('persisted');
+  });
+
+  test('two concurrent loads that both find no fight cancel once and log once', async () => {
+    const store = memoryStore([heldRecord()]);
+    const results = await Promise.all([sweep(store, [heldRecord()]), sweep(store, [heldRecord()])]);
+    expect(results.reduce((sum, n) => sum + n, 0)).toBe(1);
+    expect(expiryLines()).toHaveLength(1);
+  });
+
+  test('the owner scope reaches both the listing and every move', async () => {
+    const store = memoryStore([heldRecord()]);
+    const scopes: { sessionId: string; userId: string; before: Date }[] = [];
+    const moveScopes: { sessionId: string; userId: string }[] = [];
+    await expireStaleHeldReplies(
+      { sessionId: SESSION, userId: USER, now: NOW },
+      {
+        store,
+        heldReplyDeps: noFight,
+        writeRow: async () => {},
+        listStale: async (scope) => {
+          scopes.push(scope);
+          return [heldRecord()];
+        },
+        moveHeld: async (id, to, scope) => {
+          moveScopes.push(scope);
+          return (await store.transition(id, to)).ok;
+        },
+      },
+    );
+    expect(scopes[0]?.userId).toBe(USER);
+    expect(moveScopes).toEqual([expect.objectContaining({ sessionId: SESSION, userId: USER })]);
+  });
+
+  test('a failing listing is logged and reported as nothing settled, never thrown', async () => {
+    const result = await expireStaleHeldReplies(
+      { sessionId: SESSION, userId: USER, now: NOW },
+      {
+        listStale: async () => {
+          throw new Error('connection reset');
+        },
+      },
+    );
+    expect(result).toBe(0);
+    expect(warnings).toEqual([
+      expect.objectContaining({ msg: 'DM_REPLY_EXPIRY_FAILED', error: 'connection reset' }),
+    ]);
   });
 });
