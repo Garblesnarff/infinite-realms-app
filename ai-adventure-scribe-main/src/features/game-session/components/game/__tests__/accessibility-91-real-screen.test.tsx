@@ -123,7 +123,11 @@ vi.mock('@/contexts/GameContext', () => ({
   }),
 }));
 vi.mock('@/contexts/MessageContext', () => ({
-  useMessageContext: () => ({ queueStatus: 'idle', sendMessage: vi.fn(async () => {}) }),
+  useMessageContext: () => ({
+    queueStatus: 'idle',
+    messages: [],
+    sendMessage: vi.fn(async () => {}),
+  }),
 }));
 vi.mock('@/hooks/use-starter-campaigns', () => ({
   useStarterCampaigns: () => ({

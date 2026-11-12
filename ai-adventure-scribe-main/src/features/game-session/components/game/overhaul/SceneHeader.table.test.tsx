@@ -82,7 +82,23 @@ describe('Table scene plaque', () => {
 
   it('uses the location outside combat', () => {
     render(<SceneHeader title="The Chasm" location="Rope Ledge" />);
-    expect(screen.getByText('Exploring')).toBeInTheDocument();
+    expect(screen.getByText('EXPLORING')).toBeInTheDocument();
     expect(screen.getByText('Rope Ledge')).toBeInTheDocument();
+  });
+
+  it('prints no location line when no location is known, never the campaign title', () => {
+    render(<SceneHeader title="The Chasm" />);
+    const middle = screen.getByText('EXPLORING').parentElement;
+    expect(middle?.querySelectorAll('p')).toHaveLength(1);
+    expect(middle).not.toHaveTextContent('The Chasm');
+  });
+
+  it('shows the scene blurb as one truncated line', () => {
+    const blurb = 'A long scene paragraph that must not fill the plaque. '.repeat(6);
+    const { container } = render(
+      <SceneHeader title="The Chasm" location="Rope Ledge" blurb={blurb} />,
+    );
+    const line = container.querySelector('section p.truncate.text-sm');
+    expect(line).toHaveTextContent('A long scene paragraph that must not fill the plaque.');
   });
 });

@@ -1,4 +1,4 @@
-import { Dice6, Map as MapIcon, Sword, X } from 'lucide-react';
+import { BookOpen, Brain, Dice6, Map as MapIcon, Sword, X } from 'lucide-react';
 import React, { memo } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -238,6 +238,8 @@ interface GameMainContentProps {
   sessionId: string;
   tableLook?: boolean;
   tableHeaderSlot?: HTMLElement | null;
+  /** The End-session row: the panel buttons and the gear menu sit here, before End session. */
+  tableControlsSlot?: HTMLElement | null;
   tableRollSlot?: HTMLElement | null;
   onOpenTablePanel?: (tab: 'character' | 'memory' | 'journal') => void;
   campaignIdForHandler: string | null;
@@ -295,6 +297,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     sessionId,
     tableLook = false,
     tableHeaderSlot,
+    tableControlsSlot,
     tableRollSlot,
     onOpenTablePanel,
     campaignIdForHandler,
@@ -341,7 +344,14 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     const cardRef = React.useRef<HTMLDivElement>(null);
     const dockRef = React.useRef<HTMLDivElement>(null);
     const mapSheetHeight = useHeightAboveDock(showMapSheet, cardRef, dockRef);
-    const { queueStatus, sendMessage } = useMessageContext();
+    const { queueStatus, sendMessage, messages } = useMessageContext();
+    // The plaque's scene location: the newest message that carries one (CombatTurnBar does the same).
+    const sceneLocation = React.useMemo(
+      () =>
+        [...messages].reverse().find((message) => message.context?.location)?.context?.location ??
+        undefined,
+      [messages],
+    );
     // #90: in combat the chat box says what to do, or whose turn it is.
     const combatChatPlaceholder = useCombatChatPlaceholder();
     // #90: the ActionBar's Move opens the map in move mode — the rail on desktop, the sheet on
@@ -456,22 +466,38 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
         {tableLook &&
           tableHeaderSlot &&
           createPortal(
-            <div className="relative pr-12" data-testid="table-screen-header">
+            <div className="relative" data-testid="table-screen-header">
               <SceneHeader
                 title={overhaul.scene.title}
-                chapter={overhaul.campaign.chapter}
-                location={overhaul.campaign.regionLabel}
+                tableExtra={<InspirationCoin />}
+                location={sceneLocation}
                 party={overhaul.party}
                 combat={overhaul.combat}
-                blurb={showSceneBlurb ? overhaul.scene.blurb : overhaul.campaign.chapter}
+                blurb={showSceneBlurb ? overhaul.scene.blurb : undefined}
                 onSceneInfo={onSceneBlurbToggle}
               />
-              <nav aria-label="Table panels" className="flex justify-end gap-1">
+              <div ref={setTableTurnSlot} data-testid="table-turn-slot" />
+              <SafetyBanner
+                isPaused={(sessionData as unknown as { is_paused?: boolean })?.is_paused || false}
+                lastSafetyCommand={lastSafetyCommand}
+                contentWarnings={contentWarnings}
+                comfortLevel={comfortLevel}
+                showSafetyInfo={showSafetyInfo}
+              />
+            </div>,
+            tableHeaderSlot,
+          )}
+        {tableLook &&
+          tableControlsSlot &&
+          createPortal(
+            <>
+              <nav aria-label="Table panels" className="flex items-center gap-1">
                 <Button
                   type="button"
                   variant="outline"
-                  className="min-h-11 min-w-11"
+                  className="h-11 w-11 min-h-11 min-w-11 p-0"
                   aria-label="Open tracker"
+                  title="Tracker"
                   onClick={() => setShowTracker(true)}
                 >
                   <Sword aria-hidden="true" />
@@ -479,22 +505,25 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 <Button
                   type="button"
                   variant="outline"
-                  className="min-h-11 min-w-11"
+                  className="h-11 w-11 min-h-11 min-w-11 p-0"
+                  aria-label="Memory"
+                  title="Memory"
                   onClick={() => onOpenTablePanel?.('memory')}
                 >
-                  Memory
+                  <Brain aria-hidden="true" />
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  className="min-h-11 min-w-11"
+                  className="h-11 w-11 min-h-11 min-w-11 p-0"
+                  aria-label="Journal"
+                  title="Journal"
                   onClick={() => onOpenTablePanel?.('journal')}
                 >
-                  Journal
+                  <BookOpen aria-hidden="true" />
                 </Button>
               </nav>
-              <div ref={setTableTurnSlot} data-testid="table-turn-slot" />
-              <details className="absolute right-1 top-1 z-50">
+              <details className="relative z-50" title="Table controls">
                 <summary
                   aria-label="Table controls"
                   className="ir-brass-btn flex min-h-11 min-w-11 cursor-pointer items-center justify-center rounded"
@@ -531,15 +560,8 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                   </Button>
                 </div>
               </details>
-              <SafetyBanner
-                isPaused={(sessionData as unknown as { is_paused?: boolean })?.is_paused || false}
-                lastSafetyCommand={lastSafetyCommand}
-                contentWarnings={contentWarnings}
-                comfortLevel={comfortLevel}
-                showSafetyInfo={showSafetyInfo}
-              />
-            </div>,
-            tableHeaderSlot,
+            </>,
+            tableControlsSlot,
           )}
         <Card
           ref={cardRef}

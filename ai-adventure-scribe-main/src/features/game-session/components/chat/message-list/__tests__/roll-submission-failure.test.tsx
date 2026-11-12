@@ -54,6 +54,7 @@ const { perceptionRoll, game } = vi.hoisted(() => {
 vi.mock('@/contexts/GameContext', () => ({ useGame: () => game }));
 vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: () => ({ state: { character: { id: 'the-apprentice', name: 'The Apprentice' } } }),
+  useOptionalCharacter: () => null,
 }));
 vi.mock('@/utils/characterModifiers', () => ({
   calculateRollWithBreakdown: () => ({

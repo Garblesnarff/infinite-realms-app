@@ -70,10 +70,7 @@ export const PlayerSettings: React.FC<PlayerSettingsProps> = ({ campaignId, rule
       <Card className="p-6">
         <div className="mb-6">
           <h2 className="mb-2 flex items-center gap-2 text-xl font-semibold [body.ir-table-look_&]:text-xs [body.ir-table-look_&]:font-bold [body.ir-table-look_&]:uppercase [body.ir-table-look_&]:tracking-[0.14em] [body.ir-table-look_&]:text-[#4fb6c4]">
-            <Scroll
-              className="h-5 w-5 [body.ir-table-look_&]:hidden"
-              aria-hidden="true"
-            />
+            <Scroll className="h-5 w-5 [body.ir-table-look_&]:hidden" aria-hidden="true" />
             Table
           </h2>
           <p className="text-sm text-muted-foreground">Saved in this browser for your account.</p>
@@ -92,13 +89,6 @@ export const PlayerSettings: React.FC<PlayerSettingsProps> = ({ campaignId, rule
             description="Show the Behind the Screen summary of NPC rolls under the DM message that carried them."
             checked={settings.showNPCRolls}
             onChange={(checked) => updateSettings({ showNPCRolls: checked })}
-          />
-          <SettingSwitch
-            id="setting-table-look"
-            label="Table look"
-            description="Show the tabletop materials and cards. Turn off for the plain screen."
-            checked={settings.tableLook}
-            onChange={(checked) => updateSettings({ tableLook: checked })}
           />
           <SettingSwitch
             id="setting-dice-sound"
@@ -123,10 +113,7 @@ export const PlayerSettings: React.FC<PlayerSettingsProps> = ({ campaignId, rule
       <Card className="p-6">
         <div className="mb-6">
           <h2 className="mb-2 flex items-center gap-2 text-xl font-semibold [body.ir-table-look_&]:text-xs [body.ir-table-look_&]:font-bold [body.ir-table-look_&]:uppercase [body.ir-table-look_&]:tracking-[0.14em] [body.ir-table-look_&]:text-[#4fb6c4]">
-            <Volume2
-              className="h-5 w-5 [body.ir-table-look_&]:hidden"
-              aria-hidden="true"
-            />
+            <Volume2 className="h-5 w-5 [body.ir-table-look_&]:hidden" aria-hidden="true" />
             Narration
           </h2>
           <p className="text-sm text-muted-foreground">Saved in this browser for your account.</p>

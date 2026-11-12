@@ -41,6 +41,7 @@ vi.mock('@/contexts/CombatContext', () => ({
 
 vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: () => ({ state: { character: null } }),
+  useOptionalCharacter: () => null,
 }));
 
 vi.mock('../MessageRenderer', () => ({ MessageRenderer: () => null }));

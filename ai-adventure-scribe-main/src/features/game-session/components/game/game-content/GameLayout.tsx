@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useState, useCallback, useSyncExternalStore, memo } from 'react';
+import React, { useLayoutEffect, useState, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 
 import { BuildSessionStatus } from './BuildSessionStatus';
@@ -21,13 +21,6 @@ import { Z_INDEX } from '@/constants/z-index';
 import { useSceneBackground } from '@/contexts/SceneBackgroundContext';
 import { useMediaQuery } from '@/hooks/use-media-query';
 
-const subscribeTableLook = (notify: () => void): (() => void) => {
-  const observer = new MutationObserver(notify);
-  observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
-  return () => observer.disconnect();
-};
-const tableLookSnapshot = (): boolean => document.body.classList.contains('ir-table-look');
-
 /**
  * GameLayout Component
  *
@@ -37,6 +30,13 @@ const tableLookSnapshot = (): boolean => document.body.classList.contains('ir-ta
  */
 
 interface GameLayoutProps {
+  /**
+   * Test-only: render the old plain layout. Launch has the Table look only (Rob, 2026-11-10), so
+   * the app never sets this; the Table layout no longer reads the stored `tableLook` value or the
+   * body class, and a saved "off" cannot pair the Table CSS with the plain layout. The pre-launch
+   * layout tests set it until the `!tableLook` cleanup removes the plain branches and those tests.
+   */
+  plainLayout?: boolean;
   sessionId: string;
   campaignIdForHandler: string | null;
   characterIdForHandler: string | null;
@@ -102,9 +102,11 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
     contentWarnings,
     comfortLevel,
     showSafetyInfo,
+    plainLayout = false,
   }) => {
-    const tableLook = useSyncExternalStore(subscribeTableLook, tableLookSnapshot, () => false);
+    const tableLook = !plainLayout;
     const [tableHeaderSlot, setTableHeaderSlot] = useState<HTMLDivElement | null>(null);
+    const [tableControlsSlot, setTableControlsSlot] = useState<HTMLDivElement | null>(null);
     const [tableRollSlot, setTableRollSlot] = useState<HTMLDivElement | null>(null);
     const [tableDrawerOpen, setTableDrawerOpen] = useState(false);
     const [tableDrawerRequest, setTableDrawerRequest] = useState(0);
@@ -229,7 +231,14 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
           style={{ zIndex: Z_INDEX.DROPDOWN }}
         >
           {(tableLook || !isCombatDetected) && !isFallen && (
-            <div className="flex justify-end px-2 py-1">
+            <div className="flex items-center justify-end gap-1 px-2 py-0">
+              {tableLook && (
+                <div
+                  ref={setTableControlsSlot}
+                  data-testid="table-controls-slot"
+                  className="flex items-center gap-1"
+                />
+              )}
               <EndSessionButton
                 sessionId={sessionId}
                 campaignId={campaignIdForHandler}
@@ -273,6 +282,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
                 sessionId={sessionId}
                 tableLook={tableLook}
                 tableHeaderSlot={tableHeaderSlot}
+                tableControlsSlot={tableControlsSlot}
                 tableRollSlot={tableRollSlot}
                 onOpenTablePanel={openTablePanel}
                 campaignIdForHandler={campaignIdForHandler}
@@ -382,7 +392,13 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
             </div>
           </TacticalMapProvider>
           {tableLook && !isFallen && (
-            <div className="shrink-0 text-right">
+            // Out of flow: the build line takes no height and keeps its 10 px text. The copy button
+            // gets a 44x44 hit box on every pointer (#1421 target rule): a transparent ::before
+            // anchored to its bottom-right corner, so the box stays inside the table.
+            <div
+              data-testid="table-build-line"
+              className="pointer-events-none absolute bottom-0 right-1 z-10 text-[10px] leading-none [&>button]:pointer-events-auto [&>button]:relative [&>button]:!text-[10px] [&>button]:!min-h-0 [&>button]:!min-w-0 [&>button]:before:absolute [&>button]:before:bottom-0 [&>button]:before:right-0 [&>button]:before:h-11 [&>button]:before:w-11 [&>button]:before:content-['']"
+            >
               <BuildSessionStatus sessionId={sessionId} />
             </div>
           )}

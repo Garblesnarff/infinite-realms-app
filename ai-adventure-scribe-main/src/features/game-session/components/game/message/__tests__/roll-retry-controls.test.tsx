@@ -60,6 +60,7 @@ vi.mock('@/contexts/CombatContext', () => ({
 }));
 vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: () => ({ state: { character } }),
+  useOptionalCharacter: () => null,
 }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock('@/utils/safetyCommands', () => ({

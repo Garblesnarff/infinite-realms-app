@@ -30,6 +30,8 @@ vi.mock('@/services/user-data-api', () => ({
     listCharacters: vi.fn(),
     listSessions: vi.fn(),
     reportClientFailure: vi.fn(),
+    fetchSessionFallenState: vi.fn(async () => null),
+    fetchSessionCompletionState: vi.fn(async () => null),
   },
 }));
 vi.mock('@/lib/logger', () => ({

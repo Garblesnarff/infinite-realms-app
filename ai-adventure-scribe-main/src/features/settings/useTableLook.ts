@@ -1,26 +1,11 @@
 import { useEffect } from 'react';
 
-import { DEFAULT_TABLE_SETTINGS, readTableSettings } from './table-settings';
-
-import { useOptionalAuth } from '@/contexts/AuthContext';
-
-/** Apply the per-user choice to every route that uses Table materials. */
+/** Table materials are always on at launch. Every route that uses them gets the body class. */
 export const useTableLook = (): void => {
-  const userId = useOptionalAuth()?.user?.id ?? null;
   useEffect(() => {
-    const apply = (): void => {
-      const enabled = userId
-        ? readTableSettings(userId).tableLook
-        : DEFAULT_TABLE_SETTINGS.tableLook;
-      document.body.classList.toggle('ir-table-look', enabled);
-    };
-    apply();
-    window.addEventListener('ir-table-settings', apply);
-    window.addEventListener('storage', apply);
+    document.body.classList.add('ir-table-look');
     return () => {
-      window.removeEventListener('ir-table-settings', apply);
-      window.removeEventListener('storage', apply);
       document.body.classList.remove('ir-table-look');
     };
-  }, [userId]);
+  }, []);
 };

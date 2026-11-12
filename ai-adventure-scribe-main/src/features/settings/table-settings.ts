@@ -15,6 +15,7 @@ export interface TableSettings {
   /** One of NARRATION_SPEEDS. The audio element reads `progressive-voice-rate`. */
   narrationSpeed: number;
   diceSound: boolean;
+  /** Kept so old saved data still parses. Nothing reads it: Table look is always on. */
   tableLook: boolean;
   reduceMotion: ReduceMotion;
   /** Read by the chat reader (NpcRollSummary): when on, the Behind the Screen summary renders under its DM message. */

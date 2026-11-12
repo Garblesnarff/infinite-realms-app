@@ -22,7 +22,10 @@ import { resolveAttackRules } from '../../../../server-bun/src/services/combat/c
 
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 
-vi.mock('@/contexts/CharacterContext', () => ({ useCharacter: vi.fn() }));
+vi.mock('@/contexts/CharacterContext', () => ({
+  useCharacter: vi.fn(),
+  useOptionalCharacter: () => null,
+}));
 vi.mock('@/contexts/GameContext', () => ({ useGame: vi.fn() }));
 vi.mock('@/hooks/combat/use-player-roll-host', () => ({
   settleCombatAttackRoll: vi.fn(() => false),

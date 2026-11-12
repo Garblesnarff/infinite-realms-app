@@ -107,6 +107,7 @@ describe('formula guard — no symbolic strings reach the dice engine', () => {
 // ---------------------------------------------------------------------------
 vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: vi.fn(),
+  useOptionalCharacter: () => null,
 }));
 
 vi.mock('@/lib/logger', () => ({
