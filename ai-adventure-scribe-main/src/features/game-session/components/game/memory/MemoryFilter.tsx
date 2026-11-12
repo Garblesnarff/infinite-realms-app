@@ -6,6 +6,18 @@ import type { Memory } from './types';
 
 import { Button } from '@/components/ui/button';
 
+/**
+ * The Panels board shows five chips: All, Locations, Characters, Events, Items.
+ * Each chip maps to one memory type. Types with no chip (general, story_beat,
+ * character_moment, dialogue_gem, atmosphere) appear only under All.
+ */
+const BOARD_CHIPS: ReadonlyArray<{ type: Memory['type']; label: string }> = [
+  { type: 'location', label: 'Locations' },
+  { type: 'npc', label: 'Characters' },
+  { type: 'event', label: 'Events' },
+  { type: 'item', label: 'Items' },
+];
+
 interface MemoryFilterProps {
   selectedType: string | null;
   onTypeSelect: (type: string | null) => void;
@@ -15,13 +27,16 @@ interface MemoryFilterProps {
 
 /**
  * MemoryFilter Component
- * Filter chips: "All N" plus one chip per category that has at least one memory,
+ * Filter chips: "All N" plus one chip per board category that has at least one memory,
  * each with its count (#1429, Panels board: "{{label}} {{n}}").
  */
 export const MemoryFilter: React.FC<MemoryFilterProps> = React.memo(
   ({ selectedType, onTypeSelect, memories }) => {
     const presentTypes = new Set(memories.map((m) => m.type));
-    const categories = MEMORY_CATEGORIES.filter((c) => presentTypes.has(c.type));
+    const chips = BOARD_CHIPS.filter((chip) => presentTypes.has(chip.type)).map((chip) => ({
+      ...chip,
+      icon: MEMORY_CATEGORIES.find((category) => category.type === chip.type)?.icon,
+    }));
     const countFor = (type: string): number => memories.filter((m) => m.type === type).length;
 
     return (
@@ -35,17 +50,17 @@ export const MemoryFilter: React.FC<MemoryFilterProps> = React.memo(
         >
           All {memories.length}
         </Button>
-        {categories.map((category) => (
+        {chips.map((chip) => (
           <Button
-            key={category.type}
-            variant={selectedType === category.type ? 'default' : 'outline'}
+            key={chip.type}
+            variant={selectedType === chip.type ? 'default' : 'outline'}
             size="sm"
-            onClick={() => onTypeSelect(category.type)}
-            aria-pressed={selectedType === category.type}
+            onClick={() => onTypeSelect(chip.type)}
+            aria-pressed={selectedType === chip.type}
             className="flex min-h-11 items-center gap-2"
           >
-            <span aria-hidden="true">{category.icon}</span>
-            {category.label} {countFor(category.type)}
+            <span aria-hidden="true">{chip.icon}</span>
+            {chip.label} {countFor(chip.type)}
           </Button>
         ))}
       </div>

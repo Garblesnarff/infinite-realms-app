@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
-import { BoxedCampaign } from '../BoxedCampaign';
+import { BOX_COLOURS, BoxedCampaign } from '../BoxedCampaign';
 import { HeroFan } from '../HeroFan';
 import { tableImageUrl } from '../image-url';
 
@@ -101,7 +101,7 @@ describe('Table start screens', () => {
     expect(screen.getByText(label, { exact: true })).toHaveClass('normal-case');
   });
 
-  it('renders the difficulty word in title case outside the uppercase genre row', () => {
+  it('renders the difficulty tag in title case and genres in uppercase', () => {
     render(
       <MemoryRouter>
         <BoxedCampaign campaign={campaign} />
@@ -109,8 +109,60 @@ describe('Table start screens', () => {
     );
     const word = screen.getByText('Hard', { exact: true });
     expect(word).toHaveClass('normal-case');
-    expect(word.parentElement).toHaveClass('uppercase');
-    expect(word.parentElement).toHaveTextContent('horror · Hard');
+    expect(screen.getByText('horror')).toHaveClass('uppercase');
+  });
+
+  it('keeps the box text pairs at 7:1 or more and renders those colours', () => {
+    const luminance = (hex: string): number => {
+      const channels = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+      const [r, g, b] = channels.map((c) =>
+        c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4,
+      );
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const ratio = (a: string, b: string): number => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const c = BOX_COLOURS;
+    // Tags over cover art sit on a solid backing (#1484 strategist FIX 6814798818).
+    expect(ratio(c.hard, c.tagBacking)).toBeGreaterThanOrEqual(7);
+    expect(ratio(c.gold, c.tagBacking)).toBeGreaterThanOrEqual(7);
+    expect(ratio(c.tagText, c.tagBacking)).toBeGreaterThanOrEqual(7);
+    // Footer and target-numbers line on the darker end of the parchment gradient.
+    expect(ratio(c.inkSoft, c.parchmentDark)).toBeGreaterThanOrEqual(7);
+    expect(ratio(c.ink, c.parchmentDark)).toBeGreaterThanOrEqual(7);
+
+    render(
+      <MemoryRouter>
+        <BoxedCampaign campaign={campaign} />
+      </MemoryRouter>,
+    );
+    const tag = screen.getByText('Hard', { exact: true });
+    expect(tag).toHaveClass('bg-[#070b14]');
+    expect(tag).toHaveStyle({ color: c.hard });
+    expect(screen.getByText('horror')).toHaveClass('bg-[#070b14]');
+    expect(screen.getByText('Level 1 · Ready-made heroes')).toHaveClass('text-[#3d2c18]');
+    expect(screen.getByText(/target numbers \(DC and AC\) start hidden/)).toHaveClass(
+      'text-[#3d2c18]',
+    );
+  });
+
+  it('prints the level only when the campaign has one', () => {
+    const { unmount } = render(
+      <MemoryRouter>
+        <BoxedCampaign campaign={campaign} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Level 1 · Ready-made heroes')).toBeInTheDocument();
+    unmount();
+    render(
+      <MemoryRouter>
+        <BoxedCampaign campaign={{ ...campaign, levelRange: null }} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText('Ready-made heroes')).toBeInTheDocument();
+    expect(screen.queryByText(/Level/)).toBeNull();
   });
 
   it('moves the hero selection with arrows and starts the selected hero once', () => {
@@ -145,6 +197,33 @@ describe('Table start screens', () => {
     expect(onPlay).toHaveBeenCalledTimes(1);
     expect(onPlay).toHaveBeenCalledWith(second);
   });
+  it('states the real hero count under the fan', () => {
+    const render1 = render(
+      <HeroFan
+        vitals={() => ({ hp: 12, ac: 15 })}
+        templates={[hero('one', 'One')]}
+        disabled={false}
+        signedIn
+        onPlay={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('One ready-made hero.')).toBeInTheDocument();
+    render1.unmount();
+    render(
+      <HeroFan
+        vitals={() => ({ hp: 12, ac: 15 })}
+        templates={[hero('one', 'One'), hero('two', 'Two')]}
+        disabled={false}
+        signedIn
+        onPlay={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText('Two ready-made heroes. Tap a card to look at it.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('YOUR HERO')).toBeInTheDocument();
+  });
+
   it('keeps heroes available when a template cannot produce vitals', () => {
     const first = hero('one', 'One');
     const second = hero('two', 'Two');

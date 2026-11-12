@@ -5,6 +5,27 @@ import { TableImage } from './TableImage';
 
 import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
 
+const COUNT_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five'];
+
+/** Helper line under the fan, using the real number of heroes. */
+const heroCountLine = (count: number): string => {
+  const word = COUNT_WORDS[count] ?? String(count);
+  if (count === 1) return 'One ready-made hero.';
+  return `${word} ready-made heroes. Tap a card to look at it.`;
+};
+
+/**
+ * Fan position from the Heroes board: outer cards ±10° and lift 26px,
+ * inner cards ±5° and lift 8px, centre 0°. Distance from centre picks the step.
+ */
+const fanFor = (index: number, count: number): { rot: number; lift: number } => {
+  const distance = Math.round(Math.abs(index - (count - 1) / 2));
+  const side = index < (count - 1) / 2 ? -1 : 1;
+  if (distance === 0) return { rot: 0, lift: 0 };
+  if (distance === 1) return { rot: side * 5, lift: 8 };
+  return { rot: side * 10, lift: 26 };
+};
+
 export const HeroFan: React.FC<{
   templates: StarterCharacterTemplate[];
   disabled: boolean;
@@ -28,10 +49,11 @@ export const HeroFan: React.FC<{
 
   return (
     <div className="space-y-4">
+      <p className="font-heading text-xs tracking-[0.18em] text-[#d5b070]">YOUR HERO</p>
       <div
         role="group"
         aria-label="Choose your hero"
-        className="flex max-w-full snap-x gap-3 overflow-x-auto px-3 pb-4 pt-4"
+        className="flex max-w-full snap-x items-end overflow-x-auto px-3 pb-4 pt-10 md:justify-center"
       >
         {templates.map((template, index) => {
           const image = tableImageUrl(template.cardImageUrl ?? template.portraitUrl, 360, 540);
@@ -42,7 +64,8 @@ export const HeroFan: React.FC<{
             /* A bad template must not hide the other heroes. */
           }
           const active = template.id === selected.id;
-          const angle = templates.length > 1 ? -4 + (8 * index) / (templates.length - 1) : 0;
+          const fan = fanFor(index, templates.length);
+          const lift = fan.lift - (active ? 12 : 0);
           return (
             <button
               key={template.id}
@@ -55,8 +78,16 @@ export const HeroFan: React.FC<{
               aria-label={`Choose ${template.name}`}
               onClick={() => setSelectedId(template.id)}
               onKeyDown={(event) => move(event, index)}
-              className="ir-action-card min-h-11 w-40 shrink-0 snap-center overflow-hidden rounded-lg text-left transition-transform focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f6e3b8] hover:-translate-y-2 focus-visible:-translate-y-2"
-              style={{ rotate: `${angle}deg` }}
+              style={
+                {
+                  '--lift': `${lift}px`,
+                  '--rot': `${fan.rot}deg`,
+                  '--scale': active ? '1.08' : '1',
+                  marginLeft: index === 0 ? 0 : '-14px',
+                  zIndex: active ? 3 : 1,
+                } as React.CSSProperties
+              }
+              className="ir-action-card min-h-11 w-[clamp(132px,17vw,206px)] shrink-0 snap-center overflow-hidden rounded-lg text-left [transform:translateY(var(--lift))_rotate(var(--rot))_scale(var(--scale))] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f6e3b8] motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:[transform:translateY(calc(var(--lift)_-_14px))_rotate(0deg)_scale(var(--scale))] motion-reduce:transition-none"
             >
               <TableImage
                 src={image}
@@ -86,6 +117,7 @@ export const HeroFan: React.FC<{
           );
         })}
       </div>
+      <p className="text-center text-sm italic text-[#f1e6cb]">{heroCountLine(templates.length)}</p>
       <div className="ir-parchment rounded p-4">
         <h3 className="text-xl font-bold">{selected.name}</h3>
         <p>
