@@ -10,9 +10,10 @@ export function engineVerdictWord(line: string): string | undefined {
 }
 
 /**
- * Red for a miss or a fail, gold for a hit, crit, or success, slate when the
- * line has no such verdict. An engine badge tone of gold or red is that
- * result's own help/hurt field and wins, except a miss, which stays red.
+ * Red for a miss, a fail, or a refusal. Gold for a hit, crit, or success.
+ * Slate when the line has no pass/fail, such as initiative or damage.
+ * An engine badge tone of gold or red wins, except a miss or a refusal:
+ * those stay red when the badge is grey.
  */
 export function resultSealTone(
   word: string,
@@ -20,6 +21,7 @@ export function resultSealTone(
 ): ResultSealTone {
   const upper = word.toUpperCase();
   if (/\bMISS\b/.test(upper)) return 'red';
+  if (/\bREFUSED\b/.test(upper)) return 'red';
   if (engineTone === 'gold') return 'gold';
   if (engineTone === 'red') return 'red';
   if (/\bFAIL/.test(upper)) return 'red';

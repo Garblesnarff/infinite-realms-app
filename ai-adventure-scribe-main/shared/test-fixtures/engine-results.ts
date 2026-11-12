@@ -285,6 +285,12 @@ export const ENEMY_SAVE_SPELL_HITS_PLAYER = spellExposed(
   REEVES,
   SCHOLAR,
 );
+/** The same enemy spell when the player passes the save. */
+export const PLAYER_PASSES_ENEMY_SAVE = spellExposed(
+  { ...saveResult(true, 0), spellName: 'Fire Bolt' },
+  REEVES,
+  SCHOLAR,
+);
 /** Cure Wounds: `{hit: true, finalDamage: 0}` with no damage type. */
 export const PLAYER_HEALS_ALLY = spellExposed(
   {

@@ -27,19 +27,23 @@ const KICKER_CLASS =
   'block text-[11px] font-semibold uppercase tracking-[.1em] text-muted-foreground';
 
 /**
- * The card badge's groups, read off the structured outcome rather than the word.
- * Gold helps you (your hit or crit, or the enemy failing a save). Red hurts you
- * (an enemy hit, or you failing their save). Slate is a miss or no change, which
- * is the card's grey badge.
+ * Check-board colours, read off the structured outcome rather than the word.
+ * Gold is a hit, crit, success, or pass (including the enemy failing your save).
+ * Red is a miss, a fail, or a refusal. Slate is only a line with no verdict
+ * (a move, a note, initiative, damage). A grey card badge does not repaint these.
  */
 function sealToneForOutcome(outcome: EngineLineOutcome): ResultSealTone {
   switch (outcome) {
     case 'hit':
     case 'critical':
+    case 'pass':
     case 'failed-save':
       return 'gold';
+    case 'miss':
+    case 'enemy-miss':
     case 'enemy-hit':
     case 'fail':
+    case 'refused':
       return 'red';
     default:
       return 'slate';

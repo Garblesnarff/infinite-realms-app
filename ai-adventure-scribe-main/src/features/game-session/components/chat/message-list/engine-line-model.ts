@@ -208,6 +208,9 @@ export function parseEngineLine(line: string, options: EngineLineOptions = {}): 
       detail: sentence,
       outcome: 'refused',
       pill: PILL.refused,
+      // The engine line says "was refused" in sentence case, so the verdict
+      // regex never sees it. The seal still needs the word.
+      sealWord: 'REFUSED',
     };
   }
 

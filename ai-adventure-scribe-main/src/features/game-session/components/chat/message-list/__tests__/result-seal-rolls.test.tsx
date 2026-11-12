@@ -5,8 +5,10 @@ import {
   attackAction,
   ENEMY_FAILS_SAVE,
   ENEMY_HITS_PLAYER,
+  ENEMY_SAVES,
   FIGHT_ROSTER,
   PLAYER_HITS_ENEMY,
+  PLAYER_MISSES_ENEMY,
   REEVES,
   SCHOLAR,
   spellAction,
@@ -15,7 +17,10 @@ import { DMMessage } from '../DMMessage';
 import { MessageRenderer } from '../MessageRenderer';
 import { SystemMessage } from '../SystemMessage';
 
-import { formatCombatEngineParts } from '@/services/combat/combat-outcome-transcript';
+import {
+  formatCombatEngineParts,
+  formatRefusedSpellPart,
+} from '@/services/combat/combat-outcome-transcript';
 import { engineCardAriaLabel, initiativeCard } from '@/services/combat/engine-result-card';
 
 const campaign = vi.hoisted(() => ({ difficulty: 'medium' as string | undefined }));
@@ -221,5 +226,61 @@ describe('result seal on the mounted card (#1457)', () => {
     expect(seal).toHaveTextContent(card.badge?.word ?? '');
     expect(seal).toHaveAttribute('data-seal-tone', 'red');
     expectCardVerdict(/HIT/);
+  });
+
+  it('seals a miss red even though the card badge is grey', () => {
+    const card = formatCombatEngineParts(
+      attackAction(SCHOLAR, REEVES),
+      PLAYER_MISSES_ENEMY,
+      FIGHT_ROSTER,
+    )[0].card;
+    expect(card.badge?.tone).toBe('grey');
+    render(
+      <SystemMessage
+        message={{ sender: 'system', text: card.line, context: { engineCards: [card] } }}
+        isFirstInGroup
+        isLastInGroup
+        displayText={card.line}
+      />,
+    );
+    expect(screen.getByTestId('engine-roll-seal')).toHaveTextContent('MISS');
+    expect(screen.getByTestId('engine-roll-seal')).toHaveAttribute('data-seal-tone', 'red');
+  });
+
+  it('seals a refusal red even though the card badge is grey', () => {
+    const card = formatRefusedSpellPart(
+      SCHOLAR.id,
+      'Chill Touch',
+      'it is not your turn',
+      FIGHT_ROSTER,
+    ).card;
+    expect(card.badge?.tone).toBe('grey');
+    expect(card.badge?.word).toBe('REFUSED');
+    render(
+      <SystemMessage
+        message={{ sender: 'system', text: card.line, context: { engineCards: [card] } }}
+        isFirstInGroup
+        isLastInGroup
+        displayText={card.line}
+      />,
+    );
+    expect(screen.getByTestId('engine-roll-seal')).toHaveTextContent('REFUSED');
+    expect(screen.getByTestId('engine-roll-seal')).toHaveAttribute('data-seal-tone', 'red');
+  });
+
+  it('keeps a target-saved card slate, matching its grey badge', () => {
+    const card = formatCombatEngineParts(spellAction(SCHOLAR, REEVES), ENEMY_SAVES, FIGHT_ROSTER)[0]
+      .card;
+    expect(card.badge).toMatchObject({ word: 'TARGET SAVED', tone: 'grey' });
+    render(
+      <SystemMessage
+        message={{ sender: 'system', text: card.line, context: { engineCards: [card] } }}
+        isFirstInGroup
+        isLastInGroup
+        displayText={card.line}
+      />,
+    );
+    expect(screen.getByTestId('engine-roll-seal')).toHaveTextContent('TARGET SAVED');
+    expect(screen.getByTestId('engine-roll-seal')).toHaveAttribute('data-seal-tone', 'slate');
   });
 });

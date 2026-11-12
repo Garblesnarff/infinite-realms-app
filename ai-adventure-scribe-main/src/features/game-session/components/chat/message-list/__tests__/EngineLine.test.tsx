@@ -5,8 +5,14 @@ import { describe, expect, it } from 'vitest';
 import {
   ENEMY_FAILS_SAVE,
   ENEMY_HITS_PLAYER,
+  ENEMY_MISSES_PLAYER,
+  ENEMY_SAVES,
+  ENEMY_SAVE_SPELL_HITS_PLAYER,
   FIGHT_ROSTER,
+  PLAYER_CRITS_ENEMY,
   PLAYER_HITS_ENEMY,
+  PLAYER_MISSES_ENEMY,
+  PLAYER_PASSES_ENEMY_SAVE,
   REEVES,
   SCHOLAR,
   attackAction,
@@ -15,7 +21,10 @@ import {
 import { parseEngineLine } from '../engine-line-model';
 import { EngineLine } from '../EngineLine';
 
-import { formatCombatEngineParts } from '@/services/combat/combat-outcome-transcript';
+import {
+  formatCombatEngineParts,
+  formatRefusedSpellPart,
+} from '@/services/combat/combat-outcome-transcript';
 
 const playerHit = formatCombatEngineParts(
   attackAction(SCHOLAR, REEVES),
@@ -47,29 +56,147 @@ describe('EngineLine (#87)', () => {
 
   it('seals an enemy hit red and an enemy failed save gold, matching the card (#1457)', () => {
     document.body.classList.add('ir-table-look');
-    const enemyHit = formatCombatEngineParts(
-      attackAction(REEVES, SCHOLAR),
-      ENEMY_HITS_PLAYER,
-      FIGHT_ROSTER,
-      { targetHp: true, targetMaxHp: 7 },
-    )[0];
-    const failedSave = formatCombatEngineParts(
-      spellAction(SCHOLAR, REEVES),
-      ENEMY_FAILS_SAVE,
-      FIGHT_ROSTER,
-    )[0];
-    const { unmount } = render(
-      <EngineLine model={parseEngineLine(enemyHit.line, { roster: FIGHT_ROSTER })} />,
-    );
-    expect(screen.getByTestId('engine-line')).toHaveAttribute('data-outcome', 'enemy-hit');
-    expect(screen.getByTestId('engine-roll-seal')).toHaveAttribute('data-seal-tone', 'red');
-    expect(enemyHit.card.badge?.tone).toBe('red');
-    unmount();
-    render(<EngineLine model={parseEngineLine(failedSave.line, { roster: FIGHT_ROSTER })} />);
-    expect(screen.getByTestId('engine-line')).toHaveAttribute('data-outcome', 'failed-save');
-    expect(screen.getByTestId('engine-roll-seal')).toHaveAttribute('data-seal-tone', 'gold');
-    expect(failedSave.card.badge?.tone).toBe('gold');
-    document.body.classList.remove('ir-table-look');
+    try {
+      const enemyHit = formatCombatEngineParts(
+        attackAction(REEVES, SCHOLAR),
+        ENEMY_HITS_PLAYER,
+        FIGHT_ROSTER,
+        { targetHp: true, targetMaxHp: 7 },
+      )[0];
+      const failedSave = formatCombatEngineParts(
+        spellAction(SCHOLAR, REEVES),
+        ENEMY_FAILS_SAVE,
+        FIGHT_ROSTER,
+      )[0];
+      const { unmount } = render(
+        <EngineLine model={parseEngineLine(enemyHit.line, { roster: FIGHT_ROSTER })} />,
+      );
+      expect(screen.getByTestId('engine-line')).toHaveAttribute('data-outcome', 'enemy-hit');
+      expect(screen.getByTestId('engine-roll-seal')).toHaveAttribute('data-seal-tone', 'red');
+      expect(enemyHit.card.badge?.tone).toBe('red');
+      unmount();
+      render(<EngineLine model={parseEngineLine(failedSave.line, { roster: FIGHT_ROSTER })} />);
+      expect(screen.getByTestId('engine-line')).toHaveAttribute('data-outcome', 'failed-save');
+      expect(screen.getByTestId('engine-roll-seal')).toHaveAttribute('data-seal-tone', 'gold');
+      expect(failedSave.card.badge?.tone).toBe('gold');
+    } finally {
+      document.body.classList.remove('ir-table-look');
+    }
+  });
+
+  it('seals a miss and a refusal red, a pass gold, and a line with no verdict slate (#1457)', () => {
+    document.body.classList.add('ir-table-look');
+    try {
+      const onYou = { targetHp: true, targetMaxHp: 7 };
+      const rows = [
+        {
+          part: formatCombatEngineParts(
+            attackAction(SCHOLAR, REEVES),
+            PLAYER_HITS_ENEMY,
+            FIGHT_ROSTER,
+          )[0],
+          outcome: 'hit',
+          tone: 'gold',
+          badge: 'gold',
+        },
+        {
+          part: formatCombatEngineParts(
+            attackAction(SCHOLAR, REEVES),
+            PLAYER_CRITS_ENEMY,
+            FIGHT_ROSTER,
+          )[0],
+          outcome: 'critical',
+          tone: 'gold',
+          badge: 'gold',
+        },
+        {
+          part: formatCombatEngineParts(
+            attackAction(SCHOLAR, REEVES),
+            PLAYER_MISSES_ENEMY,
+            FIGHT_ROSTER,
+          )[0],
+          outcome: 'miss',
+          tone: 'red',
+          badge: 'grey',
+        },
+        {
+          part: formatCombatEngineParts(
+            attackAction(REEVES, SCHOLAR),
+            ENEMY_MISSES_PLAYER,
+            FIGHT_ROSTER,
+          )[0],
+          outcome: 'enemy-miss',
+          tone: 'red',
+          badge: 'grey',
+        },
+        {
+          part: formatCombatEngineParts(spellAction(SCHOLAR, REEVES), ENEMY_SAVES, FIGHT_ROSTER)[0],
+          outcome: 'saved',
+          tone: 'slate',
+          badge: 'grey',
+        },
+        {
+          part: formatCombatEngineParts(
+            spellAction(REEVES, SCHOLAR),
+            PLAYER_PASSES_ENEMY_SAVE,
+            FIGHT_ROSTER,
+          )[0],
+          outcome: 'pass',
+          tone: 'gold',
+          badge: 'grey',
+        },
+        {
+          part: formatCombatEngineParts(
+            spellAction(REEVES, SCHOLAR),
+            ENEMY_SAVE_SPELL_HITS_PLAYER,
+            FIGHT_ROSTER,
+            onYou,
+          )[0],
+          outcome: 'fail',
+          tone: 'red',
+          badge: 'red',
+        },
+        {
+          part: formatRefusedSpellPart(
+            SCHOLAR.id,
+            'Chill Touch',
+            'it is not your turn',
+            FIGHT_ROSTER,
+          ),
+          outcome: 'refused',
+          tone: 'red',
+          badge: 'grey',
+        },
+      ];
+      for (const row of rows) {
+        const { unmount } = render(
+          <EngineLine model={parseEngineLine(row.part.line, { roster: FIGHT_ROSTER })} />,
+        );
+        expect(screen.getByTestId('engine-line'), row.outcome).toHaveAttribute(
+          'data-outcome',
+          row.outcome,
+        );
+        expect(screen.getByTestId('engine-roll-seal'), row.outcome).toHaveAttribute(
+          'data-seal-tone',
+          row.tone,
+        );
+        expect(row.part.card.badge?.tone, row.outcome).toBe(row.badge);
+        unmount();
+      }
+
+      render(
+        <EngineLine
+          model={parseEngineLine('⚙️ Engine: Captain Sarah Reeves moved to (3, 4).', {
+            roster: FIGHT_ROSTER,
+          })}
+        />,
+      );
+      expect(screen.getByTestId('engine-line')).toHaveAttribute('data-outcome', 'move');
+      expect(screen.queryByTestId('engine-roll-seal')).toBeNull();
+      expect(screen.getByTestId('engine-line-pill').className).toContain('ir-wax-seal--slate');
+    } finally {
+      document.body.classList.remove('ir-table-look');
+    }
   });
 
   it('prints no "Rules engine" label when showLabel is false', () => {
