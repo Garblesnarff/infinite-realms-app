@@ -15,6 +15,21 @@ const tiltFor = (index: number | undefined, slug: string): number => {
   return TILTS[((slot % 3) + 3) % 3];
 };
 
+/**
+ * Colour pairs on the box, pinned to the Table program's 7:1 text rule in
+ * `__tests__/table-start.test.tsx`. Tags sit on a solid backing because they float over cover art.
+ */
+export const BOX_COLOURS = {
+  tagBacking: '#070b14',
+  tagText: '#eaeefa',
+  gold: '#f3deb0',
+  hard: '#f28b8b',
+  parchmentLight: '#f2e7cd',
+  parchmentDark: '#e2cfa4',
+  ink: '#2a1a0c',
+  inkSoft: '#3d2c18',
+} as const;
+
 export const BoxedCampaign: React.FC<{
   campaign: StarterCampaign;
   isFirst?: boolean;
@@ -76,17 +91,17 @@ export const BoxedCampaign: React.FC<{
               {campaign.genre.map((genre) => (
                 <span
                   key={genre}
-                  className="rounded-[5px] border border-[rgba(234,238,250,0.35)] bg-[rgba(7,11,20,0.8)] px-2 py-[3px] font-heading text-[11px] uppercase tracking-[0.08em] text-[#eaeefa]"
+                  className="rounded-[5px] border border-[rgba(234,238,250,0.35)] bg-[#070b14] px-2 py-[3px] font-heading text-[11px] uppercase tracking-[0.08em] text-[#eaeefa]"
                 >
                   {genre}
                 </span>
               ))}
             </div>
             <span
-              className="normal-case absolute right-3 top-3 rounded-[5px] border bg-[rgba(7,11,20,0.8)] px-2 py-[3px] font-heading text-[11px] font-bold tracking-[0.08em]"
+              className="normal-case absolute right-3 top-3 rounded-[5px] border bg-[#070b14] px-2 py-[3px] font-heading text-[11px] font-bold tracking-[0.08em]"
               style={{
-                borderColor: hard ? '#ef6b6b' : '#f3deb0',
-                color: hard ? '#ef6b6b' : '#f3deb0',
+                borderColor: hard ? BOX_COLOURS.hard : BOX_COLOURS.gold,
+                color: hard ? BOX_COLOURS.hard : BOX_COLOURS.gold,
               }}
             >
               {difficultyLabel}
@@ -100,11 +115,11 @@ export const BoxedCampaign: React.FC<{
             style={{ background: 'linear-gradient(175deg, #f2e7cd 0%, #e2cfa4 100%)' }}
           >
             <p className="text-[17px] leading-[1.45]">{campaign.premise}</p>
-            <p className="mt-auto text-[15px] text-[#5b4630]">{footer}</p>
+            <p className="mt-auto text-[15px] text-[#3d2c18]">{footer}</p>
             <span className="ir-brass-btn mt-1 flex min-h-11 items-center justify-center rounded px-4 font-semibold">
               Open the box
             </span>
-            <p className="text-xs text-[#5b4630]">
+            <p className="text-xs text-[#3d2c18]">
               {difficultyLabel} campaign: target numbers (DC and AC) start{' '}
               {shown ? 'shown' : 'hidden'}. You can {shown ? 'hide' : 'show'} them in Settings →
               Table.

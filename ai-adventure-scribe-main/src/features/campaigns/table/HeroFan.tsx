@@ -53,7 +53,7 @@ export const HeroFan: React.FC<{
       <div
         role="group"
         aria-label="Choose your hero"
-        className="flex max-w-full snap-x items-end overflow-x-auto px-3 pb-4 pt-10 md:justify-center md:overflow-visible"
+        className="flex max-w-full snap-x items-end overflow-x-auto px-3 pb-4 pt-10 md:justify-center"
       >
         {templates.map((template, index) => {
           const image = tableImageUrl(template.cardImageUrl ?? template.portraitUrl, 360, 540);

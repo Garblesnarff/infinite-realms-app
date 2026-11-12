@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
-import { BoxedCampaign } from '../BoxedCampaign';
+import { BOX_COLOURS, BoxedCampaign } from '../BoxedCampaign';
 import { HeroFan } from '../HeroFan';
 import { tableImageUrl } from '../image-url';
 
@@ -110,6 +110,42 @@ describe('Table start screens', () => {
     const word = screen.getByText('Hard', { exact: true });
     expect(word).toHaveClass('normal-case');
     expect(screen.getByText('horror')).toHaveClass('uppercase');
+  });
+
+  it('keeps the box text pairs at 7:1 or more and renders those colours', () => {
+    const luminance = (hex: string): number => {
+      const channels = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+      const [r, g, b] = channels.map((c) =>
+        c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4,
+      );
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const ratio = (a: string, b: string): number => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const c = BOX_COLOURS;
+    // Tags over cover art sit on a solid backing (#1484 strategist FIX 6814798818).
+    expect(ratio(c.hard, c.tagBacking)).toBeGreaterThanOrEqual(7);
+    expect(ratio(c.gold, c.tagBacking)).toBeGreaterThanOrEqual(7);
+    expect(ratio(c.tagText, c.tagBacking)).toBeGreaterThanOrEqual(7);
+    // Footer and target-numbers line on the darker end of the parchment gradient.
+    expect(ratio(c.inkSoft, c.parchmentDark)).toBeGreaterThanOrEqual(7);
+    expect(ratio(c.ink, c.parchmentDark)).toBeGreaterThanOrEqual(7);
+
+    render(
+      <MemoryRouter>
+        <BoxedCampaign campaign={campaign} />
+      </MemoryRouter>,
+    );
+    const tag = screen.getByText('Hard', { exact: true });
+    expect(tag).toHaveClass('bg-[#070b14]');
+    expect(tag).toHaveStyle({ color: c.hard });
+    expect(screen.getByText('horror')).toHaveClass('bg-[#070b14]');
+    expect(screen.getByText('Level 1 · Ready-made heroes')).toHaveClass('text-[#3d2c18]');
+    expect(screen.getByText(/target numbers \(DC and AC\) start hidden/)).toHaveClass(
+      'text-[#3d2c18]',
+    );
   });
 
   it('prints the level only when the campaign has one', () => {
