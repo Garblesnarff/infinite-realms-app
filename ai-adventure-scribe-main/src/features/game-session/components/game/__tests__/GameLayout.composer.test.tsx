@@ -143,6 +143,8 @@ const layoutProps = {
   contentWarnings: [],
   comfortLevel: 'pg13' as const,
   showSafetyInfo: false,
+  // The plain layout (unreachable in the app since #1486) until the `!tableLook` cleanup.
+  plainLayout: true,
 };
 
 /** The game screen as GameContent wires it: rail state from useGameRails. */
