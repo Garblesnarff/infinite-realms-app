@@ -21,7 +21,11 @@ import {
   formatCombatEngineParts,
   formatRefusedSpellPart,
 } from '@/services/combat/combat-outcome-transcript';
-import { engineCardAriaLabel, initiativeCard } from '@/services/combat/engine-result-card';
+import {
+  engineCardAriaLabel,
+  initiativeCard,
+  type EngineResultCard,
+} from '@/services/combat/engine-result-card';
 
 const campaign = vi.hoisted(() => ({ difficulty: 'medium' as string | undefined }));
 
@@ -71,6 +75,29 @@ describe('result seal on the mounted card (#1457)', () => {
   });
   afterEach(() => {
     document.body.classList.remove('ir-table-look');
+  });
+
+  it('does not seal a narrative check card; that seal is #1477', () => {
+    const card = {
+      kind: 'check',
+      side: 'party',
+      line: 'Athletics: 17 vs DC 15, SUCCESS',
+      title: 'Athletics',
+      badge: { word: 'SUCCESS', tone: 'gold', icon: 'check' },
+    } as unknown as EngineResultCard;
+    render(
+      <SystemMessage
+        message={{
+          sender: 'system',
+          text: card.line,
+          context: { engineCards: [card] },
+        }}
+        isFirstInGroup
+        isLastInGroup
+        displayText={card.line}
+      />,
+    );
+    expect(screen.queryByTestId('engine-roll-seal')).toBeNull();
   });
 
   it('a persisted ability check has no structured outcome, so it has no seal', () => {
