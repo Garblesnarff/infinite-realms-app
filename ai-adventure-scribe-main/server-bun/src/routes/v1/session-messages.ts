@@ -2,12 +2,58 @@ import { Elysia, t } from 'elysia';
 
 import { verifySessionOwnership } from './combat/helpers.js';
 import { PLAYER_INPUT_MAX_CHARS } from '../../../../shared/player-input-cap.js';
+import { logger } from '../../lib/logger.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
+import {
+  narrativeCheckCard,
+  serverVerdictLine,
+} from '../../services/session/narrative-check-outcome.js';
 import { SessionMessageService } from '../../services/session/session-message-service.js';
 import { SessionService } from '../../services/session-service.js';
 
 import type { DialogueHistory } from '../../../../db/schema/index';
+
+/**
+ * #1477: the server writes the outcome of a narrative ability check. The client sends the
+ * formatter line and the `rollRequestId`. The DC comes from the DM row that issued the request in
+ * this session, and the verdict is computed here. Any `engineCards` the client sent on this row
+ * is dropped, so a client cannot plant a card. A request this session did not issue gets no card.
+ * The stored line's verdict word is then set to the server's verdict, because the DM reads the
+ * stored line and must not narrate the client's word.
+ */
+async function withServerCheckOutcome<
+  T extends { speaker_type: string; message: string; context?: Record<string, unknown> },
+>(sessionId: string, userId: string, message: T): Promise<T> {
+  const context = message.context;
+  if (
+    message.speaker_type !== 'player' ||
+    context?.intent !== 'dice_roll' ||
+    typeof context.rollRequestId !== 'string'
+  ) {
+    return message;
+  }
+  const rollRequestId = context.rollRequestId;
+  const stored: Record<string, unknown> = { ...context };
+  delete stored.engineCards;
+
+  const issued = await SessionMessageService.findIssuedRollRequest(
+    sessionId,
+    userId,
+    rollRequestId,
+  );
+  const card = issued ? narrativeCheckCard({ text: message.message, request: issued }) : null;
+  if (!card) {
+    logger.warn(
+      { sessionId, rollRequestId, issued: issued !== null },
+      'narrative check: no server outcome written (unknown request or not a check)',
+    );
+    return { ...message, context: stored };
+  }
+  // The DM reads the stored line, so its verdict word is the server's, not the client's.
+  const line = serverVerdictLine(message.message, card.badge?.word === 'SUCCESS');
+  return { ...message, message: line, context: { ...stored, engineCards: [card] } };
+}
 
 // Fields shared by both message schemas below; the speaker type and the
 // message cap differ per variant.
@@ -119,7 +165,11 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
   .post(
     '/:id/messages',
     async ({ params, body, user, set }) => {
-      const payload = Array.isArray(body) ? body : [body];
+      const payload = await Promise.all(
+        (Array.isArray(body) ? body : [body]).map((message) =>
+          withServerCheckOutcome(params.id, user!.userId, message),
+        ),
+      );
       // #2517: a dead character's session is terminal. The single truth is
       // `character_stats.vital_state` (written by the vitals mirror during
       // the killing resolution); #2465 refused the next DM generate, but the

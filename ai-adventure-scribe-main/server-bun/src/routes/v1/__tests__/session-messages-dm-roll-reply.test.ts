@@ -66,6 +66,7 @@ mock.module('../../../services/session/session-message-service.js', () => ({
   SessionMessageService: {
     getRecentMessages: async () => ({ messages: [], hasMore: false, total: 0 }),
     messageExists: async () => true,
+    findIssuedRollRequest: async () => null,
     addMessages: async (messages: Array<Record<string, unknown>>) => {
       saved.push(messages);
       return messages.map((message, index) => ({
