@@ -329,3 +329,51 @@ test('a large encounter leaves the phone story and composer reachable', async ({
     ),
   ).toBe(true);
 });
+
+// The build line's copy button has a 44px hit box (ir-hit-slop, ::before) at its bottom-right
+// corner. That box must not cover the composer's Send button, or a tap meant for Send copies the
+// build instead.
+function rectsIntersect(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+): boolean {
+  return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+for (const [width, height] of [
+  [1280, 800],
+  [390, 844],
+] as const) {
+  test(`the build line hit box does not cover Send at ${width}x${height}`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await stubSession(page);
+    await page.goto(new URL('/e2e/table-game-layout.html', layoutUrl).toString());
+    await expect(page.getByTestId('story-box')).toBeVisible();
+    const composer = page.getByLabel('Describe what your character would like to do');
+    // Send is disabled until there is text, and a disabled button takes no pointer events, so type first.
+    await composer.fill('I climb carefully.');
+    const sendButton = page.getByRole('button', { name: 'Send message' });
+    await expect(sendButton).toBeEnabled();
+    const build = page.getByTestId('build-session-status');
+    const buildBox = await build.boundingBox();
+    const sendBox = await sendButton.boundingBox();
+    expect(buildBox && sendBox).toBeTruthy();
+    const hitBefore = await build.evaluate((el) => getComputedStyle(el, '::before').width);
+    expect(hitBefore).toBe('44px');
+    const hit = {
+      x: buildBox!.x + buildBox!.width - 44,
+      y: buildBox!.y + buildBox!.height - 44,
+      width: 44,
+      height: 44,
+    };
+    expect(rectsIntersect(hit, sendBox!)).toBe(false);
+    const topAtSend = await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label'),
+      { x: sendBox!.x + sendBox!.width / 2, y: sendBox!.y + sendBox!.height / 2 },
+    );
+    expect(topAtSend).toBe('Send message');
+
+    await sendButton.click();
+    await expect(composer).toHaveValue('');
+  });
+}
