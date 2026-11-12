@@ -51,7 +51,11 @@ import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { markPlayerDamageProvocation } from './npc-provocation.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { aggregateResistances } from './resistance-resolver.js';
-import { metamagicOptionsLedger, sorceryPointsLedger } from './resource-ledger.js';
+import {
+  metamagicOptionsLedger,
+  sorceryPointsLedger,
+  spendMetamagicPoints,
+} from './resource-ledger.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import {
@@ -61,7 +65,6 @@ import {
 import {
   METAMAGIC_COSTS,
   METAMAGIC_OPTION_LABELS,
-  familyCountRule,
 } from '../../../../shared/limited-feature-counts';
 import { isMetamagicOptionId } from '../../../../shared/metamagic-options';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
@@ -80,7 +83,6 @@ import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.j
 import { entitySlug } from '../../tactical/identity.js';
 import { CombatHPService } from '../combat-hp-service.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
-import { spendCountedFeatureUse } from '../progression/limited-feature-uses.js';
 import { SpellSlotsService } from '../spell-slots-service.js';
 
 import type { ConcentrationCheckResult } from './concentration-service.js';
@@ -1374,20 +1376,11 @@ export class CombatAttackService {
       // #1233: the points are spent after the slot and before the cast commits. A refusal here
       // throws before commit, so the slot spent above is given back.
       if (metamagicOption && casterData.participant.characterId) {
-        const metamagicRule = familyCountRule('sorcerer-sorcery-points');
-        if (!metamagicRule) {
-          throw new InternalServerError('Font of Magic has no counted rule');
-        }
-        const spentPoints = await spendCountedFeatureUse({
+        const spentPoints = await spendMetamagicPoints({
           characterId: casterData.participant.characterId,
           userId,
-          className: 'Sorcerer',
-          featureName: 'Font of Magic',
-          rule: metamagicRule,
-          spentBy: {
-            featureName: METAMAGIC_OPTION_LABELS[metamagicOption],
-            cost: metamagicCost,
-          },
+          featureName: METAMAGIC_OPTION_LABELS[metamagicOption],
+          cost: metamagicCost,
         });
         if (!spentPoints.ok) {
           throw new BusinessLogicError(spentPoints.reason, {
