@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.46.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.45.0...v0.46.0) (2026-11-12)
+
+
+### Features
+
+* **table:** boxed campaigns, hero hand and memory chips as the boards ([#1412](https://github.com/Garblesnarff/infinite-realms-app/issues/1412) [#1429](https://github.com/Garblesnarff/infinite-realms-app/issues/1429)) ([dcdf443](https://github.com/Garblesnarff/infinite-realms-app/commit/dcdf4430ef9a4c453f912d4b26d4334ff8aef7f7))
+
+
+### Bug Fixes
+
+* **blog:** load the one app font set; no Inter ([#1492](https://github.com/Garblesnarff/infinite-realms-app/issues/1492)) ([0187bbb](https://github.com/Garblesnarff/infinite-realms-app/commit/0187bbb1177ea8d3587b29f0c100720eceb1dd66))
+* **llm:** surface a key-limit outage to the player and the log ([#350](https://github.com/Garblesnarff/infinite-realms-app/issues/350)) ([159eaa3](https://github.com/Garblesnarff/infinite-realms-app/commit/159eaa34bdbcd741383fcfc4b9046a0161ca7e77))
+
+
+### Tests
+
+* **table:** copy-button hit box clears Send; Inspiration hint points to the coin ([#1491](https://github.com/Garblesnarff/infinite-realms-app/issues/1491)) ([6434d1e](https://github.com/Garblesnarff/infinite-realms-app/commit/6434d1e95949bb98ef0efe73a83801d37c2fbfb0))
+
 ## [0.45.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.44.1...v0.45.0) (2026-11-12)
 
 
