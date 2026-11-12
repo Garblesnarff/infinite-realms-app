@@ -8,6 +8,7 @@ import { describeAttackRoll } from '../../../../shared/describe-attack-roll';
 import { DiceRollRequest } from '../DiceRollRequest';
 
 import { useCharacter, useOptionalCharacter } from '@/contexts/CharacterContext';
+import { useInspirationArmed } from '@/features/game-session/contexts/inspiration-armed-context';
 import logger from '@/lib/logger';
 import { calculateRollWithBreakdown } from '@/utils/characterModifiers';
 
@@ -31,6 +32,10 @@ vi.mock('@/features/game-session/components', () => ({
       </button>
     </div>
   ),
+}));
+
+vi.mock('@/features/game-session/contexts/inspiration-armed-context', () => ({
+  useInspirationArmed: vi.fn(() => ({ armed: false, arm: vi.fn(), disarm: vi.fn() })),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -429,7 +434,7 @@ describe('DiceRollRequest', () => {
       <DiceRollRequest request={{ ...defaultRequest, dc: 15 }} onResult={mockOnManualResult} />,
     );
     expect(
-      screen.getByText('Spend Inspiration for advantage (roll 2d20, keep the higher).'),
+      screen.getByText('Tap the Inspiration coin to roll with advantage (2d20, keep the higher).'),
     ).toBeInTheDocument();
     expect(screen.queryByText(/coming soon/i)).not.toBeInTheDocument();
   });
@@ -451,7 +456,7 @@ describe('DiceRollRequest', () => {
     });
     render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
     expect(
-      screen.getByText('Spend Inspiration for advantage (roll 2d20, keep the higher).'),
+      screen.getByText('Tap the Inspiration coin to roll with advantage (2d20, keep the higher).'),
     ).toBeInTheDocument();
   });
 
@@ -636,5 +641,61 @@ describe('DiceRollRequest', () => {
 
     expect(screen.getByText('Roll 2d6')).toBeInTheDocument();
     expect(screen.queryByText('Roll d20')).not.toBeInTheDocument();
+  });
+
+  describe('Inspiration hint (#1491)', () => {
+    const hint = 'Tap the Inspiration coin to roll with advantage (2d20, keep the higher).';
+    const withInspiration = (inspiration: boolean) => {
+      (useOptionalCharacter as any).mockReturnValue({
+        state: { character: { ...mockCharacter, inspiration } },
+      });
+    };
+
+    beforeEach(() => {
+      vi.mocked(useInspirationArmed).mockReturnValue({
+        armed: false,
+        arm: vi.fn(),
+        disarm: vi.fn(),
+      });
+    });
+
+    it('shows the coin hint when the character has inspiration, the coin is not armed, and there is no advantage', () => {
+      withInspiration(true);
+      render(
+        <DiceRollRequest request={{ ...defaultRequest, dc: 15 }} onResult={mockOnManualResult} />,
+      );
+      expect(screen.getByText(hint)).toBeInTheDocument();
+    });
+
+    it('hides the hint while the coin is armed', () => {
+      withInspiration(true);
+      vi.mocked(useInspirationArmed).mockReturnValue({
+        armed: true,
+        arm: vi.fn(),
+        disarm: vi.fn(),
+      });
+      render(
+        <DiceRollRequest request={{ ...defaultRequest, dc: 15 }} onResult={mockOnManualResult} />,
+      );
+      expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    });
+
+    it('hides the hint once the roll already has advantage', () => {
+      withInspiration(true);
+      render(
+        <DiceRollRequest request={{ ...defaultRequest, dc: 15 }} onResult={mockOnManualResult} />,
+      );
+      expect(screen.getByText(hint)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Enable Advantage/i }));
+      expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    });
+
+    it('hides the hint without inspiration', () => {
+      withInspiration(false);
+      render(
+        <DiceRollRequest request={{ ...defaultRequest, dc: 15 }} onResult={mockOnManualResult} />,
+      );
+      expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    });
   });
 });
