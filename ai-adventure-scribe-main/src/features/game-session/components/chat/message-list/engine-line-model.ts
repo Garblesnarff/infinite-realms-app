@@ -13,6 +13,7 @@
  */
 import type { ChatMessage } from '@/types/game';
 
+import { engineVerdictWord } from '@/components/game/result-seal';
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
 
 export type EngineLineSide = 'player' | 'npc';
@@ -43,6 +44,8 @@ export interface EngineLineModel {
   detail: string | null;
   outcome: EngineLineOutcome;
   pill: string;
+  /** The verdict token written on the engine line, when it has one. */
+  sealWord?: string;
   /** The engine sentence in player-facing words (names, no enemy HP); the expanded line. */
   sentence: string;
 }
@@ -192,7 +195,8 @@ export function parseEngineLine(line: string, options: EngineLineOptions = {}): 
     options.side ??
     (isPartyRow(actor ? rosterRowFor(actor, roster) : undefined) === false ? 'npc' : 'player');
   const enemy = side === 'npc';
-  const base = { side, sentence };
+  const sealWord = engineVerdictWord(sentence);
+  const base = { side, sentence, ...(sealWord ? { sealWord } : {}) };
 
   const refused = sentence.match(/^.+?'s spell "(.+?)" was refused/);
   if (refused) {
@@ -204,6 +208,9 @@ export function parseEngineLine(line: string, options: EngineLineOptions = {}): 
       detail: sentence,
       outcome: 'refused',
       pill: PILL.refused,
+      // The engine line says "was refused" in sentence case, so the verdict
+      // regex never sees it. The seal still needs the word.
+      sealWord: 'REFUSED',
     };
   }
 

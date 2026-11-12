@@ -164,7 +164,9 @@ for (const mode of ['explore', 'combat'] as const) {
         const input = composer.querySelector('textarea')!;
         const ledger = document.querySelector('[data-testid="engine-line"] > button')!;
         const label = ledger.querySelector('span:nth-child(2)')!;
-        const seal = ledger.querySelector('[data-testid="engine-line-pill"]')!;
+        const seal = ledger.querySelector(
+          '[data-testid="engine-roll-seal"], [data-testid="engine-line-pill"]',
+        )!;
         const detail = ledger.querySelector('span.text-muted-foreground')!;
         const voice = document.querySelector('.ir-tts')!;
         const system = document.querySelector(

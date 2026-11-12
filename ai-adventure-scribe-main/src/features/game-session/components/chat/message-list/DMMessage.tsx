@@ -11,7 +11,7 @@ import { CombatRoundDivider } from './CombatRoundDivider';
 import { HandoutCard } from '../../handouts/HandoutCard';
 import { EngineLine } from './EngineLine';
 import { parseEngineLine, type EngineRosterRow } from './engine-line-model';
-import { EngineResultCardView } from '../../game/EngineResultCardView';
+import { EngineResultWithSeal } from '../../game/EngineResultWithSeal';
 import { useShowTargetNumbers } from '../../../hooks/use-show-target-numbers';
 import { useShowNPCRolls } from '@/features/settings/useShowNPCRolls';
 import type { ChatMessage } from '@/types/game';
@@ -270,7 +270,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
                 <CombatRoundDivider round={block.round} actor={block.actor} />
               )}
               {cards.map((card, index) => (
-                <EngineResultCardView
+                <EngineResultWithSeal
                   key={`${block.sequence}-card-${index}-${card.line}`}
                   card={card}
                   showTargetNumbers={showTargetNumbers}

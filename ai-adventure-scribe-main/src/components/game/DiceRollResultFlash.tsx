@@ -38,7 +38,7 @@ export const DiceRollResultFlash: React.FC<DiceRollResultFlashProps> = React.mem
       sealTone = outcome.success ? 'gold' : 'red';
     } else if (outcome) {
       label = critical ? (outcome.d20 === 20 ? '20 CRIT' : 'CRIT') : outcome.hit ? 'HIT' : 'MISS';
-      sealTone = critical ? 'gold' : outcome.hit ? 'red' : 'slate';
+      sealTone = critical || outcome.hit ? 'gold' : 'red';
     }
     const sealBackground =
       sealTone === 'gold'

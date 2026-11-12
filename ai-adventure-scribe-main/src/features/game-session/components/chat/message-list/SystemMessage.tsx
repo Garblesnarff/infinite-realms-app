@@ -3,7 +3,7 @@ import React from 'react';
 import { CombatRoundDivider } from './CombatRoundDivider';
 import { MessageMetadata } from './MessageMetadata';
 import { useShowTargetNumbers } from '../../../hooks/use-show-target-numbers';
-import { EngineResultCardView } from '../../game/EngineResultCardView';
+import { EngineResultWithSeal } from '../../game/EngineResultWithSeal';
 
 import type { ChatMessage } from '@/types/game';
 
@@ -63,7 +63,7 @@ export const SystemMessage: React.FC<SystemMessageProps> = React.memo(
             />
           )}
         {cards.map((card, index) => (
-          <EngineResultCardView
+          <EngineResultWithSeal
             key={`${index}-${card.line}`}
             card={card}
             showTargetNumbers={showTargetNumbers}
