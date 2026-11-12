@@ -548,7 +548,7 @@ describe('useMessageDiceRolls', () => {
         }),
       );
 
-      let submission!: Promise<void>;
+      let submission!: Promise<boolean>;
       act(() => {
         submission = result.current.handleManualResult(18);
         void result.current.handleManualResult(19);

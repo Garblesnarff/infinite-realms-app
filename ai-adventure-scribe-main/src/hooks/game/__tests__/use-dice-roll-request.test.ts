@@ -66,7 +66,8 @@ vi.mock('@/lib/logger', () => ({
 }));
 
 describe('useDiceRollRequest', () => {
-  const mockOnManualResult = vi.fn();
+  // #1472: a recorded roll resolves true — the Inspiration spend waits on it.
+  const mockOnManualResult = vi.fn().mockResolvedValue(true);
   const mockCharacter = {
     id: 'character-1',
     name: 'Test Hero',
@@ -602,7 +603,7 @@ describe('useDiceRollRequest', () => {
       expect(result.current.hasDisadvantage).toBe(false);
     });
 
-    it('spends before the animation and keeps advantage through the roll', async () => {
+    it('spends only after the advantaged roll is saved — the dice roll at once (#1472)', async () => {
       inspirationHolder.armed = true;
       const { result } = renderHook(() =>
         useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
@@ -611,32 +612,48 @@ describe('useDiceRollRequest', () => {
       await act(async () => {
         await result.current.handleAutoRoll();
       });
-      expect(inspirationHolder.spendInspiration).toHaveBeenCalledWith('character-1');
+      // The dice roll with the armed advantage, but the flag is not consumed yet.
       expect(result.current.showDiceAnimation).toBe(true);
       expect(result.current.hasAdvantage).toBe(true);
+      expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
 
       await act(async () => {
         await result.current.handleDiceRollComplete(15);
       });
       expect(mockOnManualResult).toHaveBeenCalledWith(15);
+      expect(inspirationHolder.spendInspiration).toHaveBeenCalledTimes(1);
+      expect(inspirationHolder.spendInspiration).toHaveBeenCalledWith('character-1');
+      // The save happens before the spend: the flag is consumed only for a recorded roll.
+      expect(mockOnManualResult.mock.invocationCallOrder[0]).toBeLessThan(
+        inspirationHolder.spendInspiration.mock.invocationCallOrder[0],
+      );
       expect(inspirationHolder.disarm).toHaveBeenCalled();
     });
 
-    it('a failed spend disarms and rolls without advantage', async () => {
+    it('a 409 after the save: the saved roll stands and the arm clears (#1472)', async () => {
       inspirationHolder.armed = true;
       inspirationHolder.spendResult = new Error('No inspiration to spend');
-      const { result, rerender } = renderHook(() =>
+      const { result } = renderHook(() =>
         useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
       );
 
       await act(async () => {
         await result.current.handleAutoRoll();
       });
+      await act(async () => {
+        await result.current.handleDiceRollComplete({
+          total: 15,
+          naturalRoll: 15,
+          rolls: [{ value: 15, useInTotal: true }],
+        });
+      });
+      // The roll was recorded with the advantage it rolled with; the refused spend does not undo it.
+      expect(mockOnManualResult).toHaveBeenCalledWith(
+        15,
+        expect.objectContaining({ advantage: true, disadvantage: false }),
+      );
       expect(inspirationHolder.spendInspiration).toHaveBeenCalledWith('character-1');
-      // The roll still happens — never lose a roll because the spend failed.
-      expect(result.current.showDiceAnimation).toBe(true);
-      rerender();
-      expect(result.current.hasAdvantage).toBe(false);
+      expect(inspirationHolder.disarm).toHaveBeenCalled();
     });
 
     it('a manual entry disarms without spending', () => {
@@ -743,35 +760,75 @@ describe('useDiceRollRequest', () => {
       expect(result.current.manualMode).toBe(false);
     });
 
-    it('does not mount the dice until the spend resolves — a failed spend rolls one die (round 3, B-1)', async () => {
+    it('a cancelled roll never spends — the flag stays true (#1472)', async () => {
       inspirationHolder.armed = true;
-      let resolveSpend: (value: boolean) => void = () => {};
-      const spendPending = new Promise<boolean>((resolve) => {
-        resolveSpend = resolve;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
       });
-      inspirationHolder.spendInspiration.mockImplementationOnce(() => spendPending);
+      // The player cancels or closes the page before the dice land: no completion runs.
+      expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
+      expect(inspirationHolder.disarm).not.toHaveBeenCalled();
+      expect(inspirationHolder.armed).toBe(true);
+      expect(mockOnManualResult).not.toHaveBeenCalled();
+    });
+
+    it('a roll whose save fails keeps the flag and the arm for the retry (#1472)', async () => {
+      inspirationHolder.armed = true;
+      mockOnManualResult.mockResolvedValueOnce(false);
+      const { result } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+      });
+      await act(async () => {
+        await result.current.handleDiceRollComplete(15);
+      });
+      expect(mockOnManualResult).toHaveBeenCalledWith(15);
+      expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
+      expect(inspirationHolder.disarm).not.toHaveBeenCalled();
+    });
+
+    it('double submit spends once — one roll, one flag (#1472)', async () => {
+      inspirationHolder.armed = true;
+      const { result } = renderHook(() =>
+        useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
+      );
+
+      await act(async () => {
+        await result.current.handleAutoRoll();
+        // A second click while the roll is in flight is refused by the synchronous guard.
+        await result.current.handleAutoRoll();
+      });
+      await act(async () => {
+        await result.current.handleDiceRollComplete(15);
+      });
+      // A duplicate completion for the same roll must not spend the flag again.
+      await act(async () => {
+        await result.current.handleDiceRollComplete(15);
+      });
+      expect(inspirationHolder.spendInspiration).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not mount the dice before the roll — the arm is spent after the save (#1472)', async () => {
+      inspirationHolder.armed = true;
       const { result, rerender } = renderHook(() =>
         useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),
       );
 
-      let rollPromise: Promise<void> = Promise.resolve();
-      act(() => {
-        rollPromise = result.current.handleAutoRoll();
-      });
-      // The prompt is locked down, but the dice are NOT mounted (showDiceAnimation gates
-      // the embed, which rolls with whatever advantage it mounts with) while the spend is
-      // pending — so a failed spend cannot have already rolled two dice.
-      expect(result.current.isRolling).toBe(true);
-      expect(result.current.showDiceAnimation).toBe(false);
-
       await act(async () => {
-        resolveSpend(false);
-        await rollPromise;
+        await result.current.handleAutoRoll();
       });
-      expect(inspirationHolder.disarm).toHaveBeenCalled();
+      expect(result.current.isRolling).toBe(true);
       expect(result.current.showDiceAnimation).toBe(true);
       rerender();
-      expect(result.current.hasAdvantage).toBe(false);
+      expect(result.current.hasAdvantage).toBe(true);
+      expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
     });
 
     it('does not spend on a damage roll — the arm survives for the next d20 roll (round 3, B-2)', async () => {
@@ -892,6 +949,9 @@ describe('useDiceRollRequest', () => {
       await act(async () => {
         await second.result.current.handleAutoRoll();
       });
+      await act(async () => {
+        await second.result.current.handleDiceRollComplete(11);
+      });
       expect(inspirationHolder.spendInspiration).toHaveBeenCalledWith('character-1');
     });
 
@@ -943,7 +1003,7 @@ describe('useDiceRollRequest', () => {
       await act(async () => {
         await result.current.handleAutoRoll();
       });
-      expect(inspirationHolder.spendInspiration).toHaveBeenCalledWith('character-1');
+      expect(inspirationHolder.spendInspiration).not.toHaveBeenCalled();
 
       await act(async () => {
         await result.current.handleDiceRollComplete({
@@ -959,6 +1019,7 @@ describe('useDiceRollRequest', () => {
         16,
         expect.objectContaining({ advantage: true, disadvantage: false, naturalRoll: 14 }),
       );
+      expect(inspirationHolder.spendInspiration).toHaveBeenCalledWith('character-1');
       expect(inspirationHolder.disarm).toHaveBeenCalled();
     });
   });

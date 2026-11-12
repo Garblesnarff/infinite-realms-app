@@ -61,7 +61,7 @@ vi.mock('@/services/user-data-api', () => ({
 type GameStore = ReturnType<typeof useDiceRollManagement> & { state: typeof initialGameState };
 
 interface DiceHandle {
-  handleManualResult: (result: number, details?: { naturalRoll: number }) => Promise<void>;
+  handleManualResult: (result: number, details?: { naturalRoll: number }) => Promise<boolean>;
   handleCancelRoll: () => void;
   currentRollId: string | null;
   currentRollDescription: string | null;
@@ -153,14 +153,14 @@ const queueNarrativeRoll = (description: string): string =>
 
 /** Rolls the narrative check and leaves its turn running, as the real dice handler does. */
 async function rollNarrativeCheckIntoEntry(handle: { current: DiceHandle | null }): Promise<{
-  narrativeRollDone: Promise<void>;
+  narrativeRollDone: Promise<boolean>;
   narrativeRollId: string;
 }> {
   let narrativeRollId = '';
   await act(async () => {
     narrativeRollId = queueNarrativeRoll('Perception check');
   });
-  let narrativeRollDone!: Promise<void>;
+  let narrativeRollDone!: Promise<boolean>;
   await act(async () => {
     narrativeRollDone = handle.current!.handleManualResult(15, { naturalRoll: 13 });
   });
@@ -248,7 +248,7 @@ describe('initiative rolled while a narrative roll turn is still running (#2587,
     await act(async () => {
       queueNarrativeRoll('Acrobatics check');
     });
-    let narrativeRollDone!: Promise<void>;
+    let narrativeRollDone!: Promise<boolean>;
     await act(async () => {
       narrativeRollDone = handle.current!.handleManualResult(4, { naturalRoll: 1 });
     });
