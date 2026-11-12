@@ -1,0 +1,107 @@
+/*
+ * A2 table parts: character card clip and plaques, the chat-mode map sketch, and the
+ * dice tray lid. Imported by the components that use these classes, not by index.css.
+ */
+
+/* 1. Character card: a paper clip holds the portrait to the card. */
+.ir-portrait-clip {
+  position: relative;
+  flex: none;
+}
+
+.ir-paper-clip {
+  position: absolute;
+  top: -10px;
+  left: -7px;
+  width: 18px;
+  height: 40px;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+}
+
+body.ir-table-look .ir-plaques > div {
+  border: 1px solid #a9823f;
+  border-radius: 6px;
+  background: #f3e4bd;
+  padding: 4px 2px;
+}
+
+/* 2. Chat mode map: a parchment sketch of the existing map data, with ink lines. */
+body.ir-table-look .ir-map-sketch {
+  border: 1px solid #5a4226;
+  border-radius: 6px;
+  background: #efe0bd;
+  color: #2a1a0c;
+  padding: 8px;
+}
+
+.ir-map-sketch-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  margin-bottom: 6px;
+}
+
+.ir-map-sketch-caption {
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 6px;
+}
+
+/* 3. Dice tray: closed lid while no roll is pending, opened when the DM asks. The host is
+ * hidden on phones by ir-table.css (it is a fixed bottom sheet there), so the lid shows
+ * from the desktop column up only. */
+@media (min-width: 1024px) {
+  body.ir-table-look .ir-table-roll-host.ir-table-roll-host:has(> .ir-stable-roll-slot:empty) {
+    display: block;
+  }
+}
+
+/* The lid text is a real element beside the slot; it shows only while the slot is empty. */
+.ir-roll-tray-lid {
+  display: none;
+}
+
+body.ir-table-look .ir-table-roll-host:has(> .ir-stable-roll-slot:empty) > .ir-roll-tray-lid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  border: 4px solid #3b2616;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #6b4526, #4a2e18);
+  color: #f6e3b8;
+  font-size: 14px;
+  margin: 0;
+  padding: 8px 12px;
+  text-align: center;
+}
+
+@keyframes ir-tray-open {
+  from {
+    opacity: 0;
+    transform: scaleY(0.35);
+    transform-origin: top;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+body.ir-table-look .ir-stable-roll-slot > [data-testid='roll-tray'] {
+  animation: ir-tray-open 320ms ease-out both;
+}
+
+html[data-reduce-motion='on'] body.ir-table-look .ir-stable-roll-slot > [data-testid='roll-tray'] {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-reduce-motion='off'])
+    body.ir-table-look
+    .ir-stable-roll-slot
+    > [data-testid='roll-tray'] {
+    animation: none;
+  }
+}

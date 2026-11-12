@@ -152,16 +152,17 @@ describe('PlayerSettings (#1347)', () => {
 
   it('saves Speed for the narration player', () => {
     render(<PlayerSettings />);
-    fireEvent.click(screen.getByRole('radio', { name: '1.5×' }));
-    expect(readStored()).toMatchObject({ narrationSpeed: 1.5 });
-    expect(window.localStorage.getItem(VOICE_RATE_KEY)).toBe('1.5');
+    fireEvent.click(screen.getByRole('radio', { name: '1.25×' }));
+    expect(readStored()).toMatchObject({ narrationSpeed: 1.25 });
+    expect(window.localStorage.getItem(VOICE_RATE_KEY)).toBe('1.25');
   });
 
-  it('shows all four speeds as radio buttons with 1x selected', () => {
+  it('shows the three speeds from the board as radio buttons with 1x selected', () => {
     render(<PlayerSettings />);
     const group = screen.getByRole('radiogroup', { name: 'Speed' });
     expect(group).toBeInTheDocument();
-    for (const label of ['0.75×', '1×', '1.25×', '1.5×']) {
+    expect(screen.getAllByRole('radio')).toHaveLength(3);
+    for (const label of ['0.75×', '1×', '1.25×']) {
       expect(screen.getByRole('radio', { name: label })).toBeInTheDocument();
     }
     expect(screen.getByRole('radio', { name: '1×' })).toHaveAttribute('aria-checked', 'true');

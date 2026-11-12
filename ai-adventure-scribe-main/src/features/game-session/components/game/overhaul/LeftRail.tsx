@@ -7,6 +7,28 @@ import { tableImageUrl } from '@/features/campaigns/table/image-url';
 import { TableImage } from '@/features/campaigns/table/TableImage';
 import { formatCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 
+import '@/styles/ir-table-parts.css';
+
+/** A metal paper clip pinned over the portrait's top edge (table look). */
+const PaperClip: React.FC = () => (
+  <svg className="ir-paper-clip" viewBox="0 0 18 40" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="clipMetal" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stopColor="#f4f6fa" />
+        <stop offset="0.5" stopColor="#8e96a6" />
+        <stop offset="1" stopColor="#434a59" />
+      </linearGradient>
+    </defs>
+    <path
+      d="M13 6 V30 a4 4 0 0 1 -8 0 V9 a2.6 2.6 0 0 1 5.2 0 V27"
+      fill="none"
+      stroke="url(#clipMetal)"
+      strokeWidth="2"
+      strokeLinecap="round"
+    />
+  </svg>
+);
+
 const CurrentCampaign: React.FC<{ campaign: CampaignSummaryVM }> = ({ campaign }) => (
   <IRPanel>
     <IRPanelHeader title="Current Campaign" />
@@ -227,7 +249,10 @@ export const TableCharacterCard: React.FC<{
         </span>
       </button>
       <div className="hidden items-center gap-3 md:flex">
-        {portraitImage(64)}
+        <div className="ir-portrait-clip">
+          {portraitImage(64)}
+          <PaperClip />
+        </div>
         <div className="min-w-0">
           <h2 className="ir-display break-words text-lg font-bold">{character.name}</h2>
           <p>
@@ -236,7 +261,7 @@ export const TableCharacterCard: React.FC<{
         </div>
       </div>
       <div className={expanded ? 'block' : 'hidden md:block'}>
-        <dl className="mt-3 grid grid-cols-3 gap-2 text-center">
+        <dl className="ir-plaques mt-3 grid grid-cols-3 gap-2 text-center">
           <div>
             <dt>AC</dt>
             <dd>{character.ac ?? '—'}</dd>

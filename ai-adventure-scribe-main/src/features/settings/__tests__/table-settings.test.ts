@@ -44,4 +44,17 @@ describe('table settings store (#1236 section F)', () => {
       showNPCRolls: false,
     });
   });
+
+  it('maps a stored speed that is not offered to the nearest offered speed', () => {
+    window.localStorage.setItem(
+      tableSettingsKey('user-a'),
+      JSON.stringify({ narrationSpeed: 1.5 }),
+    );
+    expect(readTableSettings('user-a').narrationSpeed).toBe(1.25);
+    window.localStorage.setItem(
+      tableSettingsKey('user-a'),
+      JSON.stringify({ narrationSpeed: 0.5 }),
+    );
+    expect(readTableSettings('user-a').narrationSpeed).toBe(0.75);
+  });
 });
