@@ -160,6 +160,23 @@ const DEFERRED_TASK_TIMEOUT_MS = 20_000;
 // simply never persists and the post-combat fetch does not happen.
 const COMBAT_END_FACTS_PENDING_KEY = 'ir:combat-end-facts-pending:';
 
+/**
+ * The engine's final lines for the fallen screen: the last round's lines only,
+ * at most three, newest last. Rows without a round all count as one round.
+ */
+function finalRoundLines(
+  rows: ReadonlyArray<{ text: string; round?: number }>,
+  limit = 3,
+): string[] {
+  const last = rows[rows.length - 1];
+  if (!last) return [];
+  return rows
+    .filter((row) => row.round === last.round)
+    .map((row) => row.text.trim())
+    .filter(Boolean)
+    .slice(-limit);
+}
+
 function markCombatEndFactsPending(sessionId: string): void {
   try {
     window.sessionStorage.setItem(COMBAT_END_FACTS_PENDING_KEY + sessionId, '1');
@@ -1172,10 +1189,11 @@ export const useAIResponse = (): {
 
         // The rows the server wrote this turn. When its creatures end the fight on the player,
         // the killing row (with its DEAD and ending lines) is what the end state shows (#2518).
-        const turnEngineRows: string[] = [];
+        const turnEngineRows: Array<{ text: string; round?: number }> = [];
         const collectEngineRows = (event: Event): void => {
-          for (const row of (event as CustomEvent<Array<{ text?: string }>>).detail ?? []) {
-            if (row.text) turnEngineRows.push(row.text);
+          for (const row of (event as CustomEvent<Array<{ text?: string; round?: number }>>)
+            .detail ?? []) {
+            if (row.text) turnEngineRows.push({ text: row.text, round: row.round });
           }
         };
         window.addEventListener('session-engine-rows', collectEngineRows);
@@ -1308,7 +1326,7 @@ export const useAIResponse = (): {
             const fallen = await userDataApi.fetchSessionFallenState(sessionId);
             if (fallen) {
               const finalLines = turnEngineRows.length
-                ? turnEngineRows.slice(-1)
+                ? finalRoundLines(turnEngineRows)
                 : combatEngineBlocks?.[combatEngineBlocks.length - 1]?.lines;
               setTerminalDeathState({
                 state: 'party_defeated',

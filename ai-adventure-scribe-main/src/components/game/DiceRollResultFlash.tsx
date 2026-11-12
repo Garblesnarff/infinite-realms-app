@@ -75,7 +75,7 @@ export const DiceRollResultFlash: React.FC<DiceRollResultFlashProps> = React.mem
           {(outcome || (tableLook && typeof checkSuccess === 'boolean')) && (
             <span
               data-testid="engine-roll-seal"
-              className={`ir-wax-seal ir-wax-seal--${sealTone} ${critical ? '[body.ir-table-look_&]:shadow-[0_0_24px_rgba(246,227,184,0.75)]' : ''} ml-auto px-3 py-2 font-bold`}
+              className={`ir-wax-seal ir-seal-stamp ir-wax-seal--${sealTone} ${critical ? '[body.ir-table-look_&]:shadow-[0_0_24px_rgba(246,227,184,0.75)]' : ''} ml-auto px-3 py-2 font-bold`}
               style={tableLook ? { background: sealBackground } : undefined}
             >
               {label}

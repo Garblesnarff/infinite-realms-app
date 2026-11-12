@@ -227,7 +227,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     // (Inter) rule, so EB Garamond still governs in the app.
     // The bubble caps width at 72ch, so the old lg:78ch narrative cap is dead.
     const narrativeClass = cn(
-      'dm-narrative ir-narr ir-ink-reveal [body.ir-table-look_&]:!text-[#2a1a0c] text-[16px] md:text-[17px] leading-[1.65] text-foreground hyphens-auto',
+      'dm-narrative ir-narr ir-ink-reveal ir-drop-cap [body.ir-table-look_&]:!text-[#2a1a0c] text-[16px] md:text-[17px] leading-[1.65] text-foreground hyphens-auto',
       'selection:bg-infinite-purple/20 selection:text-white break-words',
       shouldClamp && 'max-h-[22rem] overflow-hidden clamp-fade',
     );

@@ -183,7 +183,7 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
       title={title}
       sub={sub}
       hpSentence={hpSentenceOf(hp)}
-      next={tableLook ? summary.nextLine : undefined}
+      next={summary.nextLine}
       edge={edge}
       titleClassName={titleClassName}
     >
@@ -197,7 +197,7 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
             data-testid="combat-turn-pip"
             data-state={actor.state}
             className={cn(
-              'ir-tent-card inline-flex h-[30px] w-[30px] min-w-[30px] shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold [body.ir-table-look_&]:h-auto [body.ir-table-look_&]:w-auto [body.ir-table-look_&]:min-w-20 [body.ir-table-look_&]:flex-col [body.ir-table-look_&]:rounded [body.ir-table-look_&]:px-2 [body.ir-table-look_&]:py-1',
+              'ir-tent-card inline-flex h-[30px] w-[30px] min-w-[30px] shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold [body.ir-table-look_&]:h-auto [body.ir-table-look_&]:w-[92px] [body.ir-table-look_&]:min-w-[92px] [body.ir-table-look_&]:flex-col [body.ir-table-look_&]:rounded [body.ir-table-look_&]:px-2 [body.ir-table-look_&]:py-1',
               actor.isPlayer ? 'ir-tent-card--player' : 'ir-tent-card--foe',
               actor.state === 'now' && 'ir-tent-card--current',
               actor.isPlayer ? 'border-infinite-gold' : 'border-infinite-teal',
@@ -232,7 +232,7 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
                     Dying
                   </span>
                 ) : (
-                  actor.state === 'now' && actor.isPlayer && <span>Your turn</span>
+                  actor.state === 'now' && <span>{actor.isPlayer ? 'Your turn' : 'Now'}</span>
                 )}
               </>
             ) : (

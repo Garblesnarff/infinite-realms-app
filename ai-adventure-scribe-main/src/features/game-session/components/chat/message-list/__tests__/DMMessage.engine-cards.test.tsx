@@ -191,11 +191,11 @@ describe('engine result cards in the chat (#2417)', () => {
     expect(container.textContent).toContain('Spell attack: d20');
   });
 
-  it('shows the player their HP when hit: HP 4 of 7, −3', () => {
+  it('shows the player their HP as it fell when hit: HP 7 → 4 of 7, −3', () => {
     renderMessage();
 
     const hp = screen.getByTestId('engine-card-hp');
-    expect(hp.textContent).toContain('The Scholar · HP 4 of 7');
+    expect(hp.textContent).toContain('The Scholar · HP 7 → 4 of 7');
     expect(hp.textContent).toContain('−3');
   });
 
