@@ -178,6 +178,26 @@ describe('ChatInput', () => {
     expect(textarea).toHaveValue('');
   });
 
+  it('shows the key-limit outage message with the Retry control (#350)', async () => {
+    const onRetry = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ChatInput
+        onSendMessage={vi.fn()}
+        isDisabled={false}
+        sendError="The Dungeon Master is unavailable right now. Your turn was not lost; try again in a few minutes."
+        onRetry={onRetry}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        'The Dungeon Master is unavailable right now. Your turn was not lost; try again in a few minutes.',
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
   it('does not send empty messages', async () => {
     render(<ChatInput onSendMessage={mockOnSendMessage} isDisabled={false} />);
     const sendButton = screen.getByRole('button', { name: /send message/i });

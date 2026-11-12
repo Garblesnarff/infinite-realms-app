@@ -11,7 +11,8 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
-const PLAYER_MESSAGE = 'The storyteller is offline for maintenance. Your turn was not used.';
+const PLAYER_MESSAGE =
+  'The Dungeon Master is unavailable right now. Your turn was not lost; try again in a few minutes.';
 
 let quotaConsumeCalls: Array<Record<string, unknown>> = [];
 let refundCalls: Array<Record<string, unknown>> = [];

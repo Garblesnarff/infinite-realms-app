@@ -1504,7 +1504,7 @@ export class LLMProviderService {
     });
     // #350: a dead provider key degrades every turn silently; page once per 15 min.
     if (keyLimit) {
-      alertProviderKeyLimit({ provider: 'openrouter', upstreamStatus });
+      alertProviderKeyLimit({ provider: 'openrouter', model: textModel, upstreamStatus });
     }
     return {
       error: 'LLM request failed',
