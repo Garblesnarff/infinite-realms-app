@@ -64,6 +64,11 @@ vi.mock('uuid', () => ({
 }));
 
 import {
+  ABILITY_CHECK_ROW_FAIL,
+  ABILITY_CHECK_ROW_SUCCESS,
+  ABILITY_CHECK_SAVE_BODY,
+} from '../../../shared/test-fixtures/ability-check-saves';
+import {
   PREVIOUSLY_ON_IDS,
   previouslyOnMessage,
   previouslyOnWireBody,
@@ -143,6 +148,91 @@ describe('useMessageQueue', () => {
     expect(saved).toEqual(
       expect.objectContaining({ id: 'first-answer', text: 'Wisdom save: 8 fail' }),
     );
+  });
+
+  // #1477: the save response is the server's rows (`mapMessage` in server-bun/src/routes/v1/session-messages.ts).
+  const saveResponseRow = (row: {
+    id: string;
+    text: string;
+    timestamp: string;
+    context: Record<string, unknown>;
+  }) => ({
+    id: row.id,
+    session_id: sessionId,
+    speaker_type: 'player',
+    speaker_id: null,
+    message: row.text,
+    context: row.context,
+    images: null,
+    sequence_number: 1,
+    timestamp: row.timestamp,
+    created_at: row.timestamp,
+    updated_at: row.timestamp,
+  });
+  const checkSave = (text: string) =>
+    ({
+      id: ABILITY_CHECK_SAVE_BODY.id,
+      sender: 'player',
+      text,
+      context: ABILITY_CHECK_SAVE_BODY.context,
+    }) as any;
+
+  it('#1477: the live check row takes the server card from the save response, with no reload', async () => {
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+    mockSaveSessionMessages.mockResolvedValueOnce({
+      messages: [saveResponseRow(ABILITY_CHECK_ROW_SUCCESS)],
+    });
+    let saved: any;
+    await act(async () => {
+      saved = await result.current.messageMutation.mutateAsync(
+        checkSave(ABILITY_CHECK_SAVE_BODY.message),
+      );
+    });
+    expect(saved.text).toBe(ABILITY_CHECK_ROW_SUCCESS.text);
+    expect(saved.context.engineCards).toEqual(ABILITY_CHECK_ROW_SUCCESS.context.engineCards);
+    expect(saved.context.engineCards[0].badge).toEqual({
+      word: 'SUCCESS',
+      tone: 'gold',
+      icon: 'check',
+    });
+  });
+
+  it('#1477: the server verdict wins over the client word, and its card is the one shown', async () => {
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+    mockSaveSessionMessages.mockResolvedValueOnce({
+      messages: [saveResponseRow(ABILITY_CHECK_ROW_FAIL)],
+    });
+    let saved: any;
+    await act(async () => {
+      // The client wrote "success" on a total below the DC; the server stored "fail".
+      saved = await result.current.messageMutation.mutateAsync(
+        checkSave('Athletics check: 9 (nat 4+5) success'),
+      );
+    });
+    expect(saved.text).toBe('Athletics check: 9 (nat 4+5) fail');
+    expect(saved.context.engineCards).toEqual(ABILITY_CHECK_ROW_FAIL.context.engineCards);
+    expect(saved.context.engineCards[0].badge.word).toBe('FAIL');
+  });
+
+  it('#1477: a save response with no server card adds no card on the client', async () => {
+    const { result } = renderHook(() => useMessageQueue(sessionId), { wrapper });
+    mockSaveSessionMessages.mockResolvedValueOnce({
+      messages: [
+        saveResponseRow({
+          id: ABILITY_CHECK_SAVE_BODY.id,
+          text: ABILITY_CHECK_SAVE_BODY.message,
+          timestamp: ABILITY_CHECK_SAVE_BODY.timestamp,
+          context: ABILITY_CHECK_SAVE_BODY.context,
+        }),
+      ],
+    });
+    let saved: any;
+    await act(async () => {
+      saved = await result.current.messageMutation.mutateAsync(
+        checkSave(ABILITY_CHECK_SAVE_BODY.message),
+      );
+    });
+    expect(saved.context.engineCards).toBeUndefined();
   });
 
   it('should successfully persist a message', async () => {
