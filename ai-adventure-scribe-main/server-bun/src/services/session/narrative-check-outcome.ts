@@ -20,7 +20,8 @@ export interface IssuedRollRequest {
   rollRequestId?: unknown;
 }
 
-const NARRATIVE_CHECK_TYPES = new Set(['check', 'skill_check']);
+// `ability_check` is a live request type (src/hooks/use-ai-response.ts), so it gets the same card.
+const NARRATIVE_CHECK_TYPES = new Set(['check', 'skill_check', 'ability_check']);
 
 /**
  * Reads the label and the reported total from the formatter line. The label is everything before

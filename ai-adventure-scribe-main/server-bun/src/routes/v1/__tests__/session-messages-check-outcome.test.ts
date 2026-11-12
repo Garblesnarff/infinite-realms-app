@@ -64,6 +64,8 @@ mock.module(import.meta.resolve('../combat/helpers.js'), () => ({
   verifyEncounterOwnership: async () => ({ success: true }),
 }));
 
+const ABILITY_CHECK_ROLL_REQUEST_ID = '77777777-7777-4777-8777-777777777777:roll:0';
+
 /** The DM row's stored request, as the server keeps it: a 15 DC skill check. */
 const issuedRequests = new Map<string, Record<string, unknown>>([
   [
@@ -79,6 +81,16 @@ const issuedRequests = new Map<string, Record<string, unknown>>([
   [
     `${storySaveAnswerBody('x', 'x').context.rollRequestId}`,
     { type: 'save', formula: '1d20', purpose: 'Wisdom save', dc: 13 },
+  ],
+  [
+    ABILITY_CHECK_ROLL_REQUEST_ID,
+    {
+      type: 'ability_check',
+      formula: '1d20+3',
+      purpose: 'Stealth check',
+      dc: 14,
+      rollRequestId: ABILITY_CHECK_ROLL_REQUEST_ID,
+    },
   ],
 ]);
 
@@ -193,6 +205,27 @@ describe('POST /v1/sessions/:id/messages — narrative ability check outcome (#1
     expect(saved[0]![0]!.message).toBe('Athletics check: 15 (nat 10+5) success');
     expect(saved[0]![0]!.context).toMatchObject({
       engineCards: [{ badge: { word: 'SUCCESS' } }],
+    });
+  });
+
+  it('a client "fail" on a total at or over the DC becomes success in the stored line and the card', async () => {
+    await post(withLine('Athletics check: 18 (nat 13+5) fail'));
+    const row = saved[0]![0]!;
+    expect(row.message).toBe('Athletics check: 18 (nat 13+5) success');
+    expect(row.context).toMatchObject({
+      engineCards: [{ badge: { word: 'SUCCESS', tone: 'gold', icon: 'check' } }],
+    });
+  });
+
+  it('an ability_check request gets the same server card (a live request type)', async () => {
+    const response = await post(
+      withLine('Stealth check: 16 (nat 13+3) fail', ABILITY_CHECK_ROLL_REQUEST_ID),
+    );
+    expect(response.status).toBe(200);
+    const row = saved[0]![0]!;
+    expect(row.message).toBe('Stealth check: 16 (nat 13+3) success');
+    expect(row.context).toMatchObject({
+      engineCards: [{ kind: 'check', badge: { word: 'SUCCESS', tone: 'gold' } }],
     });
   });
 
