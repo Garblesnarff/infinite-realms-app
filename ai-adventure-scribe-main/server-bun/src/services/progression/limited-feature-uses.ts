@@ -28,6 +28,7 @@ import {
 } from '../../../../db/schema/index';
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import {
+  familyCountRule,
   limitedFeatureRule,
   type AbilityName,
   type LimitedFeatureContext,
@@ -155,6 +156,31 @@ function canonicalRow(rows: HeldRow[], classLevel: number): HeldRow | null {
       (a.featureName < b.featureName ? -1 : a.featureName > b.featureName ? 1 : 0),
   );
   return ordered.find((row) => row.levelAcquired <= classLevel) ?? ordered[ordered.length - 1];
+}
+
+/**
+ * A counted family's pool on the character's canonical row, read without writing. `max` is the
+ * rule's uses at the character's level; `remaining` is the stored count, or the max when the row
+ * has none yet. Null when the character holds no row of the family or the rule has no fixed max.
+ */
+export async function countedFamilyPool(input: {
+  characterId: string;
+  userId: string;
+  className: string;
+  family: string;
+}): Promise<{ max: number; remaining: number } | null> {
+  const ctx = await limitedFeatureContext(input.characterId, input.userId, input.className);
+  if (!ctx) return null;
+  const rule = familyCountRule(input.family);
+  if (!rule) return null;
+  const canonical = canonicalRow(
+    await heldFamilyRows(input.characterId, input.className, input.family),
+    ctx.classLevel,
+  );
+  if (!canonical) return null;
+  const max = rule.usesAt(ctx);
+  if (typeof max !== 'number') return null;
+  return { max, remaining: Math.min(max, canonical.usesRemaining ?? max) };
 }
 
 export type CountedSpendResult =

@@ -10,6 +10,7 @@
 import { eq, and, desc, sql, exists, or } from 'drizzle-orm';
 
 import {
+  countedFamilyPool,
   countedGrantPreview,
   engineRefilledRowIds,
   grantCountedFeatureUses,
@@ -481,6 +482,20 @@ export class ClassFeatureUsageService {
       const poolRule = familyCountRule('sorcerer-sorcery-points');
       if (!poolRule)
         return refused(`${feature.featureName} spends ${pool}, so it was not spent here.`);
+      // #1233: a convert that gains nothing (the Font of Magic pool is already full) is refused
+      // before the slot is spent. A partial gain is allowed: the grant caps at the pool maximum,
+      // so the slot is spent for the points that fit.
+      const full = await countedFamilyPool({
+        characterId,
+        userId,
+        className: feature.className,
+        family: poolRule.family,
+      });
+      if (full && full.remaining >= full.max) {
+        return refused(
+          `${feature.featureName} would gain nothing: the Font of Magic pool is full (${full.max} of ${full.max} sorcery points), so no spell slot was spent.`,
+        );
+      }
       const preview = await countedGrantPreview({
         characterId,
         userId,

@@ -128,7 +128,8 @@ export interface DmFactAction {
     | 'second_wind'
     | 'action_surge'
     | 'divine_sense'
-    | 'use_item';
+    | 'use_item'
+    | 'flexible_casting';
   /** Engine slug of the actor (the tactical digest id). */
   actorSlug: string;
   actorIsPlayer: boolean;

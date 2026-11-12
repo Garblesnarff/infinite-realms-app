@@ -137,6 +137,20 @@ const fighterFeatureFields = {
 };
 
 /**
+ * Flexible Casting (#1233), a bonus action. `direction` is `convert` (a spell slot of
+ * `slotLevel` becomes that many sorcery points) or `create` (sorcery points for `slotLevel`
+ * become a spell slot of that level). The engine owns the point cost and the 2014 table; the
+ * body only names the choice. Versioned like the other mutating feature intents.
+ */
+const flexibleCastingFields = {
+  type: t.Literal('flexible_casting'),
+  actorId: participantId,
+  actionId,
+  direction: t.Union([t.Literal('convert'), t.Literal('create')]),
+  slotLevel: t.Integer({ minimum: 1, maximum: 9 }),
+};
+
+/**
  * Drinking a healing consumable (#1147): the item spent, like the feature fields above
  * versioned because it mutates the sheet (quantity) and the board (HP).
  */
@@ -155,6 +169,7 @@ const playerCombatIntentSchema = t.Union([
   t.Object({ ...defensiveFields, expectedVersion }),
   t.Object({ ...fighterFeatureFields, expectedVersion }),
   t.Object({ ...itemFields, expectedVersion }),
+  t.Object({ ...flexibleCastingFields, expectedVersion }),
 ]);
 
 /**
@@ -173,6 +188,7 @@ const dmCombatIntentSchema = t.Union([
   t.Object({ ...defensiveFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...fighterFeatureFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...itemFields, expectedVersion: t.Optional(expectedVersion) }),
+  t.Object({ ...flexibleCastingFields, expectedVersion: t.Optional(expectedVersion) }),
 ]);
 
 /**

@@ -14,6 +14,7 @@ import { trackCombatEvent } from './combat-events.js';
 import { resolveCombatIntentRefsWithRetry } from './combat-intent-refs.js';
 import { assertActorTurn } from './combat-intent-turn.js';
 import { resolveUseItem, type ResolveUseItemResult } from './combat-item-service.js';
+import { resolveFlexibleCasting, type FlexibleCastingResult } from './flexible-casting-resolver.js';
 import { resolveWeaponName } from '../../../../shared/equipment-weapon-resolver';
 import { slotOrdinal } from '../../../../shared/slot-ordinal';
 import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
@@ -62,6 +63,7 @@ import {
   type OpportunityAttacker,
   type PlayerExitResult,
 } from './player-exit-service.js';
+import { spellSlotLedger, sorceryPointsLedger } from './resource-ledger.js';
 import { loadSessionEntityIndex, type SessionEntityIndex } from './session-entity-index.js';
 import { showTargetNumbersForSession } from './session-target-numbers.js';
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
@@ -88,7 +90,10 @@ import {
   playerFacingWeaponName,
   type EngineRosterEntry,
 } from '../../../../shared/engine-display-name';
-import { divineSmiteDice } from '../../../../shared/limited-feature-counts';
+import {
+  divineSmiteDice,
+  FLEXIBLE_CASTING_CREATE_COSTS,
+} from '../../../../shared/limited-feature-counts';
 import {
   playerTextDeclares,
   playerTextDeclaresLeaving,
@@ -98,7 +103,6 @@ import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/er
 import { planApproach } from '../../tactical/approach.js';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
 import { paladinLevelOf } from '../progression/paladin-features-service.js';
-import { SpellSlotMechanics } from '../spell-slots/spell-slot-mechanics.js';
 
 import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
 import type { LegalActionType } from '../../../../shared/combat-legal-action-types';
@@ -182,7 +186,20 @@ export type CombatIntent =
    * Drinking a healing consumable (#1147). Costs the Action and spends the item; the
    * resolver heals first and decrements second, refusing at full health before spending.
    */
-  | { type: 'use_item'; actorId: string; itemId: string; expectedVersion: number };
+  | { type: 'use_item'; actorId: string; itemId: string; expectedVersion: number }
+  /**
+   * Flexible Casting (#1233), a bonus action. `convert` turns a spell slot of `slotLevel` into
+   * sorcery points; `create` spends sorcery points for a spell slot of `slotLevel`. The
+   * resolver spends through the class-feature use path, so the pool, the table and the slot
+   * ledger are the same ones the sheet uses.
+   */
+  | {
+      type: 'flexible_casting';
+      actorId: string;
+      direction: 'convert' | 'create';
+      slotLevel: number;
+      expectedVersion: number;
+    };
 
 export type CombatActionSource = 'player' | 'dm';
 
@@ -222,6 +239,7 @@ const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
   'divine_sense',
   // #1147: an item spend is the player's own resource, same as a feature spend.
   'use_item',
+  'flexible_casting',
 ]);
 
 /**
@@ -295,6 +313,8 @@ export const VERSIONED_INTENT_TYPES = new Set([
   // is claim-based too. Listed so the legal-action version test holds; no intent carries this type.
   'divine_smite',
   'use_item',
+  // #1233: a Flexible Casting intent spends the player's sorcery points and slot ledger.
+  'flexible_casting',
 ]);
 
 /**
@@ -545,7 +565,7 @@ async function recordFeatureActionFact(
   sessionId: string,
   state: CombatState,
   actorId: string,
-  kind: 'second_wind' | 'action_surge' | 'divine_sense',
+  kind: 'second_wind' | 'action_surge' | 'divine_sense' | 'flexible_casting',
   result: SecondWindResult | ActionSurgeResult | { message: string },
 ): Promise<void> {
   const participant = state.participants.find((p) => p.id === actorId);
@@ -556,7 +576,9 @@ async function recordFeatureActionFact(
       ? `${label} used Second Wind and regained ${(result as SecondWindResult).healed} HP.`
       : kind === 'action_surge'
         ? `${label} used Action Surge and has one additional action this turn.`
-        : `${label} used Divine Sense. ${(result as { message: string }).message}`;
+        : kind === 'flexible_casting'
+          ? `${label} used Flexible Casting. ${(result as { message: string }).message}`
+          : `${label} used Divine Sense. ${(result as { message: string }).message}`;
   await recordDmTacticalFact(sessionId, fact, {
     kind,
     actorSlug: engineSlugForParticipant(map, actorId, label),
@@ -1853,6 +1875,37 @@ export async function executeCombatIntent(
         'second_wind',
         result as SecondWindResult,
       );
+    } else if (intent.type === 'flexible_casting') {
+      // #1233: Flexible Casting is a bonus action. The claim wraps the spend, so a refusal (no
+      // feature, no points, no slot, a created level above 5th) refunds the bonus action.
+      const actorCharacterId = (actor as unknown as { characterId?: string | null }).characterId;
+      result = await claimTurnBonusActionAndResolve(
+        intent.actorId,
+        encounterId,
+        intent.expectedVersion,
+        async () => {
+          if (!actorCharacterId) {
+            throw new BusinessLogicError("Flexible Casting is not on this character's sheet", {
+              reason: 'feature_not_on_sheet',
+              featureName: 'Flexible Casting',
+            });
+          }
+          return resolveFlexibleCasting({
+            characterId: actorCharacterId,
+            userId,
+            sessionId: encounter.sessionId,
+            direction: intent.direction,
+            slotLevel: intent.slotLevel,
+          });
+        },
+      );
+      await recordFeatureActionFact(
+        encounter.sessionId,
+        state,
+        intent.actorId,
+        'flexible_casting',
+        result as FlexibleCastingResult,
+      );
     } else if (intent.type === 'action_surge') {
       // #975: Action Surge costs no action itself — it grants one — so it claims
       // only the encounter version, like flee/yield. The resolver spends the
@@ -2198,34 +2251,6 @@ export async function executeCombatIntent(
   }
 }
 
-/**
- * #1362: the spell slots a Paladin can spend on Divine Smite, keyed by slot level. Stored rows
- * win. A level with no row is granted from class progression, the way ensureSpellSlotRow seeds
- * it when the attack runs, so a premade with no seeded rows is still offered its slots.
- */
-async function smiteSlotLedger(
-  characterId: string,
-  actor: {
-    characterClass?: string | null;
-    characterLevel?: number | null;
-    characterClassLevels?: unknown;
-  },
-): Promise<Map<number, number>> {
-  const stored = (await remainingSpellSlots(characterId)) ?? new Map<number, number>();
-  const ledger = new Map<number, number>();
-  for (const row of SpellSlotMechanics.seedRowsForCharacter(
-    actor.characterClass,
-    actor.characterLevel ?? 0,
-    actor.characterClassLevels,
-  )) {
-    ledger.set(row.spellLevel, stored.get(row.spellLevel) ?? row.totalSlots);
-  }
-  for (const [level, count] of stored) {
-    if (!ledger.has(level)) ledger.set(level, count);
-  }
-  return ledger;
-}
-
 export async function getLegalCombatActions(encounterId: string, userId: string) {
   const state = await CombatEncounterService.getCombatState(encounterId, userId, {
     includeCharacterClass: true,
@@ -2357,7 +2382,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     // sends the attack intent with divineSmiteSlotLevel; combat-attack-service refuses it again
     // before the roll if the class or slot no longer holds.
     if (actor.characterId && actor.characterClass?.toLowerCase().includes('paladin')) {
-      const ledger = await smiteSlotLedger(actor.characterId, actor);
+      const ledger = await spellSlotLedger(actor.characterId, actor);
       const slotLevels = [...ledger.entries()]
         .filter(([, count]) => count > 0)
         .map(([level]) => level)
@@ -2444,6 +2469,51 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       { type: 'dodge', label: 'Dodge' },
       { type: 'disengage', label: 'Disengage' },
     );
+  }
+  // #1233: Flexible Casting is a bonus action, offered to a Sorcerer with a sorcery-point pool
+  // (no pool, not a Sorcerer, means no offer). Convert: one offer per spell slot the character
+  // still has, worth its level in points. Create: one offer per level 1-5 the remaining points
+  // pay for, at the 2014 table's cost. The option carries the engine's numbers as display data;
+  // the resolver spends through the sheet's own path and refuses anything the table does not allow.
+  if (
+    actor.participantType === 'player' &&
+    actor.characterId &&
+    !actor.bonusActionUsed &&
+    actor.characterClass?.toLowerCase().includes('sorcerer')
+  ) {
+    const pool = await sorceryPointsLedger({
+      characterId: actor.characterId,
+      userId,
+      className: 'Sorcerer',
+    });
+    if (pool) {
+      // A convert gains the slot's level, capped at the room left in the pool. A full pool gains
+      // nothing, so no convert is offered (the engine refuses one before the slot is spent).
+      const room = Math.max(0, pool.max - pool.remaining);
+      const slots =
+        room > 0 ? await spellSlotLedger(actor.characterId, actor) : new Map<number, number>();
+      for (const [slotLevel, remaining] of [...slots.entries()].sort(([a], [b]) => a - b)) {
+        if (remaining <= 0 || slotLevel < 1 || slotLevel > 9) continue;
+        const pointsGained = Math.min(slotLevel, room);
+        actions.push({
+          type: 'flexible_casting',
+          direction: 'convert',
+          slotLevel,
+          pointsGained,
+          label: `Convert a ${slotOrdinal(slotLevel)}-level slot into ${pointsGained} sorcery point${pointsGained === 1 ? '' : 's'}`,
+        });
+      }
+      for (const [slotLevel, pointsCost] of Object.entries(FLEXIBLE_CASTING_CREATE_COSTS)) {
+        if (pointsCost > pool.remaining) continue;
+        actions.push({
+          type: 'flexible_casting',
+          direction: 'create',
+          slotLevel: Number(slotLevel),
+          pointsCost,
+          label: `Create a ${slotOrdinal(Number(slotLevel))}-level slot (${pointsCost} sorcery points)`,
+        });
+      }
+    }
   }
   // #975: the Fighter's short-rest features, offered while a use remains on the sheet.
   // Second Wind is a bonus action, so it is gated on that resource and not on the Action;

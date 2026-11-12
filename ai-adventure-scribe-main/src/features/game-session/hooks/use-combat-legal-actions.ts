@@ -62,6 +62,12 @@ export type LegalAction = {
   slotLevel?: number;
   /** #1362: the Divine Smite dice for a `divine_smite` chip at its slot level (2d8 at 1st). */
   smiteDice?: number;
+  /** #1233: a `flexible_casting` option: convert a slot, or create one. Engine display data. */
+  direction?: 'convert' | 'create';
+  /** #1233: sorcery points a `convert` option gains (the slot's level). */
+  pointsGained?: number;
+  /** #1233: sorcery points a `create` option costs (the 2014 table). */
+  pointsCost?: number;
   targetIds?: string[];
   x?: number;
   y?: number;
@@ -376,6 +382,39 @@ export function useCombatLegalActions(input: {
             action.type === 'divine_sense' ? 'player' : 'dm',
             Date.now(),
             action.type === 'divine_sense' ? 'action_bar' : 'typed',
+          );
+          window.dispatchEvent(new CustomEvent('character-state-updated'));
+          const parts = [
+            ...formatCombatActionParts(
+              { actor_id: actorId, action_type: action.type },
+              result,
+              roster,
+            ),
+            ...formatWakeParts(result),
+          ];
+          await sendEngineNotice(input.onSendMessage, {
+            text: parts.map((part) => part.line).join('\n\n'),
+            cards: parts.map((part) => part.card),
+          });
+          await refreshCombatState();
+        } else if (action.type === 'flexible_casting') {
+          // #1233: Flexible Casting, a bonus action. The engine spends the slot or the points
+          // and prints its line; the turn stays open (the bonus action is the only cost).
+          if (!action.direction || typeof action.slotLevel !== 'number') {
+            setError('That option could not be used. Nothing was spent.');
+            return;
+          }
+          const result = await executeAuthoritativeCombatIntent(
+            encounter.id,
+            {
+              type: 'flexible_casting',
+              actorId,
+              direction: action.direction,
+              slotLevel: action.slotLevel,
+            },
+            'player',
+            Date.now(),
+            'action_bar',
           );
           window.dispatchEvent(new CustomEvent('character-state-updated'));
           const parts = [
@@ -740,7 +779,17 @@ export function useCombatLegalActions(input: {
         await refreshLegalActions();
       }
     },
-    [encounter, legalState, roster, input, refreshCombatState, refreshLegalActions, armed, arm, disarm],
+    [
+      encounter,
+      legalState,
+      roster,
+      input,
+      refreshCombatState,
+      refreshLegalActions,
+      armed,
+      arm,
+      disarm,
+    ],
   );
 
   return {

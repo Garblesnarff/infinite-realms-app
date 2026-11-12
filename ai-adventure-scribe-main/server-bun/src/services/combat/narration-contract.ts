@@ -113,6 +113,7 @@ const KIND_LABEL: Record<ContractActionKind, string> = {
   action_surge: 'action surge',
   divine_sense: 'Divine Sense',
   use_item: 'use item',
+  flexible_casting: 'Flexible Casting',
 };
 
 const outcomeLabel = (action: AggregatedContractAction): string => {

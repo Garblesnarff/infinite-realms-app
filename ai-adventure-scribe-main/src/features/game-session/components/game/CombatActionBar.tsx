@@ -82,6 +82,8 @@ export const LEGAL_ACTION_PLACEMENT = {
   // with the other non-action options.
   inspiration: 'more',
   use_item: 'more',
+  // #1233: Flexible Casting is a bonus action with no Action cost, so it rides More.
+  flexible_casting: 'more',
   flee: 'more',
   yield: 'more',
   death_save: 'hidden',
