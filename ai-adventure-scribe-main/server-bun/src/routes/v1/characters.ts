@@ -34,19 +34,18 @@ import {
   spells,
 } from '../../../../db/schema/index';
 import { abilityModifier } from '../../../../shared/ability-modifier';
+import { planHasPaidFeatures } from '../../../../shared/plan-features';
+import { sql } from '../../lib/db.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CampaignService } from '../../services/campaign-service.js';
 import { CharacterSpellService } from '../../services/character/character-spell-service.js';
 import { CharacterService } from '../../services/character-service.js';
 import { SpellSlotDataAccess } from '../../services/spell-slots/spell-slot-data-access.js';
 
-import type {
-  Character,
-  CharacterHitDice,
-  CharacterStats,
-} from '../../../../db/schema/index';
+import type { Character, CharacterHitDice, CharacterStats } from '../../../../db/schema/index';
 
 /**
  * Overlay the engine's spell-slot table onto the sheet-facing character
@@ -119,9 +118,7 @@ export async function overlayCharacterConcentration(
     const current = await getConcentration(characterId);
     return {
       ...mapped,
-      concentration: current
-        ? { spellName: current.spellName, spellId: current.spellId }
-        : null,
+      concentration: current ? { spellName: current.spellName, spellId: current.spellId } : null,
     };
   } catch (error) {
     // prettier-ignore
@@ -154,6 +151,9 @@ const characterSchema = t.Object({
   theme: t.Optional(t.Nullable(t.String())),
   session_notes: t.Optional(t.Nullable(t.String())),
   campaign_id: t.Optional(t.Nullable(t.String())),
+  // #1344: set by the premade path only. The server trusts it only when it names a
+  // starter template whose class, race and level match the body.
+  starter_template_id: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
   skill_proficiencies: t.Optional(t.Nullable(t.String())),
   expertise_proficiencies: t.Optional(t.Nullable(t.String())),
   tool_proficiencies: t.Optional(t.Nullable(t.String())),
@@ -238,16 +238,74 @@ const characterSchema = t.Object({
   ),
 });
 
+/** #1344: how a hero was made. Set by the server only; the body never sets it. */
+type CharacterOrigin = 'starter' | 'custom' | 'import';
+
+const STARTER_TEMPLATE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * A premade hero is 'starter' only when the body names a real starter template and its
+ * class, race and level match that template row. Anything else is 'custom', so a Free
+ * player who changes the class of a premade gets the Legend gate. Throws on a database
+ * error; the caller turns that into a 503.
+ */
+async function originForCreateBody(body: typeof characterSchema.static): Promise<CharacterOrigin> {
+  const templateId = body.starter_template_id;
+  if (!templateId || !STARTER_TEMPLATE_ID.test(templateId)) return 'custom';
+  const rows = (await sql`
+    SELECT class, race, level FROM starter_character_templates WHERE id = ${templateId} LIMIT 1
+  `) as Array<{ class: string; race: string; level: number | null }>;
+  const row = rows[0];
+  if (!row) return 'custom';
+  const matches =
+    body.class === row.class && body.race === row.race && (body.level ?? 1) === (row.level ?? 1);
+  return matches ? 'starter' : 'custom';
+}
+
+interface CreateRefusal {
+  status: 403 | 503;
+  body: { error: string; code: 'LEGEND_REQUIRED' | 'PLAN_UNAVAILABLE' };
+}
+
+/**
+ * The Legend gate for hero creation (#1239, #1344). A starter hero is free. A custom or
+ * imported hero needs a paid plan. The plan comes from the strict resolver: a lookup
+ * error is a 503, never a silent Free.
+ */
+async function legendGateRefusal(
+  userId: string,
+  origin: CharacterOrigin,
+): Promise<CreateRefusal | null> {
+  if (origin === 'starter') return null;
+  let plan: string;
+  try {
+    plan = await resolveUserPlanStrict(userId);
+  } catch (error) {
+    logger.error({ msg: 'CHARACTER_CREATE plan lookup failed', error });
+    return {
+      status: 503,
+      body: { error: 'Plan unavailable. Try again.', code: 'PLAN_UNAVAILABLE' },
+    };
+  }
+  if (planHasPaidFeatures(plan)) return null;
+  return {
+    status: 403,
+    body: { error: 'Creating your own hero is a Legend feature', code: 'LEGEND_REQUIRED' },
+  };
+}
+
 /**
  * The one writer for a new character: the wizard's POST and the JSON import both land here.
  */
 async function createCharacterFromBody(
   userId: string,
   body: typeof characterSchema.static,
+  origin: CharacterOrigin,
 ): Promise<Character> {
   const character = await CharacterService.create(
     userId,
     {
+      origin,
       name: body.name,
       description: body.description,
       race: body.race,
@@ -558,7 +616,23 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           }
         }
 
-        const character = await createCharacterFromBody(user!.userId, body);
+        // #1344: the server decides the origin and the gate; the client never sends either.
+        let origin: CharacterOrigin;
+        try {
+          origin = await originForCreateBody(body);
+        } catch (error) {
+          // The starter catalog, not the plan: its own code, so a client can tell them apart.
+          logger.error({ msg: 'CHARACTER_CREATE starter lookup failed', error });
+          set.status = 503;
+          return { error: 'Starter catalog unavailable. Try again.', code: 'CATALOG_UNAVAILABLE' };
+        }
+        const refusal = await legendGateRefusal(user!.userId, origin);
+        if (refusal) {
+          set.status = refusal.status;
+          return refusal.body;
+        }
+
+        const character = await createCharacterFromBody(user!.userId, body, origin);
 
         set.status = 201;
         return mapCharacterToApi(character as Character & { stats?: CharacterStats });
@@ -579,13 +653,24 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
   .post(
     '/import',
     async ({ body, set, user }) => {
+      // #1344: an import is always 'import' (Legend only), whatever the file says.
+      const refusal = await legendGateRefusal(user!.userId, 'import');
+      if (refusal) {
+        set.status = refusal.status;
+        return refusal.body;
+      }
       // Whatever the schema let through, a file never links a campaign or sets slot state.
-      const character = await createCharacterFromBody(user!.userId, {
-        ...body.character,
-        campaign_id: undefined,
-        spell_slots: undefined,
-        pact_slots: undefined,
-      });
+      const character = await createCharacterFromBody(
+        user!.userId,
+        {
+          ...body.character,
+          campaign_id: undefined,
+          spell_slots: undefined,
+          pact_slots: undefined,
+          starter_template_id: undefined,
+        },
+        'import',
+      );
       set.status = 201;
       return mapCharacterToApi(character as Character & { stats?: CharacterStats });
     },

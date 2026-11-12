@@ -19,6 +19,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 // Same logger stub the other character-route real-DB suites use.
@@ -80,6 +81,7 @@ describeWithDb('racial Thaumaturgy route round trip (#933)', () => {
 
   beforeAll(async () => {
     userId = testId('user-710');
+    await grantLegendPlan(userId);
     db = realDb();
     const createdClasses = await db
       .insert(classes)
@@ -184,6 +186,7 @@ describeWithDb('racial Thaumaturgy route round trip (#933)', () => {
     expect((await send()).status).toBe(400);
     const owner = userId;
     userId = testId('other-933');
+    await grantLegendPlan(userId);
     expect((await send()).status).toBe(404);
     userId = owner;
     expect(

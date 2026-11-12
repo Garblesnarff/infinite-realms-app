@@ -8,12 +8,10 @@ import { Elysia } from 'elysia';
  * schema (AGENTS.md §4).
  */
 
-const applyNonAttackDamage = mock(
-  async (..._args: unknown[]) => ({
-    vitals: { currentHitPoints: 22, temporaryHitPoints: 0 },
-    engineLines: [],
-  }),
-);
+const applyNonAttackDamage = mock(async (..._args: unknown[]) => ({
+  vitals: { currentHitPoints: 22, temporaryHitPoints: 0 },
+  engineLines: [],
+}));
 
 mock.module('../../../lib/env.js', () => ({
   env: {
@@ -25,6 +23,12 @@ mock.module('../../../lib/env.js', () => ({
   },
 }));
 
+// #1344: create now checks the plan through the strict resolver. These tests assert
+// their own subject, not the gate, so the caller is given a Legend plan.
+mock.module('../../../lib/user-plan.js', () => ({
+  resolveUserPlanStrict: async () => 'pro',
+  resolveUserPlan: async () => 'pro',
+}));
 mock.module('../../../lib/auth.js', () => ({
   authenticateRequest: async () => ({
     user: { userId: 'user-1', email: 'user@example.test', plan: 'free' },
@@ -86,13 +90,10 @@ describe('character damage route wire body (#621)', () => {
     expect(response.status).toBe(200);
     const json = (await response.json()) as Record<string, unknown>;
     expect(json.currentHitPoints).toBe(22);
-    expect(applyNonAttackDamage).toHaveBeenCalledWith(
-      'character-1',
-      'user-1',
-      8,
-      'damage_taken',
-      { critical: false, damageType: undefined },
-    );
+    expect(applyNonAttackDamage).toHaveBeenCalledWith('character-1', 'user-1', 8, 'damage_taken', {
+      critical: false,
+      damageType: undefined,
+    });
   });
 
   it('forwards damageType to applyNonAttackDamage when the client sends it', async () => {
@@ -110,13 +111,10 @@ describe('character damage route wire body (#621)', () => {
     );
 
     expect(response.status).toBe(200);
-    expect(applyNonAttackDamage).toHaveBeenCalledWith(
-      'character-1',
-      'user-1',
-      8,
-      'damage_taken',
-      { critical: false, damageType: 'fire' },
-    );
+    expect(applyNonAttackDamage).toHaveBeenCalledWith('character-1', 'user-1', 8, 'damage_taken', {
+      critical: false,
+      damageType: 'fire',
+    });
   });
 
   it('rejects a negative amount at the schema boundary', async () => {

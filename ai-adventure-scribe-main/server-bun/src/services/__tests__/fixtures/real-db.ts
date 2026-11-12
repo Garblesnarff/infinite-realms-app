@@ -62,3 +62,18 @@ export function testId(prefix: string): string {
   counter += 1;
   return `${prefix}-${process.pid}-${counter}`;
 }
+
+/**
+ * #1344: the Legend gate on POST /v1/characters reads the plan from the users table, not
+ * from the auth mock. A fixture user that creates custom heroes needs a paid row first.
+ */
+export async function grantLegendPlan(userId: string): Promise<void> {
+  // Raw client: Drizzle's relation setup breaks when another suite mocks the schema.
+  const raw = postgres(realDbUrl, { max: 1, connect_timeout: 10, onnotice: () => {} });
+  try {
+    await raw`INSERT INTO users (id, email, plan) VALUES (${userId}, ${`${userId}@fixture.test`}, 'pro')
+              ON CONFLICT (id) DO UPDATE SET plan = 'pro'`;
+  } finally {
+    await raw.end({ timeout: 5 });
+  }
+}

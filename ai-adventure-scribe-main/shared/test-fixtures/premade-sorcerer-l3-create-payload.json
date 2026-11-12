@@ -13,10 +13,8 @@
   "background_image": null,
   "campaign_id": "10191019-0000-4000-8000-000000000000",
   "skill_proficiencies": "Arcana, Insight",
-  "languages": [
-    "Common",
-    "Draconic"
-  ],
+  "starter_template_id": "1019-clarice-faro",
+  "languages": ["Common", "Draconic"],
   "cantrips": "acid-splash, chill-touch, dancing-lights, fire-bolt",
   "known_spells": "burning-hands, charm-person, color-spray, comprehend-languages",
   "prepared_spells": "",

@@ -50,6 +50,12 @@ mock.module('../../../lib/logger.js', () => ({
 }));
 
 let createdArgs: unknown[] = [];
+// #1344: create now checks the plan through the strict resolver. These tests assert
+// their own subject, not the gate, so the caller is given a Legend plan.
+mock.module('../../../lib/user-plan.js', () => ({
+  resolveUserPlanStrict: async () => 'pro',
+  resolveUserPlan: async () => 'pro',
+}));
 mock.module('../../../services/character-service.js', () => ({
   CharacterService: {
     create: async (...args: unknown[]) => {

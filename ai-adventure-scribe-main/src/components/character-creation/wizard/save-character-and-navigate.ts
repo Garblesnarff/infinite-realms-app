@@ -8,6 +8,7 @@ import type { NavigateFunction } from 'react-router-dom';
 import { type useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { analytics } from '@/services/analytics';
+import { isLegendRequiredError } from '@/services/legend-gate';
 import { type Character } from '@/types/character';
 
 interface SaveCharacterAndNavigateParams {
@@ -18,6 +19,8 @@ interface SaveCharacterAndNavigateParams {
   toast: ReturnType<typeof useToast>['toast'];
   /** Called once the character is saved with an id (e.g. to clear a local draft). */
   onSaved?: () => void;
+  /** Called when the server refuses a custom hero on a free plan (#1344). */
+  onLegendRequired?: () => void;
 }
 
 export async function saveCharacterAndNavigate({
@@ -27,6 +30,7 @@ export async function saveCharacterAndNavigate({
   searchParams,
   toast,
   onSaved,
+  onLegendRequired,
 }: SaveCharacterAndNavigateParams): Promise<void> {
   try {
     logger.info('Calling saveCharacter...');
@@ -80,6 +84,11 @@ export async function saveCharacterAndNavigate({
     }
   } catch (error) {
     logger.error('Error saving character:', error);
+
+    if (onLegendRequired && isLegendRequiredError(error)) {
+      onLegendRequired();
+      return;
+    }
 
     // Enhanced error message with recovery suggestions
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

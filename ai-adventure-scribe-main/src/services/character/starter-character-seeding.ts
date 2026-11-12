@@ -16,6 +16,8 @@ import { getClassSpells, getSrdClassSpells } from '@/data/spells/api';
 import { getSpellcastingInfo } from '@/utils/spell-validation';
 
 export interface StarterCharacterTemplateLike {
+  /** The starter_character_templates row id. The server checks it (#1344). */
+  id?: string | null;
   name: string;
   race: string;
   subrace?: string | null;
@@ -338,8 +340,7 @@ export function transformStarterEquipment(
 
   for (const { item, equipment } of resolvedTemplateEquipment(equipmentNames)) {
     const key = templateEquipmentKey(item);
-    const contributed =
-      explicitEntryQuantity(item) ?? ammunitionBundleQuantity(equipment) ?? 1;
+    const contributed = explicitEntryQuantity(item) ?? ammunitionBundleQuantity(equipment) ?? 1;
     const existing = records.get(key);
     if (existing) {
       existing.quantity += contributed;
@@ -417,6 +418,7 @@ export function buildStarterCharacterSeed(
     backstory_elements: template.adaptedBackstory ?? template.adapted_backstory ?? null,
     description: template.description ?? template.tagline ?? null,
     campaign_id: campaignId,
+    ...(template.id ? { starter_template_id: template.id } : {}),
     skill_proficiencies: skills.join(', '),
     languages,
     image_url: portraitUrl,

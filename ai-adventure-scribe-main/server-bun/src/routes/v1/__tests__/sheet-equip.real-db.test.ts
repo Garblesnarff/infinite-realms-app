@@ -26,6 +26,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
@@ -82,6 +83,7 @@ describeWithDb('sheet Equip PUT (#711)', () => {
 
   beforeAll(async () => {
     userId = testId('user-711');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');

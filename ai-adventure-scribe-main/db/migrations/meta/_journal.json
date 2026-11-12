@@ -232,6 +232,13 @@
       "when": 1794151209626,
       "tag": "0034_dm_reply_records",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1794240000000,
+      "tag": "0035_character_origin",
+      "breakpoints": true
     }
   ]
 }

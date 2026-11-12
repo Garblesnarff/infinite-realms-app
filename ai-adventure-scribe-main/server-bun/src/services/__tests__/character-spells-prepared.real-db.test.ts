@@ -29,6 +29,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from './fixtures/real-db.js';
 import {
   campaigns,
@@ -99,6 +100,9 @@ if (!hasRealDb) {
 describeWithDb('character spell prepared flags (#211 QA-041)', () => {
   const db = hasRealDb ? realDb() : (null as never);
   const userId = testId('spell-prep-user');
+  beforeAll(async () => {
+    await grantLegendPlan(userId);
+  });
 
   let characterId: string;
   let campaignId: string;
@@ -374,6 +378,9 @@ describeWithDb('#1011 deleting a character cascades to character_spells (migrati
   // fixture client in its afterAll, and realDb() recreates it on demand.
   let db: ReturnType<typeof realDb>;
   const userId = testId('fk1011-user');
+  beforeAll(async () => {
+    await grantLegendPlan(userId);
+  });
 
   let campaignId = '';
   let characterId = '';
@@ -416,9 +423,7 @@ describeWithDb('#1011 deleting a character cascades to character_spells (migrati
         })
         .returning({ id: spells.id });
       spellIds.push(id);
-      await db
-        .insert(characterSpells)
-        .values({ characterId, spellId: id, sourceClassId: classId });
+      await db.insert(characterSpells).values({ characterId, spellId: id, sourceClassId: classId });
     }
   });
 
@@ -475,6 +480,9 @@ describeWithDb('Life Domain domain spells (#899)', () => {
   // fixture client in its afterAll, and realDb() recreates it on demand.
   let db: ReturnType<typeof realDb>;
   const userId = testId('life-domain-user');
+  beforeAll(async () => {
+    await grantLegendPlan(userId);
+  });
 
   let campaignId: string;
   let clericClassId: string;

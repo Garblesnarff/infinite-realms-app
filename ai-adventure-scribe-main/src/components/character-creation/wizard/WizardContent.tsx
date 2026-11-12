@@ -10,6 +10,7 @@ import CharacterPreview from '../shared/CharacterPreview';
 import ProgressIndicator from '../shared/ProgressIndicator';
 import StepNavigation from '../shared/StepNavigation';
 
+import { LegendGateCard } from '@/components/character-creation/LegendGateCard';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -59,6 +60,8 @@ const WizardContent: React.FC = () => {
   const { scrollToTop } = useAutoScroll();
   const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
   const [pendingNavigation, setPendingNavigation] = React.useState<string | null>(null);
+  // #1344: the server refused a custom hero on a free plan; show the Legend gate.
+  const [legendRequired, setLegendRequired] = React.useState(false);
 
   const isWizardPath = React.useCallback((pathname: string) => {
     return pathname === '/wizard' || /\/characters\/(?:create|new)$/.test(pathname);
@@ -325,6 +328,7 @@ const WizardContent: React.FC = () => {
           searchParams,
           toast,
           onSaved: () => clearDraft(),
+          onLegendRequired: () => setLegendRequired(true),
         });
       }
     } catch (unexpectedError) {
@@ -364,6 +368,10 @@ const WizardContent: React.FC = () => {
         </Card>
       </div>
     );
+  }
+
+  if (legendRequired) {
+    return <LegendGateCard backTarget="/app/characters" backLabel="Back to characters" />;
   }
 
   return (

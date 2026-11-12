@@ -16,6 +16,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case
 import { characterBackgroundGenerator } from '@/services/character-background-generator';
 import { characterSpellService } from '@/services/characterSpellApi';
+import { isLegendRequiredError } from '@/services/legend-gate';
 import { userDataApi } from '@/services/user-data-api';
 import { transformCharacterForStorage } from '@/types/character';
 import {
@@ -353,6 +354,8 @@ export const useCharacterSave = (): {
         return savedCharacter;
       } catch (error: unknown) {
         logger.error('Error saving character:', error);
+        // #1344: the wizard shows the Legend gate for this refusal, not a save error.
+        if (isLegendRequiredError(error)) throw error;
         toast({
           title: 'Save Error',
           description: `Failed to save character: ${error instanceof Error ? error.message : 'Unknown error'}`,

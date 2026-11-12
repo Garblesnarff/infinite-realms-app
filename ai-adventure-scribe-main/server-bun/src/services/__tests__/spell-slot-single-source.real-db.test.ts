@@ -17,7 +17,15 @@
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
-import { closeRealDb, describeWithDb, hasRealDb, importWithRealDb, realDb, testId } from './fixtures/real-db.js';
+import {
+  closeRealDb,
+  describeWithDb,
+  hasRealDb,
+  importWithRealDb,
+  realDb,
+  testId,
+  grantLegendPlan,
+} from './fixtures/real-db.js';
 import {
   campaigns,
   characters,
@@ -60,9 +68,7 @@ const LevelUpService = hasRealDb
 const ProgressionService = hasRealDb
   ? (await import('../progression-service.js')).ProgressionService
   : undefined;
-const RestService = hasRealDb
-  ? (await import('../rest-service.js')).RestService
-  : undefined;
+const RestService = hasRealDb ? (await import('../rest-service.js')).RestService : undefined;
 const SubclassService = hasRealDb
   ? (await import('../subclass-service.js')).SubclassService
   : undefined;
@@ -117,6 +123,9 @@ if (!hasRealDb) {
 describeWithDb('single spell-slot source (#2459)', () => {
   const db = hasRealDb ? realDb() : (null as never);
   const userId = testId('slots-user');
+  beforeAll(async () => {
+    await grantLegendPlan(userId);
+  });
 
   let campaignId: string;
   let wizardId: string;
@@ -267,8 +276,9 @@ describeWithDb('creation seeds slot rows from the single slot source (#270)', ()
   let db: ReturnType<typeof realDb>;
   const createdIds: string[] = [];
 
-  beforeAll(() => {
+  beforeAll(async () => {
     creationUserId = testId('creation-user');
+    await grantLegendPlan(creationUserId);
     db = realDb();
   });
 
@@ -510,7 +520,12 @@ describeWithDb('creation seeds slot rows from the single slot source (#270)', ()
     const id = await createViaRoute(testId('ekX'), 'Rogue', 3);
     await db
       .insert(characterSubclasses)
-      .values({ characterId: id, className: 'Rogue', subclassName: 'Eldritch Knight', chosenAtLevel: 3 });
+      .values({
+        characterId: id,
+        className: 'Rogue',
+        subclassName: 'Eldritch Knight',
+        chosenAtLevel: 3,
+      });
     await SpellSlotDataAccess!.syncSpellSlotTotals(id, creationUserId);
     expect(await totals(id)).toEqual([]);
   });
@@ -554,6 +569,9 @@ describeWithDb('spell slot refund on a cast that never resolved (#1287)', () => 
   // blocks close the shared fixture client in their afterAll.
   let db: ReturnType<typeof realDb>;
   const userId = testId('refund-user');
+  beforeAll(async () => {
+    await grantLegendPlan(userId);
+  });
 
   let wizardId: string;
 

@@ -46,6 +46,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../../services/__tests__/fixtures/real-db.js';
 
 let userId = '';
@@ -335,6 +336,7 @@ describeWithDb('Second Wind from the generated seed row (#975, Hark T3-001)', ()
   beforeAll(async () => {
     if (!hasRealDb) return;
     userId = testId('user-975-sw');
+    await grantLegendPlan(userId);
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../../http-pipeline.js');
       const { charactersRoutes } = await import('../../characters.js');

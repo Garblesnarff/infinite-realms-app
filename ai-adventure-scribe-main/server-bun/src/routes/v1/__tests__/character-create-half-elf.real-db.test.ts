@@ -14,6 +14,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 const stub = () => ({
@@ -64,6 +65,7 @@ describeWithDb('#897 Half-Elf creation final scores', () => {
   const ids: string[] = [];
   beforeAll(async () => {
     userId = testId('user-897');
+    await grantLegendPlan(userId);
     const { createRequestPipelineApp, charactersRoutes } = await importWithRealDb(async () => ({
       ...(await import('../../../http-pipeline.ts')),
       ...(await import('../characters.ts')),

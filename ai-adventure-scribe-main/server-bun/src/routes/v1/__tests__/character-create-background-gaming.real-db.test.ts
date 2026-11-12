@@ -13,6 +13,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 // Same logger stub the other character-route real-DB suites use.
@@ -73,6 +74,7 @@ describeWithDb('concrete background gaming choice (#893)', () => {
 
   beforeAll(async () => {
     userId = testId('user-710');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');

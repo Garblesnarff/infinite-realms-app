@@ -16,6 +16,22 @@ export interface ImportedCharacterResponse {
 }
 
 async function responseError(response: Response): Promise<Error> {
+  // #1344: keep the server's stable code (for example LEGEND_REQUIRED) on the error.
+  const code = await responseCode(response);
+  const error = await responseErrorMessage(response);
+  return code ? Object.assign(error, { code }) : error;
+}
+
+async function responseCode(response: Response): Promise<string | undefined> {
+  // A clone keeps the body readable for the message below.
+  const body = (await response
+    .clone()
+    .json()
+    .catch(() => null)) as { code?: unknown } | null;
+  return typeof body?.code === 'string' && body.code ? body.code : undefined;
+}
+
+async function responseErrorMessage(response: Response): Promise<Error> {
   try {
     const body = (await response.json()) as {
       error?: unknown;

@@ -20,6 +20,7 @@ import {
   realDb,
   realDbUrl,
   testId,
+  grantLegendPlan,
 } from './fixtures/real-db.js';
 import {
   campaigns,
@@ -162,6 +163,9 @@ const explorationEnvelope = {
 describeWithDb('DM reply: server provisional row + client save = one row (#2218)', () => {
   const database = hasRealDb ? realDb() : (null as unknown as ReturnType<typeof realDb>);
   const userId = `dm-reply-reconcile-user-${process.pid}`;
+  beforeAll(async () => {
+    await grantLegendPlan(userId);
+  });
   let campaignId = '';
   let sessionId = '';
   // #217 step d2: the reference rows the creation-wizard casters' spells are written against.

@@ -21,6 +21,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.js';
 
 const stub = () => ({
@@ -94,9 +95,11 @@ describeWithDb('character JSON export and import (#319)', () => {
   const db = hasRealDb ? realDb() : (null as never);
   const createdIds: string[] = [];
 
-  beforeAll(() => {
+  beforeAll(async () => {
     userId = testId('export-owner');
+    await grantLegendPlan(userId);
     otherUserId = testId('export-other');
+    await grantLegendPlan(otherUserId);
   });
 
   afterAll(async () => {

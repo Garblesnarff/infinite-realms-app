@@ -9,6 +9,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 import type * as CombatData from '../../../services/combat/data-access';
@@ -63,6 +64,7 @@ describeWithDb('#260 creation package ammunition', () => {
   const ids: string[] = [];
   beforeAll(async () => {
     userId = testId('ammo-260');
+    await grantLegendPlan(userId);
     ({ listCarriedWeaponProfiles } = await importWithRealDb(
       () => import('../../../services/combat/data-access'),
     ));

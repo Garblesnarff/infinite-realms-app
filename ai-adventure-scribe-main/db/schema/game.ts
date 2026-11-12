@@ -140,6 +140,9 @@ export const characters = pgTable(
     isPublic: boolean('is_public').default(false).notNull(),
     sharingMode: sharingModeEnum('sharing_mode').default('private').notNull(),
     folderId: uuid('folder_id'), // References character_folders table
+    // #1344: how the hero was made. 'starter' = a premade from a starter campaign (Free);
+    // 'custom' = wizard; 'import' = roster JSON import; 'legacy' = rows made before this column.
+    origin: text('origin').default('custom').notNull(),
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),

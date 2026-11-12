@@ -40,6 +40,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 import type { ProgressionService as ProgressionServiceClass } from '../../../services/progression-service.ts';
@@ -212,6 +213,7 @@ describeWithDb('character create starting package (#710)', () => {
 
   beforeAll(async () => {
     userId = testId('user-710');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
@@ -443,6 +445,7 @@ describeWithDb('character create XP seeding + awardXP demotion guard (#829 findi
 
   beforeAll(async () => {
     userId = testId('user-829xp');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
@@ -647,6 +650,7 @@ describeWithDb('character create gold lands in the purse, never as an item (#971
 
   beforeAll(async () => {
     userId = testId('user-971');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
@@ -775,6 +779,7 @@ describeWithDb('character create proficiencies survive to the saved sheet (#898)
 
   beforeAll(async () => {
     userId = testId('user-898');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
@@ -975,6 +980,7 @@ describeWithDb('package gear reaches the session (#1007)', () => {
 
   beforeAll(async () => {
     userId = testId('user-1007');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
@@ -1575,6 +1581,7 @@ describeWithDb('package gear reaches the session (#1007)', () => {
     const owner = userId;
     try {
       userId = testId('other-user');
+      await grantLegendPlan(userId);
       const foreign = await app.handle(
         new Request(`http://localhost/v1/combat/${encounterId}/end`, { method: 'POST' }),
       );
@@ -1859,6 +1866,7 @@ describeWithDb('package-click wizard body reaches the session (#1354)', () => {
 
   beforeAll(async () => {
     userId = testId('user-1354');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
@@ -1993,6 +2001,7 @@ describeWithDb('sheet starting package for a hero with no equipment rows (#1402)
 
   beforeAll(async () => {
     userId = testId('user-1402');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');

@@ -48,6 +48,7 @@ import {
   importWithRealDb,
   realDb,
   testId,
+  grantLegendPlan,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 // Same logger stub the other character-route real-DB suites use.
@@ -91,7 +92,10 @@ if (hasRealDb) {
 const fixture = (name: string): Record<string, unknown> =>
   JSON.parse(
     readFileSync(
-      resolve(dirname(fileURLToPath(import.meta.url)), `../../../../../shared/test-fixtures/${name}`),
+      resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        `../../../../../shared/test-fixtures/${name}`,
+      ),
       'utf8',
     ),
   ) as Record<string, unknown>;
@@ -130,6 +134,7 @@ describeWithDb('in-session weapon equip (#1059)', () => {
 
   beforeAll(async () => {
     userId = testId('user-1059');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
@@ -137,7 +142,13 @@ describeWithDb('in-session weapon equip (#1059)', () => {
       const { inventoryRoutes } = await import('../inventory.ts');
       const { issue1784DataRoutes } = await import('../issue-1784-data.ts');
       const intentService = await import('../../../services/combat/combat-intent-service.ts');
-      return { createRequestPipelineApp, charactersRoutes, inventoryRoutes, issue1784DataRoutes, intentService };
+      return {
+        createRequestPipelineApp,
+        charactersRoutes,
+        inventoryRoutes,
+        issue1784DataRoutes,
+        intentService,
+      };
     });
     app = pipeline
       .createRequestPipelineApp()
@@ -204,7 +215,9 @@ describeWithDb('in-session weapon equip (#1059)', () => {
       .insert(combatEncounters)
       .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
       .returning({ id: combatEncounters.id });
-    cleanup.push(async () => db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId)));
+    cleanup.push(async () =>
+      db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId)),
+    );
     const inserted = await db
       .insert(combatParticipants)
       .values([
@@ -354,6 +367,7 @@ describeWithDb('in-session weapon equip (#1059)', () => {
     // item, so one player can never equip (or probe) another's gear.
     const ownerId = userId;
     userId = testId('other-1059');
+    await grantLegendPlan(userId);
     try {
       const foreign = await equip(id, 'Shortbow');
       expect(foreign.status).toBe(404);
