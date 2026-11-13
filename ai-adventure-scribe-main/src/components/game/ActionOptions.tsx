@@ -234,7 +234,10 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
           {/* Option buttons with fade-in animation */}
           {visible && (
             <div className="space-y-3 animate-in fade-in-0 duration-500">
-              <div id={instructionsId} className="text-xs text-muted-foreground text-center mb-3">
+              <div
+                id={instructionsId}
+                className="text-xs text-muted-foreground text-center mb-3 [body.ir-table-look_&]:text-[color:var(--ir-ink)]"
+              >
                 {instructions ??
                   'What would you like to do? Select an option to submit it immediately.'}
               </div>

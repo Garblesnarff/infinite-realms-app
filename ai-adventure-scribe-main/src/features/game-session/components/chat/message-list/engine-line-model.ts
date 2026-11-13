@@ -331,8 +331,14 @@ export function parseEngineLine(line: string, options: EngineLineOptions = {}): 
   }
 
   const initiative = /\binitiative\b/i.test(sentence);
+  // A roll with no pass/fail verdict seals slate (#1521). The word is the initiative total the
+  // seating card shows: the player's own total when the line leads with it, else the first entry.
+  const initiativeTotal = initiative
+    ? (sentence.match(/^Initiative: (-?\d+)/)?.[1] ?? sentence.match(/= (-?\d+)\b/)?.[1])
+    : undefined;
   return {
     ...base,
+    ...(initiativeTotal ? { sealWord: initiativeTotal } : {}),
     badge: '·',
     kicker: initiative ? 'initiative' : '',
     math: null,

@@ -132,6 +132,10 @@ describe('Table start screens', () => {
     // Footer and target-numbers line on the darker end of the parchment gradient.
     expect(ratio(c.inkSoft, c.parchmentDark)).toBeGreaterThanOrEqual(7);
     expect(ratio(c.ink, c.parchmentDark)).toBeGreaterThanOrEqual(7);
+    // The option prompt in Table look is the parchment ink (--ir-ink, ir-table.css) on both parchment stops.
+    const tableInk = '#2a1a0c';
+    expect(ratio(tableInk, '#f2e7cd')).toBeGreaterThanOrEqual(7);
+    expect(ratio(tableInk, '#dcc79c')).toBeGreaterThanOrEqual(7);
 
     render(
       <MemoryRouter>
