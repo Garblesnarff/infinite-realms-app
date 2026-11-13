@@ -2,13 +2,10 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 
 import { useTacticalMap } from './useTacticalMap';
 
-import { useMediaQuery } from '@/hooks/use-media-query';
-
 export type TacticalMapState = ReturnType<typeof useTacticalMap>;
 
-// GameLayout's grid shows the left rail as its own column from these widths up.
+// GameLayout's grid shows the left rail as its own column from this width up.
 const RAIL_COLUMN_WITH_RIGHT_OPEN = '(min-width: 1024px)';
-const RAIL_COLUMN_WITH_RIGHT_CLOSED = '(min-width: 768px)';
 
 const TacticalMapContext = createContext<TacticalMapState | null>(null);
 
@@ -39,17 +36,6 @@ export function TacticalMapProvider({
 /** The shared map state, or null outside a provider. */
 export function useTacticalMapContext(): TacticalMapState | null {
   return useContext(TacticalMapContext);
-}
-
-/**
- * Whether the tactical map belongs in the left rail: only while the rail is open and is a
- * column of its own. Otherwise the center column offers a Map button (#2252).
- */
-export function useMapInRail(isLeftCollapsed: boolean, isRightCollapsed: boolean): boolean {
-  const railIsColumn = useMediaQuery(
-    isRightCollapsed ? RAIL_COLUMN_WITH_RIGHT_CLOSED : RAIL_COLUMN_WITH_RIGHT_OPEN,
-  );
-  return !isLeftCollapsed && railIsColumn;
 }
 
 /**

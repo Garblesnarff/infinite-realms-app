@@ -1,5 +1,5 @@
 /**
- * The SSR landing form and POST /v1/waitlist share one request builder.
+ * POST /v1/waitlist accepts the body buildWaitlistJoinRequest builds.
  * This posts that request through the real route. The database and the
  * confirmation email are stubbed so the test does not write a row or send mail.
  * The handler still validates the body: a misspelled path is 404, and the
@@ -43,7 +43,7 @@ const { buildWaitlistJoinRequest } =
 
 const app = createRequestPipelineApp().use(waitlistRoutes);
 
-describe('SSR waitlist form posts to the live waitlist route', () => {
+describe('POST /v1/waitlist accepts the join request', () => {
   it('accepts the request buildWaitlistJoinRequest builds', async () => {
     const join = buildWaitlistJoinRequest({
       email: 'Player@example.com',

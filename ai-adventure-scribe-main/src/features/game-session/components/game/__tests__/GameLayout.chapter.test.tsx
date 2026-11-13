@@ -27,10 +27,9 @@ vi.mock('../game-content/GameRightPanel', () => ({
   GameRightPanel: () => <div data-testid="right-panel" />,
 }));
 
-vi.mock('../FloatingActionPanel', () => ({
-  FloatingActionPanel: () => null,
+vi.mock('../game-content/TableContextCard', () => ({
+  TableContextCard: () => <div data-testid="table-context-card" />,
 }));
-
 vi.mock('../game-content/GameCombatSheet', () => ({
   GameCombatSheet: () => null,
 }));
@@ -58,16 +57,14 @@ const layoutProps = {
   contentWarnings: [],
   comfortLevel: 'pg13' as const,
   showSafetyInfo: false,
-  // The plain layout (unreachable in the app since #1486) until the `!tableLook` cleanup.
-  plainLayout: true,
 };
 
 describe('GameLayout campaign chapter', () => {
-  it('offers ending outside combat but hides it in combat', () => {
+  it('keeps End session on the table row in and out of combat', () => {
     const { rerender } = render(<GameLayout {...layoutProps} />);
     expect(screen.getByRole('button', { name: 'End session' })).toBeInTheDocument();
     rerender(<GameLayout {...layoutProps} isCombatDetected />);
-    expect(screen.queryByRole('button', { name: 'End session' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'End session' })).toBeInTheDocument();
   });
 
   it('passes a frozen chapter label instead of interpolating turn_count', () => {

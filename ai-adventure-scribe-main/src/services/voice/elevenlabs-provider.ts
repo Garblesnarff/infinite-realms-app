@@ -1,4 +1,5 @@
 import { irVoice } from '../../../shared/npc-voices';
+import { buildVoiceRequestBodies } from '../../../shared/voice-request';
 import { ELEVENLABS_MODEL } from '../voice-routing';
 import { type VoiceProvider, voiceErrorForStatus } from './voice-provider';
 
@@ -16,30 +17,33 @@ export const ElevenLabsProvider: VoiceProvider = {
   },
 
   async generateAudio(text, voice, settings, signal, sessionId) {
-    const response = await fetchWithAuth(
-      `/v1/ai-proxy/voice/${encodeURIComponent(ElevenLabsProvider.resolveVoiceId(voice))}`,
-      {
+    const path = `/v1/ai-proxy/voice/${encodeURIComponent(ElevenLabsProvider.resolveVoiceId(voice))}`;
+    // The proxy takes at most VOICE_REQUEST_TEXT_MAX characters per request (#1348),
+    // so a longer message goes as several requests, played back as one clip.
+    const parts: ArrayBuffer[] = [];
+    for (const body of buildVoiceRequestBodies(text, {
+      model_id: ELEVENLABS_MODEL,
+      voice_settings: settings,
+      sessionId,
+    })) {
+      const response = await fetchWithAuth(path, {
         method: 'POST',
         headers: {
           Accept: 'audio/mpeg',
           'Content-Type': 'application/json',
         },
         signal,
-        body: JSON.stringify({
-          text,
-          model_id: ELEVENLABS_MODEL,
-          voice_settings: settings,
-          sessionId,
-        }),
-      },
-    );
+        body: JSON.stringify(body),
+      });
 
-    if (!response.ok) {
-      throw voiceErrorForStatus(response.status, response.statusText);
+      if (!response.ok) {
+        throw voiceErrorForStatus(response.status, response.statusText);
+      }
+
+      parts.push(await response.arrayBuffer());
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    const audioBlob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+    const audioBlob = new Blob(parts, { type: 'audio/mpeg' });
     return { audioBlob, audioUrl: URL.createObjectURL(audioBlob) };
   },
 };

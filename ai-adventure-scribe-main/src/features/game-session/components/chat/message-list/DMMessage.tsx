@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useOptionalCombat } from '@/contexts/CombatContext';
 import { useSceneBackground, type AssetType } from '@/contexts/SceneBackgroundContext';
-import { findPlaceInText } from './scene-place';
+import { sceneCandidateTags } from './scene-place';
 import { cn } from '@/lib/utils';
 import { isEngineResultCard } from '@/services/combat/engine-result-card';
 import { combatEngineBlocksFromContext, engineBlockDividerKey } from '@/utils/combat-engine-blocks';
@@ -133,11 +133,21 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
       combatEngineBlocks,
     } = processed;
 
+    const locations = useMemo(() => assets.filter((asset) => asset.type === 'location'), [assets]);
+
+    // Shared candidate list for both the scene band and the background effect,
+    // so the two cannot drift: explicit tags, then the official context location,
+    // then a place named in the prose.
+    const candidateTags = useMemo(
+      () => sceneCandidateTags(assetTags, cleanContent, message.context?.location, locations),
+      [assetTags, cleanContent, message.context?.location, locations],
+    );
+
     // Generated art on the last message of a group; otherwise the place or scene the DM tagged.
     const sceneArt =
       isLastInGroup && imageUrl
         ? { url: imageUrl, caption: 'Scene' }
-        : pickSceneArt(assetTags, getAsset);
+        : pickSceneArt(candidateTags, getAsset);
 
     // #1062: the server-attached tracker line, rendered from envelope
     // state — never from the DM's prose, which is where the bracket-line
@@ -165,14 +175,9 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
         return;
       }
 
-      // The DM rarely tags a place, but names it in the prose. The place named last
-      // is a candidate after the tags; a place with no chunk adds nothing, so the
-      // previous image stays up.
-      const locations = assets.filter((asset) => asset.type === 'location');
-      const placeInText = findPlaceInText(cleanContent, locations);
-      const candidateTags = placeInText
-        ? [...assetTags, { type: 'location', key: placeInText.key }]
-        : assetTags;
+      // The DM rarely tags a place, but names it in the prose or sets an official
+      // context location. Those become candidates after the tags; a place with no
+      // chunk adds nothing, so the previous image stays up.
       if (candidateTags.length === 0) {
         return;
       }
@@ -206,7 +211,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
         setSceneBackground(bestAsset.imageUrl, bestAsset.name, bestAsset.type as AssetType);
         hasSetBackgroundRef.current = true;
       }
-    }, [assetTags, cleanContent, assets, getAsset, setSceneBackground, isLastInGroup]);
+    }, [candidateTags, getAsset, setSceneBackground, isLastInGroup]);
 
     // Don't render if content is empty after removing roll requests — unless the
     // engine still has a fact to show as a chip.

@@ -966,6 +966,13 @@ export function scheduleDmReplyWatchdog(params: DmReplyWatchdogParams): Promise<
  */
 export const DM_REPLY_RECORD_EXPIRY_MS = 30 * 60_000;
 
+/**
+ * #1502: a `ready` record whose transcript write failed was never retried, so its reply stayed off
+ * `dialogue_history` for good. The session-load sweep retries it once it has sat `ready` this long,
+ * measured from its last change (`updatedAt`).
+ */
+export const DM_REPLY_PUBLISH_RETRY_GRACE_MS = 2 * 60_000;
+
 /** The owner scope of one session's stale records. `before` is the cutoff: older records are stale. */
 export interface StaleHeldScope {
   sessionId: string;
@@ -977,35 +984,93 @@ export interface StaleHeldReplyDeps {
   store?: DmReplyRecordStore;
   heldReplyDeps?: HeldReplyDeps;
   writeRow?: (record: DmReplyRecord) => Promise<void>;
-  listStale?: (scope: StaleHeldScope) => Promise<DmReplyRecord[]>;
+  /** Held records older than `scope.before`, and ready records not changed since `readyBefore` (#1502). */
+  listStale?: (scope: StaleHeldScope, readyBefore: Date) => Promise<DmReplyRecord[]>;
   /** One conditional UPDATE on `state = 'held'`. Resolves true only when this call moved the row. */
   moveHeld?: (id: string, to: 'ready' | 'cancelled', scope: StaleHeldScope) => Promise<boolean>;
+  /** One conditional UPDATE on `state = 'ready'` and a stale `updated_at`. Resolves true only when this call claimed the row. */
+  claimReady?: (id: string, scope: StaleHeldScope, readyBefore: Date) => Promise<boolean>;
 }
 
 /**
- * Settles this session's held records older than DM_REPLY_RECORD_EXPIRY_MS. Each record goes
- * through resolveHeldReply once more: a decline or harm claim cancels it, a confirmed fight or an
- * expired entry publishes it, and anything still undecided is cancelled as expired.
+ * A retry never rewrites a row already stored under the reserved id: the turn is in the transcript
+ * (the client saved it, or an earlier write landed), so the record only needs to settle. The shared
+ * `addMessages` path throws on a duplicate non-provisional id, so the check has to come first here.
+ */
+async function writeRetriedReplyRow(record: DmReplyRecord): Promise<void> {
+  if (await dmReplyRowExists(record.id)) return;
+  await writeReplyRow(record);
+}
+
+/**
+ * Re-publishes one stale `ready` record (#1502). The claim is a conditional UPDATE that also bumps
+ * `updated_at`, so two concurrent loads publish it once, and a retry that fails again waits another
+ * grace before the next attempt. The write is keyed by the reserved id, so an existing row is never
+ * duplicated. Never throws: a failed retry is logged once for its record.
+ */
+async function retryReadyRecord(
+  record: DmReplyRecord,
+  scope: StaleHeldScope,
+  readyBefore: Date,
+  deps: {
+    store: DmReplyRecordStore;
+    claimReady: (id: string, scope: StaleHeldScope, readyBefore: Date) => Promise<boolean>;
+    writeRow?: (record: DmReplyRecord) => Promise<void>;
+  },
+): Promise<void> {
+  try {
+    if (!(await deps.claimReady(record.id, scope, readyBefore))) return;
+    const outcome = await publishReadyDmReply(
+      { ...record, state: 'ready' },
+      deps.store,
+      deps.writeRow ?? writeRetriedReplyRow,
+    );
+    if (outcome === 'retry') {
+      logger.warn({ msg: 'DM_REPLY_PUBLISH_RETRY_FAILED', recordId: record.id });
+    }
+  } catch {
+    logger.warn({ msg: 'DM_REPLY_PUBLISH_RETRY_FAILED', recordId: record.id });
+  }
+}
+
+/**
+ * Settles this session's held records older than DM_REPLY_RECORD_EXPIRY_MS, and retries the publish
+ * of its ready records older than DM_REPLY_PUBLISH_RETRY_GRACE_MS (#1502). One query lists both, so
+ * the sweep stays a single read. Each held record goes through resolveHeldReply once more: a decline
+ * or harm claim cancels it, a confirmed fight or an expired entry publishes it, and anything still
+ * undecided is cancelled as expired.
  *
- * Idempotent: each move is a conditional UPDATE on `state = 'held'`, so two concurrent loads settle
- * a record once and only the call that moved it logs. Never throws: a failure is logged and the
- * session load carries on. Returns how many held records this call moved out of `held`.
+ * Idempotent: each move is a conditional UPDATE (`held` to a new state, or a `ready` claim), so two
+ * concurrent loads settle a record once and only the call that moved it logs. Never throws: a
+ * failure is logged and the session load carries on. Returns how many held records this call moved
+ * out of `held`; retried ready records are not counted here.
  */
 export async function expireStaleHeldReplies(
   params: { sessionId: string; userId: string; now?: Date },
   deps: StaleHeldReplyDeps = {},
 ): Promise<number> {
   const store = deps.store ?? postgresDmReplyRecordStore;
-  const listStale = deps.listStale ?? listStaleHeldRecords;
+  const listStale = deps.listStale ?? listStaleRecords;
   const moveHeld = deps.moveHeld ?? moveHeldRecordForOwner;
+  const claimReady = deps.claimReady ?? claimReadyRecordForOwner;
+  const now = params.now ?? new Date();
   const scope: StaleHeldScope = {
     sessionId: params.sessionId,
     userId: params.userId,
-    before: new Date((params.now ?? new Date()).getTime() - DM_REPLY_RECORD_EXPIRY_MS),
+    before: new Date(now.getTime() - DM_REPLY_RECORD_EXPIRY_MS),
   };
+  const readyBefore = new Date(now.getTime() - DM_REPLY_PUBLISH_RETRY_GRACE_MS);
   let moved = 0;
   try {
-    for (const record of await listStale(scope)) {
+    for (const record of await listStale(scope, readyBefore)) {
+      if (record.state === 'ready') {
+        await retryReadyRecord(record, scope, readyBefore, {
+          store,
+          claimReady,
+          writeRow: deps.writeRow,
+        });
+        continue;
+      }
       const verdict = await resolveHeldReply(record, params.userId, deps.heldReplyDeps);
       if (verdict.action === 'publish') {
         if (!(await moveHeld(record.id, 'ready', scope))) continue;
@@ -1050,9 +1115,15 @@ async function sessionOwnedBy(sessionId: string, userId: string): Promise<SQL> {
   return sql`exists (select 1 from ${gameSessions} left join ${campaigns} on ${campaigns.id} = ${gameSessions.campaignId} left join ${characters} on ${characters.id} = ${gameSessions.characterId} where ${gameSessions.id} = ${sessionId} and (${campaigns.userId} = ${userId} or ${characters.userId} = ${userId}))`;
 }
 
-/** The session's held records older than the cutoff, owner-scoped. */
-async function listStaleHeldRecords(scope: StaleHeldScope): Promise<DmReplyRecord[]> {
-  const [{ db }, { dmReplyRecords }, { and, eq, lt }] = await Promise.all([
+/**
+ * The session's held records older than their cutoff, and its ready records not changed since the
+ * retry cutoff (#1502). One owner-scoped query, so the session-load sweep stays a single read.
+ */
+async function listStaleRecords(
+  scope: StaleHeldScope,
+  readyBefore: Date,
+): Promise<DmReplyRecord[]> {
+  const [{ db }, { dmReplyRecords }, { and, eq, lt, or }] = await Promise.all([
     import('../../../../db/client.js'),
     import('../../../../db/schema/index.js'),
     import('drizzle-orm'),
@@ -1064,8 +1135,10 @@ async function listStaleHeldRecords(scope: StaleHeldScope): Promise<DmReplyRecor
       and(
         eq(dmReplyRecords.sessionId, scope.sessionId),
         eq(dmReplyRecords.userId, scope.userId),
-        eq(dmReplyRecords.state, 'held'),
-        lt(dmReplyRecords.createdAt, scope.before),
+        or(
+          and(eq(dmReplyRecords.state, 'held'), lt(dmReplyRecords.createdAt, scope.before)),
+          and(eq(dmReplyRecords.state, 'ready'), lt(dmReplyRecords.updatedAt, readyBefore)),
+        ),
         await sessionOwnedBy(scope.sessionId, scope.userId),
       ),
     );
@@ -1106,4 +1179,35 @@ async function moveHeldRecordForOwner(
     )
     .returning({ id: dmReplyRecords.id });
   return moved.length > 0;
+}
+
+/**
+ * One owner-scoped conditional claim of a stale ready record (#1502). It must still be ready and
+ * untouched since the cutoff; the claim bumps `updated_at`, so a second concurrent load finds it fresh.
+ */
+async function claimReadyRecordForOwner(
+  id: string,
+  scope: StaleHeldScope,
+  readyBefore: Date,
+): Promise<boolean> {
+  const [{ db }, { dmReplyRecords }, { and, eq, lt }] = await Promise.all([
+    import('../../../../db/client.js'),
+    import('../../../../db/schema/index.js'),
+    import('drizzle-orm'),
+  ]);
+  const claimed = await db
+    .update(dmReplyRecords)
+    .set({ updatedAt: new Date() })
+    .where(
+      and(
+        eq(dmReplyRecords.id, id),
+        eq(dmReplyRecords.sessionId, scope.sessionId),
+        eq(dmReplyRecords.userId, scope.userId),
+        eq(dmReplyRecords.state, 'ready'),
+        lt(dmReplyRecords.updatedAt, readyBefore),
+        await sessionOwnedBy(scope.sessionId, scope.userId),
+      ),
+    )
+    .returning({ id: dmReplyRecords.id });
+  return claimed.length > 0;
 }

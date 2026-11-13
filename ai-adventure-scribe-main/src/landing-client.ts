@@ -7,8 +7,6 @@
  * - FAQ accordion interactions
  */
 
-import { buildWaitlistJoinRequest } from './landing/waitlist-join-request';
-
 import logger from '@/lib/logger';
 
 // Initialize when DOM is ready
@@ -17,73 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initAnalytics();
   initFAQAccordions();
 });
-
-/**
- * Initialize all waitlist forms on the page
- */
-function initWaitlistForms() {
-  const forms = document.querySelectorAll<HTMLFormElement>('[data-waitlist-form]');
-
-  forms.forEach((form) => {
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-
-      const emailInput = form.querySelector<HTMLInputElement>('input[type="email"]');
-      const submitButton = form.querySelector<HTMLButtonElement>('button[type="submit"]');
-      const messageEl = form.querySelector<HTMLElement>('[data-form-message]');
-
-      if (!emailInput || !submitButton) return;
-
-      const email = emailInput.value.trim();
-      if (!email) return;
-
-      const source = form.dataset.source || 'landing';
-      const join = buildWaitlistJoinRequest({ email, source });
-
-      // Disable form during submission
-      submitButton.disabled = true;
-      const originalText = submitButton.textContent;
-      submitButton.textContent = 'Joining...';
-
-      try {
-        const response = await fetch(join.path, {
-          method: join.method,
-          headers: join.headers,
-          body: JSON.stringify(join.body),
-        });
-
-        if (response.ok) {
-          // Success
-          emailInput.value = '';
-          if (messageEl) {
-            messageEl.textContent = 'Welcome to the adventure! Check your email for confirmation.';
-            messageEl.className = 'text-green-400 mt-2 text-sm';
-          }
-          submitButton.textContent = 'Joined!';
-
-          // Track conversion
-          trackEvent('waitlist_signup', { source });
-
-          // Reset button after delay
-          setTimeout(() => {
-            submitButton.textContent = originalText;
-            submitButton.disabled = false;
-          }, 3000);
-        } else {
-          throw new Error('Failed to join waitlist');
-        }
-      } catch (_error) {
-        // Error handling
-        if (messageEl) {
-          messageEl.textContent = 'Something went wrong. Please try again.';
-          messageEl.className = 'text-red-400 mt-2 text-sm';
-        }
-        submitButton.textContent = originalText;
-        submitButton.disabled = false;
-      }
-    });
-  });
-}
 
 /**
  * Initialize smooth scrolling for anchor links
@@ -199,4 +130,4 @@ function throttle<T extends (...args: unknown[]) => void>(fn: T, wait: number): 
 }
 
 // Export for testing
-export { initWaitlistForms, initSmoothScroll, initAnalytics };
+export { initSmoothScroll, initAnalytics };

@@ -17,7 +17,6 @@ import type { Character } from '@/types/character';
 
 import { buildStarterCharacterSeed } from '@/services/character/starter-character-seeding';
 
-
 const testDirectory = dirname(fileURLToPath(import.meta.url));
 /*
  * MulticlassManager is intentionally omitted: it is a mutation-preview surface, so its
@@ -27,8 +26,6 @@ const testDirectory = dirname(fileURLToPath(import.meta.url));
  */
 const EXISTING_CHARACTER_DISPLAY_CONSUMERS = [
   '../../../features/game-session/components/game/CompactCharacterHeader.tsx',
-  '../../../features/game-session/components/game/StatsBar.tsx',
-  '../../../features/game-session/components/game/FloatingActionPanel.tsx',
   '../../../features/game-session/components/game/overhaul/useOverhaulViewModel.ts',
   '../../../features/character/components/sheet/CharacterSheetHeader.tsx',
   '../../../features/character/components/sheet/tabs/MainTab.tsx',

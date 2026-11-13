@@ -128,6 +128,9 @@ vi.mock('../overhaul/CombatTurnBar', () => ({ CombatTurnBarLive: () => null }));
 vi.mock('../overhaul/SceneHeader', () => ({
   SceneHeader: () => <header data-testid="scene-header" />,
 }));
+vi.mock('../game-content/TableContextCard', () => ({
+  TableContextCard: () => <div data-testid="table-context-card" />,
+}));
 vi.mock('../message/MessageHandler', () => ({
   MessageHandler: ({
     children,
@@ -173,7 +176,7 @@ vi.mock('../CombatActionBar', () => ({
   useCombatChatPlaceholder: () => undefined,
 }));
 vi.mock('../TimelineRail', () => ({ TimelineRail: () => null }));
-vi.mock('../StatsBar', () => ({ StatsBar: () => null }));
+
 vi.mock('../../tactical/TacticalMapBoard', () => ({ TacticalMapBoard: () => null }));
 vi.mock('@/components/safety/SafetyBanner', () => ({ SafetyBanner: () => null }));
 vi.mock('../game-content/GamePanelControls', () => ({ GamePanelControls: () => null }));
@@ -223,6 +226,12 @@ describe('GameMainContent option clicks (#760)', () => {
     harness.handleSendMessage.mockClear();
     harness.contextSend.mockClear();
     sessionStorage.removeItem(PENDING_INPUT_STORAGE_KEY);
+    document.body.replaceChildren();
+    const roll = document.createElement('div');
+    roll.className = 'ir-table-roll-host';
+    roll.dataset.testid = 'table-roll-slot';
+    document.body.append(roll);
+    Object.assign(baseProps, { tableRollSlot: roll });
   });
 
   it('sends an option through the dock message handler at once', async () => {

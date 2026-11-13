@@ -65,19 +65,13 @@ describe('GameLeftPanel tactical map (#2252)', () => {
     combatHolder.current = undefined;
   });
 
-  it('puts the tactical map at the top of the rail when the layout places it there', () => {
+  it('puts the character rail before the map sketch', () => {
     render(
-      <GameLeftPanel
-        sessionId="s"
-        isCollapsed={false}
-        onToggle={vi.fn()}
-        onOpenSheet={vi.fn()}
-        showMap
-      />,
+      <GameLeftPanel sessionId="s" isCollapsed={false} onToggle={vi.fn()} onOpenSheet={vi.fn()} />,
     );
 
-    const board = screen.getByTestId('tactical-map-board');
-    expect(board.compareDocumentPosition(screen.getByTestId('left-rail'))).toBe(
+    const sketch = screen.getByRole('img', { name: 'Map sketch', hidden: true });
+    expect(screen.getByTestId('left-rail').compareDocumentPosition(sketch)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
   });
@@ -86,14 +80,7 @@ describe('GameLeftPanel tactical map (#2252)', () => {
     // The battle grid only renders in a fight: pin combat on for this render.
     combatHolder.current = { state: { isInCombat: true } };
     render(
-      <GameLeftPanel
-        sessionId="s"
-        isCollapsed={false}
-        tableLook
-        onToggle={vi.fn()}
-        onOpenSheet={vi.fn()}
-        showMap
-      />,
+      <GameLeftPanel sessionId="s" isCollapsed={false} onToggle={vi.fn()} onOpenSheet={vi.fn()} />,
     );
     const board = screen.getByTestId('tactical-map-board');
     expect(screen.getByTestId('left-rail').compareDocumentPosition(board)).toBe(
@@ -105,14 +92,7 @@ describe('GameLeftPanel tactical map (#2252)', () => {
     // The expand control lives on the battle grid, so this render is a fight.
     combatHolder.current = { state: { isInCombat: true } };
     render(
-      <GameLeftPanel
-        sessionId="s"
-        isCollapsed={false}
-        tableLook
-        onToggle={vi.fn()}
-        onOpenSheet={vi.fn()}
-        showMap
-      />,
+      <GameLeftPanel sessionId="s" isCollapsed={false} onToggle={vi.fn()} onOpenSheet={vi.fn()} />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Open full map →', hidden: true }));
     expect(screen.getByRole('dialog', { name: 'Tactical map', hidden: true })).toBeInTheDocument();
@@ -125,27 +105,20 @@ describe('GameLeftPanel tactical map (#2252)', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('leaves the map out when the rail is not a column of its own', () => {
+  it('draws the chat-mode sketch when no fight is running', () => {
     render(
       <GameLeftPanel sessionId="s" isCollapsed={false} onToggle={vi.fn()} onOpenSheet={vi.fn()} />,
     );
 
+    expect(screen.getByText('MAP SKETCH')).toBeInTheDocument();
     expect(screen.queryByTestId('tactical-map-board')).not.toBeInTheDocument();
     expect(screen.getByTestId('left-rail')).toBeInTheDocument();
   });
 
   it('shows the map as a MAP SKETCH in chat mode, and the battle grid in combat', () => {
-    // Chat mode on desktop: the layout shows the tile (showMap) with no fight running.
-    // showMap alone must not force the grid — that was the sketch-never-renders bug.
+    // Chat mode draws the sketch. A fight draws the battle grid. Combat is the only gate.
     const { unmount } = render(
-      <GameLeftPanel
-        sessionId="s"
-        isCollapsed={false}
-        tableLook
-        onToggle={vi.fn()}
-        onOpenSheet={vi.fn()}
-        showMap
-      />,
+      <GameLeftPanel sessionId="s" isCollapsed={false} onToggle={vi.fn()} onOpenSheet={vi.fn()} />,
     );
     const sketch = screen.getByRole('img', { name: 'Map sketch', hidden: true });
     expect(sketch).toBeInTheDocument();
@@ -157,14 +130,7 @@ describe('GameLeftPanel tactical map (#2252)', () => {
 
     combatHolder.current = { state: { isInCombat: true } };
     render(
-      <GameLeftPanel
-        sessionId="s"
-        isCollapsed={false}
-        tableLook
-        onToggle={vi.fn()}
-        onOpenSheet={vi.fn()}
-        showMap
-      />,
+      <GameLeftPanel sessionId="s" isCollapsed={false} onToggle={vi.fn()} onOpenSheet={vi.fn()} />,
     );
     expect(screen.queryByText('MAP SKETCH')).not.toBeInTheDocument();
     expect(screen.getByTestId('tactical-map-board')).toBeInTheDocument();

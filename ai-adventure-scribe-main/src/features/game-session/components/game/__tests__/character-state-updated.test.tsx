@@ -11,14 +11,16 @@
  * `use-session-story-socket` dispatches this window event; the hook refetches
  * via `characterLoaderService`.
  *
- * Real: CharacterProvider, the character reducer, the refresh hook, StatsBar.
+ * Real: CharacterProvider, the character reducer, the refresh hook, the table sheet.
  * Stubbed: `characterLoaderService.loadCharacterWithSpells` (the API edge)
  * answering with what the server's stats row holds after story damage.
  */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { StatsBar } from '../StatsBar';
+import { RightSheet } from '../overhaul/RightSheet';
+import { useOverhaulViewModel } from '../overhaul/useOverhaulViewModel';
 import { useCharacterRefreshOnCombatUpdate } from '../use-character-refresh';
 
 import { CharacterProvider, useCharacter } from '@/contexts/CharacterContext';
@@ -28,6 +30,12 @@ import { hydrateCharacterStats } from '@/services/hydrate-character-stats';
 import { normalizeCharacter } from '@/services/user-data-payload-helpers';
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock('@/contexts/CampaignContext', () => ({
+  useCampaign: () => ({ state: { campaign: { name: 'Adventure' } } }),
+}));
+vi.mock('@/contexts/CombatContext', () => ({
+  useCombat: () => ({ state: { activeEncounter: null } }),
+}));
 vi.mock('@/services/character-loader', () => ({
   characterLoaderService: { loadCharacterWithSpells: vi.fn() },
 }));
@@ -97,10 +105,15 @@ const loadedCharacter = (currentHp: number) => {
   };
 };
 
+function TableSheet() {
+  const model = useOverhaulViewModel();
+  return <RightSheet c={model.character} />;
+}
+
 function TestHarness() {
   const { dispatch } = useCharacter();
   useCharacterRefreshOnCombatUpdate(CHARACTER_ID, 'user-1', dispatch);
-  return <StatsBar />;
+  return <TableSheet />;
 }
 
 describe('#130 character-state-updated triggers refetch after story damage', () => {
@@ -116,10 +129,13 @@ describe('#130 character-state-updated triggers refetch after story damage', () 
     const refreshed = loadedCharacter(9);
     vi.mocked(characterLoaderService.loadCharacterWithSpells).mockResolvedValue(refreshed);
 
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <CharacterProvider>
-        <TestHarness />
-      </CharacterProvider>,
+      <QueryClientProvider client={queryClient}>
+        <CharacterProvider>
+          <TestHarness />
+        </CharacterProvider>
+      </QueryClientProvider>,
     );
 
     // Simulate the server notifying that story damage was applied.
@@ -144,13 +160,16 @@ describe('#130 character-state-updated triggers refetch after story damage', () 
     function NullHarness() {
       const { dispatch } = useCharacter();
       useCharacterRefreshOnCombatUpdate(null, 'user-1', dispatch);
-      return <StatsBar />;
+      return <TableSheet />;
     }
 
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
-      <CharacterProvider>
-        <NullHarness />
-      </CharacterProvider>,
+      <QueryClientProvider client={queryClient}>
+        <CharacterProvider>
+          <NullHarness />
+        </CharacterProvider>
+      </QueryClientProvider>,
     );
 
     await act(async () => {

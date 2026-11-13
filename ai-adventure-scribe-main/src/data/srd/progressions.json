@@ -586,11 +586,6 @@
     },
     {
       "level": 17,
-      "featureName": "Action Surge (2 uses)",
-      "description": "Starting at 2nd level, you can push yourself beyond your normal limits for a moment. On your turn, you can take one additional action on top of your regular action and a possible bonus action.\n\nOnce you use this feature, you must finish a short or long rest before you can use it again. Starting at 17th level, you can use it twice before a rest, but only once on the same turn."
-    },
-    {
-      "level": 17,
       "featureName": "Indomitable (3 uses)",
       "description": "Beginning at 9th level, you can reroll a saving throw that you fail. If you do so, you must use the new roll, and you can't use this feature again until you finish a long rest. You can use this feature twice between long rests starting at 13th level and three times between long rests starting at 17th level."
     },

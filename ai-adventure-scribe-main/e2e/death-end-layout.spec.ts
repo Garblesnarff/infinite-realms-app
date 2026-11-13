@@ -261,7 +261,7 @@ for (const width of [1280, 390]) {
     await page.goto(`${origin}/e2e/death-end-layout.html?view=turnbar`);
     await expect(page.getByTestId('combat-turn-text')).toHaveText('Dying');
     await expect(page.getByTestId('combat-turn-sub')).toHaveText(
-      '0 HP · roll a death saving throw',
+      'Round 4 · Turn 1 of 2 · 0 HP · roll a death saving throw',
     );
     await expect(page.getByTestId('combat-turn-dying')).toHaveText(/Dying/);
     await expect(page.getByTestId('combat-turn-pip').first()).toContainText('The Scholar');
