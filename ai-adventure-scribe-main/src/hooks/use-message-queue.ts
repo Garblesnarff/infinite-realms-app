@@ -291,11 +291,17 @@ export const useMessageQueue = (sessionId: string | null) => {
                     row.context?.rollRequestId === message.context?.rollRequestId,
                 )
               : undefined;
+          // #1477: the server writes the check card (engineCards). Copy only the server's cards onto
+          // the live row, so the seal shows without a reload. Nothing here is computed by the client.
+          const serverEngineCards = existingAnswer?.context?.engineCards;
           const persistedMessage: ChatMessage = {
             ...message,
             id: existingAnswer?.id ?? messageId,
             text: existingAnswer?.message ?? message.text,
             timestamp: existingAnswer?.timestamp ?? now,
+            ...(Array.isArray(serverEngineCards)
+              ? { context: { ...message.context, engineCards: serverEngineCards } }
+              : {}),
           };
 
           logger.info(`[MessageQueue] Message persisted with ID: ${messageId}`);

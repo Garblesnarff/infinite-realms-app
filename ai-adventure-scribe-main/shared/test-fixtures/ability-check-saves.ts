@@ -33,3 +33,59 @@ export const ABILITY_CHECK_SAVE_BODY = {
     narration_segments: null,
   },
 };
+
+/**
+ * The player row as the server stores it after the save (#1477), built from the same
+ * `serverVerdictLine` and `narrativeCheckCard` the route runs. The server test asserts these
+ * rows match what it writes, so this fixture cannot drift from the server.
+ */
+export const ABILITY_CHECK_CARD_SUCCESS = {
+  kind: 'check',
+  side: 'party',
+  line: 'Athletics check: 17 vs DC 15, SUCCESS',
+  title: 'Athletics check',
+  badge: { word: 'SUCCESS', tone: 'gold', icon: 'check' },
+  detail: '17 vs DC 15',
+};
+
+export const ABILITY_CHECK_CARD_FAIL = {
+  kind: 'check',
+  side: 'party',
+  line: 'Athletics check: 9 vs DC 15, FAIL',
+  title: 'Athletics check',
+  badge: { word: 'FAIL', tone: 'red', icon: 'alert' },
+  detail: '9 vs DC 15',
+};
+
+/** A persisted narrative check row with the server's SUCCESS card (total 17 >= DC 15). */
+export const ABILITY_CHECK_ROW_SUCCESS = {
+  id: ABILITY_CHECK_SAVE_BODY.id,
+  sender: 'player' as const,
+  text: 'Athletics check: 17 (nat 12+5) success',
+  timestamp: ATHLETICS_TIMESTAMP,
+  context: {
+    ...ABILITY_CHECK_SAVE_BODY.context,
+    engineCards: [ABILITY_CHECK_CARD_SUCCESS],
+  },
+};
+
+/** A persisted row with the server's FAIL card (total 9 < DC 15). The stored word is the server's. */
+export const ABILITY_CHECK_ROW_FAIL = {
+  id: '55555555-5555-4555-8555-555555555555',
+  sender: 'player' as const,
+  text: 'Athletics check: 9 (nat 4+5) fail',
+  timestamp: ATHLETICS_TIMESTAMP,
+  context: {
+    ...ABILITY_CHECK_SAVE_BODY.context,
+    engineCards: [ABILITY_CHECK_CARD_FAIL],
+  },
+};
+
+/** A persisted check row with no server card (saved before the outcome, or not issued). */
+export const ABILITY_CHECK_ROW_NO_CARD = {
+  id: '66666666-6666-4666-8666-666666666666',
+  sender: 'player' as const,
+  text: 'Athletics check: 17 (nat 12+5) success',
+  timestamp: ATHLETICS_TIMESTAMP,
+  context: { ...ABILITY_CHECK_SAVE_BODY.context },
+};
