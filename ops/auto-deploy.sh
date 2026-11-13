@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Production deploy, run from root cron every 15 minutes.
 #
-# Order of operations (see #2093): fetch -> build into a staging dir OUTSIDE
+# Order of operations (see #229): fetch -> build into a staging dir OUTSIDE
 # the repo -> secret-scan the staged bundle -> `pm2 restart` -> only then
 # publish into dist/, which is nginx's docroot. The server is always restarted
 # BEFORE the client bundle goes live, so any skew is new-API/old-client.
@@ -18,7 +18,7 @@ set -euo pipefail
 # While that file exists this script does nothing and exits 0; `rm` it to
 # resume. A hold older than 3h pages Slack so a forgotten one cannot silently
 # stop prod from tracking main. See the "deploy hold" block below.
-# An unmatched "run N started" comment on #2093 under 3h old holds the same
+# An unmatched "run N started" comment on #229 under 3h old holds the same
 # way; see the "open stranger-test run" block. A merge train holds with
 # `touch /var/lib/infiniterealms-deploy/TRAIN` (under 60 min old; #2224).
 #
@@ -207,10 +207,10 @@ install_deps() {
   (cd "$dir" && bun install)
 }
 
-# --- deploy hold (added 2026-09-20, #2093) -----------------------------------
+# --- deploy hold (added 2026-09-20, #229) -----------------------------------
 # The cron fires every 15 min unconditionally, so "no deploys during a stranger
 # test run" was enforced only by a human reading GitHub comments in time. A
-# deploy mid-run restarts pm2 and drops in-flight turns — the #2093 failure.
+# deploy mid-run restarts pm2 and drops in-flight turns — the #229 failure.
 #
 # Playtest now gates the cron directly instead of asking Hetzner to be awake:
 # `touch` this file when posting "run N started", `rm` it at "run N ended".
@@ -228,7 +228,7 @@ if [ -e "$HOLD_FILE" ]; then
   HOLD_AGE=$(( $(date +%s) - HOLD_SINCE ))
   echo "$(ts) Held: $HOLD_FILE present (${HOLD_AGE}s). No fetch, no build, no restart."
   # --deploy-now is an operator saying "go now", and the single thing the hold
-  # exists to stop is a deploy landing inside a stranger-test run (#2093). So
+  # exists to stop is a deploy landing inside a stranger-test run (#229). So
   # the flag does NOT override the hold: it exits non-zero, because a human who
   # typed the command is reading the output and a silent exit 0 would read as
   # "deployed". `rm` the hold first if the run really has ended.
@@ -303,9 +303,9 @@ elif [ -e "$STATE_DIR/smoke.state" ]; then
 fi
 # --- end post-deploy smoke ------------------------------------------------------
 
-# --- open stranger-test run (added 2026-09-22, #2093) -------------------------
+# --- open stranger-test run (added 2026-09-22, #229) -------------------------
 # The HOLD file only works if Playtest remembers to `touch` it. Playtest always
-# posts "run N started" / "run N ended" on #2093, so read those comments too:
+# posts "run N started" / "run N ended" on #229, so read those comments too:
 # a started run with no later matching "ended", started under
 # RUN_HOLD_MAX_AGE_SECONDS ago, is treated exactly like HOLD. Older than that it
 # is assumed to be a forgotten "ended" and ignored, so a missed comment cannot
@@ -315,8 +315,8 @@ fi
 # cannot be read the deploy proceeds (the HOLD file is still the primary
 # control) and the failure pages through record_state, rate-limited like
 # everything else.
-RUN_ISSUE=${DEPLOY_RUN_ISSUE:-2093}
-RUN_REPO=${DEPLOY_RUN_REPO:-Garblesnarff/infinite-realms-production}
+RUN_ISSUE=${DEPLOY_RUN_ISSUE:-229}
+RUN_REPO=${DEPLOY_RUN_REPO:-Garblesnarff/infinite-realms-app}
 RUN_HOLD_MAX_AGE_SECONDS=${DEPLOY_RUN_HOLD_MAX_AGE_SECONDS:-10800}
 GH_BIN=${DEPLOY_GH_BIN:-gh}
 
@@ -454,7 +454,7 @@ install_deps server-bun "server-bun"
 # look. No auto-rollback: reverting a half-applied deploy unattended is a bigger
 # risk than stopping and shouting.
 #
-# ORDERING (issue #2093, changed 2026-09-20). This used to run `bun run build`
+# ORDERING (issue #229, changed 2026-09-20). This used to run `bun run build`
 # straight into `dist/`, which IS nginx's docroot — so the build *was* the
 # publish, and the new client bundle went live while pm2 still served the old
 # API. Every successful deploy had a client/server skew window, and a browser
@@ -669,7 +669,7 @@ fi
 # #2250 shipped a save the server refused on every narrative roll, and nothing
 # noticed for a day (#2280). ops/smoke.sh now writes and reads back the #2280
 # message shape as a dedicated account, right after the deploy, and on failure
-# holds further deploys (block above), alerts, and comments once on #2093. It
+# holds further deploys (block above), alerts, and comments once on #229. It
 # never rolls back. It runs only when its env file exists, so until Hetzner
 # installs that file (on Rob's install line) the cron path is unchanged.
 SMOKE_ENV_FILE=${DEPLOY_SMOKE_ENV:-/etc/infiniterealms/smoke.env}
@@ -693,3 +693,4 @@ if [ -r "$SMOKE_ENV_FILE" ]; then
   fi
 fi
 # --- end post-deploy smoke ------------------------------------------------------
+

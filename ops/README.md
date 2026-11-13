@@ -52,7 +52,7 @@ fetching, building, or restarting anything. Playtest owns this file for the
 duration of a run: `touch` when posting `run N started`, `rm` at `run N ended`.
 
 `--deploy-now` does not override the hold. A stranger-test run is exactly the
-thing the hold protects (#2093), so the flag exits 1 with a refusal rather than
+thing the hold protects (#229), so the flag exits 1 with a refusal rather than
 exiting 0 as the cron path does — a human typed the command and is reading the
 output, and a silent success would read as "deployed". Remove the hold first.
 
@@ -61,10 +61,10 @@ rate-limited Slack alert, because a forgotten hold is indistinguishable from a
 healthy quiet deploy log — that is the shape of the 2026-05-12 drift. Removing
 the file clears the alert to RECOVERED.
 
-### Open run on #2093
+### Open run on #229
 
 The HOLD file only works if Playtest remembers to `touch` it, so the script
-also reads #2093's comments (via the box's existing `gh` login; the token is
+also reads #229's comments (via the box's existing `gh` login; the token is
 never printed). The newest `run N started` with no later `run N ended` is
 treated exactly like HOLD if it is under `DEPLOY_RUN_HOLD_MAX_AGE_SECONDS`
 (default 10800 = 3h) old: it logs `Held: run N in progress (...)` with the
@@ -75,14 +75,14 @@ deploy proceeds, so a forgotten `ended` cannot stall prod past 3h.
 Run ids are digits with an optional one-letter prefix (`run 9`, Muse's
 `run M3`), matched case-insensitively; `run M2 started` pairs with
 `run m2 ended`. Markers are matched anywhere in a comment, so a prose mention
-of "run 9 started" on #2093 arms a 3h hold: keep those words to the testers'
+of "run 9 started" on #229 arms a 3h hold: keep those words to the testers'
 own marker comments. Fixture cases: `bash ops/tests/open-run-markers.sh`
 (needs only bash + jq).
 
 `--dry-run` also names the newest marker it found, so "no open run" is visible
 rather than inferred from silence (#2201):
 `[dry-run] would record_state run_check ok — newest: run 9 ended` (or
-`newest: no run markers on #2093`). The cron path does not make that extra
+`newest: no run markers on #229`). The cron path does not make that extra
 read. Fixture cases: `bash ops/tests/newest-run-marker.sh`.
 
 If GitHub cannot be read, the deploy proceeds on the HOLD file alone and a
@@ -95,7 +95,7 @@ The merger asks the same question the cron does with one call (#2224):
 
 ```bash
 $ ops/run-status.sh
-run: open — run 9 started 12m ago (#2093: run 9 started — session …)
+run: open — run 9 started 12m ago (#229: run 9 started — session …)
 newest: run 9 started
 ```
 
@@ -178,7 +178,7 @@ As a **dedicated smoke account** (never a tester's or player's), it:
 
 **On any failure** it writes one alert line (the `DEPLOY FAILED: smoke — step N
 (…): HTTP <status> — <server's reason>` format, to `alerts.log` + Slack), posts
-**one** comment on #2093 with the step and HTTP status, and creates the hold
+**one** comment on #229 with the step and HTTP status, and creates the hold
 file **`/var/lib/infiniterealms-deploy/SMOKE_FAILED`**. Nothing is rolled
 back. The failed campaign is left for inspection; the next passing run deletes
 any `ops smoke …` campaign it finds.
@@ -202,7 +202,7 @@ the user agent `infiniterealms-smoke/1 …` so `http-alarm.sh` can leave them ou
 
 Try it by hand without holding anything: `ops/smoke.sh --no-hold [<sha>]`
 (it reports and exits 1 on failure, with no hold, alert or comment).
-`ts`/`post_slack`/`emit` and the `DEPLOY_*` alert, state and #2093 defaults are
+`ts`/`post_slack`/`emit` and the `DEPLOY_*` alert, state and #229 defaults are
 read out of the sibling `auto-deploy.sh`, as `run-status.sh` does, so the alert
 format is the cron's own. Overrides: `DEPLOY_SMOKE_ENV`, `DEPLOY_SMOKE_SCRIPT`,
 `DEPLOY_SMOKE_HOLD_FILE`; for `smoke.sh` itself `SMOKE_API_BASE` (default
@@ -219,7 +219,7 @@ reads the last 15 minutes of `/var/log/nginx/api-access.log` (and `.1`, for the
 midnight rotation), and counts 422 and 5xx per route (method + path, ids folded
 to `:id`, query dropped). A route with **≥ 3 × 422** or **≥ 1 × 5xx** fires. All
 firing routes go into **one** alert line (`HTTP ALARM: POST
-/v1/sessions/:id/messages 3×422 …`) and **one** comment on #2093. A route that
+/v1/sessions/:id/messages 3×422 …`) and **one** comment on #229. A route that
 fired stays quiet for an hour (`$STATE_DIR/http-alarm.state`). The smoke
 account's requests are not counted, and the count of them is logged. Raw ids
 and IPs never leave the box. It changes nothing.
@@ -228,7 +228,7 @@ It parses nginx's default `combined` format. If the log has lines but none
 parse, it alerts `cannot parse …` (at most hourly) rather than going quietly
 blind. Overrides: `HTTP_ALARM_LOGS`, `HTTP_ALARM_WINDOW_SECONDS`,
 `HTTP_ALARM_422_MIN`, `HTTP_ALARM_5XX_MIN`, `HTTP_ALARM_REPEAT_SECONDS`, plus the
-`DEPLOY_*` alert/state/#2093 ones. Cases: `bash ops/tests/http-alarm.sh`.
+`DEPLOY_*` alert/state/#229 ones. Cases: `bash ops/tests/http-alarm.sh`.
 
 ### Installing both (Hetzner, only on Rob's install line)
 

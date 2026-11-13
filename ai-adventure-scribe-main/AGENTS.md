@@ -4,7 +4,7 @@ These rules apply to every AI session — Claude Code (local, Hetzner, cloud), C
 
 **Canonical file:** `ai-adventure-scribe-main/AGENTS.md` (this file). A copy lives at the repository root so tools that only load `/AGENTS.md` still see the rules. Keep both in lockstep. Do not replace this file with a symlink to `CLAUDE.md`. `CLAUDE.md` is Claude-specific context only.
 
-Order in this file: worker rules (§1–§13); Hetzner (ops) rules; Playtest rules; pre-merge check procedure (#2056); deploy-ordering note (#2093).
+Order in this file: worker rules (§1–§13); Hetzner (ops) rules; Playtest rules; pre-merge check procedure (#2056); deploy-ordering note (#229).
 
 Authored monster attack lines (name, reach, and range) are in `docs/content/stat-block-format.md` at the repository root. That file is the copy content authors should read. The comment on `labelPattern` in `ai-adventure-scribe-main/server-bun/src/services/combat/authored-stat-block-parser.ts` is not a substitute.
 
@@ -146,7 +146,7 @@ Rob often pastes a task and walks away. A turn that ends with a summary, a list 
 Muse (the standing merger) or the Hetzner ops session merges, and only under the rule in §1. Workers open draft PRs; they do not merge, even when CI is green. Section 13 (finish the task, then stop) applies to Muse and Hetzner sessions too.
 
 - **PASS and green CI at the same head.** Merge only when a strategist or foreman-bot comment starts `Strategist review — PASS at <sha>` for this head and the pull_request CI run at that same head is green. A PASS or a green run on an earlier commit does not cover a later push. A green check on a cancelled-then-rerun SHA is not a green check on this SHA.
-- **No deploys during a stranger-test run.** Merges to `main` auto-deploy. Between Playtest's `run N started` and `run N ended` comments, hold merges. A deploy mid-run drops in-flight turns (#2093).
+- **No deploys during a stranger-test run.** Merges to `main` auto-deploy. Between Playtest's `run N started` and `run N ended` comments, hold merges. A deploy mid-run drops in-flight turns (#229).
 - **Prod config changes need an approval line.** Host files such as `ops/auto-deploy.sh` (and other prod-only config) are not "drive-by" edits. Do not change them without an explicit approval line from Rob naming the file and the change.
 - **Revert on Rob's line.** On Rob's line "You have my permission to revert #X", revert that PR's squash commit on `main` through a PR (`git revert <squash sha>` on a branch off current `origin/main`), merge it, and let it deploy (or `ops/auto-deploy.sh --deploy-now`). This does not need a strategist PASS on the revert. Every other rule still applies: no merge during a stranger-test run, and the revert PR's CI must be green. Then confirm with `curl -s https://api.infiniterealms.app/version` that the revert's commit is live, and say so on #X.
 - **`gh pr ready` only as part of the merge.** Muse or the Hetzner ops session may run `gh pr ready` only when the PASS line and the green pull_request CI run are at the same head. Workers never mark a PR ready.
@@ -161,7 +161,13 @@ Playtest Claude runs stranger tests against production.
 
 ## Run started / ended comments
 
-At the start of a run, post a comment: **`run N started`**. When the run is over (pass, fail, or abort), post **`run N ended`**. Hetzner holds merges between those two comments. A run with no `ended` comment is still in flight.
+At the start of a run, post a comment: **`run <id> started`**. When the run is over (pass, fail, or abort), post **`run <id> ended`**. Hetzner holds merges between those two comments. A run with no `ended` comment is still in flight.
+
+Marker format, as `ops/auto-deploy.sh` parses it on #229:
+
+- `<id>` is digits with an optional one-letter prefix (`run 9`, `run M3`). Matching is case-insensitive, so `run M2 started` pairs with `run m2 ended`.
+- Post each marker as a comment on #229. The parser matches the words anywhere in a comment, so do not write "run N started" in prose.
+- A `started` with no later matching `ended` holds deploys for 3 hours at most (`DEPLOY_RUN_HOLD_MAX_AGE_SECONDS`, default 10800). After that the deploy proceeds and logs `Ignoring run <id>`.
 
 ## Check the build before turn 1
 
@@ -173,7 +179,7 @@ A run FAILs when any of these happen:
 
 - **Dead-end:** the player cannot continue (composer disabled, no recovery control, no DM reply and no way to resend, or "your turn" with every action disabled).
 - **Fabrication:** the DM narrates a mechanical outcome (hit, miss, damage, wounded, HP change) that the engine did not produce.
-- **Lost turn across deploy:** a turn in flight at restart never comes back (#2093).
+- **Lost turn across deploy:** a turn in flight at restart never comes back (#229).
 
 Polish, copy, and non-blocking bugs are notes, not FAIL. File them; do not stop the run unless the player cannot continue.
 
@@ -211,7 +217,7 @@ Re-run only the runs whose conclusion is `cancelled` with no failed steps, or wh
 
 ---
 
-# Deploy ordering (#2093)
+# Deploy ordering (#229)
 
 The client bundle must not go live before the server restart.
 
