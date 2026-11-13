@@ -50,7 +50,14 @@ const SpellListItem: React.FC<SpellListItemProps> = ({
       return (
         <div className="flex items-center justify-between p-3 border rounded-lg">
           <div className="flex-1">
-            <div className="font-medium">{spell.name || 'Unknown Cantrip'}</div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{spell.name || 'Unknown Cantrip'}</span>
+              {spell.alwaysPrepared && (
+                <Badge variant="secondary" className="text-xs">
+                  Always prepared
+                </Badge>
+              )}
+            </div>
             <div className="text-sm text-muted-foreground">
               {spell.school || 'Unknown'} • {spell.casting_time || 'Unknown'} •{' '}
               {spell.range_text || 'Unknown'}
@@ -99,6 +106,11 @@ const SpellListItem: React.FC<SpellListItemProps> = ({
               {spell.concentration && (
                 <Badge variant="secondary" className="text-xs">
                   C
+                </Badge>
+              )}
+              {spell.alwaysPrepared && (
+                <Badge variant="secondary" className="text-xs">
+                  Always prepared
                 </Badge>
               )}
             </div>
