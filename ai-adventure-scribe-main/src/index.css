@@ -931,6 +931,10 @@
   .chat-scroll {
     scroll-behavior: smooth;
   }
+  /* #1503: a message brought into view keeps its controls (the Illustrate pill) off the parchment's edge. */
+  body.ir-table-look .chat-scroll {
+    scroll-padding-block: 12px;
+  }
 
   /* Typing indicator animation */
   .typing-dot {
@@ -1370,6 +1374,18 @@
     width: 20px;
     pointer-events: none;
     z-index: 10;
+  }
+  /* #1503: each dot's 44 px target is centred on the rail, so the rail moves in until the target fits the phone. */
+  @media (max-width: 699px) {
+    .timeline-rail {
+      right: 36px;
+    }
+  }
+  /* #1505: a sealed engine card reserves room for its seal at the title, so the seal never covers the title. */
+  body.ir-table-look
+    .relative:has(> [aria-hidden='true'] [data-testid='engine-roll-seal'])
+    .engine-card-head {
+    padding-right: 8rem;
   }
   .timeline-rail .timeline-track {
     position: sticky;
