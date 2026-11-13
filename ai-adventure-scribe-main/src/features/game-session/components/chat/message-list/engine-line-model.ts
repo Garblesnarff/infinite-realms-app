@@ -15,6 +15,8 @@ import type { ChatMessage } from '@/types/game';
 
 import { engineVerdictWord } from '@/components/game/result-seal';
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
+import { healthConditionForCombat } from '@/services/combat/health-condition';
+import { renderPlayerCombatWording } from '@/services/combat/player-combat-wording';
 
 export type EngineLineSide = 'player' | 'npc';
 
@@ -126,21 +128,28 @@ const isThePlayer = (name: string, roster: readonly EngineRosterRow[] = []): boo
   /^you$/i.test(name.trim()) || rosterRowFor(name, roster)?.participantType === 'player';
 
 /**
- * "{target} is now at {n} HP" for anyone but the player becomes a tier (#87 item 3): "is down" at
- * 0 HP or below, otherwise "is badly wounded" at or under half of the roster's max HP and
- * "is wounded" above it. "badly wounded" is plain player wording, not the DM prompt's tier words
- * (combat-rules-prompts.ts). Without a max HP the tier is "wounded".
+ * "{target} is now at {n} HP" for anyone but the player becomes the engine health tier (#863).
+ * The word comes from healthConditionForCombat. Without a known max HP the line says "wounded"
+ * rather than calling the engine with max 0, which would report near death for every amount.
+ * 0 HP is near death, except that a trailing "and is dead" or "and is unconscious" keeps that word.
+ * Any other trailing "and is …" clause is dropped and the tier word is used.
  */
 export function hideEnemyHp(text: string, roster: readonly EngineRosterRow[] = []): string {
   return text.replace(
-    /([A-Z][^.;—]*?) is now at (-?\d+) HP/g,
-    (match, target: string, hpText: string) => {
+    /([A-Z][^.;—]*?) is now at (-?\d+) HP(?: and is ([^.;—]+))?/g,
+    (match, target: string, hpText: string, clause?: string) => {
       if (isThePlayer(target, roster)) return match;
       const hp = Number(hpText);
-      if (hp <= 0) return `${target} is down`;
+      if (hp <= 0) {
+        const word = clause?.trim().toLowerCase();
+        if (word === 'dead' || word === 'unconscious') return `${target} is ${word}`;
+        return `${target} is near death`;
+      }
       const max = rosterRowFor(target, roster)?.maxHitPoints;
-      if (max && Number.isFinite(max) && hp > max / 2) return `${target} is wounded`;
-      return max && Number.isFinite(max) ? `${target} is badly wounded` : `${target} is wounded`;
+      if (typeof max === 'number' && Number.isFinite(max) && max > 0) {
+        return `${target} is ${healthConditionForCombat(hp, max)}`;
+      }
+      return `${target} is wounded`;
     },
   );
 }
@@ -149,7 +158,12 @@ export function playerFacingSentence(
   line: string,
   roster: readonly EngineRosterRow[] = [],
 ): string {
-  return hideEnemyHp(replaceSlugs(line.replace(ENGINE_PREFIX, '').trim(), roster), roster);
+  // #764: older stored lines carry "(reason: key)". The chat reads the phrase after a dash.
+  const withoutWrapper = replaceSlugs(line.replace(ENGINE_PREFIX, '').trim(), roster).replace(
+    /\s*\(reason: ([a-z_]+)\)/g,
+    (_match, key: string) => ` — ${key}`,
+  );
+  return renderPlayerCombatWording(hideEnemyHp(withoutWrapper, roster));
 }
 
 /** True when the whole text is a single `⚙️ Engine:` line. */

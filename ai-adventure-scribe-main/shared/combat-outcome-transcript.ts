@@ -22,6 +22,7 @@ import {
   playerHpOf,
   type EngineResultCard,
 } from './engine-result-card';
+import { combatEndPhrase } from './player-combat-wording';
 
 export { formatRefusedSpellOutcome, formatRefusedSpellPart } from './combat-spell-transcript';
 
@@ -682,18 +683,7 @@ export function formatWakeParts(value: unknown): EngineTranscriptPart[] {
  */
 export function formatCombatEndLine(reason: string | null | undefined): string | null {
   if (!reason) return null;
-  const explanation: Record<string, string> = {
-    last_hostile_defeated: 'the last hostile was defeated',
-    party_defeated: 'the party was defeated',
-    death_save_failed: 'a death save ended the fight',
-    player_down_stable: 'the party was knocked out but stable',
-    dm_ended_scene: 'the fight ended as the scene moved on',
-    ended_by_request: 'you ended the fight',
-    abandoned: 'the party broke off and left the fight',
-    player_surrendered: 'you yielded',
-    ended_idle: 'the fight was left idle and closed',
-  };
-  return `⚙️ Engine: Combat ended — ${explanation[reason] ?? 'the fight is over'}.`;
+  return `⚙️ Engine: Combat ended — ${combatEndPhrase(reason)}.`;
 }
 
 /** Put engine facts before model prose so option parsing cannot discard them as trailing text. */

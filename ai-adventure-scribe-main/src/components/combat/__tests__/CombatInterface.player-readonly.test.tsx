@@ -271,10 +271,10 @@ describe('CombatInterface player view (#2257)', () => {
   });
 
   it.each([
-    [12, 'Healthy'],
-    [8, 'Hurt'],
-    [5, 'Bloodied'],
-    [0, 'Down'],
+    [12, 'unharmed'],
+    [8, 'wounded'],
+    [5, 'bloodied'],
+    [0, 'near death'],
   ])('shows an enemy at %i/12 as the tier %s and never as a number', (hp, tier) => {
     renderFight({ enemyHp: hp });
     const card = screen.getByText('Goblin Boss', { selector: 'h3, div' }).closest('.w-full');
