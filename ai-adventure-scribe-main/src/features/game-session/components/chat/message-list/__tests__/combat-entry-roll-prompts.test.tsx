@@ -39,7 +39,6 @@ vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: () => ({ state: { character: null } }),
 }));
 
-
 vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -51,7 +50,7 @@ type GameStore = ReturnType<typeof useDiceRollManagement> & {
 };
 
 interface DiceHandle {
-  handleManualResult: (result: number, details?: { naturalRoll: number }) => Promise<void>;
+  handleManualResult: (result: number, details?: { naturalRoll: number }) => Promise<boolean>;
   currentRollDescription: string | null;
   currentRollId: string | null;
   pendingRollIds: string[];

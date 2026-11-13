@@ -31,10 +31,14 @@ export interface RolledResultDetails {
   disadvantage?: boolean;
 }
 
+/**
+ * Resolves true only when the roll's result was recorded (the message saved, or the engine took
+ * the die). #1472: Inspiration is spent on true alone, so a roll that did not land keeps the flag.
+ */
 export type RollResultHandler = (
   result: number,
   details?: RolledResultDetails,
-) => void | Promise<void>;
+) => boolean | void | Promise<boolean | void>;
 
 interface UseDiceRollRequestProps {
   request: RollRequest;
@@ -56,14 +60,14 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
   const [isRolling, setIsRolling] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isSubmittingRef = useRef(false);
-  // #1414: the armed advantage is paid for by this roll. `spentForCurrentRoll` keeps the
-  // armed state visible to the dice animation until the roll completes; `rollStartedRef`
-  // is the synchronous double-click guard — the spend awaits a network call, and the
-  // `isRolling` state is stale inside the same tick. `rollAdvantageRef` /
+  // #1472: `spendAfterSaveRef` holds the character whose Inspiration this roll will consume,
+  // set when the roll starts and taken (cleared) when the result completes. The flag is spent
+  // only once the result is saved, so a cancelled roll or a closed page never consumes it.
+  // `rollStartedRef` is the synchronous double-click guard. `rollAdvantageRef` /
   // `rollDisadvantageRef` capture what the dice actually roll with, at roll time: the
   // armed state can change mid-animation (the coin stays live), but the saved record
   // must say what the dice did (round 2, B4).
-  const spentForCurrentRoll = useRef(false);
+  const spendAfterSaveRef = useRef<string | null>(null);
   const rollStartedRef = useRef(false);
   const rollAdvantageRef = useRef(false);
   const rollDisadvantageRef = useRef(false);
@@ -82,7 +86,7 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
   // advantage — 2014 5e advantage does not stack, so spending on an advantaged request
   // buys nothing. Same shared-gate shape as takesAdvantage: the spend (handleAutoRoll)
   // and the values the popup reads (below) key off it directly; the record follows
-  // through paidAdvantage. When the spend is skipped, the request's own
+  // through handleAutoRoll's record refs. When the spend is skipped, the request's own
   // advantage/disadvantage flow through untouched, and the engine's cancellation
   // (DiceRollRequest nets advantage && !disadvantage; DiceEngine.roll cancels
   // both-true to a plain d20) models an advantaged-and-disadvantaged request as a
@@ -108,62 +112,42 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
   const effectiveManualMode =
     manualMode || (!!character && resolvedFormula === null && !rollCalculation.modifierUnknown);
 
-  const handleAutoRoll = useCallback(async () => {
+  // #1472: the roll never waits on the network. The dice mount with the armed advantage and
+  // roll at once; the flag is spent in handleDiceRollComplete, after the result is saved.
+  const handleAutoRoll = useCallback(() => {
     if (isRolling || isSubmittingRef.current || rollStartedRef.current) return;
     rollStartedRef.current = true;
     // Commit before starting the animation: the initiative bridge must stop its fallback timer
     // while the player's roll is visibly in flight.
     onRollCommit?.();
-    // #1414 round 3 (B-1): lock the prompt down FIRST (isRolling disables the buttons),
-    // but do NOT mount the dice yet. The embed rolls with whatever advantage it mounts
-    // with and cannot be un-rolled — a failed spend after the mount would still roll
-    // two dice. Await the spend, capture what the dice will roll with, and only then
-    // show the animation.
     setIsRolling(true);
-    // #1414 round 3 (B-2): takesAdvantage is hoisted above — a damage roll never spends,
-    // so the arm stays in place for the next d20 roll.
-    // #1471: armedApplies is hoisted above — a request that already has advantage never
-    // spends, so the arm stays in place for the next roll that needs it.
-    // #1414: the armed advantage is paid for before the dice fly, so a roll can never land
-    // with advantage the flag did not pay for. A failed spend rolls without advantage —
-    // never lose a roll because the spend failed.
-    let paidAdvantage = false;
-    if (armedApplies) {
-      if (!character?.id) {
-        // No character to charge — clear the arm instead of rolling a free advantage.
-        disarm();
-      } else {
-        const spent = await spendInspiration(character.id);
-        if (spent) {
-          spentForCurrentRoll.current = true;
-          paidAdvantage = true;
-        } else {
-          disarm();
-        }
-      }
+    // #1414 round 3 (B-2): a damage roll never takes advantage (takesAdvantage), so the arm
+    // stays for the next d20 roll. #1471: a request that already has advantage does not
+    // take the arm either (armedApplies), so the arm stays for the next roll that needs it.
+    if (armedApplies && !character?.id) {
+      // No character to charge — clear the arm instead of recording a free advantage.
+      disarm();
+      spendAfterSaveRef.current = null;
+    } else {
+      spendAfterSaveRef.current = armedApplies ? (character?.id ?? null) : null;
     }
-    // #1414 round 2 (B4): what the dice actually roll with, captured at roll time.
+    // #1414 round 2 (B4): what the dice actually roll with, captured at roll time. The armed
+    // advantage counts here even though the flag is not spent yet: the dice roll with it, so
+    // the record must say so whether or not the save and the spend succeed.
+    const paidAdvantage = armedApplies && !!character?.id;
     rollAdvantageRef.current = hasAdvantage || paidAdvantage;
     rollDisadvantageRef.current = hasDisadvantage && !paidAdvantage;
     setShowDiceAnimation(true);
-  }, [
-    armedApplies,
-    character,
-    disarm,
-    hasAdvantage,
-    hasDisadvantage,
-    isRolling,
-    onRollCommit,
-    spendInspiration,
-  ]);
+  }, [armedApplies, character, disarm, hasAdvantage, hasDisadvantage, isRolling, onRollCommit]);
 
   const submitResult = useCallback(
-    async (totalResult: number, details?: RolledResultDetails) => {
-      if (isSubmittingRef.current) return;
+    async (totalResult: number, details?: RolledResultDetails): Promise<boolean> => {
+      if (isSubmittingRef.current) return false;
       isSubmittingRef.current = true;
       setIsSubmitting(true);
       try {
-        await (details ? onResult(totalResult, details) : onResult(totalResult));
+        // Only an explicit true means the roll was recorded (#1472).
+        return (await (details ? onResult(totalResult, details) : onResult(totalResult))) === true;
       } finally {
         isSubmittingRef.current = false;
         setIsSubmitting(false);
@@ -212,21 +196,27 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
         totalResult = 0;
       }
 
+      // #1472: take the pending spend now, so a second completion cannot spend it again.
+      const spendCharacterId = spendAfterSaveRef.current;
+      spendAfterSaveRef.current = null;
+      let recorded = false;
       try {
-        await submitResult(totalResult, details);
+        recorded = await submitResult(totalResult, details);
       } finally {
         rollStartedRef.current = false;
         rollAdvantageRef.current = false;
         rollDisadvantageRef.current = false;
-        // #1414: the spend already happened in handleAutoRoll; the armed state only kept
-        // the advantage visible to the animation. Clear it now that the roll has landed.
-        if (spentForCurrentRoll.current) {
-          spentForCurrentRoll.current = false;
-          disarm();
-        }
+      }
+      // #1472: the advantaged roll is saved, so the flag is consumed now. A 409 (the flag was
+      // already spent elsewhere) leaves this roll standing and the coin shows spent. A failed
+      // save never reaches here, so the flag stays true for the retry.
+      if (recorded && spendCharacterId) {
+        // #1472 (foreman FIX): clear the arm only when the spend went through. A 409 already
+        // cleared it in useInspirationSpend; any other failure keeps the arm for the next roll.
+        if (await spendInspiration(spendCharacterId)) disarm();
       }
     },
-    [disarm, submitResult],
+    [disarm, spendInspiration, submitResult],
   );
 
   const handleManualSubmit = useCallback(() => {
@@ -302,13 +292,10 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
     // them without completing would otherwise leak stale advantage into the next roll.
     rollAdvantageRef.current = false;
     rollDisadvantageRef.current = false;
-    // #1414: the roll never landed, but the flag was already spent in handleAutoRoll —
-    // the armed state would be a lie, so clear it. The player retries without advantage.
-    if (spentForCurrentRoll.current) {
-      spentForCurrentRoll.current = false;
-      disarm();
-    }
-  }, [disarm]);
+    // #1472: the roll did not land, so the flag was never spent. Keep the arm — the player's
+    // retry still has it — and drop the pending spend so the retry takes its own.
+    spendAfterSaveRef.current = null;
+  }, []);
 
   // ⚡ Bolt: Wrapped the hook's return value in useMemo to enforce referential stability,
   // preventing downstream component re-renders when state or props haven't changed.

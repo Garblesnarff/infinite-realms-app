@@ -112,7 +112,7 @@ export function useMessageDiceRolls({
   currentRoll: DiceRollRequest | null;
   batchProgress: { current: number; total: number } | null;
   rollRequest: RollRequest | null;
-  handleManualResult: (result: number, details?: RolledResultDetails) => Promise<void>;
+  handleManualResult: (result: number, details?: RolledResultDetails) => Promise<boolean>;
   handleCancelRoll: () => void;
   handleRetryRoll: () => Promise<void>;
   isRetrying: boolean;
@@ -383,15 +383,18 @@ export function useMessageDiceRolls({
   }, []);
 
   // Handle manual dice result input with batching support
+  // #1472: resolves true only when this roll's die was recorded (the message saved, or the
+  // engine took the die). The dice hook spends Inspiration on true alone, so a roll that
+  // did not land never consumes the flag.
   const handleManualResult = useCallback(
-    async (result: number, details?: RolledResultDetails) => {
+    async (result: number, details?: RolledResultDetails): Promise<boolean> => {
       const roll = getCurrentDiceRoll();
       if (!roll) {
         logger.warn('[useMessageDiceRolls] No current dice roll in queue');
-        return;
+        return false;
       }
 
-      if (handlingRollIdsRef.current.has(roll.id)) return;
+      if (handlingRollIdsRef.current.has(roll.id)) return false;
       handlingRollIdsRef.current.add(roll.id);
       pendingRollIdRef.current = roll.id;
       setPendingRollId(roll.id);
@@ -406,7 +409,7 @@ export function useMessageDiceRolls({
           numericResult = (result as { total: number }).total;
         } else {
           logger.error('[useMessageDiceRolls] Invalid result type:', result);
-          return;
+          return false;
         }
 
         // The engine settlers take the bare d20. The popup's animated roll reports its natural
@@ -419,7 +422,7 @@ export function useMessageDiceRolls({
           (!Number.isInteger(naturalFace) || naturalFace < 1 || naturalFace > 20)
         ) {
           logger.warn('[useMessageDiceRolls] initiative result must be a natural d20 (1-20)');
-          return;
+          return false;
         }
 
         // CRITICAL FIX: Calculate batch completion status BEFORE dispatch
@@ -507,7 +510,7 @@ export function useMessageDiceRolls({
           if (settleCombatDeathSaveRoll(roll.id, naturalFace)) {
             completeDiceRoll(roll.id, settledResult);
             logger.info('[useMessageDiceRolls] manual death save die returned to the engine');
-            return;
+            return true;
           }
         }
         // The popup rolled two dice for advantage/disadvantage: carry the dropped face with
@@ -522,14 +525,14 @@ export function useMessageDiceRolls({
         if (settleCombatAttackRoll(roll.id, naturalFace, d20Rolls ? { d20Rolls } : undefined)) {
           completeDiceRoll(roll.id, settledResult);
           logger.info('[useMessageDiceRolls] manual combat attack die returned to the engine');
-          return;
+          return true;
         }
         if (settleCombatInitiativeRoll(roll.id, naturalFace)) {
           completeDiceRoll(roll.id, settledResult);
           logger.info(
             '[useMessageDiceRolls] manual combat initiative die returned to the entry flow',
           );
-          return;
+          return true;
         }
 
         // A mid-combat check's die returns to the engine for the same reason an attack's does:
@@ -537,7 +540,7 @@ export function useMessageDiceRolls({
         if (settleCombatCheckRoll(roll.id, naturalFace)) {
           completeDiceRoll(roll.id, settledResult);
           logger.info('[useMessageDiceRolls] manual combat check die returned to the engine');
-          return;
+          return true;
         }
 
         // An attack/initiative die with no engine settler, during or just before an encounter,
@@ -552,7 +555,7 @@ export function useMessageDiceRolls({
               total: numericResult,
             },
           );
-          return;
+          return false;
         }
 
         const playerMessage: ChatMessage = {
@@ -581,6 +584,7 @@ export function useMessageDiceRolls({
         if (roll.batchId && willCompleteBatch) clearBatch();
         await submit();
         if (failedSubmissionRef.current === submit) failedSubmissionRef.current = null;
+        return true;
       } catch (error) {
         failedSubmissionRef.current = retrySubmission;
         setRollFailure({
@@ -592,6 +596,7 @@ export function useMessageDiceRolls({
           userMessage: 'Failed to process dice result',
           context: { location: 'useMessageDiceRolls.handleManualResult' },
         });
+        return false;
       } finally {
         handlingRollIdsRef.current.delete(roll.id);
         if (pendingRollIdRef.current === roll.id) {

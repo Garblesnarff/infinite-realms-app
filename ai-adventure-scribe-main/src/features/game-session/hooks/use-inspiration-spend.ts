@@ -3,14 +3,15 @@ import { useCallback } from 'react';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useInspirationArmed } from '@/features/game-session/contexts/inspiration-armed-context';
 import logger from '@/lib/logger';
-import { userDataApi } from '@/services/user-data-api';
+import { UserDataApiRequestError, userDataApi } from '@/services/user-data-api';
 
 /**
  * #1414: the one spend path for Inspiration. The coin and the legal-action chip arm the
  * advantage; the roll that consumes it calls `spendInspiration`, which clears the flag
  * server-side and mirrors the change into the local character state so the coin goes grey
- * at once. Returns false (never throws) when the flag was already spent or the spend
- * failed — the caller rolls without advantage instead of losing the roll. Disarming is
+ * at once. #1472: the roll calls this only after its result is saved. A 409 means the flag
+ * was already spent elsewhere, so the coin is set to spent and the saved roll stands.
+ * Returns false (never throws) when the spend did not happen. Disarming is
  * the caller's job: the roll request keeps the armed state through its animation and
  * disarms at completion. The combat action bar never spends — the popup is the single
  * spend site (round 2, B2), so a typed number never spends the flag either; the chip
@@ -28,22 +29,36 @@ export function useInspirationSpend() {
 
   const spendInspiration = useCallback(
     async (characterId: string): Promise<boolean> => {
-      try {
-        await userDataApi.spendInspiration(characterId);
-      } catch (error) {
-        logger.warn('Inspiration spend failed; rolling without advantage', error);
-        return false;
+      const markSpent = (): void => {
+        const character = characterContext?.state.character;
+        if (character && character.id === characterId) {
+          characterContext.dispatch({
+            type: 'UPDATE_CHARACTER',
+            payload: { ...character, inspiration: false },
+          });
+        }
+      };
+      // #1472 (foreman FIX on #1499): one retry on a non-409 failure. A 409 means the server
+      // already spent the flag, so the coin is set to spent and the arm is cleared here. Any
+      // other failure leaves the server flag true: the coin stays gold and the arm stays set,
+      // so the next roll that needs advantage pays for it.
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          await userDataApi.spendInspiration(characterId);
+          markSpent();
+          return true;
+        } catch (error) {
+          if (error instanceof UserDataApiRequestError && error.status === 409) {
+            markSpent();
+            disarm();
+            return false;
+          }
+          logger.warn(`Inspiration spend failed (attempt ${attempt} of 2)`, error);
+        }
       }
-      const character = characterContext?.state.character;
-      if (character && character.id === characterId) {
-        characterContext.dispatch({
-          type: 'UPDATE_CHARACTER',
-          payload: { ...character, inspiration: false },
-        });
-      }
-      return true;
+      return false;
     },
-    [characterContext],
+    [characterContext, disarm],
   );
 
   return { armed, arm, disarm, spendInspiration };
