@@ -431,6 +431,28 @@ describeWithDb('creation seeds slot rows from the single slot source (#270)', ()
     expect(await totals(id)).toEqual([[1, 1, 0]]);
   });
 
+  it('a short rest and a long rest each restore a warlock’s spent pact slot (#761)', async () => {
+    const id = await createViaRoute(testId('wlk761'), 'Warlock', 1);
+
+    const spentOnShort = await SpellSlotsService!.useSpellSlot(
+      { characterId: id, spellName: 'Hex', spellLevel: 1, slotLevelUsed: 1 },
+      creationUserId,
+    );
+    expect(spentOnShort.success).toBe(true);
+    expect(await totals(id)).toEqual([[1, 1, 1]]);
+    await RestService!.takeShortRest(id, creationUserId);
+    expect(await totals(id)).toEqual([[1, 1, 0]]);
+
+    const spentOnLong = await SpellSlotsService!.useSpellSlot(
+      { characterId: id, spellName: 'Hex', spellLevel: 1, slotLevelUsed: 1 },
+      creationUserId,
+    );
+    expect(spentOnLong.success).toBe(true);
+    expect(await totals(id)).toEqual([[1, 1, 1]]);
+    await RestService!.takeLongRest(id, creationUserId);
+    expect(await totals(id)).toEqual([[1, 1, 0]]);
+  });
+
   it('level-up re-syncs a warlock\u2019s pact rows and prunes the old slot level (#397)', async () => {
     const id = await createViaRoute(testId('wlkLvl'), 'Warlock', 1);
     expect(await totals(id)).toEqual([[1, 1, 0]]);
@@ -518,14 +540,12 @@ describeWithDb('creation seeds slot rows from the single slot source (#270)', ()
     // setSubclass would refuse this pairing, so the row is written directly:
     // the slot code must not trust a bad pairing.
     const id = await createViaRoute(testId('ekX'), 'Rogue', 3);
-    await db
-      .insert(characterSubclasses)
-      .values({
-        characterId: id,
-        className: 'Rogue',
-        subclassName: 'Eldritch Knight',
-        chosenAtLevel: 3,
-      });
+    await db.insert(characterSubclasses).values({
+      characterId: id,
+      className: 'Rogue',
+      subclassName: 'Eldritch Knight',
+      chosenAtLevel: 3,
+    });
     await SpellSlotDataAccess!.syncSpellSlotTotals(id, creationUserId);
     expect(await totals(id)).toEqual([]);
   });

@@ -37,13 +37,21 @@ const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
               size="sm"
               onClick={longRest}
               disabled={resting}
-              aria-label="Recover all spell slots and sorcery points"
+              aria-label={
+                pactSlotLevel !== null
+                  ? 'Pact Magic slots recover on a short or long rest'
+                  : 'Recover all spell slots and sorcery points'
+              }
             >
               {resting ? 'Resting…' : 'Long Rest'}
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Recover all spell slots and sorcery points</p>
+            <p>
+              {pactSlotLevel !== null
+                ? 'Pact Magic slots recover on a short or long rest'
+                : 'Recover all spell slots and sorcery points'}
+            </p>
           </TooltipContent>
         </Tooltip>
       </CardHeader>
@@ -60,7 +68,7 @@ const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
               <div className="flex-1">
                 {pactSlotLevel !== null && Number(level) === pactSlotLevel && (
                   <p className="text-xs text-muted-foreground mb-1">
-                    Pact Magic — recovers on a Short Rest
+                    Pact Magic slots recover on a short or long rest
                   </p>
                 )}
                 <div className="flex gap-1 mb-1">
