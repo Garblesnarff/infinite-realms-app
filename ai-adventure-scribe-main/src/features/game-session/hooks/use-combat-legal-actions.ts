@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
 import { LEGAL_ACTION_TYPES } from '../../../../shared/combat-legal-action-types';
@@ -17,6 +17,7 @@ import {
   resultCarriesPersistedPlayerRow,
 } from '@/services/combat/combat-action-boundary';
 import {
+  CombatIntentRefusedError,
   executeAuthoritativeCombatIntent,
   executeStructuredCombatActionWithBoundary,
   type ClientCombatIntent,
@@ -38,7 +39,10 @@ import {
   participantBoardCell,
 } from '@/services/combat/player-movement-remaining';
 import { askPlayerForSpellCast } from '@/services/combat/player-spell-cast';
-import { publishEngineRollOutcome } from '@/services/combat/roll-outcome-display';
+import {
+  publishEngineRollOutcome,
+  publishEngineRollRefusal,
+} from '@/services/combat/roll-outcome-display';
 import { getSpellById } from '@/utils/spell-lookup';
 
 export function fleeProvokerOf(label: string): string | null {
@@ -160,6 +164,7 @@ export function useCombatLegalActions(input: {
   // until that re-fetch settles, so ActionOptions retains disabled old options
   // only during an actual refresh and clears a settled empty menu immediately.
   const [isRefreshingLegalActions, setIsRefreshingLegalActions] = useState(false);
+  const refreshSequence = useRef(0);
   const [loadFailed, setLoadFailed] = useState(false);
   const [sessionEnded, setSessionEnded] = useState(false);
   // #1414 round 4 (CI fix): the armed-advantage state the Inspiration chip and the
@@ -170,6 +175,7 @@ export function useCombatLegalActions(input: {
   const { armed, arm, disarm } = useInspirationArmed();
 
   const refreshLegalActions = useCallback(async () => {
+    const sequence = ++refreshSequence.current;
     if (!showCombatMenu || !encounter?.id) {
       setIsRefreshingLegalActions(false);
       return;
@@ -180,12 +186,14 @@ export function useCombatLegalActions(input: {
         `/v1/combat/${encodeURIComponent(encounter.id)}/legal-actions`,
         { retryBudgetMs: 0 },
       );
+      if (sequence !== refreshSequence.current) return;
       if (!response.ok) {
         setLoadFailed(true);
         setLegalState((previous) => ({ actorId: previous.actorId, actions: [] }));
         return;
       }
       const payload = (await response.json()) as { actorId?: string; actions?: LegalAction[] };
+      if (sequence !== refreshSequence.current) return;
       setLoadFailed(false);
       setSessionEnded(false);
       // A dying player's only legal action is the death save, and the dying panel owns it: a
@@ -195,6 +203,7 @@ export function useCombatLegalActions(input: {
         actions: (payload.actions ?? []).filter((action) => action.type !== 'death_save'),
       });
     } catch (loadError) {
+      if (sequence !== refreshSequence.current) return;
       if (loadError instanceof SessionExpiredError) {
         setSessionEnded(true);
         setLoadFailed(false);
@@ -207,7 +216,7 @@ export function useCombatLegalActions(input: {
       setLoadFailed(true);
       setLegalState((previous) => ({ actorId: previous.actorId, actions: [] }));
     } finally {
-      setIsRefreshingLegalActions(false);
+      if (sequence === refreshSequence.current) setIsRefreshingLegalActions(false);
     }
   }, [showCombatMenu, encounter?.id, encounter?.currentTurnParticipantId, encounter?.currentRound]);
 
@@ -563,13 +572,19 @@ export function useCombatLegalActions(input: {
           // number disarms without spending (it takes no advantage). Spending here too
           // double-spent every armed auto-roll (the in-flight closure still saw the
           // pre-roll armed=true) and spent typed numbers the design says keep.
-          const execution = await executeStructuredCombatActionWithBoundary(
-            encounter.id,
-            structuredAction,
-            die.d20,
-            die.d20Rolls,
-            'action_bar',
-          );
+          let execution;
+          try {
+            execution = await executeStructuredCombatActionWithBoundary(
+              encounter.id,
+              structuredAction,
+              die.d20,
+              die.d20Rolls,
+              'action_bar',
+            );
+          } catch (failure) {
+            if (failure instanceof CombatIntentRefusedError) publishEngineRollRefusal(die.rollId);
+            throw failure;
+          }
           publishEngineRollOutcome(die.rollId, execution.result);
           const playerParts = [
             ...formatCombatActionParts(structuredAction, execution.result, roster),
