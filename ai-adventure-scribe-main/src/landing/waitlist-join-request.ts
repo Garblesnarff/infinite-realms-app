@@ -1,6 +1,6 @@
 /**
- * The request the SSR landing waitlist form sends.
- * `initWaitlistForms` is the only caller. The route test posts this same value.
+ * The waitlist join request.
+ * The server route test posts this value through POST /v1/waitlist.
  */
 export function buildWaitlistJoinRequest(input: { email: string; source: string }): {
   path: string;
