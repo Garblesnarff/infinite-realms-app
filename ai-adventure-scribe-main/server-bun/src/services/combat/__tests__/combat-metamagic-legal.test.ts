@@ -322,3 +322,39 @@ describe('getLegalCombatActions Metamagic (#1233)', () => {
     expect(offers).toHaveLength(0);
   });
 });
+
+describe('Twinned Spell is offered only for a spell it can apply to (#1233)', () => {
+  beforeEach(() => {
+    player.characterClass = 'Sorcerer';
+    player.characterLevel = 3;
+    player.characterClassLevels = [{ className: 'Sorcerer', level: 3 }];
+    player.actionUsed = false;
+    player.bonusActionUsed = false;
+    sorceryPool = { max: 3, remaining: 3 };
+    knownMetamagic = ['twinned'];
+    ledgerSlots = new Map([[1, 4]]);
+    participants = [player, monster];
+  });
+
+  afterEach(() => {
+    profile.spellIds = [];
+    sorceryPool = null;
+    knownMetamagic = [];
+    ledgerSlots = new Map();
+    player.characterClass = 'Paladin';
+    player.characterLevel = 6;
+    player.characterClassLevels = [{ className: 'Paladin', level: 6 }];
+  });
+
+  test('not offered when the only player spell is multi-target (Magic Missile)', async () => {
+    profile.spellIds = ['magic-missile'];
+    const offers = metamagicOffers((await getLegalCombatActions('encounter-1', 'user-1')).actions);
+    expect(offers.map((offer) => offer.option)).toEqual([]);
+  });
+
+  test('offered, with no points cost of its own, when a single-target spell is held (Fire Bolt)', async () => {
+    profile.spellIds = ['fire-bolt'];
+    const offers = metamagicOffers((await getLegalCombatActions('encounter-1', 'user-1')).actions);
+    expect(offers.map((offer) => [offer.option, offer.pointsCost])).toEqual([['twinned', null]]);
+  });
+});

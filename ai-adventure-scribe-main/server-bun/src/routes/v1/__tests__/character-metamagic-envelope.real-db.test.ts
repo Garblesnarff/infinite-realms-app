@@ -9,6 +9,7 @@ import { Elysia } from 'elysia';
 
 import { characters } from '../../../../../db/schema/index';
 import {
+  metamagicEnvelopeJson,
   metamagicOverCapBody,
   metamagicUnknownIdBody,
   metamagicValidBody,
@@ -113,5 +114,61 @@ describeWithDb('Metamagic envelope through the real characters routes (#1233)', 
       ...metamagicUnknownIdBody,
     });
     expect(response.status).toBe(400);
+  });
+
+  // #1233 (strategist FIX): a stored list is fixed. The beforeAll character holds ['quickened',
+  // 'careful'] at level 3; the tests below only read it or update their own characters.
+  test('a swap of the stored list is refused with 422, and nothing is stored', async () => {
+    const before = await storedEnvelope();
+    const response = await send('PUT', `/v1/characters/${characterId}`, {
+      personality_notes: metamagicEnvelopeJson(['quickened', 'subtle']),
+    });
+    expect(response.status).toBe(422);
+    expect(await storedEnvelope()).toBe(before);
+  });
+
+  test('a removal of the stored list is refused with 422', async () => {
+    const before = await storedEnvelope();
+    const response = await send('PUT', `/v1/characters/${characterId}`, {
+      personality_notes: JSON.stringify({ traits: [], inspiration: false }),
+    });
+    expect(response.status).toBe(422);
+    expect(await storedEnvelope()).toBe(before);
+  });
+
+  test('a grow is accepted at 10th level, where the cap allows a third option', async () => {
+    const created = await send('POST', '/v1/characters', {
+      name: testId('1233-metamagic-level10'),
+      class: 'Sorcerer',
+      level: 10,
+      ...metamagicValidBody,
+    });
+    expect(created.status).toBe(201);
+    const id = (JSON.parse(created.text) as { id: string }).id;
+    const response = await send('PUT', `/v1/characters/${id}`, {
+      level: 10,
+      personality_notes: metamagicEnvelopeJson(['quickened', 'careful', 'subtle']),
+    });
+    expect(response.status).toBe(200);
+    const [row] = await db
+      .select({ personalityNotes: characters.personalityNotes })
+      .from(characters)
+      .where(eq(characters.id, id));
+    expect(row.personalityNotes).toContain('"subtle"');
+    await db.delete(characters).where(eq(characters.id, id));
+  });
+
+  test('a first pick is accepted when the character holds no list yet', async () => {
+    const created = await send('POST', '/v1/characters', {
+      name: testId('1233-metamagic-first-pick'),
+      class: 'Sorcerer',
+      level: 3,
+      personality_notes: JSON.stringify({ traits: [], inspiration: false }),
+    });
+    expect(created.status).toBe(201);
+    const id = (JSON.parse(created.text) as { id: string }).id;
+    const response = await send('PUT', `/v1/characters/${id}`, metamagicValidBody);
+    expect(response.status).toBe(200);
+    await db.delete(characters).where(eq(characters.id, id));
   });
 });

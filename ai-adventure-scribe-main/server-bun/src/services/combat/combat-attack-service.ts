@@ -74,6 +74,7 @@ import {
   isPlayerCombatUtilitySpell,
   isSelfCastSpell,
   resolveCatalogSpell,
+  twinnedAllowed,
 } from '../../data/spellData.js';
 import { rollD20, rollD20Pair } from '../../lib/dice.js';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../../lib/errors.js';
@@ -1305,6 +1306,14 @@ export class CombatAttackService {
         );
       }
       if (metamagicOption === 'twinned') {
+        // #1233 (strategist FIX): the spell itself must target one creature. An area spell, a
+        // multi-target spell or a Self spell is refused whatever the target count was.
+        if (!twinnedAllowed(spell)) {
+          throw new BusinessLogicError(
+            `Spell refused: Twinned Spell cannot apply to ${spell.name}, which can hit more than one creature or covers an area`,
+            { reason: 'metamagic_twinned_not_single_target_spell', spell: spell.name },
+          );
+        }
         if (targetIds.length !== 1) {
           throw new BusinessLogicError(
             `Spell refused: Twinned Spell needs exactly one target for ${spell.name}`,

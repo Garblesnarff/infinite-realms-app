@@ -100,7 +100,7 @@ import {
   playerTextDeclares,
   playerTextDeclaresLeaving,
 } from '../../../../shared/player-exit-wording';
-import { isPlayerCombatSpell, resolveCatalogSpell } from '../../data/spellData.js';
+import { isPlayerCombatSpell, resolveCatalogSpell, twinnedAllowed } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import { planApproach } from '../../tactical/approach.js';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
@@ -2533,10 +2533,17 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     const metamagicPool = known.length
       ? await sorceryPointsLedger({ characterId: actor.characterId, userId, className: 'Sorcerer' })
       : null;
+    // #1233 (strategist FIX): Twinned is offered only while the character has a player spell it can
+    // apply to: one creature, not an area, not a Self spell (see twinnedAllowed).
+    const twinnableSpellHeld = profile.spellIds.some((id) => {
+      const spell = resolveCatalogSpell(id);
+      return !!spell && isPlayerCombatSpell(spell) && twinnedAllowed(spell);
+    });
     for (const option of known) {
       // Twinned costs the spell's level, so only the cheapest possible (1) gates the offer here.
       const pointsCost = option === 'twinned' ? 1 : METAMAGIC_COSTS[option];
       if (!metamagicPool || metamagicPool.remaining < pointsCost) continue;
+      if (option === 'twinned' && !twinnableSpellHeld) continue;
       actions.push({
         type: 'metamagic',
         option,

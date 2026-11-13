@@ -339,4 +339,27 @@ describeWithDb('Metamagic casts through the real intent route (#1233)', () => {
     const body = JSON.parse(response.text) as { result: { results: unknown[] } };
     expect(body.result.results).toHaveLength(1);
   });
+
+  // #1233 (strategist FIX): Twinned Spell applies only to a spell that can target one creature.
+  // Magic Missile hits up to three creatures, so Twinned is refused at its cast, with no cost.
+  test('Twinned Magic Missile is refused with 422 at the cast, and spends nothing', async () => {
+    const db = realDb();
+    await db
+      .update(characters)
+      .set({ personalityNotes: metamagicEnvelopeJson(['twinned', 'careful']) })
+      .where(eq(characters.id, characterId));
+    try {
+      await turn(3);
+      const response = await post(metamagicMagicMissileBody(heroId, foeId, 'twinned'));
+      expect(response.status).toBe(422);
+      expect(response.text).toContain('Twinned Spell cannot apply to Magic Missile');
+      expect(await points()).toBe(3);
+      expect(await usedSlots(1)).toBe(0);
+    } finally {
+      await db
+        .update(characters)
+        .set({ personalityNotes: metamagicEnvelopeJson(['quickened', 'careful']) })
+        .where(eq(characters.id, characterId));
+    }
+  });
 });

@@ -19,7 +19,7 @@ import {
   syncArmorClassAfterEquipmentChange,
 } from './character/character-armor-class.js';
 import { CharacterSpellService } from './character/character-spell-service.js';
-import { checkEnvelopeMetamagic } from './character-metamagic.js';
+import { checkEnvelopeMetamagic, checkMetamagicRepick } from './character-metamagic.js';
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { ClassFeaturesService } from './class-features-service.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
@@ -50,7 +50,7 @@ import {
   findSrdClassForHitPoints,
 } from '../../../shared/level-1-hit-points';
 import { XP_TO_REACH_LEVEL } from '../../../shared/xp-tables';
-import { InternalServerError, ValidationError } from '../lib/errors.js';
+import { BusinessLogicError, InternalServerError, ValidationError } from '../lib/errors.js';
 import { classLevelOf } from './progression/limited-feature-uses.js';
 import { AVAILABLE_SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '../types/class-features.js';
 import { parseClassLevels, SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
@@ -865,6 +865,7 @@ export class CharacterService {
           class: characters.class,
           level: characters.level,
           classLevels: characters.classLevels,
+          personalityNotes: characters.personalityNotes,
         })
         .from(characters)
         .where(eq(characters.id, characterId))
@@ -879,6 +880,13 @@ export class CharacterService {
       );
       const updatedMetamagic = checkEnvelopeMetamagic(data.personalityNotes, updatedSorcererLevel);
       if (!updatedMetamagic.ok) throw new ValidationError(updatedMetamagic.reason);
+      // #1233 (strategist FIX): a stored list is fixed, except that the cap may allow a new option.
+      const repick = checkMetamagicRepick(
+        current?.personalityNotes ?? null,
+        data.personalityNotes,
+        updatedSorcererLevel,
+      );
+      if (!repick.ok) throw new BusinessLogicError(repick.reason, { reason: 'metamagic_repick' });
     }
     // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
     const {
