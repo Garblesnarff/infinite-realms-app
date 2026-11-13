@@ -589,7 +589,6 @@ export default tseslint.config(
       'src/components/character-creation/steps/StartingEquipmentSelection.tsx',
       'src/components/character-creation/steps/PersonalitySelection.tsx',
       'src/components/character-creation/steps/personality/use-personality-selection.ts',
-      'src/features/game-session/components/game/FloatingActionPanel.tsx',
       'src/services/spellApi.ts',
       'src/services/__tests__/spellApi.test.ts',
       'src/services/__tests__/passive-skills-service.test.ts',

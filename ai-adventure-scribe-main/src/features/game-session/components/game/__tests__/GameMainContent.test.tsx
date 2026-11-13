@@ -193,7 +193,9 @@ vi.mock('../../chat/ChatInput', () => ({
   ),
 }));
 vi.mock('../TimelineRail', () => ({ TimelineRail: () => <aside data-testid="timeline-rail" /> }));
-vi.mock('../StatsBar', () => ({ StatsBar: () => <div>Stats</div> }));
+vi.mock('../game-content/TableContextCard', () => ({
+  TableContextCard: () => <div data-testid="table-context-card" />,
+}));
 vi.mock('../../tactical/TacticalMapBoard', () => ({
   TacticalMapBoard: () => <div data-testid="tactical-map-board" />,
 }));
@@ -304,6 +306,18 @@ describe('GameMainContent overhaul behavior contract', () => {
     state.tacticalMap = null;
     sendMessage.mockClear();
     mockTerminalDeathState = null;
+    document.body.replaceChildren();
+    const header = document.createElement('div');
+    const controls = document.createElement('div');
+    const roll = document.createElement('div');
+    roll.dataset.testid = 'table-roll-slot';
+    roll.className = 'ir-table-roll-host';
+    document.body.append(header, controls, roll);
+    Object.assign(baseProps, {
+      tableHeaderSlot: header,
+      tableControlsSlot: controls,
+      tableRollSlot: roll,
+    });
   });
 
   it('keeps the live message, dice, quick-action, timeline, and input surfaces in the navy center stage', () => {
@@ -715,44 +729,36 @@ describe('GameMainContent overhaul behavior contract', () => {
     );
 
     expect(state.lastChapterLabel).toBe('Chapter 1');
-    expect(screen.getByTestId('scene-header')).toHaveTextContent('Chapter 1');
     expect(screen.getByTestId('scene-header')).not.toHaveTextContent('Chapter 15');
   });
   describe('roll tray and tactical map placement (#2252)', () => {
-    const OVERLAY = /(^|\s)(fixed|absolute|sticky)(\s|$)/;
-
-    it('docks the roll tray in the main column between the stream and the composer, not in an overlay', () => {
+    it('portals the roll into the table roll slot, not into the stream or the composer', () => {
       state.currentRoll = {
         id: 'attack-1',
         status: 'pending',
         requestType: 'attack',
         description: 'Longsword attack vs Faceless Stalker',
       };
-      const { container } = render(<GameMainContent {...baseProps} isCombatDetected />);
+      render(<GameMainContent {...baseProps} isCombatDetected />);
 
       const rollButton = screen.getByRole('button', { name: 'Roll Dice' });
-      const slot = screen.getByTestId('roll-tray-slot');
+      const slot = screen.getByTestId('table-roll-slot');
       const stream = screen.getByTestId('message-list');
       const composer = screen.getByTestId('chat-input');
 
       expect(slot).toContainElement(rollButton);
       expect(stream).not.toContainElement(rollButton);
-      expect(stream.compareDocumentPosition(slot) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-      expect(
-        slot.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING,
-      ).toBeTruthy();
-
-      // Normal flow all the way up: nothing between the button and the page positions it.
-      for (let el: HTMLElement | null = rollButton; el && el !== container; el = el.parentElement) {
-        expect(el.className).not.toMatch(OVERLAY);
-        expect(['fixed', 'absolute', 'sticky']).not.toContain(el.style.position);
-      }
+      expect(composer).not.toContainElement(rollButton);
+      expect(screen.getByTestId('story-box')).not.toContainElement(rollButton);
     });
 
-    it('renders an empty tray slot and no roll status when no roll is pending', () => {
+    it('leaves the table roll slot empty and shows no roll status when no roll is pending', () => {
       render(<GameMainContent {...baseProps} />);
 
-      expect(screen.getByTestId('roll-tray-slot').firstElementChild).toBeEmptyDOMElement();
+      expect(screen.getByText('It opens when the DM asks for a roll.')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('table-roll-slot').querySelector('.ir-stable-roll-slot'),
+      ).toBeEmptyDOMElement();
       expect(screen.queryByRole('button', { name: 'Roll Dice' })).not.toBeInTheDocument();
       expect(screen.queryByText(/Your roll:/)).not.toBeInTheDocument();
     });
@@ -762,7 +768,7 @@ describe('GameMainContent overhaul behavior contract', () => {
       render(<GameMainContent {...baseProps} mapInRail />);
 
       expect(screen.queryByTestId('tactical-map-board')).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Map' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Open map' })).not.toBeInTheDocument();
     });
 
     it('opens the map in a sheet above the dock, never over the tray or the composer', () => {
@@ -776,12 +782,12 @@ describe('GameMainContent overhaul behavior contract', () => {
       render(<GameMainContent {...baseProps} isLeftCollapsed />);
 
       expect(screen.queryByTestId('tactical-map-board')).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Open map' }));
 
       const sheet = screen.getByRole('dialog', { name: 'Tactical map' });
       expect(sheet).toContainElement(screen.getByTestId('tactical-map-board'));
       // The sheet is not an ancestor of the tray or the chat box, and does not sit inside them.
-      const slot = screen.getByTestId('roll-tray-slot');
+      const slot = screen.getByTestId('table-roll-slot');
       const composer = screen.getByTestId('chat-input');
       expect(sheet).not.toContainElement(slot);
       expect(sheet).not.toContainElement(composer);
@@ -792,9 +798,11 @@ describe('GameMainContent overhaul behavior contract', () => {
       expect(screen.queryByRole('dialog', { name: 'Tactical map' })).not.toBeInTheDocument();
     });
 
-    it('offers no Map button when there is no tactical map', () => {
+    it('offers no map button when there is no tactical map', () => {
       render(<GameMainContent {...baseProps} isLeftCollapsed />);
-      expect(screen.queryByRole('button', { name: 'Map' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Open map' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Open full map' })).not.toBeInTheDocument();
+      expect(screen.getByText('Map unavailable')).toBeInTheDocument();
     });
   });
 
