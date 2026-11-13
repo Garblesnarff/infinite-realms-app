@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.47.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.47.0...v0.47.1) (2026-11-13)
+
+
+### Tests
+
+* **e2e:** bring the Table specs in line with the shipped screens ([2c02d8f](https://github.com/Garblesnarff/infinite-realms-app/commit/2c02d8f4f00f4e6ea6c9a7fff3b2f1263da5d442)), closes [#92](https://github.com/Garblesnarff/infinite-realms-app/issues/92)
+
 ## [0.47.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.46.0...v0.47.0) (2026-11-13)
 
 
