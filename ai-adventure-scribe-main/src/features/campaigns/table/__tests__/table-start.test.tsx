@@ -101,7 +101,7 @@ describe('Table start screens', () => {
     expect(screen.getByText(label, { exact: true })).toHaveClass('normal-case');
   });
 
-  it('renders the difficulty tag in title case and genres in uppercase', () => {
+  it('renders the difficulty tag and the genre chips in title case', () => {
     render(
       <MemoryRouter>
         <BoxedCampaign campaign={campaign} />
@@ -109,7 +109,9 @@ describe('Table start screens', () => {
     );
     const word = screen.getByText('Hard', { exact: true });
     expect(word).toHaveClass('normal-case');
-    expect(screen.getByText('horror')).toHaveClass('uppercase');
+    // #1460 title case, #1521: genre chips capitalise their stored text, not uppercase it.
+    expect(screen.getByText('horror')).toHaveClass('capitalize');
+    expect(screen.getByText('horror')).not.toHaveClass('uppercase');
   });
 
   it('keeps the box text pairs at 7:1 or more and renders those colours', () => {
