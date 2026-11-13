@@ -19,6 +19,11 @@ import {
   syncArmorClassAfterEquipmentChange,
 } from './character/character-armor-class.js';
 import { CharacterSpellService } from './character/character-spell-service.js';
+import {
+  envelopeInspiration,
+  mergeClientEnvelope,
+  withoutEngineOwnedKeys,
+} from './character-envelope.js';
 import { checkEnvelopeMetamagic, checkMetamagicRepick } from './character-metamagic.js';
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { ClassFeaturesService } from './class-features-service.js';
@@ -247,24 +252,6 @@ function characterWriteCondition(characterId: string, userId: string): ReturnTyp
   );
 }
 
-/**
- * #1414: the `inspiration` flag out of the personality envelope persisted in the
- * `personality_notes` column. The client module `src/utils/character/personality-envelope.ts`
- * owns the envelope shape; the server only ever reads this one flag. A column that is
- * not an envelope (legacy free text, unparseable JSON) reads as unknown, never as true.
- */
-function inspirationFromEnvelope(personalityNotes: string | null): boolean | undefined {
-  if (!personalityNotes) return undefined;
-  try {
-    const parsed: unknown = JSON.parse(personalityNotes);
-    if (!parsed || typeof parsed !== 'object') return undefined;
-    const inspiration = (parsed as Record<string, unknown>).inspiration;
-    return typeof inspiration === 'boolean' ? inspiration : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 export class CharacterService {
   /**
    * List all characters for a user
@@ -347,7 +334,7 @@ export class CharacterService {
    */
   static async characterHasInspiration(characterId: string, userId: string): Promise<boolean> {
     const character = await CharacterService.getById(characterId, userId);
-    return inspirationFromEnvelope(character?.personalityNotes ?? null) === true;
+    return envelopeInspiration(character?.personalityNotes ?? null);
   }
 
   /**
@@ -388,7 +375,7 @@ export class CharacterService {
       return updated !== undefined;
     };
     const raw = character.personalityNotes ?? null;
-    if (!raw || inspirationFromEnvelope(raw) !== true) {
+    if (!raw || !envelopeInspiration(raw)) {
       return { success: false, reason: 'no_inspiration' };
     }
     if (await attempt(raw)) return { success: true, inspiration: false };
@@ -398,7 +385,7 @@ export class CharacterService {
     // still refuses, because the re-read sees the flag already false.
     const reread = await CharacterService.getById(characterId, userId);
     const freshRaw = reread?.personalityNotes ?? null;
-    if (freshRaw && inspirationFromEnvelope(freshRaw) === true && (await attempt(freshRaw))) {
+    if (freshRaw && envelopeInspiration(freshRaw) && (await attempt(freshRaw))) {
       return { success: true, inspiration: false };
     }
     return { success: false, reason: 'no_inspiration' };
@@ -858,8 +845,11 @@ export class CharacterService {
     data: Partial<NewCharacter>,
     equipment?: Array<Record<string, unknown>>,
   ): Promise<Character | null> {
-    // #1233: a stored Metamagic list must be valid for the Sorcerer level the row will hold.
-    if (data.personalityNotes) {
+    // #1508: the client's envelope is merged onto the stored one on the server. Engine-owned keys
+    // (inspiration) keep their stored value, a key the client omits keeps its stored value, and a
+    // null, empty or non-JSON envelope cannot bypass the guards below. No envelope leaves the column.
+    let mergedPersonalityNotes: string | undefined;
+    if (data.personalityNotes !== undefined) {
       const [current] = await db
         .select({
           class: characters.class,
@@ -870,30 +860,41 @@ export class CharacterService {
         .from(characters)
         .where(eq(characters.id, characterId))
         .limit(1);
-      const updatedSorcererLevel = classLevelOf(
-        {
-          class: data.class ?? current?.class ?? null,
-          level: data.level ?? current?.level ?? 1,
-          classLevels: data.classLevels ?? current?.classLevels ?? null,
-        },
-        'Sorcerer',
-      );
-      const updatedMetamagic = checkEnvelopeMetamagic(data.personalityNotes, updatedSorcererLevel);
-      if (!updatedMetamagic.ok) throw new ValidationError(updatedMetamagic.reason);
-      // #1233 (strategist FIX): a stored list is fixed, except that the cap may allow a new option.
-      const repick = checkMetamagicRepick(
-        current?.personalityNotes ?? null,
-        data.personalityNotes,
-        updatedSorcererLevel,
-      );
-      if (!repick.ok) throw new BusinessLogicError(repick.reason, { reason: 'metamagic_repick' });
+      const clientEnvelope = data.personalityNotes ?? '';
+      const merge = mergeClientEnvelope(current?.personalityNotes ?? null, clientEnvelope);
+      if (merge.kind === 'refuse') throw new ValidationError(merge.reason);
+      if (merge.kind === 'write') {
+        mergedPersonalityNotes = merge.value;
+        // #1233: a stored Metamagic list must be valid for the Sorcerer level the row will hold.
+        const updatedSorcererLevel = classLevelOf(
+          {
+            class: data.class ?? current?.class ?? null,
+            level: data.level ?? current?.level ?? 1,
+            classLevels: data.classLevels ?? current?.classLevels ?? null,
+          },
+          'Sorcerer',
+        );
+        const updatedMetamagic = checkEnvelopeMetamagic(merge.value, updatedSorcererLevel);
+        if (!updatedMetamagic.ok) throw new ValidationError(updatedMetamagic.reason);
+        // #1233 (strategist FIX): a stored list is fixed, except that the cap may allow a new option.
+        // The client's own envelope is checked, not the merged one: an envelope that leaves the
+        // stored list out is a removal and is refused (#1233), while a missing envelope keeps it.
+        const repick = checkMetamagicRepick(
+          current?.personalityNotes ?? null,
+          clientEnvelope,
+          updatedSorcererLevel,
+        );
+        if (!repick.ok) throw new BusinessLogicError(repick.reason, { reason: 'metamagic_repick' });
+      }
     }
-    // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields
+    // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields.
+    // personalityNotes is left out here: the merged value above is the only one written.
     const {
       id: _id,
       userId: _userId,
       ownerId: _ownerId,
       campaignId: _campaignId,
+      personalityNotes: _clientPersonalityNotes,
       ...safeUpdates
     } = data as any;
 
@@ -902,6 +903,9 @@ export class CharacterService {
         .update(characters)
         .set({
           ...safeUpdates,
+          ...(mergedPersonalityNotes !== undefined
+            ? { personalityNotes: mergedPersonalityNotes }
+            : {}),
           updatedAt: new Date(),
         })
         .where(characterWriteCondition(characterId, userId))
@@ -1197,7 +1201,7 @@ export class CharacterService {
         backgroundImage: charData.backgroundImage || null,
         appearance: charData.appearance || null,
         personalityTraits: charData.personalityTraits || null,
-        personalityNotes: charData.personalityNotes || null,
+        personalityNotes: withoutEngineOwnedKeys(charData.personalityNotes) || null,
         backstoryElements: charData.backstoryElements || null,
         cantrips: charData.cantrips || null,
         knownSpells: charData.knownSpells || null,
