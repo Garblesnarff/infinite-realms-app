@@ -267,8 +267,9 @@ const { getLegalCombatActions, VERSIONED_INTENT_TYPES } =
 
 test('all claim-based legal actions require a version', () => {
   // #1414: `inspiration` arms advantage locally and never submits an intent, so it needs
-  // no version claim — like `move`, `death_save` and `end_turn`.
-  const nonClaimActions = new Set(['move', 'death_save', 'end_turn', 'inspiration']);
+  // no version claim — like `move`, `death_save` and `end_turn`. #1233: `metamagic` arms a
+  // known option the same way; the next spell cast is the intent that carries it.
+  const nonClaimActions = new Set(['move', 'death_save', 'end_turn', 'inspiration', 'metamagic']);
   for (const type of LEGAL_ACTION_TYPES.filter((type) => !nonClaimActions.has(type))) {
     expect(VERSIONED_INTENT_TYPES.has(type)).toBe(true);
   }

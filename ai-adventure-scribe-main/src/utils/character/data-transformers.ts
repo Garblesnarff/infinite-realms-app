@@ -623,6 +623,10 @@ export const transformCharacterData = (
     bonds: personalityEnvelope?.bonds ?? [],
     flaws: personalityEnvelope?.flaws ?? [],
     inspiration: personalityEnvelope?.inspiration ?? false,
+    // #1233: the Metamagic list and the envelope keys the sheet does not own, carried through
+    // so the next save writes them back.
+    metamagicOptions: personalityEnvelope?.metamagicOptions,
+    personalityEnvelopeExtras: personalityEnvelope?.extras,
     personality_notes: personalityEnvelope?.legacyNotes,
     personalityIntegration: personalityEnvelope
       ? {

@@ -312,6 +312,8 @@ export interface Character {
   preparedSpellIds?: string[];
   // Advanced Spellcasting Features
   metamagicOptions?: string[];
+  /** #1233: envelope keys the sheet does not own, kept verbatim so a save writes them back. */
+  personalityEnvelopeExtras?: Record<string, unknown>;
   sorceryPoints?: {
     maximum: number;
     current: number;

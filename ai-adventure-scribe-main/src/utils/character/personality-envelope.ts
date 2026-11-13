@@ -43,7 +43,31 @@ export interface SheetPersonalityEnvelope {
    * This is the storage shape #2703 builds on.
    */
   legacyNotes?: string;
+  /**
+   * #1233: the Sorcerer's known Metamagic options (ids from shared/metamagic-options). Present only
+   * when the stored envelope has the key.
+   */
+  metamagicOptions?: string[];
+  /**
+   * Keys this module does not own (anything other than the fields above), kept verbatim so a save
+   * writes them back. A save reads the stored document and keeps these; it never drops a key
+   * it does not know.
+   */
+  extras?: Record<string, unknown>;
 }
+
+/** The keys the sheet owns in the envelope. Every other key is kept as an extra. */
+const SHEET_OWNED_ENVELOPE_KEYS = new Set([
+  'traits',
+  'ideals',
+  'bonds',
+  'flaws',
+  'inspiration',
+  'lastInspiration',
+  'inspirationHistory',
+  'legacyNotes',
+  'metamagicOptions',
+]);
 
 const asStringArray = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
@@ -82,6 +106,9 @@ const tryParseEnvelopeJson = (raw: string): SheetPersonalityEnvelope | null => {
           description: typeof e.description === 'string' ? e.description : '',
         }))
     : [];
+  const extras = Object.fromEntries(
+    Object.entries(p).filter(([key]) => !SHEET_OWNED_ENVELOPE_KEYS.has(key)),
+  );
   return {
     traits: asStringArray(p.traits),
     ideals: asStringArray(p.ideals),
@@ -91,6 +118,8 @@ const tryParseEnvelopeJson = (raw: string): SheetPersonalityEnvelope | null => {
     lastInspiration: typeof p.lastInspiration === 'string' ? p.lastInspiration : null,
     inspirationHistory: history,
     ...(typeof p.legacyNotes === 'string' && p.legacyNotes ? { legacyNotes: p.legacyNotes } : {}),
+    ...('metamagicOptions' in p ? { metamagicOptions: asStringArray(p.metamagicOptions) } : {}),
+    ...(Object.keys(extras).length ? { extras } : {}),
   };
 };
 
@@ -133,7 +162,11 @@ export const serializePersonalityEnvelope = (character: Character): string => {
   const raw = character.personality_notes;
   // Already an envelope document: keep it as-is rather than nesting it.
   if (raw && tryParseEnvelopeJson(raw)) return raw;
+  // #1233: read-modify-write. The keys the sheet does not own (the extras from the stored
+  // document) go first, so the sheet's fields below overwrite only what it owns and nothing else
+  // is dropped on a save.
   return JSON.stringify({
+    ...(character.personalityEnvelopeExtras ?? {}),
     traits: character.personalityTraits ?? [],
     ideals: character.ideals ?? [],
     bonds: character.bonds ?? [],
@@ -142,5 +175,8 @@ export const serializePersonalityEnvelope = (character: Character): string => {
     lastInspiration: character.personalityIntegration?.lastInspiration ?? null,
     inspirationHistory: character.personalityIntegration?.inspirationHistory ?? [],
     ...(raw ? { legacyNotes: raw } : {}),
-  } satisfies SheetPersonalityEnvelope);
+    ...(character.metamagicOptions !== undefined
+      ? { metamagicOptions: character.metamagicOptions }
+      : {}),
+  });
 };

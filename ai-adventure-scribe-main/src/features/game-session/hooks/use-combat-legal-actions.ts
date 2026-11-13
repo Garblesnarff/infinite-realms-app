@@ -48,7 +48,11 @@ export function fleeProvokerOf(label: string): string | null {
 export type LegalAction = {
   /** `divine_smite` (#1362) is a melee attack chip that declares the slot, sent as an attack. */
   /** `inspiration` (#1414) arms advantage on the next roll; it spends nothing itself. */
-  type: ClientCombatIntent['type'] | 'divine_smite' | 'inspiration';
+  type: ClientCombatIntent['type'] | 'divine_smite' | 'inspiration' | 'metamagic';
+  /** #1233: a `metamagic` option: the Metamagic id the chip arms for the next cast. */
+  option?: string;
+  /** #1233: the casting time the option changes ('bonus action' for Quickened). */
+  castingTime?: string;
   label: string;
   weaponId?: string;
   spellId?: string;
@@ -66,8 +70,11 @@ export type LegalAction = {
   direction?: 'convert' | 'create';
   /** #1233: sorcery points a `convert` option gains (the slot's level). */
   pointsGained?: number;
-  /** #1233: sorcery points a `create` option costs (the 2014 table). */
-  pointsCost?: number;
+  /**
+   * #1233: sorcery points a `create` option costs (the 2014 table), or a `metamagic` option's cost
+   * (null for Twinned, which costs the spell's level).
+   */
+  pointsCost?: number | null;
   targetIds?: string[];
   x?: number;
   y?: number;
@@ -134,10 +141,15 @@ export function useCombatLegalActions(input: {
   sessionEnded: boolean;
   retryLoad: () => Promise<void>;
   runAction: (action: LegalAction, options?: { exitConfirmed?: boolean }) => Promise<void>;
+  /** #1233: the Metamagic option armed for the next spell cast, if any. */
+  armedMetamagic: string | null;
 } {
   const { state: combatState, refreshCombatState } = useCombat();
   const showCombatMenu = input.enabled;
   const [error, setError] = useState<string | null>(null);
+  // #1233: the Metamagic option armed for the next spell cast. Armed locally (like Inspiration);
+  // the cast carries it and the server spends the points then.
+  const [armedMetamagic, setArmedMetamagic] = useState<string | null>(null);
   const encounter = combatState.activeEncounter;
   const roster = useMemo(() => engineRosterOf(encounter?.participants), [encounter?.participants]);
   const [legalState, setLegalState] = useState<{ actorId?: string; actions: LegalAction[] }>({
@@ -236,7 +248,16 @@ export function useCombatLegalActions(input: {
       // commit while the fetch has not started yet (#118).
       setIsRefreshingLegalActions(true);
       try {
-        if (action.type === 'inspiration') {
+        if (action.type === 'metamagic') {
+          // #1233: arm (or disarm) a known option. No intent: the next spell cast carries it.
+          if (!action.option) {
+            setError('That option could not be used. Nothing was spent.');
+            return;
+          }
+          setArmedMetamagic((current) =>
+            current === action.option ? null : (action.option ?? null),
+          );
+        } else if (action.type === 'inspiration') {
           // #1414: the chip arms advantage on the next roll; it spends nothing. The roll
           // that consumes the advantage pays server-side, so arming and disarming are free
           // and the coin shows the same state. No engine notice: the armed coin is the feedback.
@@ -621,6 +642,7 @@ export function useCombatLegalActions(input: {
               spell_id: action.spellId ?? null,
               slot_level: slotLevel,
               movement_feet: 0,
+              ...(armedMetamagic ? { metamagic: armedMetamagic } : {}),
             };
             let committedAction = structuredAction;
             let castRollId: string | undefined;
@@ -704,6 +726,8 @@ export function useCombatLegalActions(input: {
               );
             }
             publishEngineRollOutcome(castRollId, execution.result);
+            // #1233: the armed option is spent by this cast; the next cast starts unarmed.
+            if (committedAction.metamagic) setArmedMetamagic(null);
             // The cast's engine result persists like a weapon attack's (#2622): one row.
             const playerParts = [
               ...formatCombatActionParts(committedAction, execution.result, roster),
@@ -789,10 +813,12 @@ export function useCombatLegalActions(input: {
       armed,
       arm,
       disarm,
+      armedMetamagic,
     ],
   );
 
   return {
+    armedMetamagic,
     actorId: legalState.actorId,
     actions: legalState.actions,
     isPlayerTurn,

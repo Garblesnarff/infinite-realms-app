@@ -129,6 +129,30 @@ export function isPlayerCombatUtilitySpell(spell: Spell | undefined): boolean {
  * keeps the area path. The exact admitted set is pinned by
  * spell-self-cast-gate.vitest.ts, so a catalog addition forces a conscious verdict.
  */
+/**
+ * Spells that can hit more than one creature at their cast level (#1233). The SRD record carries
+ * no target count, so the engine names them here. Twinned Spell (2014 PHB p.102) applies only to a
+ * spell that can target one creature.
+ */
+export const MULTI_TARGET_SPELL_IDS: ReadonlySet<string> = new Set([
+  'magic-missile', // three darts, each to a creature of your choice
+  'scorching-ray', // three rays, at one target or several
+  'acid-splash', // one creature, or two within 5 feet of each other
+  'sleep', // every creature in an area
+]);
+
+/**
+ * Whether Twinned Spell can apply to this spell: one creature, not an area, and not a Self spell
+ * (2014: a Self spell cannot be twinned). Area spells are refused by their `areaOfEffect`.
+ */
+export function twinnedAllowed(spell: Spell): boolean {
+  return (
+    !spell.areaOfEffect &&
+    !MULTI_TARGET_SPELL_IDS.has(spell.id) &&
+    !/^self\b/i.test(spell.range.trim())
+  );
+}
+
 export function isSelfCastSpell(spell: Spell | undefined): boolean {
   if (!spell) return false;
   return (

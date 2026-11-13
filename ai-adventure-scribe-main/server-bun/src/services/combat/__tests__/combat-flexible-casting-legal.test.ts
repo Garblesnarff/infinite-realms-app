@@ -257,6 +257,8 @@ let ledgerSlots = new Map<number, number>();
 mock.module('../resource-ledger.js', () => ({
   spellSlotLedger: async () => ledgerSlots,
   sorceryPointsLedger: async () => sorceryPool,
+  // #1233: combat-intent-service imports this too; a mock without it fails to link.
+  metamagicOptionsLedger: async () => [],
 }));
 
 const { getLegalCombatActions } = await import('../combat-intent-service.js');

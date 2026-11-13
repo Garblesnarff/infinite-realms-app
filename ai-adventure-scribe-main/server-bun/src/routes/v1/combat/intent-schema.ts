@@ -73,6 +73,9 @@ const spellFields = {
   d20: t.Optional(dieFace),
   // The popup's dropped die, so the log can name both dice (#263 CB-028).
   d20Rolls: d20Pair,
+  // #1233: a known Metamagic option applied to this cast. The engine checks the stored list and
+  // spends the sorcery points; the body only names the option.
+  metamagic: t.Optional(t.String({ minLength: 1, maxLength: 20 })),
 };
 
 const defensiveFields = {

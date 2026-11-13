@@ -36,7 +36,7 @@ import {
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import { planHasPaidFeatures } from '../../../../shared/plan-features';
 import { sql } from '../../lib/db.js';
-import { NotFoundError } from '../../lib/errors.js';
+import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -638,6 +638,11 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         return mapCharacterToApi(character as Character & { stats?: CharacterStats });
       } catch (error) {
         logger.error({ msg: 'CHARACTER_CREATE error', error });
+        // #1233: a stored Metamagic list the Sorcerer level cannot hold is a 400, with the rule.
+        if (error instanceof ValidationError) {
+          set.status = 400;
+          return { error: error.message, code: 'VALIDATION_ERROR' };
+        }
         throw error;
       }
     },
@@ -813,6 +818,16 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         return mapCharacterToApi(updated as Character & { stats?: CharacterStats });
       } catch (error) {
         logger.error({ msg: 'CHARACTER_UPDATE error', error });
+        // #1233: a stored Metamagic list the Sorcerer level cannot hold is a 400, with the rule.
+        if (error instanceof ValidationError) {
+          set.status = 400;
+          return { error: error.message, code: 'VALIDATION_ERROR' };
+        }
+        // #1233: a swapped or removed Metamagic list is a 422, with the rule.
+        if (error instanceof BusinessLogicError) {
+          set.status = 422;
+          return { error: error.message, code: 'BUSINESS_LOGIC_ERROR' };
+        }
         throw error;
       }
     },
