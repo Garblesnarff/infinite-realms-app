@@ -152,14 +152,21 @@ describe('names and enemy HP (#87 items 2-3)', () => {
     expect(hideEnemyHp('Captain Sarah Reeves is now at 0 HP.', ROSTER)).toBe(
       'Captain Sarah Reeves is near death.',
     );
+    // #764: a 0 HP line that also says the enemy is dead keeps that word, not "near death".
+    expect(hideEnemyHp('Captain Sarah Reeves is now at 0 HP and is dead.', ROSTER)).toBe(
+      'Captain Sarah Reeves is dead.',
+    );
+    expect(hideEnemyHp('Captain Sarah Reeves is now at 0 HP and is unconscious.', ROSTER)).toBe(
+      'Captain Sarah Reeves is unconscious.',
+    );
     expect(hideEnemyHp('Goblin is now at 8 HP.')).toBe('Goblin is wounded.');
     expect(hideEnemyHp('The Scholar is now at 4 HP.', ROSTER)).toBe('The Scholar is now at 4 HP.');
     expect(playerFacingSentence('⚙️ Engine: Combat ended (reason: last_hostile_defeated).')).toBe(
-      'Combat ended (reason: the last hostile was defeated).',
+      'Combat ended — the last hostile was defeated.',
     );
     expect(
       playerFacingSentence('⚙️ Engine: Combat ended (reason: last_hostile_defeated).'),
-    ).not.toMatch(/\b[a-z]+(?:_[a-z0-9]+)+\b/);
+    ).not.toMatch(/\(reason|\b[a-z]+(?:_[a-z0-9]+)+\b/);
   });
 
   it('isEngineLine is true only for a single bare engine line', () => {
