@@ -1,6 +1,9 @@
 /**
  * Utility functions for hit point (HP) related UI logic
  */
+import type { CombatHealthCondition } from '@/services/combat/health-condition';
+
+import { healthConditionForCombat } from '@/services/combat/health-condition';
 
 /**
  * Returns a semantic Tailwind background color class based on HP percentage
@@ -18,38 +21,19 @@ export const getHPColor = (percent: number): string => {
 };
 
 /**
- * Returns a semantic health status description based on HP percentage
- * - Healthy (> 50%)
- * - Bloodied (25% - 50%)
- * - Near Death (< 25%)
- * - Unconscious (0%)
- *
- * @param percent HP percentage (0-100)
- * @returns Semantic status string
+ * The player's own hidden-HP word. Same cuts as healthConditionForCombat (#863).
+ * A percent is current HP out of 100, so the engine function owns the tier.
  */
-export const getHPStatusDescription = (percent: number): string => {
-  if (percent <= 0) return 'Unconscious';
-  if (percent <= 25) return 'Near Death';
-  if (percent <= 50) return 'Bloodied';
-  return 'Healthy';
-};
+export const getHPStatusDescription = (percent: number): CombatHealthCondition =>
+  healthConditionForCombat(percent, 100);
 
-export type EnemyHealthTier = 'Healthy' | 'Hurt' | 'Bloodied' | 'Down';
+export type EnemyHealthTier = CombatHealthCondition;
 
 /**
- * The only health a player is shown for an enemy (#2257): a word, never a number.
- * - Down (0 HP)
- * - Bloodied (at or under half)
- * - Hurt (over half, at or under three quarters)
- * - Healthy (over three quarters)
+ * The only health a player is shown for an enemy (#2257): the engine tier, never a number.
  */
-export const getEnemyHealthTier = (currentHp: number, maxHp: number): EnemyHealthTier => {
-  if (currentHp <= 0) return 'Down';
-  const percent = maxHp > 0 ? (currentHp / maxHp) * 100 : 0;
-  if (percent <= 50) return 'Bloodied';
-  if (percent <= 75) return 'Hurt';
-  return 'Healthy';
-};
+export const getEnemyHealthTier = (currentHp: number, maxHp: number): EnemyHealthTier =>
+  healthConditionForCombat(currentHp, maxHp);
 
 /**
  * Bar colour for the player's own HP: good above half, warn at or under half, bad at or under a

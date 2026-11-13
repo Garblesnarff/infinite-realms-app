@@ -25,6 +25,7 @@ import {
   hideEnemyHp,
   isEngineLine,
   parseEngineLine,
+  playerFacingSentence,
   replaceSlugs,
   type EngineRosterRow,
 } from '../engine-line-model';
@@ -140,15 +141,25 @@ describe('names and enemy HP (#87 items 2-3)', () => {
 
   it('an enemy HP number becomes a tier; the player keeps theirs', () => {
     expect(hideEnemyHp('Captain Sarah Reeves is now at 20 HP.', ROSTER)).toBe(
+      'Captain Sarah Reeves is unharmed.',
+    );
+    expect(hideEnemyHp('Captain Sarah Reeves is now at 14 HP.', ROSTER)).toBe(
       'Captain Sarah Reeves is wounded.',
     );
     expect(hideEnemyHp('Captain Sarah Reeves is now at 6 HP.', ROSTER)).toBe(
-      'Captain Sarah Reeves is badly wounded.',
+      'Captain Sarah Reeves is bloodied.',
     );
     expect(hideEnemyHp('Captain Sarah Reeves is now at 0 HP.', ROSTER)).toBe(
-      'Captain Sarah Reeves is down.',
+      'Captain Sarah Reeves is near death.',
     );
+    expect(hideEnemyHp('Goblin is now at 8 HP.')).toBe('Goblin is wounded.');
     expect(hideEnemyHp('The Scholar is now at 4 HP.', ROSTER)).toBe('The Scholar is now at 4 HP.');
+    expect(playerFacingSentence('⚙️ Engine: Combat ended (reason: last_hostile_defeated).')).toBe(
+      'Combat ended (reason: the last hostile was defeated).',
+    );
+    expect(
+      playerFacingSentence('⚙️ Engine: Combat ended (reason: last_hostile_defeated).'),
+    ).not.toMatch(/\b[a-z]+(?:_[a-z0-9]+)+\b/);
   });
 
   it('isEngineLine is true only for a single bare engine line', () => {

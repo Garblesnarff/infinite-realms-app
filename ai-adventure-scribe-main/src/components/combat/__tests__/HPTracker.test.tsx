@@ -39,7 +39,10 @@ describe('HPTracker', () => {
 
     // Check for progress bar aria-label
     const progress = screen.getByRole('progressbar');
-    expect(progress).toHaveAttribute('aria-label', expect.stringContaining('Thorin Ironforge health'));
+    expect(progress).toHaveAttribute(
+      'aria-label',
+      expect.stringContaining('Thorin Ironforge health'),
+    );
 
     // Check for damage input and label
     const damageInput = screen.getByPlaceholderText('Damage');
@@ -100,18 +103,18 @@ describe('HPTracker', () => {
     // Exact HP numbers should NOT be visible
     expect(screen.queryByText('45 / 45')).not.toBeInTheDocument();
 
-    // Semantic status should be visible (45/45 is 100%, which is "Healthy")
-    const status = screen.getByText('Healthy');
+    // Semantic status should be visible (45/45 is full HP, which is "unharmed")
+    const status = screen.getByText('unharmed');
     expect(status).toBeInTheDocument();
     expect(status).toHaveAttribute('aria-live', 'polite');
 
     // Progress bar aria-label should use semantic status
     const progress = screen.getByRole('progressbar');
-    expect(progress).toHaveAttribute('aria-label', 'Thorin Ironforge health: Healthy');
+    expect(progress).toHaveAttribute('aria-label', 'Thorin Ironforge health: unharmed');
     // Title is removed in favor of Tooltip
   });
 
-  it('shows "Near Death" semantic status when HP is low and hidden', () => {
+  it('shows "near death" semantic status when HP is low and hidden', () => {
     const woundedParticipant = {
       ...participant,
       currentHitPoints: 5, // ~11% of 45
@@ -123,9 +126,9 @@ describe('HPTracker', () => {
     };
     render(<HPTracker {...hiddenProps} />);
 
-    expect(screen.getByText('Near Death')).toBeInTheDocument();
+    expect(screen.getByText('near death')).toBeInTheDocument();
     const progress = screen.getByRole('progressbar');
-    expect(progress).toHaveAttribute('aria-label', 'Thorin Ironforge health: Near Death');
+    expect(progress).toHaveAttribute('aria-label', 'Thorin Ironforge health: near death');
   });
 
   it('title-cases a raw slug participant name like the engine lines do (#2343 B4)', () => {

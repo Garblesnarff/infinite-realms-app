@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCombat } from '@/contexts/CombatContext';
+import { renderPlayerCombatWording } from '@/services/combat/player-combat-wording';
 import { getHPColor } from '@/utils/hp-utils';
 
 /**
@@ -59,7 +60,7 @@ const ParticipantListItem = React.memo(
           <div className="flex flex-wrap gap-1 mt-1">
             {participant.conditions.slice(0, 3).map((condition) => (
               <span key={condition.name} className="px-1 py-0.5 bg-muted text-xs rounded">
-                {condition.name}
+                {renderPlayerCombatWording(condition.name)}
               </span>
             ))}
             {participant.conditions.length > 3 && (

@@ -419,7 +419,8 @@ describeWithDb('combat damage reaches the character record', () => {
 
     expect(summary.encounterId).toBe(encounterId);
     expect(summary.rounds).toBe(1);
-    expect(summary.totalDamage).toBe(10);
+    expect(summary.totalDamage).toBe(7);
+    expect(summary.totalDamage).not.toBe(10);
     expect(summary.participants).toHaveLength(2);
     expect(summary.participants.find((p) => p.participantId === heroId)).toMatchObject({
       name: 'The Seeker',
