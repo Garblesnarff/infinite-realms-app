@@ -1,9 +1,10 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import type { Character, CharacterClass } from '@/types/character';
 
+import { cleric } from '@/data/classes/cleric';
 import SpellsTab from '@/features/character/components/sheet/tabs/SpellsTab';
 import { restApi } from '@/services/rest-api';
 
@@ -131,6 +132,32 @@ describe('SpellsTab', () => {
     expect(
       screen.queryByRole('button', { name: 'Recover all spell slots and sorcery points' }),
     ).not.toBeInTheDocument();
+  });
+
+  it('labels Life Domain spells as always prepared on the sheet', async () => {
+    const user = userEvent.setup();
+    const character = {
+      ...makeCleric(),
+      class: cleric,
+      level: 1,
+      classFeatures: {
+        'divine-domain': {
+          name: 'Divine Domain',
+          description: '',
+          choice: 'Life Domain: Focuses on healing and protection',
+        },
+      },
+      knownSpells: ['bless', 'cure-wounds', 'bane'],
+      preparedSpells: ['bless', 'cure-wounds', 'bane'],
+    } as Character;
+    render(<SpellsTab character={character} onUpdate={() => {}} />);
+    await user.click(screen.getByRole('tab', { name: /^spells/i }));
+    for (const name of ['Bless', 'Cure Wounds']) {
+      const row = screen.getByText(name).closest('.border.rounded-lg')!;
+      expect(within(row as HTMLElement).getByText('Always prepared')).toBeInTheDocument();
+    }
+    const bane = screen.getByText('Bane').closest('.border.rounded-lg')!;
+    expect(within(bane as HTMLElement).queryByText('Always prepared')).not.toBeInTheDocument();
   });
 
   it('keeps the spell tabs mounted after a rejected Long Rest and shows the inline error', async () => {
