@@ -103,7 +103,7 @@ test.describe('game panels (#1429)', () => {
     );
   });
 
-  test('settings sheet: all six settings plus Table look, target-numbers default stated', async ({
+  test('settings sheet: all five settings plus target-numbers default stated, no Table look switch', async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 });
@@ -116,7 +116,11 @@ test.describe('game panels (#1429)', () => {
     await expect(page.getByRole('switch', { name: 'Dice sound' })).toBeVisible();
     await expect(page.getByRole('switch', { name: 'Reduce motion' })).toBeVisible();
     await expect(page.getByRole('switch', { name: 'Show NPC rolls' })).toBeVisible();
-    await expect(page.getByRole('switch', { name: 'Table look' })).toBeVisible();
+    // #1486 removed the Table look switch: Table look is the only look now, always on
+    // (useTableLook adds the body class on every game route; nothing reads the old
+    // setting). The sheet must not offer it.
+    await expect(page.getByRole('switch', { name: 'Table look' })).toHaveCount(0);
+    await expect(page.getByText('Table look')).toHaveCount(0);
     await expect(
       page.getByRole('switch', { name: 'Read new DM messages aloud' }),
     ).toBeVisible();
