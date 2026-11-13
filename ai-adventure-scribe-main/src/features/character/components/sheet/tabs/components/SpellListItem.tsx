@@ -9,13 +9,18 @@ import logger from '@/lib/logger';
 interface SpellListItemProps {
   spell: CharacterSpellDisplay;
   isCantrip?: boolean;
+  alwaysPrepared?: boolean;
 }
 
 /**
  * Individual spell list item for the SpellsTab
  * Extracted for better modularity and to reduce SpellsTab complexity
  */
-const SpellListItem: React.FC<SpellListItemProps> = ({ spell, isCantrip = false }) => {
+const SpellListItem: React.FC<SpellListItemProps> = ({
+  spell,
+  isCantrip = false,
+  alwaysPrepared = false,
+}) => {
   // Helper function to format spell components with error handling
   const formatComponents = (spell: CharacterSpellDisplay) => {
     try {
@@ -81,6 +86,11 @@ const SpellListItem: React.FC<SpellListItemProps> = ({ spell, isCantrip = false 
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <span className="font-medium">{spell.name || 'Unknown Spell'}</span>
+              {alwaysPrepared && (
+                <Badge variant="secondary" className="text-xs">
+                  Always prepared
+                </Badge>
+              )}
               {spell.ritual && (
                 <Badge variant="secondary" className="text-xs">
                   R

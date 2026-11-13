@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getPactMagicProgression, hasPactMagic } from '@/data/spellcastingFeatures';
+import { getAlwaysPreparedSpells } from '@/utils/character/subclass-grants';
 
 interface SpellsTabProps {
   character: Character;
@@ -42,6 +43,8 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
     leveledSpells,
     longRest,
   } = useSpells(character, onUpdate);
+
+  const alwaysPreparedSpells = getAlwaysPreparedSpells(character);
 
   // Show loading state
   if (loading) {
@@ -164,7 +167,13 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
                         No spells learned yet
                       </div>
                     ) : (
-                      leveledSpells.map((spell) => <SpellListItem key={spell.id} spell={spell} />)
+                      leveledSpells.map((spell) => (
+                        <SpellListItem
+                          key={spell.id}
+                          spell={spell}
+                          alwaysPrepared={alwaysPreparedSpells.includes(spell.name)}
+                        />
+                      ))
                     )}
                   </div>
                 </CardContent>
