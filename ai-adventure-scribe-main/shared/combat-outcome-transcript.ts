@@ -53,6 +53,16 @@ type PlayerExitOutcome = {
   } | null;
 };
 
+/** One damage type inside a hit's total (#1522): the weapon's, and a rider's (Divine Smite's radiant). */
+export interface DamagePart {
+  damageType: string;
+  amount: number;
+  /** The rider that added this part, e.g. "Divine Smite". Absent on the weapon's part. */
+  source?: string;
+  /** The rider's dice, e.g. "2d8". */
+  dice?: string;
+}
+
 export interface CombatEngineResult {
   resolvedAs?: string;
   actorName?: string;
@@ -77,6 +87,8 @@ export interface CombatEngineResult {
   hit?: boolean;
   finalDamage?: number;
   damageType?: string;
+  /** #1522: a hit split by damage type when a rider (Divine Smite) added its own damage. */
+  damageParts?: DamagePart[];
   isCritical?: boolean;
   targetCondition?: 'unharmed' | 'wounded' | 'bloodied' | 'near death';
   targetIsConscious?: boolean;
@@ -164,6 +176,22 @@ function formatModifier(value: number): string {
  * The d20 portion of an attack line. Advantage/disadvantage rolled two dice: the line names
  * both and the kept one (#263 CB-028). `d20Rolls` is `[kept, dropped]`.
  */
+/**
+ * `7 slashing + 11 radiant (Divine Smite 2d8) = 18 damage` for a hit whose damage the engine
+ * split by type (#1522). Null when there is no split, so the caller keeps the single-type line.
+ */
+export function damagePartsText(result: CombatEngineResult): string | null {
+  const parts = result.damageParts;
+  if (!parts || parts.length < 2 || !isFiniteNumber(result.finalDamage)) return null;
+  const text = parts
+    .map((part) => {
+      const rider = part.source ? ` (${part.source}${part.dice ? ` ${part.dice}` : ''})` : '';
+      return `${part.amount} ${part.damageType}${rider}`;
+    })
+    .join(' + ');
+  return `${text} = ${result.finalDamage} damage`;
+}
+
 function formatD20Roll(result: CombatEngineResult): string {
   const kept = result.d20 as number;
   const rolls = result.d20Rolls;
@@ -277,8 +305,13 @@ export function formatCombatEngineParts(
   const auto = result.autoRolled === true ? ' (auto-rolled)' : '';
   let line = `⚙️ Engine: ${actor} ${roll}${roll.startsWith('rolled ') ? ` against ${target}` : ''}${weapon} — ${outcome}${auto}.`;
   if (result.hit) {
-    const damage = isFiniteNumber(result.finalDamage) ? result.finalDamage : 0;
-    line += ` ${damage}${result.damageType ? ` ${result.damageType}` : ''} damage.`;
+    const split = damagePartsText(result);
+    if (split) {
+      line += ` ${split}.`;
+    } else {
+      const damage = isFiniteNumber(result.finalDamage) ? result.finalDamage : 0;
+      line += ` ${damage}${result.damageType ? ` ${result.damageType}` : ''} damage.`;
+    }
   } else {
     line += ' No damage.';
   }

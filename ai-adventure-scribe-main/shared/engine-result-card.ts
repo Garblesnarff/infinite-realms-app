@@ -8,6 +8,7 @@
  * Colour rule (Rob, 2026-10-01): gold helps you, red hurts you, grey changes nothing. The word and
  * the icon always carry the same meaning as the colour.
  */
+import { damagePartsText } from './combat-outcome-transcript';
 import {
   describeDamageAtZeroHp,
   describeInstantDeath,
@@ -249,6 +250,8 @@ function isFiniteNumber(value: unknown): value is number {
 
 /** `3 slashing damage`, or `No damage.` The card's effect line, from the same fields as the line. */
 export function damageEffectText(result: CombatEngineResult): string | undefined {
+  const split = damagePartsText(result);
+  if (split) return split;
   if (isFiniteNumber(result.finalDamage)) {
     if (result.finalDamage === 0 && result.hit === false) return 'No damage.';
     return `${result.finalDamage}${result.damageType ? ` ${result.damageType}` : ''} damage`;
