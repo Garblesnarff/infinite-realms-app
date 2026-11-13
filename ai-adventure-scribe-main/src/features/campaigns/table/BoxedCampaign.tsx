@@ -91,7 +91,7 @@ export const BoxedCampaign: React.FC<{
               {campaign.genre.map((genre) => (
                 <span
                   key={genre}
-                  className="rounded-[5px] border border-[rgba(234,238,250,0.35)] bg-[#070b14] px-2 py-[3px] font-heading text-[11px] uppercase tracking-[0.08em] text-[#eaeefa]"
+                  className="rounded-[5px] border border-[rgba(234,238,250,0.35)] bg-[#070b14] px-2 py-[3px] font-heading text-[11px] capitalize tracking-[0.08em] text-[#eaeefa]"
                 >
                   {genre}
                 </span>
