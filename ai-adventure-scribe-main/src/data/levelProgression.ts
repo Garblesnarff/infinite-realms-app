@@ -5,6 +5,7 @@ import {
   multiclassProficiencies,
 } from './progression-data';
 import { collapseActionSurgeRows, isExtraActionSurgeRow } from '../../shared/action-surge-rows';
+import { levelFromXp } from '../../shared/xp-tables';
 
 import type { LevelFeature } from './progression-data';
 import type { AbilityScores } from '@/types/character';
@@ -25,12 +26,7 @@ export function getExperienceForLevel(level: number): number {
 }
 
 export function getLevelFromExperience(experience: number): number {
-  for (let level = 20; level >= 1; level--) {
-    if (experience >= experienceTable[level]) {
-      return level;
-    }
-  }
-  return 1;
+  return levelFromXp(experience);
 }
 
 export function getProficiencyBonus(level: number): number {
