@@ -6,6 +6,7 @@
  * string could not import it without the whole chain, and in the server suite that chain is
  * poisoned by a process-wide `mock.module` leak from an unrelated file.
  */
+import { damagePartsSentence, type DamagePart } from '../../../../shared/damage-parts';
 import { formatVersusArmorClass } from '../../../../shared/engine-display-name';
 /**
  * The sentence the DM reads after an attack the engine actually rolled.
@@ -30,6 +31,8 @@ export function describeResolvedAttack(
     autoRolled?: boolean;
     /** Extra necrotic from Hex on a hit against its cursed target (#754). */
     hexDamage?: number;
+    /** #1522: the hit split by type when Divine Smite added its radiant part. */
+    damageParts?: DamagePart[];
   },
   weaponName?: string,
 ): string {
@@ -47,11 +50,15 @@ export function describeResolvedAttack(
       : 'CRITICAL HIT'
     : 'HIT';
   const damage = Number(outcome.finalDamage ?? 0);
+  // #1522: a split hit names each part (weapon, Hex, Divine Smite) with the same words the engine
+  // line uses, so the DM can narrate the smite and not a single unexplained total.
+  const split = damagePartsSentence(outcome.damageParts, outcome.finalDamage);
   // Hex's rider is already inside finalDamage; say so, so it is not read as extra damage.
   const hex =
-    outcome.hexDamage && outcome.hexDamage > 0
+    !split && outcome.hexDamage && outcome.hexDamage > 0
       ? ` (including ${outcome.hexDamage} necrotic from Hex)`
       : '';
+  const dealt = split ? `: ${split}` : ` for ${damage} damage${hex}`;
   const hp =
     outcome.targetNewHp == null ? '' : ` ${targetLabel} is now at ${outcome.targetNewHp} HP`;
   const state = outcome.targetIsDead
@@ -60,7 +67,7 @@ export function describeResolvedAttack(
       ? ` and is UNCONSCIOUS`
       : '';
   return (
-    `${actorLabel} attacked ${targetLabel}${weapon}: ${crit}${auto} for ${damage} damage${hex}.${hp}${state}. ` +
+    `${actorLabel} attacked ${targetLabel}${weapon}: ${crit}${auto}${dealt}.${hp}${state}. ` +
     'Narrate this outcome; it already happened.'
   );
 }

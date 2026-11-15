@@ -6,6 +6,7 @@
  * instead, except for a hit on the player, whose own HP is theirs to see (`targetHp`, #2378).
  */
 import { formatSpellEngineParts } from './combat-spell-transcript';
+import { damagePartsSentence, type DamagePart } from './damage-parts';
 import { describeDeathSave, describeWake } from './death-save-lines';
 import {
   facingName,
@@ -23,6 +24,8 @@ import {
   type EngineResultCard,
 } from './engine-result-card';
 import { combatEndPhrase } from './player-combat-wording';
+
+export type { DamagePart };
 
 export { formatRefusedSpellOutcome, formatRefusedSpellPart } from './combat-spell-transcript';
 
@@ -78,6 +81,8 @@ export interface CombatEngineResult {
   hit?: boolean;
   finalDamage?: number;
   damageType?: string;
+  /** #1522: a hit split by damage type when a rider (Divine Smite) added its own damage. */
+  damageParts?: DamagePart[];
   isCritical?: boolean;
   targetCondition?: 'unharmed' | 'wounded' | 'bloodied' | 'near death';
   targetIsConscious?: boolean;
@@ -165,6 +170,11 @@ function formatModifier(value: number): string {
  * The d20 portion of an attack line. Advantage/disadvantage rolled two dice: the line names
  * both and the kept one (#263 CB-028). `d20Rolls` is `[kept, dropped]`.
  */
+/** The split-damage sentence for a hit, or null when the hit has no split (#1522). */
+export function damagePartsText(result: CombatEngineResult): string | null {
+  return damagePartsSentence(result.damageParts, result.finalDamage);
+}
+
 function formatD20Roll(result: CombatEngineResult): string {
   const kept = result.d20 as number;
   const rolls = result.d20Rolls;
@@ -278,8 +288,13 @@ export function formatCombatEngineParts(
   const auto = result.autoRolled === true ? ' (auto-rolled)' : '';
   let line = `⚙️ Engine: ${actor} ${roll}${roll.startsWith('rolled ') ? ` against ${target}` : ''}${weapon} — ${outcome}${auto}.`;
   if (result.hit) {
-    const damage = isFiniteNumber(result.finalDamage) ? result.finalDamage : 0;
-    line += ` ${damage}${result.damageType ? ` ${result.damageType}` : ''} damage.`;
+    const split = damagePartsText(result);
+    if (split) {
+      line += ` ${split}.`;
+    } else {
+      const damage = isFiniteNumber(result.finalDamage) ? result.finalDamage : 0;
+      line += ` ${damage}${result.damageType ? ` ${result.damageType}` : ''} damage.`;
+    }
   } else {
     line += ' No damage.';
   }

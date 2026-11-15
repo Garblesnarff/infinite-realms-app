@@ -27,6 +27,7 @@ import {
   inventoryItems,
 } from '../../../../db/schema/index';
 import { setRngSeed } from '../../lib/rng.js';
+import { describeResolvedAttack } from '../combat/attack-narration.js';
 
 const combatAttackService = hasRealDb
   ? (await import('../combat/combat-attack-service.js')).combatAttackService
@@ -238,6 +239,21 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
     expect(smite).toBeLessThanOrEqual(dice * 8);
     expect(outcome!.transcriptLines?.join('\n')).toContain(`Divine Smite: ${dice}d8 radiant`);
 
+    // #1522: the hit reports its weapon part and its radiant part separately, and the parts add
+    // up to the total the orc took.
+    const parts = (outcome as { damageParts?: Array<Record<string, unknown>> }).damageParts!;
+    expect(parts.map((part) => part.damageType)).toEqual(['slashing', 'radiant']);
+    expect(parts[1]).toMatchObject({ amount: smite, source: 'Divine Smite', dice: `${dice}d8` });
+    expect(parts.reduce((sum, part) => sum + (part.amount as number), 0)).toBe(
+      outcome!.finalDamage,
+    );
+
+    // #1522: the DM is told the same split, in the words of the engine line.
+    const fact = describeResolvedAttack('The Paladin', 'The Orc', outcome!);
+    expect(fact).toContain(
+      `${parts[0].amount} slashing + ${parts[1].amount} radiant (Divine Smite ${dice}d8) = ${outcome!.finalDamage} damage`,
+    );
+
     // The Smite lands on the orc's HP along with the weapon damage.
     expect(await orcHp()).toBeLessThanOrEqual(ORC_START_HP - smite);
   });
@@ -358,6 +374,77 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
 
     expect(missed).toBe(true);
     expect(await usedSlots()).toBe(0);
+  });
+
+  it.each([
+    [1, false],
+    [36, true],
+  ])('a fiend takes +1d8 on the Smite (seed %i)', async (seed, critical) => {
+    setRngSeed(seed);
+    await db
+      .update(combatParticipants)
+      .set({ creatureType: 'fiend' })
+      .where(eq(combatParticipants.id, orcId));
+
+    let outcome: Awaited<ReturnType<typeof attack>> | null = null;
+    for (let i = 0; i < MAX_ATTEMPTS && !outcome; i++) {
+      const version = await giveTurnToPaladin();
+      const attempt = await attack(version, 1);
+      if (attempt.hit) outcome = attempt;
+    }
+    expect(outcome).not.toBeNull();
+    expect(outcome!.isCritical).toBe(critical);
+    // Level 1 slot: 2d8, plus 1d8 against a fiend, doubled on a critical hit.
+    const dice = critical ? 6 : 3;
+    const parts = (outcome as { damageParts?: Array<Record<string, unknown>> }).damageParts!;
+    expect(parts[1]).toMatchObject({ source: 'Divine Smite', dice: `${dice}d8` });
+    expect(parts[1].amount).toBeGreaterThanOrEqual(dice);
+    expect(parts[1].amount).toBeLessThanOrEqual(dice * 8);
+  });
+
+  it('a critical hit doubles the weapon dice as well as the Smite dice (seed 36)', async () => {
+    setRngSeed(36);
+    let outcome: Awaited<ReturnType<typeof attack>> | null = null;
+    for (let i = 0; i < MAX_ATTEMPTS && !outcome; i++) {
+      const version = await giveTurnToPaladin();
+      const attempt = await attack(version, 1);
+      if (attempt.hit) outcome = attempt;
+    }
+    expect(outcome).not.toBeNull();
+    expect(outcome!.isCritical).toBe(true);
+    // The Longsword is 1d8+3 (STR 16). Its largest non-critical roll is 11, so a critical roll
+    // above 11 can only come from two weapon dice.
+    expect(outcome!.damageBeforeResistances).toBeGreaterThan(8 + 3);
+  });
+
+  it("a target resistant to the weapon's type takes half the weapon damage, floored, and the full radiant (seed 1)", async () => {
+    setRngSeed(1);
+    await db
+      .update(combatParticipants)
+      .set({ damageResistances: ['slashing'] })
+      .where(eq(combatParticipants.id, orcId));
+    try {
+      let outcome: Awaited<ReturnType<typeof attack>> | null = null;
+      for (let i = 0; i < MAX_ATTEMPTS && !outcome; i++) {
+        const version = await giveTurnToPaladin();
+        const attempt = await attack(version, 1);
+        if (attempt.hit) outcome = attempt;
+      }
+      expect(outcome).not.toBeNull();
+      const parts = (outcome as { damageParts?: Array<{ amount: number }> }).damageParts!;
+      const weaponRolled = outcome!.damageBeforeResistances!;
+      // Weapon part: resisted on its own type, half and floored.
+      expect(parts[0].amount).toBe(Math.floor(weaponRolled / 2));
+      // Radiant part: no radiant resistance, so the full Smite roll lands.
+      const smiteRolled = (outcome as { divineSmiteDamage?: number }).divineSmiteDamage!;
+      expect(parts[1].amount).toBe(smiteRolled);
+      expect(parts[0].amount + parts[1].amount).toBe(outcome!.finalDamage);
+    } finally {
+      await db
+        .update(combatParticipants)
+        .set({ damageResistances: [] })
+        .where(eq(combatParticipants.id, orcId));
+    }
   });
 
   it('refuses a Smite from a character who is not a Paladin before anything is spent', async () => {
