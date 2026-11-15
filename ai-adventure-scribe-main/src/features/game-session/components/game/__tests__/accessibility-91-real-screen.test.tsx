@@ -164,7 +164,10 @@ vi.mock('../overhaul/SceneHeader', () => ({
   ),
 }));
 vi.mock('../TimelineRail', () => ({ TimelineRail: () => null }));
-vi.mock('../StatsBar', () => ({ StatsBar: () => null }));
+vi.mock('../game-content/TableContextCard', () => ({
+  TableContextCard: () => <div data-testid="table-context-card" />,
+}));
+
 vi.mock('../game-content/GamePanelControls', () => ({ GamePanelControls: () => null }));
 vi.mock('../../tactical/TacticalMapProvider', () => ({
   useTacticalMapContext: () => null,
@@ -258,6 +261,12 @@ vi.mock('../message/MessageHandler', () => ({
 
 function RealGameScreenKeyboardTurn(): React.ReactElement {
   const [, forceRender] = React.useReducer((value) => value + 1, 0);
+  const [rollHost] = React.useState(() => {
+    const host = document.createElement('div');
+    host.className = 'ir-table-roll-host';
+    document.body.append(host);
+    return host;
+  });
   turn.rerender = forceRender;
   return (
     <GameMainContent
@@ -287,6 +296,7 @@ function RealGameScreenKeyboardTurn(): React.ReactElement {
       contentWarnings={[]}
       comfortLevel="pg"
       showSafetyInfo={false}
+      tableRollSlot={rollHost}
     />
   );
 }
@@ -294,6 +304,7 @@ function RealGameScreenKeyboardTurn(): React.ReactElement {
 describe('real game-screen keyboard path (#91)', () => {
   beforeEach(() => {
     turn.phase = 'bar';
+    document.body.replaceChildren();
   });
 
   it('keeps the action bar before the chat box in the game-screen tab order', () => {

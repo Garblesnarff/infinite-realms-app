@@ -9,10 +9,13 @@
  * damage application writes one row with its source participant — plus the encounter's
  * final roster for names, rounds and status.
  */
+
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { getDamageLog } from './hp-data-access.js';
+import { summarizeCombatDamageEvents } from '../../../../shared/combat-summary-events';
 
 import type { VitalState } from './vital-state.js';
+import type { CombatDamageHit } from '../../../../shared/combat-summary-events';
 import type { CombatParticipant } from '../../types/combat.js';
 
 export interface CombatDamageSummaryParticipant {
@@ -28,9 +31,12 @@ export interface CombatDamageSummary {
   rounds: number;
   totalDamage: number;
   participants: CombatDamageSummaryParticipant[];
+  hits: CombatDamageHit[];
 }
 
-function summaryStatus(vitalState: VitalState | undefined): CombatDamageSummaryParticipant['status'] {
+function summaryStatus(
+  vitalState: VitalState | undefined,
+): CombatDamageSummaryParticipant['status'] {
   if (vitalState === 'dead') return 'dead';
   if (vitalState === 'dying' || vitalState === 'stabilized') return 'unconscious';
   return 'ok';
@@ -69,10 +75,23 @@ export async function getCombatDamageSummary(
       status: summaryStatus(participant.vitalState),
     }),
   );
+  const sideById = new Map(
+    combat.participants.map((participant) => [participant.id, participant.participantType]),
+  );
+  const events = logs.map((log) => ({
+    round: log.roundNumber,
+    side:
+      sideById.get(log.sourceParticipantId ?? '') === 'player'
+        ? ('player' as const)
+        : ('npc' as const),
+    damage: log.damageAmount,
+  }));
+  const totaled = summarizeCombatDamageEvents(events, combat.encounter.currentRound ?? 1);
   return {
     encounterId,
-    rounds: combat.encounter.currentRound ?? 1,
-    totalDamage: participants.reduce((sum, p) => sum + p.damageDealt, 0),
+    rounds: totaled.rounds,
+    totalDamage: totaled.totalDamage,
     participants,
+    hits: totaled.hits,
   };
 }

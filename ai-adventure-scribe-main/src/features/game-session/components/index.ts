@@ -29,11 +29,9 @@ export { DiceRollEmbed } from './dice/DiceRollEmbed';
 export { GameInterface } from './game-interface';
 export { default as GameContent } from './game/GameContent';
 export { default as GameContentWithErrorBoundary } from './game/GameContentWithErrorBoundary';
-export { StatsBar } from './game/StatsBar';
 export { GameSidePanel } from './game/MemoryPanel';
 export { CompactCharacterHeader } from './game/CompactCharacterHeader';
 export { CampaignSidePanel } from './game/CampaignSidePanel';
-export { FloatingActionPanel } from './game/FloatingActionPanel';
 export { CombatSummary } from './game/CombatSummary';
 export { TimelineRail } from './game/TimelineRail';
 

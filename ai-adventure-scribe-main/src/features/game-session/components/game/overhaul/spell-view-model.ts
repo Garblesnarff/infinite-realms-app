@@ -5,11 +5,25 @@ import type { SpellVM, SpellSlotVM, SpellcastingVM, SpellsVM } from './types';
 import type { Character } from '@/types/character';
 import type { CharacterStats } from '@/utils/character-calculations';
 
+import { getAlwaysPreparedSpells } from '@/utils/character/subclass-grants';
 import { getSpellById } from '@/utils/spell-lookup';
 
-const uniqueSpellIds = (ids: readonly string[] | undefined): string[] => [
-  ...new Set((ids ?? []).filter((id): id is string => typeof id === 'string' && id.length > 0)),
-];
+const canonicalSpellId = (id: string): string => getSpellById(id, false)?.id ?? id;
+
+/** Dedupe by catalog id, but keep the first raw stored id so Prepare/Cast
+ * still send the same string the character record uses. */
+const uniqueSpellIds = (ids: readonly string[] | undefined): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const id of ids ?? []) {
+    if (typeof id !== 'string' || id.length === 0) continue;
+    const canonical = canonicalSpellId(id);
+    if (seen.has(canonical)) continue;
+    seen.add(canonical);
+    result.push(id);
+  }
+  return result;
+};
 
 const prettifySpellId = (id: string): string =>
   id
@@ -19,8 +33,14 @@ const prettifySpellId = (id: string): string =>
 
 const formatAbility = (ability: string): string => ability.slice(0, 3).toUpperCase();
 
-const toSpell = (id: string, isPrepared: boolean, canPrepare: boolean): SpellVM => {
+const toSpell = (
+  id: string,
+  isPrepared: boolean,
+  canPrepare: boolean,
+  alwaysPreparedIds: ReadonlySet<string>,
+): SpellVM => {
   const spell = getSpellById(id, false);
+  const alwaysPrepared = alwaysPreparedIds.has(canonicalSpellId(id));
 
   return {
     id,
@@ -34,7 +54,8 @@ const toSpell = (id: string, isPrepared: boolean, canPrepare: boolean): SpellVM 
     ritual: spell?.ritual,
     concentration: spell?.concentration,
     isPrepared,
-    canPrepare,
+    canPrepare: alwaysPrepared ? false : canPrepare,
+    alwaysPrepared,
   };
 };
 
@@ -93,15 +114,27 @@ export function buildSpellsViewModel(
   const spellcastingAbility = stats.spellcastingAbility;
   const classCanCast = Boolean(spellcastingAbility);
   const canPrepare = classCanCast && canPrepareSpells(character);
-  const preparedIds = new Set(uniqueSpellIds(character.preparedSpells));
+  const hasSpellbook = Boolean(
+    character.class?.spellcasting?.spellbook ||
+    findSrdClass(character.class?.name)?.spellcasting?.knownSpellsFormula === 'wizard-spellbook',
+  );
+  const preparedIds = new Set(uniqueSpellIds(character.preparedSpells).map(canonicalSpellId));
   const cantripIds = uniqueSpellIds(character.cantrips);
-  const knownIds = uniqueSpellIds([...(character.knownSpells ?? []), ...preparedIds]);
+  const knownIds = uniqueSpellIds([
+    ...(character.knownSpells ?? []),
+    ...(character.preparedSpells ?? []),
+  ]);
   const preparedSpellIds = uniqueSpellIds(character.preparedSpells);
+  const alwaysPreparedIds = new Set(
+    getAlwaysPreparedSpells(character).map((name) => canonicalSpellId(name)),
+  );
 
   const spells: SpellsVM = {
-    cantrips: cantripIds.map((id) => toSpell(id, true, false)),
-    known: knownIds.map((id) => toSpell(id, preparedIds.has(id), canPrepare)),
-    prepared: preparedSpellIds.map((id) => toSpell(id, true, canPrepare)),
+    cantrips: cantripIds.map((id) => toSpell(id, true, false, alwaysPreparedIds)),
+    known: knownIds.map((id) =>
+      toSpell(id, preparedIds.has(canonicalSpellId(id)), canPrepare, alwaysPreparedIds),
+    ),
+    prepared: preparedSpellIds.map((id) => toSpell(id, true, canPrepare, alwaysPreparedIds)),
   };
 
   return {
@@ -112,6 +145,7 @@ export function buildSpellsViewModel(
           spellAttackBonus: stats.spellAttackBonus ?? null,
           spellSaveDC: stats.spellSaveDC ?? null,
           canPrepare,
+          hasSpellbook,
           slots: toSpellSlots(character, stats.spellSlots),
         }
       : null,

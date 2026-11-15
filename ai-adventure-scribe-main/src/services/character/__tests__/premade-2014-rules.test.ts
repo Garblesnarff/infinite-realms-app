@@ -223,7 +223,6 @@ describe('premade starter templates follow 2014 rules (#2483)', () => {
     );
   });
 
-
   describe('level 1 Paladin', () => {
     const row = premade('the-oathbound');
 
@@ -273,6 +272,7 @@ describe('premade starter templates follow 2014 rules (#2483)', () => {
         spellAttackBonus: 6,
         spellSaveDC: 14,
         canPrepare: true,
+        hasSpellbook: true,
         slots: [{ level: 1, current: 2, max: 2 }],
       });
     });

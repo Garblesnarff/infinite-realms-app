@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.47.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.46.0...v0.47.0) (2026-11-13)
+
+
+### Features
+
+* **combat:** offer Metamagic in a fight ([#1233](https://github.com/Garblesnarff/infinite-realms-app/issues/1233)) ([592d9f2](https://github.com/Garblesnarff/infinite-realms-app/commit/592d9f2cbc8243dfc6729d3e6e4765475615df0d))
+
+
+### Bug Fixes
+
+* **creation:** label domain spells on character sheets ([5f8500f](https://github.com/Garblesnarff/infinite-realms-app/commit/5f8500f6bd69e34f029331268e749738a4b70863))
+* **dm:** expire held reply records that never resolve ([#1444](https://github.com/Garblesnarff/infinite-realms-app/issues/1444)) ([6729936](https://github.com/Garblesnarff/infinite-realms-app/commit/6729936ebecbe46ea879b826a730b863ddc2b81a))
+* **dm:** retry the publish of a ready reply record ([#1502](https://github.com/Garblesnarff/infinite-realms-app/issues/1502)) ([9d3f59b](https://github.com/Garblesnarff/infinite-realms-app/commit/9d3f59b7f44b7e9f34f47d7c75b646b97f2203f8))
+* **rules:** one Action Surge feature with two uses ([#1518](https://github.com/Garblesnarff/infinite-realms-app/issues/1518)) ([08397fe](https://github.com/Garblesnarff/infinite-realms-app/commit/08397fe64c0945ab5ac6354f5c575e576b3f27b0))
+* **scene-art:** follow the current location in the scene band ([#1026](https://github.com/Garblesnarff/infinite-realms-app/issues/1026)) ([b2ebc65](https://github.com/Garblesnarff/infinite-realms-app/commit/b2ebc65765d89b2f552579363ca572c026e05cfa))
+* **sheet:** show one Always prepared badge per spell row ([#1530](https://github.com/Garblesnarff/infinite-realms-app/issues/1530)) ([e5fe596](https://github.com/Garblesnarff/infinite-realms-app/commit/e5fe5969def537fc132b670d0bd0cc7ccca90bbb))
+* **spells:** dedupe Life Cleric Bless on the sheet ([#765](https://github.com/Garblesnarff/infinite-realms-app/issues/765)) ([3ec5232](https://github.com/Garblesnarff/infinite-realms-app/commit/3ec5232d4822c8996715b160a3777c6dd5631b22))
+* **table:** show the seal on narrative check cards ([#1477](https://github.com/Garblesnarff/infinite-realms-app/issues/1477)) ([8b5f837](https://github.com/Garblesnarff/infinite-realms-app/commit/8b5f837bed9f6e05b6cfca2ad21f2bd2f5490b3c))
+* **table:** spend Inspiration only when the advantaged roll is saved ([#1472](https://github.com/Garblesnarff/infinite-realms-app/issues/1472)) ([57bb036](https://github.com/Garblesnarff/infinite-realms-app/commit/57bb0368d2b4c2409de0f6cb93ba0724a55ff4a6))
+* **voice:** Listen works on older messages and fails clearly ([#1348](https://github.com/Garblesnarff/infinite-realms-app/issues/1348)) ([a261cf1](https://github.com/Garblesnarff/infinite-realms-app/commit/a261cf1a2c16a10f19da83e8ad901791f4c017ae))
+
+
+### Refactoring
+
+* **table:** remove the dead plain-layout path ([#1496](https://github.com/Garblesnarff/infinite-realms-app/issues/1496)) ([5e91900](https://github.com/Garblesnarff/infinite-realms-app/commit/5e91900561b7f28f42a5fe09b34792e533cf3ea3))
+
+
+### Tests
+
+* **creation:** cover gaming proficiency in roll tray ([4c39583](https://github.com/Garblesnarff/infinite-realms-app/commit/4c395833c84c6566248d45d93f03032c4e37259a))
+
 ## [0.46.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.45.0...v0.46.0) (2026-11-12)
 
 

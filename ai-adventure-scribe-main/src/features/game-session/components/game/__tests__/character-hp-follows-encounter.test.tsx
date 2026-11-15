@@ -10,16 +10,18 @@
  * (`useCharacterRefreshOnCombatUpdate`) answers it. Nothing else writes the character's HP.
  *
  * Real: CombatProvider, mapAuthoritativeCombat, CharacterProvider, the character reducer, the
- * refresh hook and the StatsBar. Stubbed: `fetch` for `/v1/combat/sessions/:id/active`, and the
+ * refresh hook and the table sheet (RightSheet). Stubbed: `fetch` for `/v1/combat/sessions/:id/active`, and the
  * character loader (the API edge) answering with what the server's stats row holds. The character
  * is built the way production does it: the API's raw `stats` shape through the real
  * `normalizeCharacter` and `hydrateCharacterStats`.
  */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { StatsBar } from '../StatsBar';
+import { RightSheet } from '../overhaul/RightSheet';
+import { useOverhaulViewModel } from '../overhaul/useOverhaulViewModel';
 import { useCharacterRefreshOnCombatUpdate } from '../use-character-refresh';
 
 import { CharacterProvider, useCharacter } from '@/contexts/CharacterContext';
@@ -30,6 +32,9 @@ import { hydrateCharacterStats } from '@/services/hydrate-character-stats';
 import { normalizeCharacter } from '@/services/user-data-payload-helpers';
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock('@/contexts/CampaignContext', () => ({
+  useCampaign: () => ({ state: { campaign: { name: 'Adventure' } } }),
+}));
 vi.mock('@/services/character-loader', () => ({
   characterLoaderService: { loadCharacterWithSpells: vi.fn() },
 }));
@@ -209,17 +214,21 @@ const Harness = ({ onReady }: { onReady: (api: Api) => void }) => {
     playerState: () =>
       player() && { isUnconscious: player()?.isUnconscious, isStable: player()?.isStable },
   });
-  return <StatsBar />;
+  const model = useOverhaulViewModel();
+  return <RightSheet c={model.character} />;
 };
 
 const mount = (): (() => Api) => {
   let api!: Api;
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
-    <CharacterProvider>
-      <CombatProvider sessionId={SESSION_ID}>
-        <Harness onReady={(next) => (api = next)} />
-      </CombatProvider>
-    </CharacterProvider>,
+    <QueryClientProvider client={queryClient}>
+      <CharacterProvider>
+        <CombatProvider sessionId={SESSION_ID}>
+          <Harness onReady={(next) => (api = next)} />
+        </CombatProvider>
+      </CharacterProvider>
+    </QueryClientProvider>,
   );
   return () => api;
 };

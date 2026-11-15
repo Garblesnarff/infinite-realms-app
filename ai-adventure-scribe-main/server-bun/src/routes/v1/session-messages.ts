@@ -135,7 +135,8 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
   .get(
     '/:id/messages',
     async ({ params, query, user }) => {
-      // #1444: settle this session's held replies that nothing decided, before the messages are read,
+      // #1444: settle this session's held replies that nothing decided, and retry the publish of its
+      // ready replies whose write failed (#1502), before the messages are read,
       // so a reply published here is in this response. Never throws.
       await expireStaleHeldReplies({ sessionId: params.id, userId: user!.userId });
       const [result, session] = await Promise.all([

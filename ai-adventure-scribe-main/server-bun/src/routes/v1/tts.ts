@@ -1,5 +1,6 @@
 import { Elysia, t } from 'elysia';
 
+import { VOICE_REQUEST_TEXT_MAX } from '../../../../shared/voice-request.js';
 import { logger } from '../../lib/logger.js';
 import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { requireAuth } from '../../middleware/auth.js';
@@ -16,7 +17,8 @@ const DEFAULT_ELEVENLABS_MODEL = 'eleven_flash_v2_5';
 type TtsFetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
 const ttsRequestSchema = t.Object({
-  text: t.String({ minLength: 1, maxLength: 5000 }),
+  // The client splits longer text into requests of this size (#1348).
+  text: t.String({ minLength: 1, maxLength: VOICE_REQUEST_TEXT_MAX }),
   // Absent for voices that are not tied to a game session (previews, tools).
   sessionId: t.Optional(t.String({ maxLength: 255 })),
   // Accepted so existing clients keep validating; the server pins the model (#2158).

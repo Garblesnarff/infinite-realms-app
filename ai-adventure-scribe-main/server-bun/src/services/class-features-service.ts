@@ -22,6 +22,11 @@ import {
   type CharacterSubclass,
   type FeatureUsageLog,
 } from '../../../db/schema/index';
+import {
+  collapseActionSurgeRows,
+  isActionSurgeName,
+  isExtraActionSurgeRow,
+} from '../../../shared/action-surge-rows.js';
 import { NotFoundError, ConflictError } from '../lib/errors.js';
 
 import type {
@@ -282,7 +287,22 @@ export class ClassFeaturesService {
       orderBy: [characterFeatures.acquiredAtLevel],
     });
 
-    return features;
+    // #1187: a level-17 sheet can hold the level-2 row and the level-17
+    // "two uses" row. Return one. The stored rows stay.
+    const surges = features.filter(
+      (row): row is typeof row & { feature: NonNullable<(typeof row)['feature']> } =>
+        Boolean(row.feature) && isActionSurgeName(row.feature.featureName),
+    );
+    if (surges.length <= 1) return features;
+    const [keep] = collapseActionSurgeRows(
+      surges.map((row) => ({
+        row,
+        featureName: row.feature.featureName,
+        levelAcquired: row.feature.levelAcquired,
+      })),
+    );
+    if (!keep) return features;
+    return features.filter((row) => !surges.includes(row) || row === keep.row);
   }
 
   /**
@@ -429,11 +449,14 @@ export class ClassFeaturesService {
       });
     }
 
-    const allFeatures = [...classFeatures, ...subclassFeatures].filter(
-      (f) =>
-        !f.featureName.includes('Archetype') &&
-        !f.featureName.includes('Tradition') &&
-        !f.featureName.includes('Domain'),
+    const allFeatures = collapseActionSurgeRows(
+      [...classFeatures, ...subclassFeatures].filter(
+        (f) =>
+          !f.featureName.includes('Archetype') &&
+          !f.featureName.includes('Tradition') &&
+          !f.featureName.includes('Domain') &&
+          !isExtraActionSurgeRow(f),
+      ),
     );
 
     // ⚡ Bolt: Optimized to grant all features for the level in a single batch operation.

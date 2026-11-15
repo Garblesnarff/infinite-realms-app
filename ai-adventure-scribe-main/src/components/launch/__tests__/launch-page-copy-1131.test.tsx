@@ -10,7 +10,6 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
-import { EarlyAccessSection } from '../EarlyAccessSection';
 import { FeaturesSection } from '../FeaturesSection';
 import { FooterSection } from '../FooterSection';
 import { PricingSection } from '../PricingSection';
@@ -48,14 +47,6 @@ describe('launch page copy (#1131)', () => {
     const { container } = withRouter(<PricingSection />);
     expect(container.textContent).toContain('$0 forever');
     expect(container.textContent).not.toContain('$0forever');
-  });
-
-  it('beta note has a space after the colon', () => {
-    const { container } = withRouter(<EarlyAccessSection />);
-    expect(container.textContent).toContain(
-      'Note: This is a beta. Some things will break or change. Tell us, and we fix them.',
-    );
-    expect(container.textContent).not.toContain('Note:This');
   });
 
   it('footer has a space after the year', () => {

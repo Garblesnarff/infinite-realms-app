@@ -2,7 +2,7 @@
  * #712: Lay on Hands pool mechanics.
  */
 import { afterAll, beforeAll, expect, it } from 'bun:test';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import {
   campaigns,
@@ -478,5 +478,111 @@ describeWithDb('paladin Lay on Hands pool (#712)', () => {
       .where(eq(characterStats.characterId, paladinId))
       .limit(1);
     expect(stats.currentHitPoints).toBe(10);
+  });
+
+  it('two concurrent unnamed draws on a 1-HP gap heal once and charge the pool once (#885)', async () => {
+    // Full pool (5), paladin missing 1 HP. Each unnamed draw reads the same
+    // missing HP; the pool may be charged only for HP that actually lands.
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 11 })
+      .where(eq(characterStats.characterId, paladinId));
+
+    const results = await Promise.all(
+      Array.from({ length: 2 }, () =>
+        resolveLayOnHands({
+          characterId: paladinId,
+          userId: paladinUserId,
+          targetCharacterId: paladinId,
+          sessionId,
+          context: 'unnamed-concurrency-check',
+        }),
+      ),
+    );
+
+    const healedTotal = results.reduce((sum, r) => sum + (r.ok ? r.healed : 0), 0);
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, paladinId))
+      .limit(1);
+    expect(stats.currentHitPoints).toBe(12);
+    expect(healedTotal).toBe(1);
+    expect(await poolRemaining(layOnHandsId)).toBe(4);
+  });
+
+  it('a retry after the usage log fails heals once, not twice (#885)', async () => {
+    // Pool 5, paladin at 2 of 12 HP. Make the usage-log insert fail for this
+    // call only, using a real trigger (no mock). The failed attempt must not
+    // leave a heal or a pool draw behind, so the retry is the only one that counts.
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 2 })
+      .where(eq(characterStats.characterId, paladinId));
+
+    await db.execute(sql`
+      CREATE OR REPLACE FUNCTION lay_on_hands_test_fail_usage() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'injected usage-log failure'; END;
+      $$ LANGUAGE plpgsql
+    `);
+    await db.execute(sql`
+      CREATE TRIGGER lay_on_hands_test_fail_usage_trg BEFORE INSERT ON feature_usage_log
+      FOR EACH ROW EXECUTE FUNCTION lay_on_hands_test_fail_usage()
+    `);
+    try {
+      await expect(
+        resolveLayOnHands({
+          characterId: paladinId,
+          userId: paladinUserId,
+          targetCharacterId: paladinId,
+          amount: 2,
+          sessionId,
+          context: 'retry-after-log-failure',
+        }),
+      ).rejects.toThrow();
+    } finally {
+      await db.execute(
+        sql`DROP TRIGGER IF EXISTS lay_on_hands_test_fail_usage_trg ON feature_usage_log`,
+      );
+      await db.execute(sql`DROP FUNCTION IF EXISTS lay_on_hands_test_fail_usage()`);
+    }
+
+    const retry = await resolveLayOnHands({
+      characterId: paladinId,
+      userId: paladinUserId,
+      targetCharacterId: paladinId,
+      amount: 2,
+      sessionId,
+      context: 'retry-after-log-failure',
+    });
+    expect(retry.ok).toBe(true);
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, paladinId))
+      .limit(1);
+    // One heal: 2 + 2 = 4. A replayed heal would read 6.
+    expect(stats.currentHitPoints).toBe(4);
+    // One draw: 5 - 2 = 3. A replayed draw would read 1.
+    expect(await poolRemaining(layOnHandsId)).toBe(3);
   });
 });

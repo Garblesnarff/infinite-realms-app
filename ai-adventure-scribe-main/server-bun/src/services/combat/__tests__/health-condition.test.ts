@@ -14,4 +14,13 @@ describe('authoritative combat health condition', () => {
     expect(healthConditionForCombat(0, 30, false)).toBe('near death');
     expect(healthConditionForCombat(0, 30, false, true)).toBe('near death');
   });
+
+  it('does not call 70% HP near death (#863)', () => {
+    expect(healthConditionForCombat(7, 10)).toBe('wounded');
+    expect(healthConditionForCombat(70, 100)).toBe('wounded');
+    expect(healthConditionForCombat(3, 10)).toBe('bloodied');
+    expect(healthConditionForCombat(5, 20)).toBe('near death');
+    expect(healthConditionForCombat(6, 20)).toBe('bloodied');
+    expect(healthConditionForCombat(14, 20)).toBe('wounded');
+  });
 });

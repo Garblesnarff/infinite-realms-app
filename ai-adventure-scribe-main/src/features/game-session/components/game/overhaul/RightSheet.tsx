@@ -114,6 +114,9 @@ const SpellEntry: React.FC<{
           {spellLevelLabel(spell.level)}
           {spell.school ? ` · ${spell.school}` : ''}
         </p>
+        {spell.alwaysPrepared && (
+          <p className="ir-text-min text-infinite-gold/80">Always prepared</p>
+        )}
       </div>
       {showActions && (
         <div className="flex shrink-0 items-center gap-1">
@@ -271,7 +274,13 @@ const SpellsSection: React.FC<{
         onTogglePrepared={onTogglePrepared}
       />
       <SpellGroup
-        title={c.spellcasting?.canPrepare ? 'Spellbook' : 'Known Spells'}
+        title={
+          c.spellcasting?.canPrepare
+            ? c.spellcasting?.hasSpellbook
+              ? 'Spellbook'
+              : 'Prepared'
+            : 'Known Spells'
+        }
         spells={c.spells.known}
         isInCombat={isInCombat}
         pendingSpellId={pendingSpellId}
@@ -279,7 +288,7 @@ const SpellsSection: React.FC<{
         onCastSpell={c.spellcasting ? onCastSpell : undefined}
         onTogglePrepared={onTogglePrepared}
       />
-      {c.spellcasting?.canPrepare && (
+      {c.spellcasting?.canPrepare && c.spellcasting?.hasSpellbook && (
         <SpellGroup
           title="Prepared"
           spells={c.spells.prepared}

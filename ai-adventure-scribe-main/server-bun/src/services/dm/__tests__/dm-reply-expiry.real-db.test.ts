@@ -187,14 +187,15 @@ describeWithDb('#1444 held reply expiry against real Postgres', () => {
     return row?.state;
   };
 
-  test('a stale record of the owner campaign session is cancelled; fresh, ready and other-owner records are not', async () => {
+  test('a stale record of the owner campaign session is cancelled; a stale ready record is published (#1502); fresh and other-owner records are not', async () => {
     const settled = await expireStaleHeldReplies(
       { sessionId: ids.sessionCampaign, userId: OWNER, now: NOW },
       { heldReplyDeps: noFight, writeRow: async () => {} },
     );
     expect(await stateOf(ids.staleByCampaign)).toBe('cancelled');
     expect(await stateOf(ids.freshByCampaign)).toBe('held');
-    expect(await stateOf(ids.readyByCampaign)).toBe('ready');
+    // #1502: the same sweep now retries a stale ready record; its write succeeds here, so it persists.
+    expect(await stateOf(ids.readyByCampaign)).toBe('persisted');
     expect(await stateOf(ids.staleOtherUser)).toBe('held');
     expect(settled).toBeGreaterThanOrEqual(1);
   });
@@ -253,6 +254,7 @@ describeWithDb('#1444 held reply expiry against real Postgres', () => {
   });
 
   test('the move is conditional on held and on age: a fresh or ready record is refused by the UPDATE', async () => {
+    const readyBefore = await stateOf(ids.readyByCampaign);
     const settled = await expireStaleHeldReplies(
       { sessionId: ids.sessionCampaign, userId: OWNER, now: NOW },
       {
@@ -282,7 +284,8 @@ describeWithDb('#1444 held reply expiry against real Postgres', () => {
     );
     expect(settled).toBe(0);
     expect(await stateOf(ids.freshByCampaign)).toBe('held');
-    expect(await stateOf(ids.readyByCampaign)).toBe('ready');
+    // Unchanged by this call: the held UPDATE refuses a row that is no longer held.
+    expect(await stateOf(ids.readyByCampaign)).toBe(readyBefore);
   });
 
   test('two concurrent loads cancel one stale record once', async () => {

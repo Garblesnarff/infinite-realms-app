@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { useVoiceContext } from '@/contexts/VoiceContext';
 import { cn } from '@/lib/utils';
+import { VOICE_PREPARE_TIMEOUT_MESSAGE } from '@/services/voice/voice-prepare';
 import { extractNarrativeContent } from '@/utils/parseMessageOptions';
 
 interface DMMessageVoiceControlsProps {
@@ -60,6 +61,7 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
     const isPreparing = isThisMessage && isProcessing;
     const hasError = isThisMessage && !!playbackError && !isPreparing;
     const isLimit = hasError && /\b(limit|quota)\b/i.test(playbackError ?? '');
+    const isTimeout = hasError && playbackError === VOICE_PREPARE_TIMEOUT_MESSAGE;
 
     const handlePlay = useCallback(
       (e: React.MouseEvent) => {
@@ -180,7 +182,7 @@ export const DMMessageVoiceControls: React.FC<DMMessageVoiceControlsProps> = Rea
               role="alert"
               className="text-sm text-muted-foreground [body.ir-table-look_&]:!text-[#ef8a8a]"
             >
-              The voice could not load.
+              {isTimeout ? 'The voice took too long to prepare.' : 'The voice could not load.'}
             </span>
           </>
         ) : isPreparing ? (

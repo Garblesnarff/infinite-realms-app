@@ -113,7 +113,10 @@ const TurnBarShell: React.FC<{
       <p className="sr-only" data-testid="combat-turn-sentence">
         {sentence}
       </p>
-      <div aria-hidden="true" className="order-1 min-w-0 flex-1">
+      <div
+        aria-hidden="true"
+        className="order-1 min-w-0 flex-1 [body.ir-table-look_&]:max-[699px]:basis-full"
+      >
         <p
           data-testid="combat-turn-text"
           className={cn('font-heading truncate text-base font-bold tracking-wide', titleClassName)}
@@ -121,7 +124,10 @@ const TurnBarShell: React.FC<{
           {title}
         </p>
         {sub && (
-          <p data-testid="combat-turn-sub" className="truncate text-xs text-muted-foreground">
+          <p
+            data-testid="combat-turn-sub"
+            className="truncate text-xs text-muted-foreground [body.ir-table-look_&]:overflow-visible [body.ir-table-look_&]:whitespace-normal"
+          >
             {sub}
           </p>
         )}
@@ -168,7 +174,8 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
   const baseTitle = turnBarTitle(summary, busy, playerDown);
   const normalSub = turnBarSub(summary, enemyDistance ?? null, playerDown);
   const down = actorIsDying(summary.active, playerDown);
-  const title = tableLook && down ? 'Dying' : baseTitle;
+  // #1521: same word as the chip (#1507).
+  const title = tableLook && down ? 'Unconscious' : baseTitle;
   const sub = tableLook
     ? `Round ${summary.round} · Turn ${summary.turn} of ${summary.actors.length}${normalSub && !normalSub.startsWith('Round ') ? ` · ${normalSub}` : ''}`
     : normalSub;
@@ -189,7 +196,7 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
     >
       <div
         aria-hidden="true"
-        className="order-2 flex flex-wrap items-center gap-1.5 max-[699px]:order-3 [body.ir-table-look_&]:max-w-full [body.ir-table-look_&]:flex-nowrap [body.ir-table-look_&]:overflow-x-auto"
+        className="order-2 flex flex-wrap items-center gap-1.5 max-[699px]:order-3 [body.ir-table-look_&]:max-w-full [body.ir-table-look_&]:min-w-0 [body.ir-table-look_&]:flex-nowrap [body.ir-table-look_&]:overflow-x-auto"
       >
         {summary.actors.map((actor) => (
           <span
@@ -229,7 +236,8 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
                         strokeLinejoin="round"
                       />
                     </svg>
-                    Dying
+                    {/* #1507: a hero at 0 HP is Unconscious, the tracker's word (DyingStates state 9). */}
+                    Unconscious
                   </span>
                 ) : (
                   actor.state === 'now' && <span>{actor.isPlayer ? 'Your turn' : 'Now'}</span>

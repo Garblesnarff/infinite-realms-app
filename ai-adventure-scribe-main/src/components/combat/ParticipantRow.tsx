@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { participantVital } from '@/services/combat/participant-vital';
+import { renderPlayerCombatWording } from '@/services/combat/player-combat-wording';
 import { getEnemyHealthTier, getPlayerHPBarColor } from '@/utils/hp-utils';
 
 // ===========================
@@ -152,11 +153,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
 
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground overflow-hidden">
             {portraitUrl ? (
-              <img
-                src={portraitUrl}
-                alt={label}
-                className="w-full h-full object-cover"
-              />
+              <img src={portraitUrl} alt={label} className="w-full h-full object-cover" />
             ) : (
               getParticipantTypeIcon()
             )}
@@ -166,9 +163,7 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
         {/* Participant Info */}
         <div className="flex-1 ml-4">
           <div className="flex items-center gap-2">
-            <h4 className={`font-semibold ${isDead ? 'line-through' : ''}`}>
-              {label}
-            </h4>
+            <h4 className={`font-semibold ${isDead ? 'line-through' : ''}`}>{label}</h4>
 
             {/* The word, not only a colour or a pip: a screen reader hears the state. */}
             {isPlayer && (vital === 'dying' || vital === 'stable' || vital === 'dead') && (
@@ -292,7 +287,8 @@ export const ParticipantRow: React.FC<ParticipantRowProps> = React.memo(
                 const ConditionIcon = CONDITION_ICONS[condition.name]?.icon || UserX;
                 const colorClass = CONDITION_ICONS[condition.name]?.color || 'bg-gray-500';
 
-                const conditionLabel = `${condition.name}${condition.duration > 0 ? ` (${condition.duration} rounds)` : ''}`;
+                const conditionWord = renderPlayerCombatWording(condition.name);
+                const conditionLabel = `${conditionWord}${condition.duration > 0 ? ` (${condition.duration} rounds)` : ''}`;
                 return (
                   <Tooltip key={index}>
                     <TooltipTrigger asChild>

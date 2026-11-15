@@ -77,3 +77,24 @@ export function publishEngineRollOutcome(rollId: string | undefined, result: unk
   if (outcomes.size > 32) outcomes.delete(outcomes.keys().next().value as string);
   listeners.forEach((listener) => listener(outcome));
 }
+
+const refusedRolls = new Set<string>();
+const refusalListeners = new Set<(rollId: string) => void>();
+
+export function engineRollWasRefused(rollId: string): boolean {
+  return refusedRolls.has(rollId);
+}
+
+export function subscribeEngineRollRefusal(listener: (rollId: string) => void): () => void {
+  refusalListeners.add(listener);
+  return () => {
+    refusalListeners.delete(listener);
+  };
+}
+
+export function publishEngineRollRefusal(rollId: string | undefined): void {
+  if (!rollId) return;
+  refusedRolls.add(rollId);
+  if (refusedRolls.size > 32) refusedRolls.delete(refusedRolls.values().next().value as string);
+  refusalListeners.forEach((listener) => listener(rollId));
+}

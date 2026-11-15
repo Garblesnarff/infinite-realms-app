@@ -220,6 +220,16 @@ describe('ActionOptions', () => {
       expect(screen.getByText(/Select an option to submit it immediately/i)).toBeInTheDocument();
     });
 
+    it('sets the option prompt in the parchment ink in Table look (#1521)', () => {
+      render(<ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={0} />);
+      act(() => {
+        vi.advanceTimersByTime(0);
+      });
+
+      const prompt = screen.getByText(/Select an option to submit it immediately/i);
+      expect(prompt).toHaveClass('[body.ir-table-look_&]:text-[color:var(--ir-ink)]');
+    });
+
     it('does not flicker back to loading state or reset timer when rerendered with equivalent option array', () => {
       const { rerender } = render(
         <ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={1000} />,

@@ -1,9 +1,11 @@
 import React from 'react';
 
+import type { CombatDamageHit } from '@/services/combat/combat-summary-events';
 import type { CombatEncounter } from '@/types/combat-encounter';
 import type { ChatMessage } from '@/types/game';
 
 import { fetchWithAuth } from '@/infrastructure/api/rest-client';
+import { summarizeCombatDamageEvents } from '@/services/combat/combat-summary-events';
 import { combatMessageEndedCombat } from '@/utils/combat-engine-blocks';
 
 /** Posts the summary anyway if this fight's terminal DM message never arrives. */
@@ -32,6 +34,7 @@ export interface ServerDamageSummary {
   rounds: number;
   totalDamage: number;
   participants: ServerDamageSummaryParticipant[];
+  hits?: CombatDamageHit[];
 }
 
 export async function fetchCombatDamageSummary(encounterId: string): Promise<ServerDamageSummary> {
@@ -62,6 +65,7 @@ export function buildCombatSummaryMessageFromServer(summary: ServerDamageSummary
         summary: {
           rounds: summary.rounds,
           totalDamage: summary.totalDamage,
+          ...(summary.hits ? { hits: summary.hits } : {}),
           participants: summary.participants.map((p) => ({
             name: p.name,
             damageDealt: p.damageDealt,
@@ -101,7 +105,21 @@ const terminalMessageKeys = (messages: ChatMessage[]): Set<string> =>
 export function buildCombatSummaryMessage(
   encounter: CombatEncounter | null | undefined,
 ): ChatMessage {
-  const rounds = encounter?.currentRound || encounter?.roundsElapsed || 1;
+  const sideById = new Map(
+    (encounter?.participants || []).map((participant) => [
+      participant.id,
+      participant.participantType,
+    ]),
+  );
+  const events = (encounter?.actions || []).map((action) => ({
+    round: action.round,
+    side: sideById.get(action.participantId) === 'player' ? ('player' as const) : ('npc' as const),
+    damage: action.damageDealt || 0,
+  }));
+  const totaled = summarizeCombatDamageEvents(
+    events,
+    encounter?.currentRound || encounter?.roundsElapsed || 1,
+  );
   const participants = (encounter?.participants || []).map((p) => ({
     name: p.name,
     damageDealt: (encounter?.actions || [])
@@ -110,14 +128,19 @@ export function buildCombatSummaryMessage(
     damageTaken: Math.max(0, (p.maxHitPoints || 0) - (p.currentHitPoints || 0)),
     status: p.isDead ? 'dead' : p.isUnconscious ? 'unconscious' : 'ok',
   }));
-  const totalDamage = participants.reduce((s, x) => s + x.damageDealt, 0);
   return {
     text: 'Combat has ended.',
     sender: 'system',
     context: {
       combatData: {
         type: 'summary',
-        summary: { rounds, totalDamage, participants, outcome: 'Combat concluded' },
+        summary: {
+          rounds: totaled.rounds,
+          totalDamage: totaled.totalDamage,
+          hits: totaled.hits,
+          participants,
+          outcome: 'Combat concluded',
+        },
       },
     },
   };

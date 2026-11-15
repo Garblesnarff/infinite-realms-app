@@ -14,7 +14,18 @@ import type { VoiceSegment, AISegment } from '@/services/voice-routing';
 
 import { speakSegment } from '@/services/voice/speech-synthesis-voice';
 import { isStandardVoiceActive } from '@/services/voice/voice-mode-store';
+import {
+  STANDARD_FALLBACK_NOTICE_TITLE,
+  VOICE_PREPARE_TIMEOUT_MESSAGE,
+  VOICE_PREPARE_TIMEOUT_MS,
+} from '@/services/voice/voice-prepare';
 import { VoiceDirector } from '@/services/voice-director';
+
+export {
+  STANDARD_FALLBACK_NOTICE_TITLE,
+  VOICE_PREPARE_TIMEOUT_MESSAGE,
+  VOICE_PREPARE_TIMEOUT_MS,
+} from '@/services/voice/voice-prepare';
 
 const PREFETCH_CONCURRENCY = 3;
 export const SEGMENT_AUDIO_CACHE_MAX = 32;
@@ -83,6 +94,57 @@ async function generateWithCache(
     rememberSegment(segmentCacheKey(segment, generated.provider ?? expectedProvider), generated);
   }
   return generated;
+}
+
+/** Thrown inside prepareSegment when the prepare outlives VOICE_PREPARE_TIMEOUT_MS. */
+class VoicePrepareTimeoutError extends Error {
+  constructor() {
+    super(VOICE_PREPARE_TIMEOUT_MESSAGE);
+    this.name = 'VoicePrepareTimeoutError';
+  }
+}
+
+/**
+ * generateWithCache under the prepare timeout (#1348). At the timeout the
+ * request is aborted and the prepare rejects with VOICE_PREPARE_TIMEOUT_MESSAGE.
+ * A stop from the parent signal still cancels the prepare, as before.
+ */
+function prepareSegment(
+  segment: VoiceSegment,
+  parentSignal?: AbortSignal,
+  sessionId?: string,
+): Promise<VoiceSegment> {
+  const controller = new AbortController();
+  const abortFromParent = () => controller.abort();
+  if (parentSignal?.aborted) controller.abort();
+  parentSignal?.addEventListener('abort', abortFromParent);
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new VoicePrepareTimeoutError());
+    }, VOICE_PREPARE_TIMEOUT_MS);
+  });
+
+  return Promise.race([generateWithCache(segment, controller.signal, sessionId), timedOut]).finally(
+    () => {
+      clearTimeout(timer);
+      parentSignal?.removeEventListener('abort', abortFromParent);
+    },
+  );
+}
+
+// Set once per page load: the player hears the Standard voice and is told once, not per clip.
+let standardFallbackAnnounced = false;
+
+function announceStandardFallbackOnce(toast: VoiceProcessingProps['toast']): void {
+  if (standardFallbackAnnounced) return;
+  standardFallbackAnnounced = true;
+  toast({
+    title: STANDARD_FALLBACK_NOTICE_TITLE,
+    description: 'Premium voice did not answer for this message. Playing the standard voice.',
+  });
 }
 
 function createDeferred<T>(): {
@@ -160,6 +222,7 @@ export const useVoiceProcessing = ({
 
       const readyFlags = segments.map(() => false);
       let failedGenerations = 0;
+      let timedOutGenerations = 0;
       const timings = segments.map(() => ({ requestMs: 0, readyMs: 0 }));
       const slots = segments.map(() => createDeferred<VoiceSegment>());
 
@@ -176,7 +239,11 @@ export const useVoiceProcessing = ({
           }
           const requestStartedAt = performance.now();
           try {
-            const generated = await generateWithCache(segments[i], signal, sessionId);
+            const premiumExpected = !isStandardVoiceActive();
+            const generated = await prepareSegment(segments[i], signal, sessionId);
+            if (premiumExpected && generated.provider && generated.provider !== 'elevenlabs') {
+              announceStandardFallbackOnce(toast);
+            }
             timings[i] = {
               requestMs: performance.now() - requestStartedAt,
               readyMs: performance.now() - prefetchStartedAt,
@@ -241,6 +308,7 @@ export const useVoiceProcessing = ({
               segmentWithAudio.error,
             );
             failedGenerations += 1;
+            if (segmentWithAudio.error === VOICE_PREPARE_TIMEOUT_MESSAGE) timedOutGenerations += 1;
             continue;
           }
 
@@ -275,7 +343,11 @@ export const useVoiceProcessing = ({
       }
 
       if (!signal?.aborted && segments.length > 0 && failedGenerations === segments.length) {
-        setStateForRun((prev) => ({ ...prev, error: 'Voice unavailable for this message' }));
+        const error =
+          timedOutGenerations === segments.length
+            ? VOICE_PREPARE_TIMEOUT_MESSAGE
+            : 'Voice unavailable for this message';
+        setStateForRun((prev) => ({ ...prev, error }));
       }
 
       setStateForRun((prev) => ({
@@ -289,7 +361,7 @@ export const useVoiceProcessing = ({
 
       logger.info('🏁 Progressive processing complete');
     },
-    [playAudioSegment, setState, sessionId, abortController],
+    [playAudioSegment, setState, sessionId, abortController, toast],
   );
 
   /**

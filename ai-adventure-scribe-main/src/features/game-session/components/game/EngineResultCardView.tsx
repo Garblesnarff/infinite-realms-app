@@ -241,7 +241,7 @@ export const EngineResultCardView: React.FC<{
         {sentence}
       </p>
       <div aria-hidden="true">
-        <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        <div className="engine-card-head flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
           <p
             className={cn(
               'min-w-0 flex-1 basis-48 break-words text-white',

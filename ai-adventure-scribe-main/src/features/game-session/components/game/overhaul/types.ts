@@ -84,6 +84,7 @@ export interface SpellVM {
   concentration?: boolean;
   isPrepared: boolean;
   canPrepare: boolean;
+  alwaysPrepared?: boolean;
 }
 
 export interface SpellSlotVM {
@@ -97,6 +98,7 @@ export interface SpellcastingVM {
   spellAttackBonus: number | null;
   spellSaveDC: number | null;
   canPrepare: boolean;
+  hasSpellbook: boolean;
   slots: SpellSlotVM[];
 }
 

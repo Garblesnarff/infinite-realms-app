@@ -4,6 +4,7 @@ import {
   classProgressions,
   multiclassProficiencies,
 } from './progression-data';
+import { collapseActionSurgeRows, isExtraActionSurgeRow } from '../../shared/action-surge-rows';
 
 import type { LevelFeature } from './progression-data';
 import type { AbilityScores } from '@/types/character';
@@ -75,12 +76,14 @@ export function canMulticlass(
 
 export function getClassFeaturesForLevel(className: string, level: number): LevelFeature[] {
   const classProgression = classProgressions[className.toLowerCase()] || [];
-  return classProgression.filter((feature) => feature.level === level);
+  return classProgression.filter(
+    (feature) => feature.level === level && !isExtraActionSurgeRow(feature),
+  );
 }
 
 export function getAllClassFeaturesUpToLevel(className: string, level: number): LevelFeature[] {
   const classProgression = classProgressions[className.toLowerCase()] || [];
-  return classProgression.filter((feature) => feature.level <= level);
+  return collapseActionSurgeRows(classProgression.filter((feature) => feature.level <= level));
 }
 
 export function getMulticlassProficiencies(className: string) {

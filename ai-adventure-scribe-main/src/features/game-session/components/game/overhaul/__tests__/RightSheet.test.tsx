@@ -75,6 +75,7 @@ const casterSheet: CharacterSheetVM = {
     spellAttackBonus: 5,
     spellSaveDC: 13,
     canPrepare: true,
+    hasSpellbook: true,
     slots: [{ level: 1, current: 4, max: 4 }],
   },
 };

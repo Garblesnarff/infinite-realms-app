@@ -13,6 +13,7 @@ import type { Spell, Character } from '@/types/character';
 
 import { allSpells } from '@/data/spellOptions';
 import logger from '@/lib/logger';
+import { getAlwaysPreparedSpells } from '@/utils/character/subclass-grants';
 
 /**
  * Interface for character spell data
@@ -20,6 +21,7 @@ import logger from '@/lib/logger';
 export interface CharacterSpellDisplay extends Spell {
   is_prepared?: boolean;
   source_feature?: string;
+  alwaysPrepared?: boolean;
 }
 
 /**
@@ -136,7 +138,15 @@ export function getCharacterSpells(character: any): {
 } {
   type CharacterWithSpells = Pick<
     Character,
-    'name' | 'cantrips' | 'knownSpells' | 'preparedSpells' | 'ritualSpells'
+    | 'name'
+    | 'cantrips'
+    | 'knownSpells'
+    | 'preparedSpells'
+    | 'ritualSpells'
+    | 'class'
+    | 'classFeatures'
+    | 'level'
+    | 'subclassName'
   >;
   const c = character as CharacterWithSpells | null;
   // Validate character input
@@ -160,26 +170,34 @@ export function getCharacterSpells(character: any): {
       characterName: c?.name || 'Unknown',
     });
 
+    const alwaysPreparedIds = new Set(
+      getAlwaysPreparedSpells(c).map((name) => getSpellById(name, false)?.id ?? name),
+    );
+
     // Get spells from each category with error handling
     const cantrips = getSpellsByIds(c?.cantrips || [], true).map((spell) => ({
       ...spell,
       source_feature: 'Class Cantrips',
+      alwaysPrepared: alwaysPreparedIds.has(spell.id),
     }));
 
     const knownSpells = getSpellsByIds(c?.knownSpells || [], true).map((spell) => ({
       ...spell,
       source_feature: 'Known Spells',
+      alwaysPrepared: alwaysPreparedIds.has(spell.id),
     }));
 
     const preparedSpells = getSpellsByIds(c?.preparedSpells || [], true).map((spell) => ({
       ...spell,
       is_prepared: true,
       source_feature: 'Prepared Spells',
+      alwaysPrepared: alwaysPreparedIds.has(spell.id),
     }));
 
     const ritualSpells = getSpellsByIds(c?.ritualSpells || [], true).map((spell) => ({
       ...spell,
       source_feature: 'Ritual Spells',
+      alwaysPrepared: alwaysPreparedIds.has(spell.id),
     }));
 
     // Combine all spells, avoiding duplicates
@@ -201,6 +219,7 @@ export function getCharacterSpells(character: any): {
         allSpellsMap.set(spell.id, {
           ...existingSpell,
           is_prepared: existingSpell.is_prepared || spell.is_prepared,
+          alwaysPrepared: existingSpell.alwaysPrepared || spell.alwaysPrepared,
           source_feature: sources.join(', '),
         });
       } else {

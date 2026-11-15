@@ -1,8 +1,8 @@
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DMMessage } from '../DMMessage';
-import { findPlaceInText } from '../scene-place';
+import { findPlaceInText, sceneCandidateTags } from '../scene-place';
 
 import type { CampaignAsset } from '@/hooks/use-campaign-assets';
 import type { ReactNode } from 'react';
@@ -154,5 +154,151 @@ describe('findPlaceInText', () => {
     expect(
       findPlaceInText('In The Heartwood Basin the water is still.', [basin, heartwoodBasin]),
     ).toBe(heartwoodBasin);
+  });
+});
+
+/**
+ * A GET /v1/sessions/:id/messages row, the same shape mapMessage in
+ * session-messages.ts returns and use-messages.ts maps onto a ChatMessage.
+ */
+const sessionPayloadMessages = [
+  {
+    id: 'msg-sweet-mud',
+    session_id: 'session-gardeners-heir',
+    speaker_type: 'dm' as const,
+    speaker_id: null,
+    message: sweetMudText,
+    context: { location: 'The Sweet Mud' },
+    images: null,
+    sequence_number: 1,
+    timestamp: '2026-10-22T12:00:00.000Z',
+    created_at: '2026-10-22T12:00:00.000Z',
+    updated_at: '2026-10-22T12:00:00.000Z',
+  },
+  {
+    id: 'msg-heartwood',
+    session_id: 'session-gardeners-heir',
+    speaker_type: 'dm' as const,
+    speaker_id: null,
+    message: heartwoodText,
+    context: { location: 'The Heartwood' },
+    images: null,
+    sequence_number: 2,
+    timestamp: '2026-10-22T12:05:00.000Z',
+    created_at: '2026-10-22T12:05:00.000Z',
+    updated_at: '2026-10-22T12:05:00.000Z',
+  },
+];
+
+// Mirrors use-messages.ts (text = message, sender = speaker_type, context as-is).
+const chatFromSessionPayload = (row: (typeof sessionPayloadMessages)[number]) => ({
+  id: row.id,
+  text: row.message,
+  sender: row.speaker_type,
+  timestamp: row.timestamp,
+  sequenceNumber: row.sequence_number,
+  context: row.context,
+  images: row.images ?? undefined,
+});
+
+const dmFromPayload = (row: (typeof sessionPayloadMessages)[number], isLastInGroup = true) => {
+  const message = chatFromSessionPayload(row);
+  return (
+    <DMMessage
+      key={message.id}
+      message={message}
+      messageId={message.id!}
+      isFirstInGroup
+      isLastInGroup={isLastInGroup}
+      displayContent={message.text}
+      isExpanded={false}
+      onToggleExpanded={vi.fn()}
+      isGeneratingImage={false}
+      onGenerateImage={vi.fn()}
+    />
+  );
+};
+
+describe('scene art follows the current location from a real session payload (#1026)', () => {
+  it('shows The Heartwood image in the scene band after the party leaves The Sweet Mud', async () => {
+    const [sweetMud, heartwood] = sessionPayloadMessages;
+    const { rerender } = render(scene(dmFromPayload(sweetMud)));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Sweet Mud' })).toHaveAttribute(
+        'src',
+        urlFor('The Sweet Mud'),
+      ),
+    );
+
+    rerender(scene([dmFromPayload(sweetMud, false), dmFromPayload(heartwood)]));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Heartwood' })).toHaveAttribute(
+        'src',
+        urlFor('The Heartwood'),
+      ),
+    );
+  });
+
+  it('shows the official context location when the prose does not name it', async () => {
+    const contextOnly = {
+      ...sessionPayloadMessages[1],
+      id: 'msg-heartwood-context-only',
+      message: 'The guard looks at you and waits.',
+      context: { location: 'The Heartwood' },
+    };
+    render(scene(dmFromPayload(contextOnly)));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Heartwood' })).toHaveAttribute(
+        'src',
+        urlFor('The Heartwood'),
+      ),
+    );
+  });
+});
+
+describe('sceneCandidateTags', () => {
+  const locationOf = (name: string): CampaignAsset => ({
+    type: 'location',
+    key: name.toLowerCase().replace(/\s+/g, '-'),
+    name,
+    imageUrl: `${name}.png`,
+  });
+  const sweetMud = locationOf('The Sweet Mud');
+  const heartwood = locationOf('The Heartwood');
+
+  it('appends a matching context location after explicit tags', () => {
+    expect(
+      sceneCandidateTags(
+        [{ type: 'location', key: 'the-sweet-mud' }],
+        'The guard looks at you and waits.',
+        'The Heartwood',
+        [sweetMud, heartwood],
+      ),
+    ).toEqual([
+      { type: 'location', key: 'the-sweet-mud' },
+      { type: 'location', key: heartwood.key },
+    ]);
+  });
+
+  it('puts the official context location ahead of a different place named in prose', () => {
+    expect(
+      sceneCandidateTags(
+        [],
+        'The reeds part around the Sweet Mud, warm underfoot.',
+        'The Heartwood',
+        [sweetMud, heartwood],
+      ),
+    ).toEqual([
+      { type: 'location', key: heartwood.key },
+      { type: 'location', key: sweetMud.key },
+    ]);
+  });
+
+  it('adds nothing for a context location with no matching chunk', () => {
+    expect(
+      sceneCandidateTags([], 'The party reaches The Forest of Glass.', 'The Forest of Glass', [
+        sweetMud,
+      ]),
+    ).toEqual([]);
   });
 });

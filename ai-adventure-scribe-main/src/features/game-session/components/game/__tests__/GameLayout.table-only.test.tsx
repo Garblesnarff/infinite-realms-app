@@ -36,11 +36,6 @@ vi.mock('../game-content/TableContextCard', () => ({
 
 vi.mock('../../tactical/TacticalMapProvider', () => ({
   TacticalMapProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  useMapInRail: () => false,
-}));
-
-vi.mock('../FloatingActionPanel', () => ({
-  FloatingActionPanel: () => null,
 }));
 
 vi.mock('../game-content/GameCombatSheet', () => ({

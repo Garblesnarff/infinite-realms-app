@@ -282,13 +282,12 @@ describe('game screen tap targets and text (#228)', () => {
 });
 
 describe('guard: no sub-12px text classes on the game screen (#228)', () => {
-  // The 12 named game files plus RightSheet: every text-[9px]/text-[10px]/text-[11px]
+  // Named game files plus RightSheet: every text-[9px]/text-[10px]/text-[11px]
   // must use the ir-text-min (12px) token instead.
   const GAME_SCREEN_FILES = [
     'src/features/game-session/components/game/overhaul/RightSheet.tsx',
     'src/features/game-session/components/game/overhaul/CenterStagePreview.tsx',
     'src/features/game-session/components/game/overhaul/CombatTurnBar.tsx',
-    'src/features/game-session/components/game/FloatingActionPanel.tsx',
     'src/features/game-session/components/game/EngineOutcomeChip.tsx',
     'src/features/game-session/components/game/memory/DesktopMemoryTab.tsx',
     'src/features/game-session/components/game/CombatSummary.tsx',

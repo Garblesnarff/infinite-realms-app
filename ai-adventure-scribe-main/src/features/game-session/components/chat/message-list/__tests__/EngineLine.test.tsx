@@ -199,6 +199,23 @@ describe('EngineLine (#87)', () => {
     }
   });
 
+  // The initiative line exactly as the server writes it (server-bun combat-entry-gate.test.ts).
+  it('seals an initiative line slate with the initiative total and drops the NOTE pill (#1521)', () => {
+    document.body.classList.add('ir-table-look');
+    try {
+      const initiativeLine =
+        '⚙️ Engine: Initiative: 5 (nat 4+1) — Faceless Stalker 2: 15 + 0 = 15. Faceless Stalker 1: 11 + 0 = 11. You: 4 + 1 = 5 (you rolled). Goblin: 7 + 0 = 7.';
+      render(<EngineLine model={parseEngineLine(initiativeLine, { side: 'player' })} />);
+      expect(screen.getByTestId('engine-line')).toHaveAttribute('data-outcome', 'info');
+      const seal = screen.getByTestId('engine-roll-seal');
+      expect(seal).toHaveAttribute('data-seal-tone', 'slate');
+      expect(seal).toHaveTextContent(/^5$/);
+      expect(screen.queryByTestId('engine-line-pill')).toBeNull();
+    } finally {
+      document.body.classList.remove('ir-table-look');
+    }
+  });
+
   it('prints no "Rules engine" label when showLabel is false', () => {
     render(<EngineLine model={parseEngineLine(playerHit, { side: 'player' })} showLabel={false} />);
     expect(screen.queryByText('Rules engine')).toBeNull();

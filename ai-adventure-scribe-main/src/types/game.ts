@@ -80,6 +80,12 @@ export interface MessageContext {
     summary?: {
       rounds: number;
       totalDamage: number;
+      hits?: Array<{
+        round: number;
+        side: 'player' | 'npc';
+        damage: number;
+        label: string;
+      }>;
       participants: Array<{
         name: string;
         damageDealt: number;

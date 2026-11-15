@@ -102,27 +102,22 @@ const MapSketch: React.FC<{ map: TacticalMap }> = ({ map }) => {
 interface GameLeftPanelProps {
   sessionId: string;
   isCollapsed: boolean;
-  tableLook?: boolean;
   onToggle: () => void;
   onOpenSheet: () => void;
   chapterLabel?: string;
-  /** Render the tactical map at the top of the rail (the layout decides; see GameLayout). */
-  showMap?: boolean;
 }
 
 export const GameLeftPanel: React.FC<GameLeftPanelProps> = memo(
-  ({ sessionId, isCollapsed, tableLook = false, chapterLabel, onOpenSheet, showMap = false }) => {
+  ({ sessionId, isCollapsed, chapterLabel, onOpenSheet }) => {
     const [mapExpanded, setMapExpanded] = useState(false);
     const tactical = useTacticalMapContext();
     const inCombat = useOptionalCombat()?.state.isInCombat ?? false;
     if (isCollapsed) return null;
 
-    // Combat keeps the battle grid. Outside combat (chat mode) the same map data shows as a sketch.
-    // The grid is gated on combat alone, not on showMap: the layout only shows this tile when
-    // the rail is open on desktop (GameLayout mapInRail), so showMap is true whenever the tile
-    // is visible — gating on it showed the grid in chat mode and the sketch never (#1487).
+    // Combat keeps the battle grid. Outside combat the same map data shows as a sketch.
+    // The grid is gated on combat alone (#1487).
     const showBattleGrid = inCombat;
-    const map = tableLook ? (
+    const map = (
       <section
         key="map"
         data-testid="table-map-tile"
@@ -163,19 +158,15 @@ export const GameLeftPanel: React.FC<GameLeftPanelProps> = memo(
           </>
         )}
       </section>
-    ) : showMap ? (
-      <TacticalMapBoard key="map" sessionId={sessionId} canvasClassName="h-auto aspect-square" />
-    ) : null;
+    );
     const rail = (
-      <div key="rail" className={tableLook ? 'min-h-0' : 'min-h-0 flex-1'}>
+      <div key="rail" className="min-h-0">
         <LeftRailLive sessionId={sessionId} chapterLabel={chapterLabel} onOpenSheet={onOpenSheet} />
       </div>
     );
     return (
-      <div
-        className={`order-1 md:order-1 w-full md:w-auto min-h-0 h-full flex flex-col gap-3 ${tableLook ? 'overflow-y-auto' : ''}`}
-      >
-        {tableLook ? [rail, map] : [map, rail]}
+      <div className="order-1 md:order-1 w-full md:w-auto min-h-0 h-full flex flex-col gap-3 overflow-y-auto">
+        {[rail, map]}
       </div>
     );
   },

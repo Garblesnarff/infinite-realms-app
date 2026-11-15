@@ -27,6 +27,8 @@ import {
 } from '@/services/combat/player-roll-bridge';
 import {
   engineRollOutcome,
+  engineRollWasRefused,
+  subscribeEngineRollRefusal,
   subscribeEngineRollOutcome,
   type EngineRollOutcome,
 } from '@/services/combat/roll-outcome-display';
@@ -244,6 +246,10 @@ export function useMessageDiceRolls({
     const total = done.result.total;
     const rollId =
       tableLook && (done.combatAttackRoll || done.combatCheckRoll) ? done.id : undefined;
+    if (rollId && engineRollWasRefused(rollId)) {
+      setCompletedRoll(null);
+      return;
+    }
     const engineOutcome = rollId ? engineRollOutcome(rollId) : undefined;
     setCompletedRoll({
       die: done.result.naturalRoll ?? total - modifier,
@@ -268,6 +274,13 @@ export function useMessageDiceRolls({
     );
     completedRollTimerRef.current = setTimeout(() => setCompletedRoll(null), ROLL_RESULT_FLASH_MS);
   }, [tableLook, completedRoll?.rollId]);
+  useEffect(
+    () =>
+      subscribeEngineRollRefusal((rollId) => {
+        setCompletedRoll((current) => (current?.rollId === rollId ? null : current));
+      }),
+    [],
+  );
   useEffect(
     () =>
       subscribeEngineRollOutcome((outcome) => {

@@ -54,7 +54,6 @@ vi.mock('../../chat/MessageList', () => ({
   MessageList: () => <div data-testid="message-list">The DM speaks.</div>,
 }));
 vi.mock('../TimelineRail', () => ({ TimelineRail: () => null }));
-vi.mock('../StatsBar', () => ({ StatsBar: () => null }));
 vi.mock('@/components/safety/SafetyBanner', () => ({ SafetyBanner: () => null }));
 vi.mock('../../chat/ChatInput', () => ({
   ChatInput: () => <textarea data-testid="composer" aria-label="Message the DM" />,
@@ -71,7 +70,6 @@ vi.mock('../message/MessageHandler', () => ({
 vi.mock('../../tactical/TacticalMapProvider', () => ({
   TacticalMapProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useTacticalMapContext: () => null,
-  useMapInRail: () => false,
 }));
 vi.mock('../game-content/GamePanelControls', () => ({
   GamePanelControls: ({
@@ -94,15 +92,8 @@ vi.mock('../game-content/GameLeftPanel', () => ({
 vi.mock('../MemoryPanel', () => ({
   GameSidePanel: () => <div data-testid="character-sheet">Character sheet</div>,
 }));
-vi.mock('../FloatingActionPanel', () => ({
-  FloatingActionPanel: ({ anchored }: { anchored?: boolean }) => (
-    <button
-      data-testid="quick-actions"
-      className={anchored ? 'absolute left-3 bottom-3' : 'fixed left-4 bottom-4'}
-    >
-      Quick actions
-    </button>
-  ),
+vi.mock('../game-content/TableContextCard', () => ({
+  TableContextCard: () => <div data-testid="table-context-card" />,
 }));
 vi.mock('../game-content/GameCombatSheet', () => ({ GameCombatSheet: () => null }));
 
@@ -143,8 +134,6 @@ const layoutProps = {
   contentWarnings: [],
   comfortLevel: 'pg13' as const,
   showSafetyInfo: false,
-  // The plain layout (unreachable in the app since #1486) until the `!tableLook` cleanup.
-  plainLayout: true,
 };
 
 /** The game screen as GameContent wires it: rail state from useGameRails. */
@@ -178,7 +167,11 @@ function expectOverStoryNotComposer(panel: HTMLElement): void {
 /** Nothing fixed to the viewport is showing that could land on the composer. */
 function expectNoFixedOverlayShowing(): void {
   for (const el of Array.from(document.body.querySelectorAll<HTMLElement>('.fixed'))) {
-    // `hidden md:block`: display:none below md.
+    // The table roll column is fixed on a phone and hides itself while empty.
+    if (el.getAttribute('data-testid') === 'table-roll-slot') {
+      expect(el.className).toContain('empty:hidden');
+      continue;
+    }
     expect(el, el.outerHTML.slice(0, 120)).toHaveClass('hidden');
   }
 }
@@ -195,15 +188,15 @@ describe.each([390, 665])('game layout at %i px (#2281)', (width) => {
     window.localStorage.clear();
   });
 
-  it('opens with the character sheet and the campaign rail closed, whatever was remembered', () => {
+  it('opens with the character drawer closed and the campaign rail beside the story', () => {
     render(<Game />);
 
     expect(screen.getByTestId('composer')).toBeInTheDocument();
     expect(screen.queryByTestId('character-sheet')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('campaign-rail')).not.toBeInTheDocument();
+    const rail = screen.getByTestId('campaign-rail');
+    expect(screen.getByTestId('story-box')).not.toContainElement(rail);
+    expect(screen.queryByTestId('quick-actions')).not.toBeInTheDocument();
     expectNoFixedOverlayShowing();
-    // The Quick Actions button sits in the story box, above the chat box.
-    expectOverStoryNotComposer(screen.getByTestId('quick-actions'));
   });
 
   it('opens the sheet over the story box, never over the composer', () => {
@@ -224,14 +217,14 @@ describe.each([390, 665])('game layout at %i px (#2281)', (width) => {
     expect(screen.getByTestId('composer')).toBeEnabled();
   });
 
-  it('keeps one rail open at a time, both over the story box', () => {
+  it('hides the campaign rail in its column and opens the sheet over the story', () => {
     render(<Game />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle Campaign' }));
-    expectOverStoryNotComposer(screen.getByTestId('campaign-rail'));
+    expect(screen.queryByTestId('campaign-rail')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rail-over-story')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle Character' }));
-    expect(screen.queryByTestId('campaign-rail')).not.toBeInTheDocument();
     expectOverStoryNotComposer(screen.getByTestId('character-sheet'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Toggle Character' }));
@@ -254,12 +247,12 @@ describe.each([390, 665])('game layout at %i px (#2281)', (width) => {
     expect(toggle).toHaveFocus();
   });
 
-  it('closes the campaign rail on Escape too', () => {
+  it('does not lay the campaign rail over the story', () => {
     render(<Game />);
 
+    const rail = screen.getByTestId('campaign-rail');
+    expect(screen.getByTestId('story-box')).not.toContainElement(rail);
     fireEvent.click(screen.getByRole('button', { name: 'Toggle Campaign' }));
-    fireEvent.keyDown(screen.getByTestId('rail-over-story'), { key: 'Escape' });
-
     expect(screen.queryByTestId('campaign-rail')).not.toBeInTheDocument();
     expect(screen.queryByTestId('rail-over-story')).not.toBeInTheDocument();
   });
@@ -288,12 +281,13 @@ describe('game layout at 1440 px', () => {
     window.localStorage.clear();
   });
 
-  it('keeps the remembered rails open as columns beside the story', () => {
+  it('keeps the campaign rail beside the story and leaves the character drawer shut', () => {
     render(<Game />);
 
-    const sheet = screen.getByTestId('character-sheet');
-    expect(screen.getByTestId('campaign-rail')).toBeInTheDocument();
-    expect(screen.getByTestId('story-box')).not.toContainElement(sheet);
+    const rail = screen.getByTestId('campaign-rail');
+    expect(screen.getByTestId('story-box')).not.toContainElement(rail);
+    expect(screen.queryByTestId('character-sheet')).not.toBeInTheDocument();
     expect(screen.queryByTestId('rail-over-story')).not.toBeInTheDocument();
+    expect(window.localStorage.getItem('ui:rightPanelCollapsed:v2')).toBe('false');
   });
 });

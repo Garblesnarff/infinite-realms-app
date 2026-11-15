@@ -9,10 +9,10 @@ for (const width of [1280, 390]) {
     const cards = page.getByTestId('engine-result-card');
     const expected = [
       /Spell attack: d20 2 \+ 6 = 8 vs AC 11[\s\S]*No damage/,
-      /d20 14 \+ 0 = 14 vs your AC 11[\s\S]*3 slashing damage[\s\S]*HP 4 of 7/,
+      /d20 14 \+ 0 = 14 vs your AC 11[\s\S]*3 slashing damage[\s\S]*HP 7 → 4 of 7/,
       /DEX save 6 vs DC 14[\s\S]*2 acid damage/,
       /DEX save 17 vs DC 14[\s\S]*No damage/,
-      /CRITICAL HIT[\s\S]*6 slashing damage[\s\S]*HP 1 of 7/,
+      /CRITICAL HIT[\s\S]*6 slashing damage[\s\S]*HP 7 → 1 of 7/,
       /AUTO-HIT[\s\S]*7 force damage/,
       /moves 30 ft.*No attack/,
       /REFUSED[\s\S]*No roll, no damage/,

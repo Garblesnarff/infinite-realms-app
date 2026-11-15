@@ -5,7 +5,10 @@ import { useMessageDiceRolls, ROLL_RESULT_FLASH_MS } from '../use-message-dice-r
 
 import { gameReducer, initialGameState } from '@/contexts/game/game-reducer';
 import { useGame } from '@/contexts/GameContext';
-import { publishEngineRollOutcome } from '@/services/combat/roll-outcome-display';
+import {
+  publishEngineRollOutcome,
+  publishEngineRollRefusal,
+} from '@/services/combat/roll-outcome-display';
 
 vi.mock('@/contexts/GameContext', () => ({ useGame: vi.fn() }));
 vi.mock('@/hooks/combat/use-player-roll-host', () => ({
@@ -195,6 +198,20 @@ describe('roll result flash (#84)', () => {
 
     expect(result.current.completedRoll).toBeNull();
   });
+  it('closes the completed attack flash when the engine refuses the roll', () => {
+    document.body.classList.add('ir-table-look');
+    const attack = { ...baseRoll, id: 'refused-flash', combatAttackRoll: true };
+    mockQueue(attack.id, [attack]);
+    const { result, rerender } = renderHook(() => useMessageDiceRolls({ onSendMessage: vi.fn() }));
+    mockQueue(undefined, [
+      { ...attack, status: 'completed', result: { total: 18, naturalRoll: 13 } },
+    ]);
+    rerender();
+    expect(result.current.completedRoll).not.toBeNull();
+    act(() => publishEngineRollRefusal(attack.id));
+    expect(result.current.completedRoll).toBeNull();
+  });
+
   it('waits for the matching server attack result without using a different roll', () => {
     document.body.classList.add('ir-table-look');
     const attack = { ...baseRoll, id: 'engine-roll-test', combatAttackRoll: true };
