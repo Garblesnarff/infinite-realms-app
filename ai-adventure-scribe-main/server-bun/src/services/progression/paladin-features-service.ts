@@ -61,7 +61,7 @@ export function paladinLevelOf(character: {
       entry &&
       typeof entry === 'object' &&
       typeof (entry as { className?: unknown }).className === 'string' &&
-      ((entry as { className: string }).className.toLowerCase() === 'paladin')
+      (entry as { className: string }).className.toLowerCase() === 'paladin'
     ) {
       const entryLevel = (entry as { level?: unknown }).level;
       multiclass += typeof entryLevel === 'number' && entryLevel > 0 ? Math.trunc(entryLevel) : 0;
@@ -188,7 +188,9 @@ export interface PoolState {
 export async function layOnHandsPool(
   characterId: string,
   userId: string,
-): Promise<(PoolState & { row: CharacterFeature; featureId: string; character: CharacterRow }) | null> {
+): Promise<
+  (PoolState & { row: CharacterFeature; featureId: string; character: CharacterRow }) | null
+> {
   const character = await ownedCharacter(characterId, userId);
   if (!character) return null;
   const max = paladinLevelOf(character) * 5;
@@ -214,7 +216,12 @@ export async function divineSenseUses(
   const max = Math.max(1, 1 + (await charismaModifier(characterId)));
   const ensured = await ensurePoolRow(characterId, userId, DIVINE_SENSE_NAME, max);
   if (!ensured) return null;
-  return { max, remaining: ensured.row.usesRemaining ?? max, row: ensured.row, featureId: ensured.featureId };
+  return {
+    max,
+    remaining: ensured.row.usesRemaining ?? max,
+    row: ensured.row,
+    featureId: ensured.featureId,
+  };
 }
 
 /**
@@ -407,23 +414,29 @@ async function missingHitPoints(
   return Math.max(0, (stats.max ?? 0) - (stats.current ?? 0));
 }
 
+/** A transaction handle from `db.transaction`: writes through it commit or roll back together. */
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 /**
  * Clear an active 'Poisoned' condition after Lay on Hands neutralizes it.
- * Best-effort: a missing library row or no active condition is not an error.
+ * A missing library row or no active condition is not an error. A database
+ * error throws, which rolls back the cure's transaction.
  */
 async function clearPoisoned(input: {
+  executor: DbTx;
   targetCharacterId: string;
   participantId?: string;
   encounterId?: string;
 }): Promise<void> {
-  const [library] = await db
+  const { executor } = input;
+  const [library] = await executor
     .select({ id: conditionsLibrary.id })
     .from(conditionsLibrary)
     .where(ilike(conditionsLibrary.name, 'poisoned'))
     .limit(1);
   if (!library) return;
   if (input.participantId) {
-    await db
+    await executor
       .update(combatParticipantConditions)
       .set({ isActive: false })
       .where(
@@ -435,7 +448,7 @@ async function clearPoisoned(input: {
       );
     return;
   }
-  await db
+  await executor
     .update(characterConditions)
     .set({ isActive: false })
     .where(
@@ -448,14 +461,13 @@ async function clearPoisoned(input: {
 }
 
 /**
- * Claim HP from the pool atomically: one conditional UPDATE that lands only
- * when the row still holds at least `draw`. Two concurrent spends can both
- * read the same remaining value, but each HP is claimed once — the loser gets
- * null and refuses, instead of both spends writing the same absolute
- * remainder and overspending the pool. Returns the post-claim remaining.
+ * Claim pool HP: one conditional UPDATE that lands only when the row still
+ * holds at least `draw`. Runs inside the draw's transaction, after the pool row
+ * lock, so a null return means the pool cannot cover the draw. Returns the
+ * post-claim remaining.
  */
-async function claimPoolDraw(rowId: string, draw: number): Promise<number | null> {
-  const [claimed] = await db
+async function claimPoolDraw(executor: DbTx, rowId: string, draw: number): Promise<number | null> {
+  const [claimed] = await executor
     .update(characterFeatures)
     .set({ usesRemaining: sql`${characterFeatures.usesRemaining} - ${draw}` })
     .where(and(eq(characterFeatures.id, rowId), gte(characterFeatures.usesRemaining, draw)))
@@ -463,28 +475,17 @@ async function claimPoolDraw(rowId: string, draw: number): Promise<number | null
   return claimed?.usesRemaining ?? null;
 }
 
-/** Give a claimed draw back when the effect it paid for throws. */
-async function releasePoolDraw(rowId: string, draw: number): Promise<void> {
-  await db
-    .update(characterFeatures)
-    .set({ usesRemaining: sql`${characterFeatures.usesRemaining} + ${draw}` })
-    .where(eq(characterFeatures.id, rowId));
-}
-
-/** The pool value the sheet currently shows, for a refusal after a lost race. */
-async function currentPoolRemaining(rowId: string): Promise<number> {
-  const [row] = await db
-    .select({ usesRemaining: characterFeatures.usesRemaining })
-    .from(characterFeatures)
-    .where(eq(characterFeatures.id, rowId))
-    .limit(1);
-  return row?.usesRemaining ?? 0;
-}
-
 /**
  * Resolve Lay on Hands against the pool: heal (or cure) the target, decrement
  * the pool, and refuse clearly when the pool cannot cover it. The pool row is
  * the single source of truth the sheet reads.
+ *
+ * The whole draw runs in one transaction. Its first statement locks the pool
+ * row, so concurrent draws queue behind it and read the pool and the target's
+ * HP only after the earlier draw has finished. The claim and the usage row are
+ * written before the heal. If the heal throws, the transaction rolls back the
+ * claim and the usage row together, so a retry starts from the same state and
+ * spends once.
  */
 async function resolveLayOnHandsAgainstPool(
   input: ResolveLayOnHandsInput,
@@ -527,151 +528,149 @@ async function resolveLayOnHandsAgainstPool(
     }
   }
 
-  if (cure) {
-    const cureRefusal = (remaining: number): LayOnHandsResult => ({
-      ok: false,
-      reason: 'insufficient_pool',
-      message:
-        `${paladinName}'s Lay on Hands pool has ${remaining} of ${pool.max} HP left; ` +
-        `curing ${cure === 'disease' ? 'a disease' : 'a poison'} costs ${LAY_ON_HANDS_CURE_COST}. ` +
-        `They must finish a long rest to replenish it.`,
-      poolRemaining: remaining,
-      poolMax: pool.max,
-    });
-    if (pool.remaining < LAY_ON_HANDS_CURE_COST) return cureRefusal(pool.remaining);
-    // Claim the cure's cost before applying it, so a concurrent spend cannot
-    // take the same HP twice; a lost race refuses with the current value.
-    const poolRemaining = await claimPoolDraw(pool.row.id, LAY_ON_HANDS_CURE_COST);
-    if (poolRemaining === null) return cureRefusal(await currentPoolRemaining(pool.row.id));
-    try {
+  const cureRefusal = (remaining: number): LayOnHandsResult => ({
+    ok: false,
+    reason: 'insufficient_pool',
+    message:
+      `${paladinName}'s Lay on Hands pool has ${remaining} of ${pool.max} HP left; ` +
+      `curing ${cure === 'disease' ? 'a disease' : 'a poison'} costs ${LAY_ON_HANDS_CURE_COST}. ` +
+      `They must finish a long rest to replenish it.`,
+    poolRemaining: remaining,
+    poolMax: pool.max,
+  });
+  const emptyRefusal = (): LayOnHandsResult => ({
+    ok: false,
+    reason: 'empty_pool',
+    message:
+      `${paladinName}'s Lay on Hands pool is empty (0 of ${pool.max} HP). ` +
+      `They must finish a long rest to replenish it.`,
+    poolRemaining: 0,
+    poolMax: pool.max,
+  });
+
+  return db.transaction(async (tx) => {
+    // The first write of the draw: lock the pool row. Every other draw on this
+    // pool waits here, so the reads below see the result of the draw before it.
+    const [locked] = await tx
+      .select({ usesRemaining: characterFeatures.usesRemaining })
+      .from(characterFeatures)
+      .where(eq(characterFeatures.id, pool.row.id))
+      .for('update');
+    const remaining = locked?.usesRemaining ?? 0;
+    const usageContext = context ?? (cure ? `lay-on-hands-cure-${cure}` : 'lay-on-hands');
+
+    if (cure) {
+      if (remaining < LAY_ON_HANDS_CURE_COST) return cureRefusal(remaining);
+      const poolRemaining = await claimPoolDraw(tx, pool.row.id, LAY_ON_HANDS_CURE_COST);
+      if (poolRemaining === null) return cureRefusal(remaining);
       // Disease has no condition row in the SRD list; a poisoned condition is
-      // cleared best-effort so the sheet matches the narration.
+      // cleared so the sheet matches the narration.
       if (cure === 'poison') {
-        await clearPoisoned({ targetCharacterId: targetId, participantId, encounterId });
+        await clearPoisoned({
+          executor: tx,
+          targetCharacterId: targetId,
+          participantId,
+          encounterId,
+        });
       }
-    } catch (error) {
-      await releasePoolDraw(pool.row.id, LAY_ON_HANDS_CURE_COST);
-      throw error;
+      await tx.insert(featureUsageLog).values({
+        characterId,
+        featureId: pool.featureId,
+        sessionId: sessionId || null,
+        context: usageContext || null,
+      });
+      return {
+        ok: true,
+        healed: 0,
+        poolRemaining,
+        poolMax: pool.max,
+        cured: cure,
+        message:
+          `${paladinName} lays on hands and ` +
+          (cure === 'disease' ? 'cures the disease' : 'neutralizes the poison') +
+          `. Pool: ${poolRemaining} of ${pool.max} HP remaining.`,
+      };
     }
-    await ClassFeatureUsageService.logFeatureUsage(
-      characterId,
-      pool.featureId,
-      userId,
-      context ?? `lay-on-hands-cure-${cure}`,
-      sessionId,
-    );
-    return {
-      ok: true,
-      healed: 0,
-      poolRemaining,
-      poolMax: pool.max,
-      cured: cure,
-      message:
-        `${paladinName} lays on hands and ` +
-        (cure === 'disease' ? 'cures the disease' : 'neutralizes the poison') +
-        `. Pool: ${poolRemaining} of ${pool.max} HP remaining.`,
-    };
-  }
 
-  if (pool.remaining <= 0) {
-    return {
-      ok: false,
-      reason: 'empty_pool',
-      message:
-        `${paladinName}'s Lay on Hands pool is empty (0 of ${pool.max} HP). ` +
-        `They must finish a long rest to replenish it.`,
-      poolRemaining: 0,
-      poolMax: pool.max,
-    };
-  }
+    if (remaining <= 0) return emptyRefusal();
 
-  const missing = await missingHitPoints(targetId, participantId, encounterId);
-  // A named amount ("for 20") may exceed what the target can actually receive:
-  // healing clamps at max HP (hp-mechanics.ts), so cap the heal at the target's
-  // missing HP — otherwise the pool pays for healing that never lands (#712).
-  const namedAmount =
-    typeof input.amount === 'number' && input.amount > 0 ? Math.trunc(input.amount) : null;
-  const wanted = Math.min(namedAmount ?? missing, missing);
-  if (wanted <= 0) {
-    return {
-      ok: true,
-      healed: 0,
-      poolRemaining: pool.remaining,
-      poolMax: pool.max,
-      message: `${paladinName}'s target is already at full health; the pool is untouched.`,
-    };
-  }
+    const missing = await missingHitPoints(targetId, participantId, encounterId);
+    // A named amount ("for 20") may exceed what the target can actually receive:
+    // healing clamps at max HP (hp-mechanics.ts), so cap the heal at the target's
+    // missing HP — otherwise the pool pays for healing that never lands (#712).
+    const namedAmount =
+      typeof input.amount === 'number' && input.amount > 0 ? Math.trunc(input.amount) : null;
+    const wanted = Math.min(namedAmount ?? missing, missing);
+    if (wanted <= 0) {
+      return {
+        ok: true,
+        healed: 0,
+        poolRemaining: remaining,
+        poolMax: pool.max,
+        message: `${paladinName}'s target is already at full health; the pool is untouched.`,
+      };
+    }
 
-  // Claim before healing, so concurrent spends cannot take the same HP
-  // twice. The claimed amount never depends on a value a racing call can
-  // move: a named amount claims that amount, capped at the pool's max (the
-  // most one draw can ever need to hold), and an unnamed draw claims what
-  // the target needs, capped at the pool this call read. The claim lands
-  // only when the row still holds it, so concurrent spends refuse instead
-  // of overspending. The heal is capped at the target's missing HP and any
-  // unhealed remainder of the claim goes back to the pool; a heal that
-  // throws gives the whole claim back.
-  const draw =
-    namedAmount !== null ? Math.min(namedAmount, pool.max) : Math.min(wanted, pool.remaining);
-  const claimedRemaining = await claimPoolDraw(pool.row.id, draw);
-  if (claimedRemaining === null) {
-    const remaining = await currentPoolRemaining(pool.row.id);
-    if (remaining <= 0) {
+    // A named amount claims that amount, capped at the pool's max. An unnamed
+    // draw claims what the target needs, capped at the pool. Both are read under
+    // the pool lock, so the claim cannot be sized from a value another draw is
+    // about to change.
+    const draw =
+      namedAmount !== null ? Math.min(namedAmount, pool.max) : Math.min(wanted, remaining);
+    const claimedRemaining = await claimPoolDraw(tx, pool.row.id, draw);
+    if (claimedRemaining === null) {
       return {
         ok: false,
-        reason: 'empty_pool',
+        reason: 'insufficient_pool',
         message:
-          `${paladinName}'s Lay on Hands pool is empty (0 of ${pool.max} HP). ` +
+          `${paladinName}'s Lay on Hands pool has ${remaining} of ${pool.max} HP left, ` +
+          `not enough for the ${draw} HP they tried to spend. ` +
           `They must finish a long rest to replenish it.`,
-        poolRemaining: 0,
+        poolRemaining: remaining,
         poolMax: pool.max,
       };
     }
-    return {
-      ok: false,
-      reason: 'insufficient_pool',
-      message:
-        `${paladinName}'s Lay on Hands pool has ${remaining} of ${pool.max} HP left, ` +
-        `not enough for the ${draw} HP they tried to spend. ` +
-        `They must finish a long rest to replenish it.`,
-      poolRemaining: remaining,
-      poolMax: pool.max,
-    };
-  }
 
-  const healAmount = Math.min(draw, missing);
-  try {
+    const healAmount = Math.min(draw, missing);
+    await tx.insert(featureUsageLog).values({
+      characterId,
+      featureId: pool.featureId,
+      sessionId: sessionId || null,
+      context: usageContext || null,
+    });
+    // The heal commits in its own transaction. If it throws, this transaction
+    // rolls back the claim and the usage row with it.
     if (participantId && encounterId) {
-      await CombatHPService.healDamage(participantId, encounterId, healAmount, 'Lay on Hands', userId);
+      await CombatHPService.healDamage(
+        participantId,
+        encounterId,
+        healAmount,
+        'Lay on Hands',
+        userId,
+      );
     } else {
       await CharacterVitalsService.heal(targetId, userId, healAmount);
     }
-  } catch (error) {
-    await releasePoolDraw(pool.row.id, draw);
-    throw error;
-  }
-  if (healAmount < draw) {
-    await releasePoolDraw(pool.row.id, draw - healAmount);
-  }
-  const poolRemaining = claimedRemaining + (draw - healAmount);
-  await ClassFeatureUsageService.logFeatureUsage(
-    characterId,
-    pool.featureId,
-    userId,
-    context ?? 'lay-on-hands',
-    sessionId,
-  );
+    // Any part of the claim the heal did not use goes back to the pool.
+    if (healAmount < draw) {
+      await tx
+        .update(characterFeatures)
+        .set({ usesRemaining: sql`${characterFeatures.usesRemaining} + ${draw - healAmount}` })
+        .where(eq(characterFeatures.id, pool.row.id));
+    }
+    const poolRemaining = claimedRemaining + (draw - healAmount);
 
-  const targetLabel = targetId === characterId ? 'themself' : 'their ally';
-  return {
-    ok: true,
-    healed: healAmount,
-    poolRemaining,
-    poolMax: pool.max,
-    message:
-      `${paladinName} lays on hands and restores ${healAmount} HP to ${targetLabel}. ` +
-      `Pool: ${poolRemaining} of ${pool.max} HP remaining.`,
-  };
+    const targetLabel = targetId === characterId ? 'themself' : 'their ally';
+    return {
+      ok: true,
+      healed: healAmount,
+      poolRemaining,
+      poolMax: pool.max,
+      message:
+        `${paladinName} lays on hands and restores ${healAmount} HP to ${targetLabel}. ` +
+        `Pool: ${poolRemaining} of ${pool.max} HP remaining.`,
+    };
+  });
 }
 
 /**
@@ -680,9 +679,7 @@ async function resolveLayOnHandsAgainstPool(
  * of the inner resolver carries poolRemaining/poolMax, so one mirror site
  * covers heals, cures, and refusals alike.
  */
-export async function resolveLayOnHands(
-  input: ResolveLayOnHandsInput,
-): Promise<LayOnHandsResult> {
+export async function resolveLayOnHands(input: ResolveLayOnHandsInput): Promise<LayOnHandsResult> {
   const result = await resolveLayOnHandsAgainstPool(input);
   if (result.poolMax > 0) {
     await syncSheetPool({
