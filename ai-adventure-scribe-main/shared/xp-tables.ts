@@ -27,6 +27,17 @@ export const XP_TO_REACH_LEVEL: Readonly<Record<number, number>> = {
   20: 355000,
 };
 
+/** Level reached by a total XP value, using {@link XP_TO_REACH_LEVEL}. Below the level-2 threshold stays level 1. */
+export function levelFromXp(totalXp: number): number {
+  for (let level = 20; level >= 1; level--) {
+    const threshold = XP_TO_REACH_LEVEL[level];
+    if (threshold !== undefined && totalXp >= threshold) {
+      return level;
+    }
+  }
+  return 1;
+}
+
 /** XP per character for an encounter at each difficulty, by character level: [easy, medium, hard, deadly] (2014 DMG p. 82). */
 export const ENCOUNTER_XP_BY_LEVEL: Record<number, [number, number, number, number]> = {
   1: [25, 50, 75, 100],

@@ -1,6 +1,6 @@
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import { proficiencyBonus } from '../../../../shared/proficiency-bonus';
-import { XP_TO_REACH_LEVEL } from '../../../../shared/xp-tables';
+import { levelFromXp, XP_TO_REACH_LEVEL } from '../../../../shared/xp-tables';
 
 /**
  * Progression Mechanics
@@ -63,13 +63,7 @@ export class ProgressionMechanics {
    * Calculate level from total XP
    */
   static calculateLevelFromXP(totalXp: number): number {
-    for (let level = 20; level >= 1; level--) {
-      const threshold = XP_TO_REACH_LEVEL[level];
-      if (threshold !== undefined && totalXp >= threshold) {
-        return level;
-      }
-    }
-    return 1;
+    return levelFromXp(totalXp);
   }
 
   /**
