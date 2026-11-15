@@ -238,6 +238,15 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
     expect(smite).toBeLessThanOrEqual(dice * 8);
     expect(outcome!.transcriptLines?.join('\n')).toContain(`Divine Smite: ${dice}d8 radiant`);
 
+    // #1522: the hit reports its weapon part and its radiant part separately, and the parts add
+    // up to the total the orc took.
+    const parts = (outcome as { damageParts?: Array<Record<string, unknown>> }).damageParts!;
+    expect(parts.map((part) => part.damageType)).toEqual(['slashing', 'radiant']);
+    expect(parts[1]).toMatchObject({ amount: smite, source: 'Divine Smite', dice: `${dice}d8` });
+    expect(parts.reduce((sum, part) => sum + (part.amount as number), 0)).toBe(
+      outcome!.finalDamage,
+    );
+
     // The Smite lands on the orc's HP along with the weapon damage.
     expect(await orcHp()).toBeLessThanOrEqual(ORC_START_HP - smite);
   });

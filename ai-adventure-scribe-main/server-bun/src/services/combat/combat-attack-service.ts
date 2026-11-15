@@ -109,7 +109,12 @@ import type { UseSpellSlotResult } from '../../types/spell-slots.js';
  * the shared AttackResult so this change does not overlap the open boss-moves PR touching
  * types/combat.ts; `hexDamage` is optional and the narration reads it from the result object.
  */
-type HexAttackResult = AttackResult & { hexDamage?: number; divineSmiteDamage?: number };
+type HexAttackResult = AttackResult & {
+  hexDamage?: number;
+  divineSmiteDamage?: number;
+  /** #1522: the hit split by damage type when Divine Smite added its radiant part. */
+  damageParts?: Array<{ damageType: string; amount: number; source?: string; dice?: string }>;
+};
 
 /**
  * Whether the caller supplied a real d20 face. Guards the whole player-rolled path against a
@@ -1004,6 +1009,24 @@ export class CombatAttackService {
           finalDamage: appliedDamage,
           ...(hexDamage > 0 ? { hexDamage } : {}),
           ...(smiteApplied ? { divineSmiteDamage: smiteApplied.damage } : {}),
+          // #1522: the weapon part and the radiant part, each resisted on its own type. The
+          // rolled parts are reported as rolled; the per-hit cap can lower finalDamage below them.
+          ...(smiteApplied
+            ? {
+                damageParts: [
+                  { damageType: weapon.damageType, amount: damageCalc.finalDamage },
+                  ...(hexDamage > 0
+                    ? [{ damageType: 'necrotic', amount: hexDamage, source: 'Hex' }]
+                    : []),
+                  {
+                    damageType: 'radiant',
+                    amount: smiteApplied.damage,
+                    source: 'Divine Smite',
+                    dice: `${smiteApplied.diceCount}d8`,
+                  },
+                ],
+              }
+            : {}),
           ...(blessDie > 0 ? { blessDie } : {}),
           targetNewHp: hpResult.newCurrentHp,
           targetIsConscious: hpResult.isConscious,
