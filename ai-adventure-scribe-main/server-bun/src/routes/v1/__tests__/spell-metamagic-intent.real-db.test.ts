@@ -362,4 +362,34 @@ describeWithDb('Metamagic casts through the real intent route (#1233)', () => {
         .where(eq(characters.id, characterId));
     }
   });
+
+  // #1508: Twinned fails closed. A spell that is not on the single-target allowlist is refused
+  // with 422 at the cast, whatever the body names, and spends nothing.
+  test('Twinned on a spell that is not on the single-target allowlist is refused with 422', async () => {
+    const db = realDb();
+    await db
+      .update(characters)
+      .set({ personalityNotes: metamagicEnvelopeJson(['twinned', 'careful']) })
+      .where(eq(characters.id, characterId));
+    try {
+      await turn(3);
+      const body = {
+        ...metamagicMagicMissileBody(heroId, foeId, 'twinned'),
+        intent: {
+          ...metamagicMagicMissileBody(heroId, foeId, 'twinned').intent,
+          spellId: 'not-a-catalog-spell',
+          spellName: 'Not A Catalog Spell',
+        },
+      };
+      const response = await post(body);
+      expect(response.status).toBe(422);
+      expect(await points()).toBe(3);
+      expect(await usedSlots(1)).toBe(0);
+    } finally {
+      await db
+        .update(characters)
+        .set({ personalityNotes: metamagicEnvelopeJson(['quickened', 'careful']) })
+        .where(eq(characters.id, characterId));
+    }
+  });
 });

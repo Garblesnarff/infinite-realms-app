@@ -42,6 +42,7 @@ import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CampaignService } from '../../services/campaign-service.js';
 import { CharacterSpellService } from '../../services/character/character-spell-service.js';
+import { envelopeInspiration } from '../../services/character-envelope.js';
 import { CharacterService } from '../../services/character-service.js';
 import { SpellSlotDataAccess } from '../../services/spell-slots/spell-slot-data-access.js';
 
@@ -469,6 +470,8 @@ export function mapCharacterToApi(
     appearance: character.appearance,
     personality_traits: character.personalityTraits,
     personality_notes: character.personalityNotes,
+    // #1508: the engine-owned Inspiration flag. A character with no key in its envelope is not held.
+    inspiration: envelopeInspiration(character.personalityNotes),
     backstory_elements: character.backstoryElements,
     theme: character.theme,
     session_notes: character.sessionNotes,
