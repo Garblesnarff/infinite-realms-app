@@ -864,4 +864,131 @@ describeWithDb('paladin Lay on Hands pool (#712)', () => {
 
     expect(await poolRemaining(layOnHandsId)).toBe(2);
   });
+
+  it('in combat, Lay on Hands still heals a paladin whose character row has no campaign (#1531)', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 7 })
+      .where(eq(combatParticipantStatus.participantId, participantId));
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 7 })
+      .where(eq(characterStats.characterId, paladinId));
+
+    await db.update(characters).set({ campaignId: null }).where(eq(characters.id, paladinId));
+    try {
+      const result = await resolveLayOnHands({
+        characterId: paladinId,
+        userId: paladinUserId,
+        participantId,
+        encounterId,
+        targetCharacterId: paladinId,
+        sessionId,
+        context: 'no-campaign-combat-1531',
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.healed).toBe(5);
+      }
+
+      const [status] = await db
+        .select()
+        .from(combatParticipantStatus)
+        .where(eq(combatParticipantStatus.participantId, participantId))
+        .limit(1);
+      expect(status.currentHp).toBe(12);
+    } finally {
+      await db.update(characters).set({ campaignId }).where(eq(characters.id, paladinId));
+    }
+  });
+
+  it('Lay on Hands refuses a participant from an encounter the user does not own (#1531)', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+
+    const foreignUserId = testId('1531-foreign-user');
+    const [{ id: foreignCampaignId }] = await db
+      .insert(campaigns)
+      .values({ userId: foreignUserId, name: testId('1531-foreign-camp') })
+      .returning({ id: campaigns.id });
+
+    const [{ id: foreignSessionId }] = await db
+      .insert(gameSessions)
+      .values({
+        campaignId: foreignCampaignId,
+        characterId: null,
+        sessionNumber: 1,
+        status: 'active',
+      })
+      .returning({ id: gameSessions.id });
+
+    const [{ id: foreignEncounterId }] = await db
+      .insert(combatEncounters)
+      .values({
+        sessionId: foreignSessionId,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
+      .returning({ id: combatEncounters.id });
+
+    const [{ id: foreignParticipantId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId: foreignEncounterId,
+        characterId: null,
+        name: 'Foreign',
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 10,
+        maxHp: 12,
+      })
+      .returning({ id: combatParticipants.id });
+
+    await db.insert(combatParticipantStatus).values({
+      participantId: foreignParticipantId,
+      currentHp: 4,
+      maxHp: 12,
+      isConscious: true,
+    });
+
+    try {
+      await resolveLayOnHands({
+        characterId: paladinId,
+        userId: paladinUserId,
+        participantId: foreignParticipantId,
+        encounterId: foreignEncounterId,
+        sessionId,
+      });
+    } catch {
+      // acceptable: getCombatState may throw for an encounter the user does not own
+    }
+
+    const [foreignStatus] = await db
+      .select()
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, foreignParticipantId))
+      .limit(1);
+    expect(foreignStatus.currentHp).toBe(4);
+
+    expect(await poolRemaining(layOnHandsId)).toBe(5);
+  });
 });

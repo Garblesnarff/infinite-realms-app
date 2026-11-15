@@ -23,6 +23,7 @@ import { and, eq, gte, ilike, or, sql } from 'drizzle-orm';
 import { ClassFeatureUsageService } from './class-feature-usage-service.js';
 import { db } from '../../../../db/client';
 import {
+  campaigns,
   characterConditions,
   characterFeatures,
   characters,
@@ -438,40 +439,58 @@ async function missingHitPoints(
   return Math.max(0, (stats.max ?? 0) - (stats.current ?? 0));
 }
 
-/** True when the target is the paladin or sits in the paladin's campaign (#1531). */
-async function targetInPaladinCampaign(
+/**
+ * True when the target is in a campaign or session the user owns: the same rule
+ * getCombatState uses for the encounter (#1531).
+ */
+async function targetInUsersCampaign(
   executor: DbTx,
   input: {
-    paladin: CharacterRow;
+    userId: string;
+    paladinId: string;
     targetCharacterId: string;
     participantId?: string;
     encounterId?: string;
   },
 ): Promise<boolean> {
-  const { paladin, targetCharacterId, participantId, encounterId } = input;
+  const { userId, targetCharacterId, participantId, encounterId } = input;
   if (participantId && encounterId) {
-    if (paladin.campaignId === null) return false;
     const [row] = await executor
       .select({ one: sql`1` })
       .from(combatParticipants)
       .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
       .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .leftJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characters, eq(gameSessions.characterId, characters.id))
       .where(
         and(
           eq(combatParticipants.id, participantId),
           eq(combatParticipants.encounterId, encounterId),
-          eq(gameSessions.campaignId, paladin.campaignId),
+          or(
+            eq(campaigns.userId, userId),
+            eq(characters.userId, userId),
+            eq(characters.ownerId, userId),
+          ),
         ),
       )
       .limit(1);
     return !!row;
   }
-  if (targetCharacterId === paladin.id) return true;
-  if (paladin.campaignId === null) return false;
+  if (targetCharacterId === input.paladinId) return true;
   const [row] = await executor
     .select({ one: sql`1` })
     .from(characters)
-    .where(and(eq(characters.id, targetCharacterId), eq(characters.campaignId, paladin.campaignId)))
+    .leftJoin(campaigns, eq(characters.campaignId, campaigns.id))
+    .where(
+      and(
+        eq(characters.id, targetCharacterId),
+        or(
+          eq(characters.userId, userId),
+          eq(characters.ownerId, userId),
+          eq(campaigns.userId, userId),
+        ),
+      ),
+    )
     .limit(1);
   return !!row;
 }
@@ -618,8 +637,9 @@ async function resolveLayOnHandsAgainstPool(
     const remaining = locked?.usesRemaining ?? 0;
     const usageContext = context ?? (cure ? `lay-on-hands-cure-${cure}` : 'lay-on-hands');
 
-    const targetOk = await targetInPaladinCampaign(tx, {
-      paladin: pool.character,
+    const targetOk = await targetInUsersCampaign(tx, {
+      userId,
+      paladinId: characterId,
       targetCharacterId: targetId,
       participantId,
       encounterId,
@@ -628,7 +648,7 @@ async function resolveLayOnHandsAgainstPool(
       return {
         ok: false,
         reason: 'invalid_target',
-        message: `Lay on Hands can only reach a character in ${paladinName}'s campaign.`,
+        message: 'Lay on Hands can only reach a character in this campaign.',
         poolRemaining: remaining,
         poolMax: pool.max,
       };
