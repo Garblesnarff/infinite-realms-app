@@ -174,7 +174,8 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
   const baseTitle = turnBarTitle(summary, busy, playerDown);
   const normalSub = turnBarSub(summary, enemyDistance ?? null, playerDown);
   const down = actorIsDying(summary.active, playerDown);
-  const title = tableLook && down ? 'Dying' : baseTitle;
+  // #1521: same word as the chip (#1507).
+  const title = tableLook && down ? 'Unconscious' : baseTitle;
   const sub = tableLook
     ? `Round ${summary.round} · Turn ${summary.turn} of ${summary.actors.length}${normalSub && !normalSub.startsWith('Round ') ? ` · ${normalSub}` : ''}`
     : normalSub;

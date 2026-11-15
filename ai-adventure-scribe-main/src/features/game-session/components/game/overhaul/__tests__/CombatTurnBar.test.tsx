@@ -580,7 +580,7 @@ describe('stable and multi-player vital states (#1431)', () => {
     document.body.classList.add('ir-table-look');
     render(<CombatTurnBar summary={summary} busy={null} playerDown />);
 
-    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Dying');
+    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Unconscious');
     const activePip = screen
       .getAllByTestId('combat-turn-pip')
       .find((pip) => pip.textContent?.includes('Active hero'));
@@ -591,7 +591,7 @@ describe('stable and multi-player vital states (#1431)', () => {
     expect(otherPip?.querySelector('[data-testid="combat-turn-dying"]')).toBeNull();
   });
 
-  it('still marks an ordinary dying player Dying', () => {
+  it('still marks an ordinary dying player Unconscious', () => {
     const dyingEncounter = mapAuthoritativeCombat({
       encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 4, currentTurnOrder: 0 },
       participants: [
@@ -611,7 +611,7 @@ describe('stable and multi-player vital states (#1431)', () => {
     const summary = summarizeCombatTurn(dyingEncounter)!;
     render(<CombatTurnBar summary={summary} busy={null} playerDown />);
 
-    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Dying');
+    expect(screen.getByTestId('combat-turn-text').textContent).toBe('Unconscious');
     expect(screen.queryAllByTestId('combat-turn-dying')).toHaveLength(1);
   });
 });
@@ -807,6 +807,13 @@ describe('turn bar vital chip word (#1507)', () => {
           status: { ...status, deathSavesSuccesses: 3 },
         }),
         wire({
+          id: 'x',
+          name: 'Dead hero',
+          initiative: 8,
+          vitalState: 'dead',
+          status: { ...status, deathSavesFailures: 3 },
+        }),
+        wire({
           id: 'h',
           name: 'Healthy hero',
           initiative: 4,
@@ -829,6 +836,11 @@ describe('turn bar vital chip word (#1507)', () => {
         .getAllByTestId('combat-turn-pip')
         .find((pip) => pip.textContent?.includes('Stable hero'));
       expect(stablePip?.querySelector('[data-testid="combat-turn-dying"]')).toBeNull();
+      const deadPip = screen
+        .getAllByTestId('combat-turn-pip')
+        .find((pip) => pip.textContent?.includes('Dead hero'));
+      expect(deadPip).toBeDefined();
+      expect(deadPip?.querySelector('[data-testid="combat-turn-dying"]')).toBeNull();
     } finally {
       document.body.classList.remove('ir-table-look');
     }
