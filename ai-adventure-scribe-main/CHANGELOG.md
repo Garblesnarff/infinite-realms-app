@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.47.2](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.47.1...v0.47.2) (2026-11-15)
+
+
+### Bug Fixes
+
+* **chronicle:** the empty state points to End session ([#1523](https://github.com/Garblesnarff/infinite-realms-app/issues/1523)) ([6ada3e3](https://github.com/Garblesnarff/infinite-realms-app/commit/6ada3e3491c07d3b49b8387492906ef46c4d41fa))
+* **combat:** refuse spent-action attack proposals ([94a418d](https://github.com/Garblesnarff/infinite-realms-app/commit/94a418d133fe1ebe43cf903b30de33210b89dcfd))
+* **combat:** show the radiant part of a Divine Smite hit ([#1522](https://github.com/Garblesnarff/infinite-realms-app/issues/1522)) ([b1b29a7](https://github.com/Garblesnarff/infinite-realms-app/commit/b1b29a79d34e19511a1efa39c30c0812af4d2fee))
+* **engine:** merge the character envelope on the server ([#1508](https://github.com/Garblesnarff/infinite-realms-app/issues/1508)) ([3dfeadd](https://github.com/Garblesnarff/infinite-realms-app/commit/3dfeadd7a26f5601d64565829c7400e297f6d99a))
+* **paladin:** Lay on Hands follow-ups ([#1531](https://github.com/Garblesnarff/infinite-realms-app/issues/1531)) ([1c59255](https://github.com/Garblesnarff/infinite-realms-app/commit/1c592551b626fced144540af174812229371604f))
+
+
+### Refactoring
+
+* **rules:** one owner for SRD modifier, proficiency and XP arithmetic ([#618](https://github.com/Garblesnarff/infinite-realms-app/issues/618)) ([c5a67cd](https://github.com/Garblesnarff/infinite-realms-app/commit/c5a67cdd38f30694ca4bcc9663599d089b201134))
+
+
+### Tests
+
+* **dice:** pin the roll tray's natural d20 to the roll result ([#1423](https://github.com/Garblesnarff/infinite-realms-app/issues/1423)) ([7fab46a](https://github.com/Garblesnarff/infinite-realms-app/commit/7fab46ab69d5a3c13d60cc7f828f1d6d8ee7fa1c))
+
 ## [0.47.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.47.0...v0.47.1) (2026-11-15)
 
 
