@@ -9,6 +9,14 @@ const layoutUrl =
   process.env.TABLE_LAYOUT_BASE_URL ??
   servers.find((server) => server?.url?.includes('/e2e/game-panel-layout.html'))?.url;
 if (!layoutUrl) throw new Error('The layout web server is not configured');
+
+// The fixture mounts the full game screen; on this VM's load the mount takes
+// ~45 s per test, so the config's 60 s test timeout is too tight (two tests
+// timed out at 60 s in the baseline run). 180 s lets the mount finish; the
+// 10 s expect timeouts are unchanged.
+test.beforeEach(() => {
+  test.setTimeout(180_000);
+});
 async function stubSession(page: Page): Promise<void> {
   await page.route('**/v1/**', (route) => {
     const path = new URL(route.request().url()).pathname;

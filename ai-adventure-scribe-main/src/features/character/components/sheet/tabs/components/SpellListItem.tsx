@@ -93,7 +93,7 @@ const SpellListItem: React.FC<SpellListItemProps> = ({
           <div className="flex-1">
             <div className="flex items-center gap-2">
               <span className="font-medium">{spell.name || 'Unknown Spell'}</span>
-              {alwaysPrepared && (
+              {(alwaysPrepared || spell.alwaysPrepared) && (
                 <Badge variant="secondary" className="text-xs">
                   Always prepared
                 </Badge>
@@ -106,11 +106,6 @@ const SpellListItem: React.FC<SpellListItemProps> = ({
               {spell.concentration && (
                 <Badge variant="secondary" className="text-xs">
                   C
-                </Badge>
-              )}
-              {spell.alwaysPrepared && (
-                <Badge variant="secondary" className="text-xs">
-                  Always prepared
                 </Badge>
               )}
             </div>

@@ -979,10 +979,10 @@ describeWithDb('Fighter feature More-menu bodies resolve through the real route 
     });
   });
 
-  test('#1187: the replayed library holds both Action Surge rows until the follow-up merge (step 1 only)', async () => {
-    // Step 1 only (option (a)): the level-17 "two uses" row stays until the follow-up
-    // migration merges it (db/migrations/20261027_merge_action_surge_rows.sql). Rows this
-    // suite inserts for the #1181 backstop cases are marked "Test-only" and are not the seed.
+  test('#1187: the replayed library holds one Action Surge row, at level 2', async () => {
+    // The second use at fighter level 17 is a uses count, not a library row.
+    // Rows this suite inserts for the #1181 backstop cases are marked "Test-only"
+    // and are not the seed.
     const rows = await db
       .select({
         name: classFeaturesLibrary.featureName,
@@ -1006,10 +1006,7 @@ describeWithDb('Fighter feature More-menu bodies resolve through the real route 
     const seeded = rows.filter((row) => !row.description.startsWith('Test-only'));
     expect(
       seeded.map(({ name, levelAcquired, usesCount }) => ({ name, levelAcquired, usesCount })),
-    ).toEqual([
-      { name: 'Action Surge', levelAcquired: 2, usesCount: 1 },
-      { name: 'Action Surge (two uses)', levelAcquired: 17, usesCount: 2 },
-    ]);
+    ).toEqual([{ name: 'Action Surge', levelAcquired: 2, usesCount: 1 }]);
   });
 
   test('#1187: a level-17 sheet with only the level-2 row rests to two uses and spends one', async () => {
