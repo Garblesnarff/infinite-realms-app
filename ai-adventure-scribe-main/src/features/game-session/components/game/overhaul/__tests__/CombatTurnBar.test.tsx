@@ -777,3 +777,60 @@ describe('Table turn bar (#1428)', () => {
     }
   });
 });
+
+describe('turn bar vital chip word (#1507)', () => {
+  it('words the 0 HP chip Unconscious, not Dying, and shows no chip for a stable or dead hero', () => {
+    const status = {
+      ...DYING_SCHOLAR_PARTICIPANT.status,
+      currentHp: 0,
+      isConscious: false,
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0,
+    };
+    const wire = (
+      overrides: Partial<AuthoritativeCombatPayload['participants'][number]>,
+    ): AuthoritativeCombatPayload['participants'][number] => ({
+      ...DYING_SCHOLAR_PARTICIPANT,
+      conditions: [...DYING_SCHOLAR_PARTICIPANT.conditions],
+      status: { ...status },
+      ...overrides,
+    });
+    const authoritative = mapAuthoritativeCombat({
+      encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 4, currentTurnOrder: 0 },
+      participants: [
+        wire({ id: 'd', name: 'Dying hero', initiative: 18, vitalState: 'dying' }),
+        wire({
+          id: 's',
+          name: 'Stable hero',
+          initiative: 12,
+          vitalState: 'stabilized',
+          status: { ...status, deathSavesSuccesses: 3 },
+        }),
+        wire({
+          id: 'h',
+          name: 'Healthy hero',
+          initiative: 4,
+          vitalState: 'standing',
+          status: { ...status, currentHp: 7, isConscious: true },
+        }),
+      ],
+    });
+    const turn = summarizeCombatTurn(authoritative)!;
+    document.body.classList.add('ir-table-look');
+    try {
+      render(<CombatTurnBar summary={turn} busy={null} playerDown />);
+
+      const chips = screen.queryAllByTestId('combat-turn-dying');
+      expect(chips.map((chip) => chip.textContent?.trim())).toEqual(['Unconscious']);
+      expect(
+        screen.queryByText('Dying', { selector: '[data-testid="combat-turn-dying"]' }),
+      ).toBeNull();
+      const stablePip = screen
+        .getAllByTestId('combat-turn-pip')
+        .find((pip) => pip.textContent?.includes('Stable hero'));
+      expect(stablePip?.querySelector('[data-testid="combat-turn-dying"]')).toBeNull();
+    } finally {
+      document.body.classList.remove('ir-table-look');
+    }
+  });
+});
