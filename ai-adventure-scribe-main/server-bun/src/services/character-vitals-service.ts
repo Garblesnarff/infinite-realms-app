@@ -411,20 +411,30 @@ export class CharacterVitalsService {
   /**
    * Apply healing. Healing that leaves the character above 0 HP revives them from dying
    * to standing and clears their death saves.
+   *
+   * A caller that passes its transaction gets the heal committed or rolled back with
+   * its own writes.
    */
-  static async heal(characterId: string, userId: string, amount: number): Promise<CharacterVitals> {
-    return db.transaction(async (tx) => {
-      const current = await loadVitals(tx, characterId, { userId, forUpdate: true });
+  static async heal(
+    characterId: string,
+    userId: string,
+    amount: number,
+    tx?: VitalsTx,
+  ): Promise<CharacterVitals> {
+    const run = async (t: VitalsTx): Promise<CharacterVitals> => {
+      const current = await loadVitals(t, characterId, { userId, forUpdate: true });
       if (!current) throw notFound();
 
       return writeVitals(
-        tx,
+        t,
         characterId,
         current.maxHitPoints,
         computeVitalsAfterHeal(current, amount),
         userId,
       );
-    });
+    };
+    if (tx) return run(tx);
+    return db.transaction(run);
   }
 
   /**

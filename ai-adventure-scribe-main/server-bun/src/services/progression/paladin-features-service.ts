@@ -28,9 +28,13 @@ import {
   characters,
   characterStats,
   classFeaturesLibrary,
+  combatEncounters,
   combatParticipantConditions,
+  combatParticipantStatus,
+  combatParticipants,
   conditionsLibrary,
   featureUsageLog,
+  gameSessions,
   type CharacterFeature,
 } from '../../../../db/schema/index';
 import { abilityModifier } from '../../../../shared/ability-modifier';
@@ -47,6 +51,9 @@ export const LAY_ON_HANDS_NAME = 'Lay on Hands';
 const LAY_ON_HANDS_CURE_COST = 5;
 
 type CharacterRow = typeof characters.$inferSelect;
+
+/** A transaction handle from `db.transaction`: writes through it commit or roll back together. */
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 /** Paladin levels: `classLevels` entries ({ className, level }) win; else class/level. */
 export function paladinLevelOf(character: {
@@ -394,15 +401,32 @@ export interface ResolveLayOnHandsInput {
 }
 
 async function missingHitPoints(
+  executor: DbTx,
   targetCharacterId: string,
   participantId: string | undefined,
   encounterId: string | undefined,
 ): Promise<number> {
   if (participantId && encounterId) {
-    const status = await CombatHPService.getParticipantStatus(participantId);
-    if (status) return Math.max(0, (status.maxHp ?? 0) - (status.currentHp ?? 0));
+    const [row] = await executor
+      .select({
+        currentHp: combatParticipantStatus.currentHp,
+        maxHp: combatParticipantStatus.maxHp,
+      })
+      .from(combatParticipantStatus)
+      .innerJoin(
+        combatParticipants,
+        eq(combatParticipantStatus.participantId, combatParticipants.id),
+      )
+      .where(
+        and(
+          eq(combatParticipantStatus.participantId, participantId),
+          eq(combatParticipants.encounterId, encounterId),
+        ),
+      )
+      .limit(1);
+    if (row) return Math.max(0, (row.maxHp ?? 0) - (row.currentHp ?? 0));
   }
-  const [stats] = await db
+  const [stats] = await executor
     .select({
       current: characterStats.currentHitPoints,
       max: characterStats.maxHitPoints,
@@ -414,8 +438,43 @@ async function missingHitPoints(
   return Math.max(0, (stats.max ?? 0) - (stats.current ?? 0));
 }
 
-/** A transaction handle from `db.transaction`: writes through it commit or roll back together. */
-type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+/** True when the target is the paladin or sits in the paladin's campaign (#1531). */
+async function targetInPaladinCampaign(
+  executor: DbTx,
+  input: {
+    paladin: CharacterRow;
+    targetCharacterId: string;
+    participantId?: string;
+    encounterId?: string;
+  },
+): Promise<boolean> {
+  const { paladin, targetCharacterId, participantId, encounterId } = input;
+  if (participantId && encounterId) {
+    if (paladin.campaignId === null) return false;
+    const [row] = await executor
+      .select({ one: sql`1` })
+      .from(combatParticipants)
+      .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .where(
+        and(
+          eq(combatParticipants.id, participantId),
+          eq(combatParticipants.encounterId, encounterId),
+          eq(gameSessions.campaignId, paladin.campaignId),
+        ),
+      )
+      .limit(1);
+    return !!row;
+  }
+  if (targetCharacterId === paladin.id) return true;
+  if (paladin.campaignId === null) return false;
+  const [row] = await executor
+    .select({ one: sql`1` })
+    .from(characters)
+    .where(and(eq(characters.id, targetCharacterId), eq(characters.campaignId, paladin.campaignId)))
+    .limit(1);
+  return !!row;
+}
 
 /**
  * Clear an active 'Poisoned' condition after Lay on Hands neutralizes it.
@@ -559,6 +618,22 @@ async function resolveLayOnHandsAgainstPool(
     const remaining = locked?.usesRemaining ?? 0;
     const usageContext = context ?? (cure ? `lay-on-hands-cure-${cure}` : 'lay-on-hands');
 
+    const targetOk = await targetInPaladinCampaign(tx, {
+      paladin: pool.character,
+      targetCharacterId: targetId,
+      participantId,
+      encounterId,
+    });
+    if (!targetOk) {
+      return {
+        ok: false,
+        reason: 'invalid_target',
+        message: `Lay on Hands can only reach a character in ${paladinName}'s campaign.`,
+        poolRemaining: remaining,
+        poolMax: pool.max,
+      };
+    }
+
     if (cure) {
       if (remaining < LAY_ON_HANDS_CURE_COST) return cureRefusal(remaining);
       const poolRemaining = await claimPoolDraw(tx, pool.row.id, LAY_ON_HANDS_CURE_COST);
@@ -573,12 +648,14 @@ async function resolveLayOnHandsAgainstPool(
           encounterId,
         });
       }
-      await tx.insert(featureUsageLog).values({
+      await ClassFeatureUsageService.logFeatureUsage(
         characterId,
-        featureId: pool.featureId,
-        sessionId: sessionId || null,
-        context: usageContext || null,
-      });
+        pool.featureId,
+        userId,
+        usageContext,
+        sessionId,
+        tx,
+      );
       return {
         ok: true,
         healed: 0,
@@ -594,7 +671,7 @@ async function resolveLayOnHandsAgainstPool(
 
     if (remaining <= 0) return emptyRefusal();
 
-    const missing = await missingHitPoints(targetId, participantId, encounterId);
+    const missing = await missingHitPoints(tx, targetId, participantId, encounterId);
     // A named amount ("for 20") may exceed what the target can actually receive:
     // healing clamps at max HP (hp-mechanics.ts), so cap the heal at the target's
     // missing HP — otherwise the pool pays for healing that never lands (#712).
@@ -632,15 +709,20 @@ async function resolveLayOnHandsAgainstPool(
     }
 
     const healAmount = Math.min(draw, missing);
-    await tx.insert(featureUsageLog).values({
+    await ClassFeatureUsageService.logFeatureUsage(
       characterId,
-      featureId: pool.featureId,
-      sessionId: sessionId || null,
-      context: usageContext || null,
-    });
-    // The heal commits in its own transaction. If it throws, this transaction
-    // rolls back the claim and the usage row with it.
+      pool.featureId,
+      userId,
+      usageContext,
+      sessionId,
+      tx,
+    );
+    // The sheet heal runs on this transaction, so a failed refund or commit rolls
+    // back the heal with the claim and usage row.
     if (participantId && encounterId) {
+      // Gap (#1531): CombatHPService.healDamage cannot take a transaction; it opens
+      // its own. In combat, a failure after healDamage returns (the refund or the
+      // commit) leaves the heal applied while the claim rolls back.
       await CombatHPService.healDamage(
         participantId,
         encounterId,
@@ -649,7 +731,7 @@ async function resolveLayOnHandsAgainstPool(
         userId,
       );
     } else {
-      await CharacterVitalsService.heal(targetId, userId, healAmount);
+      await CharacterVitalsService.heal(targetId, userId, healAmount, tx);
     }
     // Any part of the claim the heal did not use goes back to the pool.
     if (healAmount < draw) {

@@ -74,6 +74,8 @@ function divineInterventionContext(
   return `${context ?? ''} divine-intervention:success`.trim();
 }
 
+type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 /**
  * Class Feature Usage Service
  */
@@ -720,9 +722,11 @@ export class ClassFeatureUsageService {
     userId: string,
     context?: string,
     sessionId?: string,
+    executor?: DbExecutor,
   ): Promise<FeatureUsageLog> {
+    const run = executor ?? db;
     // Verify ownership before logging
-    const [character] = await db
+    const [character] = await run
       .select({ id: characters.id })
       .from(characters)
       .where(
@@ -740,7 +744,7 @@ export class ClassFeatureUsageService {
     // The insert-select repeated the ownership query immediately above it, and its
     // projection covered 4 of feature_usage_log's 7 columns, so Drizzle threw and no
     // feature use was ever logged. The check above is the authorization.
-    const [log] = await db
+    const [log] = await run
       .insert(featureUsageLog)
       .values({
         characterId,
