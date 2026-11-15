@@ -40,6 +40,18 @@ describe('Twinned Spell allowlist (#1508)', () => {
     expect(twinnedAllowed(spell!)).toBe(false);
   });
 
+  // #1508 FIX (strategist on #1534): each gains a target per slot level above its own (2014 SRD), so
+  // Twinned must be refused for them. They are not on the allowlist, and the allowlist has no slot
+  // level to check. The real-route refusal path calls this same function before any cost is spent.
+  it('refuses Hold Person and Charm Person, which gain targets when upcast', () => {
+    for (const id of ['hold-person', 'charm-person']) {
+      const spell = resolveCatalogSpell(id);
+      expect(spell, `${id} is not in the spell data`).toBeDefined();
+      expect(TWINNABLE_SINGLE_TARGET_SPELL_IDS.has(id), id).toBe(false);
+      expect(twinnedAllowed(spell!), id).toBe(false);
+    }
+  });
+
   it('refuses a spell id that is not in the catalog', () => {
     expect(resolveCatalogSpell('not-a-catalog-spell')).toBeUndefined();
   });

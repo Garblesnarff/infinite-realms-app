@@ -231,6 +231,26 @@ describeWithDb('character envelope merge on the server (#1508)', () => {
     expect(await storedNotes(id)).toEqual(stored);
   });
 
+  it('a spend that lands between the read and the write of a PUT leaves inspiration false', async () => {
+    // #1508 FIX (strategist): a PUT reads the stored envelope and writes the merged one. A spend
+    // that commits in between must not be overwritten by the stale stored `true`. Each round runs
+    // a PUT (which sends inspiration true) and a spend at the same time from the same stored state.
+    // Without the row lock in update, a round can lose the spend and leave the flag true.
+    const id = await createCharacter('spend-race');
+    for (let round = 0; round < 25; round += 1) {
+      await storeEnvelope(id, { traits: ['Brave'], inspiration: true });
+      const [put, spend] = await Promise.all([
+        send(`/v1/characters/${id}`, 'PUT', {
+          personality_notes: JSON.stringify({ traits: [`Bold ${round}`], inspiration: true }),
+        }),
+        send(`/v1/characters/${id}/spend-inspiration`, 'POST'),
+      ]);
+      expect(put.status, `round ${round}`).toBe(200);
+      expect([200, 409], `round ${round}`).toContain(spend.status);
+      expect((await storedNotes(id))?.inspiration, `round ${round}`).toBe(false);
+    }
+  });
+
   it('a premade with no inspiration key reads as not held (false) from the character API', async () => {
     const id = await createCharacter('premade');
     await storeEnvelope(id, null);

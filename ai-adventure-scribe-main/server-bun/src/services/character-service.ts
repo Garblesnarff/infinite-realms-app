@@ -845,50 +845,8 @@ export class CharacterService {
     data: Partial<NewCharacter>,
     equipment?: Array<Record<string, unknown>>,
   ): Promise<Character | null> {
-    // #1508: the client's envelope is merged onto the stored one on the server. Engine-owned keys
-    // (inspiration) keep their stored value, a key the client omits keeps its stored value, and a
-    // null, empty or non-JSON envelope cannot bypass the guards below. No envelope leaves the column.
-    let mergedPersonalityNotes: string | undefined;
-    if (data.personalityNotes !== undefined) {
-      const [current] = await db
-        .select({
-          class: characters.class,
-          level: characters.level,
-          classLevels: characters.classLevels,
-          personalityNotes: characters.personalityNotes,
-        })
-        .from(characters)
-        .where(eq(characters.id, characterId))
-        .limit(1);
-      const clientEnvelope = data.personalityNotes ?? '';
-      const merge = mergeClientEnvelope(current?.personalityNotes ?? null, clientEnvelope);
-      if (merge.kind === 'refuse') throw new ValidationError(merge.reason);
-      if (merge.kind === 'write') {
-        mergedPersonalityNotes = merge.value;
-        // #1233: a stored Metamagic list must be valid for the Sorcerer level the row will hold.
-        const updatedSorcererLevel = classLevelOf(
-          {
-            class: data.class ?? current?.class ?? null,
-            level: data.level ?? current?.level ?? 1,
-            classLevels: data.classLevels ?? current?.classLevels ?? null,
-          },
-          'Sorcerer',
-        );
-        const updatedMetamagic = checkEnvelopeMetamagic(merge.value, updatedSorcererLevel);
-        if (!updatedMetamagic.ok) throw new ValidationError(updatedMetamagic.reason);
-        // #1233 (strategist FIX): a stored list is fixed, except that the cap may allow a new option.
-        // The client's own envelope is checked, not the merged one: an envelope that leaves the
-        // stored list out is a removal and is refused (#1233), while a missing envelope keeps it.
-        const repick = checkMetamagicRepick(
-          current?.personalityNotes ?? null,
-          clientEnvelope,
-          updatedSorcererLevel,
-        );
-        if (!repick.ok) throw new BusinessLogicError(repick.reason, { reason: 'metamagic_repick' });
-      }
-    }
     // 🛡️ Sentinel: Explicitly destructure to prevent Mass Assignment of sensitive fields.
-    // personalityNotes is left out here: the merged value above is the only one written.
+    // personalityNotes is left out here: the merged value computed below is the only one written.
     const {
       id: _id,
       userId: _userId,
@@ -899,6 +857,56 @@ export class CharacterService {
     } = data as any;
 
     const saved = await db.transaction(async (tx) => {
+      // #1508 (strategist FIX on #1534): the stored envelope is read under a row lock, and the
+      // merged value is written in this same transaction. A spend-inspiration that commits between
+      // the read and the write cannot be overwritten by a stale stored `true`: the spend waits for
+      // the lock, and its compare-and-set re-reads the envelope.
+      let mergedPersonalityNotes: string | undefined;
+      if (data.personalityNotes !== undefined) {
+        const [current] = await tx
+          .select({
+            class: characters.class,
+            level: characters.level,
+            classLevels: characters.classLevels,
+            personalityNotes: characters.personalityNotes,
+          })
+          .from(characters)
+          .where(eq(characters.id, characterId))
+          .limit(1)
+          .for('update');
+        // The client's envelope is merged onto the stored one. Engine-owned keys (inspiration) keep
+        // their stored value, a key the client omits keeps its stored value, and a null, empty or
+        // non-JSON envelope cannot bypass the guards below. No envelope leaves the column.
+        const clientEnvelope = data.personalityNotes ?? '';
+        const merge = mergeClientEnvelope(current?.personalityNotes ?? null, clientEnvelope);
+        if (merge.kind === 'refuse') throw new ValidationError(merge.reason);
+        if (merge.kind === 'write') {
+          mergedPersonalityNotes = merge.value;
+          // #1233: a stored Metamagic list must be valid for the Sorcerer level the row will hold.
+          const updatedSorcererLevel = classLevelOf(
+            {
+              class: data.class ?? current?.class ?? null,
+              level: data.level ?? current?.level ?? 1,
+              classLevels: data.classLevels ?? current?.classLevels ?? null,
+            },
+            'Sorcerer',
+          );
+          const updatedMetamagic = checkEnvelopeMetamagic(merge.value, updatedSorcererLevel);
+          if (!updatedMetamagic.ok) throw new ValidationError(updatedMetamagic.reason);
+          // #1233 (strategist FIX): a stored list is fixed, except that the cap may allow a new
+          // option. The client's own envelope is checked, not the merged one: an envelope that
+          // leaves the stored list out is a removal and is refused (#1233), while a missing
+          // envelope keeps it.
+          const repick = checkMetamagicRepick(
+            current?.personalityNotes ?? null,
+            clientEnvelope,
+            updatedSorcererLevel,
+          );
+          if (!repick.ok) {
+            throw new BusinessLogicError(repick.reason, { reason: 'metamagic_repick' });
+          }
+        }
+      }
       const [updated] = await tx
         .update(characters)
         .set({

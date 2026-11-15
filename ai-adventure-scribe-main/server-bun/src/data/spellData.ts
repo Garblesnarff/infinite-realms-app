@@ -147,8 +147,8 @@ export const TWINNABLE_SINGLE_TARGET_SPELL_IDS: ReadonlySet<string> = new Set([
   'sacred-flame',
   'cure-wounds',
   'healing-word',
-  'hold-person',
-  'charm-person',
+  // hold-person and charm-person are not listed: each gains a target per slot level above its own
+  // (2014 SRD), so Twinned would apply to a multi-target upcast. The allowlist has no slot level.
 ]);
 
 /**
