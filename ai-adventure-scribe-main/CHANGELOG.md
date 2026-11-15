@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.47.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.47.0...v0.47.1) (2026-11-15)
+
+
+### Bug Fixes
+
+* **combat:** player wording, health tier and summary totals ([#764](https://github.com/Garblesnarff/infinite-realms-app/issues/764)) ([ebf0dba](https://github.com/Garblesnarff/infinite-realms-app/commit/ebf0dba32b6ab40973289bfea886bd4881990465))
+* **combat:** prevent stale attacks and surface refusals ([3ebdb15](https://github.com/Garblesnarff/infinite-realms-app/commit/3ebdb15a8c50783bf7ba46ad149002ecd72d37cf))
+* **paladin:** make the Lay on Hands draw atomic and retry-safe ([#885](https://github.com/Garblesnarff/infinite-realms-app/issues/885)) ([3a41789](https://github.com/Garblesnarff/infinite-realms-app/commit/3a41789e00992fe2bd69176a2f3c309543d58d59))
+* **sheet:** Pact Magic slots recover on a short rest ([#761](https://github.com/Garblesnarff/infinite-realms-app/issues/761)) ([9bd9a75](https://github.com/Garblesnarff/infinite-realms-app/commit/9bd9a750849b5c251f8ad6e3772110fdbcacdbdb))
+* **table:** fit the story chrome, turn strip and seals at 390 px ([#1503](https://github.com/Garblesnarff/infinite-realms-app/issues/1503)) ([5e561bd](https://github.com/Garblesnarff/infinite-realms-app/commit/5e561bdb10b8685c72756becdf5235f9e059ed35))
+* **table:** one word for a downed hero in the turn bar ([#1521](https://github.com/Garblesnarff/infinite-realms-app/issues/1521)) ([0182e90](https://github.com/Garblesnarff/infinite-realms-app/commit/0182e901306e5f5a5ae9b8d8515f5344aa9c63c3))
+* **table:** slate seal for initiative, readable option prompt, title-case badges ([#1521](https://github.com/Garblesnarff/infinite-realms-app/issues/1521)) ([cd05590](https://github.com/Garblesnarff/infinite-realms-app/commit/cd0559090c5e85eb47ce1ec5d946e341c000a40c))
+
+
+### Tests
+
+* **e2e:** bring the Table specs in line with the shipped screens ([2c02d8f](https://github.com/Garblesnarff/infinite-realms-app/commit/2c02d8f4f00f4e6ea6c9a7fff3b2f1263da5d442)), closes [#92](https://github.com/Garblesnarff/infinite-realms-app/issues/92)
+
 ## [0.47.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.46.0...v0.47.0) (2026-11-13)
 
 
