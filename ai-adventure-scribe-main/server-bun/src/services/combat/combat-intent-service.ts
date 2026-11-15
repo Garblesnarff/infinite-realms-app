@@ -27,6 +27,7 @@ import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
   claimTurnVersion,
+  readActionSurgeMark,
   setDefensiveAction,
 } from './combat-turn-resources.js';
 import { buildCombatWeaponOptions, type WeaponTargetResolution } from './combat-weapon-options.js';
@@ -1051,6 +1052,17 @@ export async function proposeCombatAttack(
     weapon: grounding.weapon,
   });
   if (approach.movementOnly) return { movementOnly: true, result: approach.result };
+  if ((actor as unknown as TurnResourceView).actionUsed) {
+    const surge = await readActionSurgeMark(encounter.sessionId);
+    if (
+      !surge ||
+      surge.encounterId !== encounterId ||
+      surge.participantId !== actor.id ||
+      surge.round !== encounter.currentRound
+    ) {
+      throw new BusinessLogicError('Action already used this turn', { participantId: actor.id });
+    }
+  }
   const attackService = await createCombatAttackService();
   const proposal = await attackService.proposeAttack(
     encounterId,
