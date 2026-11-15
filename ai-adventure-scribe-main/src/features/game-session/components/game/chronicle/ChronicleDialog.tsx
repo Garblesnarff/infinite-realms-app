@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { shareChronicle } from './chronicleShareApi';
 import { planHasPaidFeatures } from '../../../../../../shared/plan-features';
+import { EndSessionButton } from '../game-content/EndSessionButton';
 
 import './chronicle.css';
 
@@ -15,6 +16,7 @@ interface ChronicleDialogProps {
   sessionId: string | null;
   open: boolean;
   onClose: () => void;
+  endSession?: { campaignId: string | null; starterCampaignId: string | null };
 }
 
 function splitParagraphs(text: string | null | undefined): string[] {
@@ -25,7 +27,12 @@ function splitParagraphs(text: string | null | undefined): string[] {
     .filter((part) => part.length > 0);
 }
 
-const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onClose }) => {
+const ChronicleDialog: React.FC<ChronicleDialogProps> = ({
+  sessionId,
+  open,
+  onClose,
+  endSession,
+}) => {
   const { userPlan } = useAuth();
   const navigate = useNavigate();
   const [shareStatus, setShareStatus] = useState('');
@@ -73,6 +80,21 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
     sessionNumber != null ? `SESSION CHRONICLE · SESSION ${sessionNumber}` : 'SESSION CHRONICLE';
   const paragraphs = splitParagraphs(chronicle?.chronicleText);
 
+  const renderEmptyState = (): React.ReactNode => (
+    <div className="ir-chronicle-state">
+      <p>Your chronicle is written when you end the session.</p>
+      {endSession && sessionId ? (
+        <div className="mt-3">
+          <EndSessionButton
+            sessionId={sessionId}
+            campaignId={endSession.campaignId}
+            starterCampaignId={endSession.starterCampaignId}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+
   const handleShare = async (): Promise<void> => {
     if (!chronicle?.id || sharing) return;
     setSharing(true);
@@ -118,7 +140,7 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
     }
 
     if (!chronicle) {
-      return <div className="ir-chronicle-state">No chronicle yet.</div>;
+      return renderEmptyState();
     }
 
     if (chronicle.status === 'generating') {
@@ -244,7 +266,7 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({ sessionId, open, onCl
       );
     }
 
-    return <div className="ir-chronicle-state">No chronicle yet.</div>;
+    return renderEmptyState();
   };
 
   return (
