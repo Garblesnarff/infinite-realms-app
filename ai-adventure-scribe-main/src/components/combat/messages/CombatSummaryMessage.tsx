@@ -15,6 +15,7 @@ export interface CombatSummaryProps {
   summary: {
     rounds: number;
     totalDamage: number;
+    hits?: Array<{ round: number; side: 'player' | 'npc'; damage: number; label: string }>;
     participants: Array<{ name: string; damageDealt: number; damageTaken: number; status: string }>;
     outcome: string;
   };
@@ -42,10 +43,21 @@ export const CombatSummaryMessage: React.FC<CombatSummaryProps> = React.memo(
               <strong>Rounds:</strong> {summary.rounds}
             </div>
             <div className="text-sm">
-              {/* #974: the total sums every combatant's damage, the enemies' too; say so. */}
-              <strong>Total Damage:</strong> {summary.totalDamage}{' '}
-              <span className="text-muted-foreground">(all combatants)</span>
+              <strong>Total Damage:</strong> {summary.totalDamage}
             </div>
+            {summary.hits && summary.hits.length > 0 && (
+              <ul className="text-sm space-y-1" aria-label="Damage by round">
+                {summary.hits.map((hit, index) => (
+                  <li key={`${hit.label}-${hit.side}-${index}`}>
+                    <span>{hit.label}</span>
+                    {' · '}
+                    {hit.side === 'player' ? 'you' : 'foe'}
+                    {' · '}
+                    {hit.damage}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 

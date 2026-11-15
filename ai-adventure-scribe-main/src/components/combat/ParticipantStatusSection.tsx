@@ -5,6 +5,7 @@ import DeathSaveManager from './DeathSaveManager';
 import type { CombatEncounter as Encounter } from '@/types/combat';
 
 import { Badge } from '@/components/ui/badge';
+import { renderPlayerCombatWording } from '@/services/combat/player-combat-wording';
 import { needsDeathSaves } from '@/utils/combat/deathSaves';
 
 type Participant = Encounter['participants'][number];
@@ -39,15 +40,19 @@ export const ParticipantStatusSection: React.FC<ParticipantStatusSectionProps> =
           )}
           {isDead && <Badge variant="destructive">Dead</Badge>}
           {hasConditions &&
-            currentParticipant.conditions.map((condition) => (
-              <Badge
-                key={condition.name}
-                variant="outline"
-                className="border-orange-500 text-orange-700"
-              >
-                {condition.name.charAt(0).toUpperCase() + condition.name.slice(1)}
-              </Badge>
-            ))}
+            currentParticipant.conditions.map((condition) => {
+              const word = renderPlayerCombatWording(condition.name);
+              const label = word.charAt(0).toUpperCase() + word.slice(1);
+              return (
+                <Badge
+                  key={condition.name}
+                  variant="outline"
+                  className="border-orange-500 text-orange-700"
+                >
+                  {label}
+                </Badge>
+              );
+            })}
         </div>
       </div>
     );

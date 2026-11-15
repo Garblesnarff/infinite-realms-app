@@ -7,6 +7,8 @@ import {
   playerHpOf,
   type EngineResultCard,
 } from './engine-result-card';
+import { healthConditionForCombat } from './health-condition';
+import { renderPlayerCombatWording } from './player-combat-wording';
 
 import type {
   CombatEngineResult,
@@ -57,10 +59,13 @@ function spellTargetTrailer(
     return ` ${target} is now at ${result.targetNewHp} HP${state}.`;
   }
   // Anyone but the player: no HP number (#87). The tier reads like the attack line's
-  // (`targetState`: dead, unconscious, or the engine's condition word); 0 HP without one is "down".
+  // (`targetState`: dead, unconscious, or the engine's condition word). 0 HP with no
+  // state uses healthConditionForCombat, which is near death.
   const state = targetState(result);
-  if (state) return ` ${target} is ${state}.`;
-  return isFiniteNumber(result.targetNewHp) && result.targetNewHp <= 0 ? ` ${target} is down.` : '';
+  if (state) return ` ${target} is ${renderPlayerCombatWording(state)}.`;
+  return isFiniteNumber(result.targetNewHp) && result.targetNewHp <= 0
+    ? ` ${target} is ${healthConditionForCombat(result.targetNewHp, 1)}.`
+    : '';
 }
 
 function terminalStatus(result: CombatEngineResult): string | undefined {
@@ -243,7 +248,8 @@ export function formatRefusedSpellPart(
   roster: readonly EngineRosterEntry[] = [],
 ): EngineTranscriptPart {
   const actor = facingName(undefined, actorId, roster);
-  const line = `⚙️ Engine: ${actor}'s spell "${spellName}" was refused (${reason}). No roll, no damage, no wound.`;
+  const told = renderPlayerCombatWording(reason);
+  const line = `⚙️ Engine: ${actor}'s spell "${spellName}" was refused (${told}). No roll, no damage, no wound.`;
   const side = engineCardSide(actorId, roster, false);
   return {
     line,
@@ -253,7 +259,7 @@ export function formatRefusedSpellPart(
       line,
       title: `${actor}'s ${spellName} was refused`,
       badge: engineBadge('refused', side),
-      detail: `${reason}. No roll, no damage, no wound.`,
+      detail: `${told}. No roll, no damage, no wound.`,
     },
   };
 }

@@ -4,6 +4,8 @@ import type {
   StructuredCombatAction,
 } from '@/services/combat/combat-action-executor';
 
+import { renderPlayerCombatWording } from '@/services/combat/player-combat-wording';
+
 export const COMBAT_INTENT_SCHEMA_REJECTED = 'COMBAT_INTENT_SCHEMA_REJECTED';
 export const COMBAT_INTENT_OUT_OF_TURN = 'COMBAT_INTENT_OUT_OF_TURN';
 /** The target the action named is not a combatant in this fight (#2438). */
@@ -49,7 +51,7 @@ export function playerFacingRefusal(
   if (reason === COMBAT_INTENT_SCHEMA_REJECTED || /^validation failed$/i.test(refusal.message)) {
     return 'the game could not read that cast — cast it again and name your target';
   }
-  return refusal.message;
+  return renderPlayerCombatWording(refusal.message);
 }
 
 export function turnNotice(
@@ -73,7 +75,9 @@ export function turnNotice(
  * caught nobody, a spell the DM never declared. Nothing resolved, so nothing ended the turn.
  */
 export function stillYourTurnNotice(reason?: string): string {
-  const explanation = reason?.trim() || 'the game could not resolve that action';
+  const explanation = renderPlayerCombatWording(
+    reason?.trim() || 'the game could not resolve that action',
+  );
   return `*(Your declared action was not resolved: ${explanation} — it is still your turn. You can choose another action or End turn.)*`;
 }
 

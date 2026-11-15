@@ -21,7 +21,9 @@ import {
 } from '../../../../db/schema/index';
 
 if (!hasRealDb) {
-  console.warn('[combat-damage-summary] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.');
+  console.warn(
+    '[combat-damage-summary] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.',
+  );
 }
 
 describeWithDb('combat damage summary aggregation', () => {
@@ -56,7 +58,14 @@ describeWithDb('combat damage summary aggregation', () => {
     const parts = await db
       .insert(combatParticipants)
       .values([
-        { encounterId, name: 'Hero', participantType: 'player', characterId, turnOrder: 0, isActive: true },
+        {
+          encounterId,
+          name: 'Hero',
+          participantType: 'player',
+          characterId,
+          turnOrder: 0,
+          isActive: true,
+        },
         { encounterId, name: 'Goblin', participantType: 'monster', turnOrder: 1, isActive: true },
       ])
       .returning({ id: combatParticipants.id });
@@ -103,8 +112,16 @@ describeWithDb('combat damage summary aggregation', () => {
     const summary = await getCombatDamageSummary(encounterId, userId);
     expect(summary.encounterId).toBe(encounterId);
     expect(summary.rounds).toBe(2);
-    // Total damage dealt across all participants: 7 + 6 = 13.
-    expect(summary.totalDamage).toBe(13);
+    // Headline total is the player's damage. The goblin's 6 stays on its row (#974).
+    expect(summary.totalDamage).toBe(7);
+    expect(summary.totalDamage).not.toBe(13);
+    expect(summary.hits).toHaveLength(2);
+    expect(summary.hits).toEqual(
+      expect.arrayContaining([
+        { round: 1, side: 'player', damage: 7, label: 'R1' },
+        { round: 1, side: 'npc', damage: 6, label: 'R1' },
+      ]),
+    );
     const hero = summary.participants.find((p) => p.participantId === heroId);
     const goblin = summary.participants.find((p) => p.participantId === goblinId);
     expect(hero?.damageDealt).toBe(7);
@@ -139,17 +156,41 @@ describeWithDb('combat damage summary aggregation', () => {
       .returning({ id: characters.id });
     const [{ id: session2Id }] = await db
       .insert(gameSessions)
-      .values({ campaignId: campaign2Id, characterId: character2Id, sessionNumber: 1, status: 'active' })
+      .values({
+        campaignId: campaign2Id,
+        characterId: character2Id,
+        sessionNumber: 1,
+        status: 'active',
+      })
       .returning({ id: gameSessions.id });
     const [{ id: encounter7Id }] = await db
       .insert(combatEncounters)
-      .values({ sessionId: session2Id, status: 'completed', currentRound: 7, currentTurnOrder: 0, version: 1 })
+      .values({
+        sessionId: session2Id,
+        status: 'completed',
+        currentRound: 7,
+        currentTurnOrder: 0,
+        version: 1,
+      })
       .returning({ id: combatEncounters.id });
     const parts = await db
       .insert(combatParticipants)
       .values([
-        { encounterId: encounter7Id, name: 'Hero Seven', participantType: 'player', characterId: character2Id, turnOrder: 0, isActive: true },
-        { encounterId: encounter7Id, name: 'Manager', participantType: 'monster', turnOrder: 1, isActive: true },
+        {
+          encounterId: encounter7Id,
+          name: 'Hero Seven',
+          participantType: 'player',
+          characterId: character2Id,
+          turnOrder: 0,
+          isActive: true,
+        },
+        {
+          encounterId: encounter7Id,
+          name: 'Manager',
+          participantType: 'monster',
+          turnOrder: 1,
+          isActive: true,
+        },
       ])
       .returning({ id: combatParticipants.id });
     const [hero7Id, managerId] = parts.map((p) => p.id);
@@ -192,7 +233,10 @@ describeWithDb('combat damage summary aggregation', () => {
     const { getCombatDamageSummary } = await import('../combat/combat-damage-summary.js');
     const summary = await getCombatDamageSummary(encounter7Id, userId);
     expect(summary.rounds).toBe(7);
-    expect(summary.totalDamage).toBe(53);
+    expect(summary.totalDamage).toBe(35);
+    expect(summary.hits.filter((hit) => hit.side === 'player')).toHaveLength(7);
+    expect(summary.hits.filter((hit) => hit.side === 'npc')).toHaveLength(6);
+    expect(summary.hits.some((hit) => hit.label === 'R7' && hit.side === 'player')).toBe(true);
     const hero = summary.participants.find((p) => p.participantId === hero7Id);
     const manager = summary.participants.find((p) => p.participantId === managerId);
     expect(hero?.damageDealt).toBe(35);

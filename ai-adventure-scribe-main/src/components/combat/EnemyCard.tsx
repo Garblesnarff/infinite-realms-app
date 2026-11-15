@@ -17,6 +17,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import DiceRoller from '@/components/ui/dice-roller';
 import { useCampaignAssetsContext } from '@/contexts/CampaignAssetsContext';
 import { useCombat } from '@/contexts/CombatContext';
+import { renderPlayerCombatWording } from '@/services/combat/player-combat-wording';
 import { getEnemyHealthTier } from '@/utils/hp-utils';
 
 interface EnemyCardProps {
@@ -199,7 +200,7 @@ const EnemyCard: React.FC<EnemyCardProps> = React.memo(
             <div className="flex flex-wrap gap-1 pt-2 border-t">
               {enemy.conditions.map((condition, index) => (
                 <Badge key={index} variant="destructive" className="text-xs">
-                  {condition.name}
+                  {renderPlayerCombatWording(condition.name)}
                   {condition.duration > 0 && ` (${condition.duration})`}
                 </Badge>
               ))}
