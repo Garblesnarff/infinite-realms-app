@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider, useMutation, useQuery } from '@tanstack/react-query';
-import { act, cleanup, render, screen, fireEvent } from '@testing-library/react';
+import { act, cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -11,6 +11,7 @@ import type { inferRouterOutputs } from '@trpc/server';
 import type * as ReactRouterDOM from 'react-router-dom';
 
 const mockNavigate = vi.fn();
+const mockCompleteSession = vi.hoisted(() => vi.fn());
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof ReactRouterDOM>('react-router-dom');
   return {
@@ -26,6 +27,17 @@ vi.mock('@/contexts/AuthContext', () => ({
 
 vi.mock('@/hooks/use-toast', () => ({
   useToast: () => ({ toast: vi.fn() }),
+}));
+
+vi.mock('@/hooks/use-starter-campaigns', () => ({
+  useStarterCampaigns: () => ({
+    campaigns: [{ id: 'starter', slug: 'adventure' }],
+    isLoading: false,
+  }),
+}));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: { completeSession: mockCompleteSession },
 }));
 
 vi.mock('@/infrastructure/api', () => ({
@@ -487,5 +499,79 @@ describe('ChronicleDialog', () => {
       await screen.findByText('Could not write the full chronicle. Try again.'),
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Share this chronicle' })).not.toBeInTheDocument();
+  });
+});
+
+describe('empty chronicle state (#1523)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockCompleteSession.mockReset();
+    mockCompleteSession.mockResolvedValue(undefined);
+    mockUseAuth.mockReturnValue({ userPlan: 'pro' });
+  });
+
+  it('shows the end-session message and the End session button, and generates nothing', () => {
+    const mutate = vi.fn();
+    const mutateAsync = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(trpc.chronicles.generate.useMutation).mockReturnValue({
+      mutate,
+      mutateAsync,
+      isPending: false,
+    } as unknown as ReturnType<typeof trpc.chronicles.generate.useMutation>);
+    vi.mocked(trpc.chronicles.getBySessionId.useQuery).mockReturnValue(mockSuccessResult(null));
+
+    render(
+      <MemoryRouter>
+        <ChronicleDialog
+          sessionId="session-1"
+          open
+          onClose={vi.fn()}
+          endSession={{ campaignId: 'campaign-1', starterCampaignId: null }}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText('Your chronicle is written when you end the session.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'End session' })).toBeInTheDocument();
+    expect(screen.queryByText('No chronicle yet.')).toBeNull();
+    expect(mutate).not.toHaveBeenCalled();
+    expect(mutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('End session runs the existing end-session flow: completeSession, then navigate', async () => {
+    vi.mocked(trpc.chronicles.getBySessionId.useQuery).mockReturnValue(mockSuccessResult(null));
+
+    render(
+      <MemoryRouter>
+        <ChronicleDialog
+          sessionId="session-1"
+          open
+          onClose={vi.fn()}
+          endSession={{ campaignId: 'campaign-1', starterCampaignId: null }}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'End session' }));
+
+    await waitFor(() => expect(mockCompleteSession).toHaveBeenCalledWith('session-1'));
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/app/campaigns/campaign-1'));
+  });
+
+  it('outside a game (no endSession) shows the message without the button', () => {
+    vi.mocked(trpc.chronicles.getBySessionId.useQuery).mockReturnValue(mockSuccessResult(null));
+
+    render(
+      <MemoryRouter>
+        <ChronicleDialog sessionId="session-1" open onClose={vi.fn()} />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText('Your chronicle is written when you end the session.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'End session' })).toBeNull();
   });
 });

@@ -344,6 +344,12 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
         undefined,
       [messages],
     );
+    // #1523: the Chronicle dialog's empty state offers the same End session control.
+    const starterCampaignId = sessionData.starter_campaign_id ?? null;
+    const chronicleEndSession = React.useMemo(
+      () => ({ campaignId: campaignIdForHandler, starterCampaignId }),
+      [campaignIdForHandler, starterCampaignId],
+    );
     // #90: in combat the chat box says what to do, or whose turn it is.
     const combatChatPlaceholder = useCombatChatPlaceholder();
     // #90: the ActionBar's Move opens the map in move mode — the rail on desktop, the sheet on
@@ -523,6 +529,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     onLeftToggle={onLeftToggle}
                     onRightToggle={onRightToggle}
                     onSceneBlurbToggle={onSceneBlurbToggle}
+                    endSession={chronicleEndSession}
                   />
                   <TargetNumbersToggle />
                   <GameSettingsButton />
