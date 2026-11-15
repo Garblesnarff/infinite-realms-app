@@ -256,14 +256,14 @@ for (const width of [1280, 390]) {
     await page.screenshot({ path: `test-results/dying-cards-${width}.png`, fullPage: true });
   });
 
-  test(`turn bar says Dying at ${width}px`, async ({ page }) => {
+  test(`turn bar says Unconscious at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await page.goto(`${origin}/e2e/death-end-layout.html?view=turnbar`);
-    await expect(page.getByTestId('combat-turn-text')).toHaveText('Dying');
+    await expect(page.getByTestId('combat-turn-text')).toHaveText('Unconscious');
     await expect(page.getByTestId('combat-turn-sub')).toHaveText(
       'Round 4 · Turn 1 of 2 · 0 HP · roll a death saving throw',
     );
-    await expect(page.getByTestId('combat-turn-dying')).toHaveText(/Dying/);
+    await expect(page.getByTestId('combat-turn-dying')).toHaveText(/Unconscious/);
     await expect(page.getByTestId('combat-turn-pip').first()).toContainText('The Scholar');
     const geometry = await page.evaluate(() => ({
       width: document.documentElement.scrollWidth,
@@ -403,13 +403,13 @@ test('natural 20 without reported HP does not invent a wake HP number', async ({
   await expect(page.getByTestId('card-nat20')).toContainText('You wake with 1 HP');
 });
 
-test('dying turn bar shows initials in plain look and Dying chip only in table look', async ({
+test('dying turn bar shows initials in plain look and Unconscious chip only in table look', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${origin}/e2e/death-end-layout.html?view=turnbar`);
-  // FIX4: Table header is Dying; tracker wording stays engine-driven (isDying).
-  await expect(page.getByTestId('combat-turn-text')).toHaveText('Dying');
+  // FIX4: Table header is Unconscious (#1521, the #1507 word); tracker wording stays engine-driven (isDying).
+  await expect(page.getByTestId('combat-turn-text')).toHaveText('Unconscious');
   await expect(page.getByTestId('combat-turn-dying')).toBeVisible();
   await expect(page.getByTestId('combat-turn-pip').first()).toContainText('The Scholar');
   await page.evaluate(() => document.body.classList.remove('ir-table-look'));
