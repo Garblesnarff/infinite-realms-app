@@ -6,10 +6,12 @@ import { and, eq, sql } from 'drizzle-orm';
 
 import {
   campaigns,
+  characterConditions,
   characterFeatures,
   characterStats,
   characters,
   classFeaturesLibrary,
+  conditionsLibrary,
   combatEncounters,
   combatParticipantStatus,
   combatParticipants,
@@ -538,16 +540,22 @@ describeWithDb('paladin Lay on Hands pool (#712)', () => {
       .set({ currentHitPoints: 2 })
       .where(eq(characterStats.characterId, paladinId));
 
-    await db.execute(sql`
-      CREATE OR REPLACE FUNCTION lay_on_hands_test_fail_usage() RETURNS trigger AS $$
-      BEGIN RAISE EXCEPTION 'injected usage-log failure'; END;
-      $$ LANGUAGE plpgsql
-    `);
-    await db.execute(sql`
-      CREATE TRIGGER lay_on_hands_test_fail_usage_trg BEFORE INSERT ON feature_usage_log
-      FOR EACH ROW EXECUTE FUNCTION lay_on_hands_test_fail_usage()
-    `);
+    const suffix = testId('1531-trg')
+      .replace(/[^a-z0-9_]/gi, '_')
+      .toLowerCase();
+    const fnName = `loh_fail_usage_${suffix}`;
+    const trgName = `loh_fail_usage_trg_${suffix}`;
     try {
+      await db.execute(
+        sql.raw(
+          `CREATE OR REPLACE FUNCTION "${fnName}"() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'injected usage-log failure'; END; $$ LANGUAGE plpgsql`,
+        ),
+      );
+      await db.execute(
+        sql.raw(
+          `CREATE TRIGGER "${trgName}" BEFORE INSERT ON feature_usage_log FOR EACH ROW WHEN (NEW.character_id = '${paladinId}') EXECUTE FUNCTION "${fnName}"()`,
+        ),
+      );
       await expect(
         resolveLayOnHands({
           characterId: paladinId,
@@ -559,10 +567,8 @@ describeWithDb('paladin Lay on Hands pool (#712)', () => {
         }),
       ).rejects.toThrow();
     } finally {
-      await db.execute(
-        sql`DROP TRIGGER IF EXISTS lay_on_hands_test_fail_usage_trg ON feature_usage_log`,
-      );
-      await db.execute(sql`DROP FUNCTION IF EXISTS lay_on_hands_test_fail_usage()`);
+      await db.execute(sql.raw(`DROP TRIGGER IF EXISTS "${trgName}" ON feature_usage_log`));
+      await db.execute(sql.raw(`DROP FUNCTION IF EXISTS "${fnName}"()`));
     }
 
     const retry = await resolveLayOnHands({
@@ -584,5 +590,405 @@ describeWithDb('paladin Lay on Hands pool (#712)', () => {
     expect(stats.currentHitPoints).toBe(4);
     // One draw: 5 - 2 = 3. A replayed draw would read 1.
     expect(await poolRemaining(layOnHandsId)).toBe(3);
+  });
+
+  it('a failed refund after the heal rolls back the heal with the claim (#1531)', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 10 })
+      .where(eq(characterStats.characterId, paladinId));
+
+    const [poolRow] = await db
+      .select({ id: characterFeatures.id })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      )
+      .limit(1);
+    const poolRowId = poolRow.id;
+
+    const suffix = testId('1531-refund')
+      .replace(/[^a-z0-9_]/gi, '_')
+      .toLowerCase();
+    const fnName = `loh_fail_refund_${suffix}`;
+    const trgName = `loh_fail_refund_trg_${suffix}`;
+    try {
+      await db.execute(
+        sql.raw(
+          `CREATE OR REPLACE FUNCTION "${fnName}"() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'injected refund failure'; END; $$ LANGUAGE plpgsql`,
+        ),
+      );
+      await db.execute(
+        sql.raw(
+          `CREATE TRIGGER "${trgName}" BEFORE UPDATE ON character_features FOR EACH ROW WHEN (OLD.id = '${poolRowId}' AND NEW.uses_remaining > OLD.uses_remaining) EXECUTE FUNCTION "${fnName}"()`,
+        ),
+      );
+
+      await expect(
+        resolveLayOnHands({
+          characterId: paladinId,
+          userId: paladinUserId,
+          targetCharacterId: paladinId,
+          amount: 4,
+          sessionId,
+          context: 'refund-failure-1531',
+        }),
+      ).rejects.toThrow();
+    } finally {
+      await db.execute(sql.raw(`DROP TRIGGER IF EXISTS "${trgName}" ON character_features`));
+      await db.execute(sql.raw(`DROP FUNCTION IF EXISTS "${fnName}"()`));
+    }
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, paladinId))
+      .limit(1);
+    // Before #1531 the heal committed on its own connection and this read 12.
+    expect(stats.currentHitPoints).toBe(10);
+
+    expect(await poolRemaining(layOnHandsId)).toBe(5);
+
+    const logs = await db
+      .select()
+      .from(featureUsageLog)
+      .where(
+        and(
+          eq(featureUsageLog.characterId, paladinId),
+          eq(featureUsageLog.context, 'refund-failure-1531'),
+        ),
+      );
+    expect(logs.length).toBe(0);
+  });
+
+  it('Lay on Hands refuses a character outside the paladin campaign and spends nothing (#1531)', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+
+    const otherUserId = testId('1531-other-user');
+    const [{ id: otherCampaignId }] = await db
+      .insert(campaigns)
+      .values({ userId: otherUserId, name: testId('1531-other-camp') })
+      .returning({ id: campaigns.id });
+
+    const [{ id: otherCharacterId }] = await db
+      .insert(characters)
+      .values({
+        userId: otherUserId,
+        campaignId: otherCampaignId,
+        name: testId('1531-other-char'),
+        class: 'Fighter',
+        level: 1,
+      })
+      .returning({ id: characters.id });
+
+    await db.insert(characterStats).values({
+      characterId: otherCharacterId,
+      maxHitPoints: 12,
+      currentHitPoints: 5,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    const result = await resolveLayOnHands({
+      characterId: paladinId,
+      userId: paladinUserId,
+      targetCharacterId: otherCharacterId,
+      sessionId,
+      context: 'outside-campaign-1531',
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('invalid_target');
+    }
+
+    const [otherStats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, otherCharacterId))
+      .limit(1);
+    expect(otherStats.currentHitPoints).toBe(5);
+
+    expect(await poolRemaining(layOnHandsId)).toBe(5);
+  });
+
+  it('a poison cure on a character outside the campaign clears nothing and spends nothing (#1531)', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+
+    // ensure Poisoned condition library row
+    await db
+      .insert(conditionsLibrary)
+      .values({ name: 'Poisoned', description: 'test', mechanicalEffects: 'test' })
+      .onConflictDoNothing();
+    const [poisonedRow] = await db
+      .select({ id: conditionsLibrary.id })
+      .from(conditionsLibrary)
+      .where(eq(conditionsLibrary.name, 'Poisoned'))
+      .limit(1);
+    const conditionId = poisonedRow.id;
+
+    const otherUserId = testId('1531-other-user-2');
+    const [{ id: otherCampaignId }] = await db
+      .insert(campaigns)
+      .values({ userId: otherUserId, name: testId('1531-other-camp-2') })
+      .returning({ id: campaigns.id });
+
+    const [{ id: outsideCharacterId }] = await db
+      .insert(characters)
+      .values({
+        userId: otherUserId,
+        campaignId: otherCampaignId,
+        name: testId('1531-outside-char-2'),
+        class: 'Fighter',
+        level: 1,
+      })
+      .returning({ id: characters.id });
+
+    await db.insert(characterStats).values({
+      characterId: outsideCharacterId,
+      maxHitPoints: 12,
+      currentHitPoints: 5,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    await db.insert(characterConditions).values({
+      characterId: outsideCharacterId,
+      conditionId,
+      isActive: true,
+    });
+
+    const result = await resolveLayOnHands({
+      characterId: paladinId,
+      userId: paladinUserId,
+      targetCharacterId: outsideCharacterId,
+      cure: 'poison',
+      sessionId,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.reason).toBe('invalid_target');
+    }
+
+    const [cond] = await db
+      .select()
+      .from(characterConditions)
+      .where(eq(characterConditions.characterId, outsideCharacterId))
+      .limit(1);
+    expect(cond.isActive).toBe(true);
+
+    expect(await poolRemaining(layOnHandsId)).toBe(5);
+  });
+
+  it('Lay on Hands still heals an ally in the paladin campaign (#1531)', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+
+    const [{ id: allyId }] = await db
+      .insert(characters)
+      .values({
+        userId: paladinUserId,
+        campaignId,
+        name: testId('1531-ally'),
+        class: 'Fighter',
+        level: 1,
+      })
+      .returning({ id: characters.id });
+
+    await db.insert(characterStats).values({
+      characterId: allyId,
+      maxHitPoints: 12,
+      currentHitPoints: 9,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    const result = await resolveLayOnHands({
+      characterId: paladinId,
+      userId: paladinUserId,
+      targetCharacterId: allyId,
+      sessionId,
+      context: 'ally-heal-1531',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.healed).toBe(3);
+    }
+
+    const [allyStats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, allyId))
+      .limit(1);
+    expect(allyStats.currentHitPoints).toBe(12);
+
+    expect(await poolRemaining(layOnHandsId)).toBe(2);
+  });
+
+  it('in combat, Lay on Hands still heals a paladin whose character row has no campaign (#1531)', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 7 })
+      .where(eq(combatParticipantStatus.participantId, participantId));
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 7 })
+      .where(eq(characterStats.characterId, paladinId));
+
+    await db.update(characters).set({ campaignId: null }).where(eq(characters.id, paladinId));
+    try {
+      const result = await resolveLayOnHands({
+        characterId: paladinId,
+        userId: paladinUserId,
+        participantId,
+        encounterId,
+        targetCharacterId: paladinId,
+        sessionId,
+        context: 'no-campaign-combat-1531',
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.healed).toBe(5);
+      }
+
+      const [status] = await db
+        .select()
+        .from(combatParticipantStatus)
+        .where(eq(combatParticipantStatus.participantId, participantId))
+        .limit(1);
+      expect(status.currentHp).toBe(12);
+    } finally {
+      await db.update(characters).set({ campaignId }).where(eq(characters.id, paladinId));
+    }
+  });
+
+  it('Lay on Hands refuses a participant from an encounter the user does not own (#1531)', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+
+    const foreignUserId = testId('1531-foreign-user');
+    const [{ id: foreignCampaignId }] = await db
+      .insert(campaigns)
+      .values({ userId: foreignUserId, name: testId('1531-foreign-camp') })
+      .returning({ id: campaigns.id });
+
+    const [{ id: foreignSessionId }] = await db
+      .insert(gameSessions)
+      .values({
+        campaignId: foreignCampaignId,
+        characterId: null,
+        sessionNumber: 1,
+        status: 'active',
+      })
+      .returning({ id: gameSessions.id });
+
+    const [{ id: foreignEncounterId }] = await db
+      .insert(combatEncounters)
+      .values({
+        sessionId: foreignSessionId,
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        version: 1,
+      })
+      .returning({ id: combatEncounters.id });
+
+    const [{ id: foreignParticipantId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId: foreignEncounterId,
+        characterId: null,
+        name: 'Foreign',
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 10,
+        maxHp: 12,
+      })
+      .returning({ id: combatParticipants.id });
+
+    await db.insert(combatParticipantStatus).values({
+      participantId: foreignParticipantId,
+      currentHp: 4,
+      maxHp: 12,
+      isConscious: true,
+    });
+
+    try {
+      await resolveLayOnHands({
+        characterId: paladinId,
+        userId: paladinUserId,
+        participantId: foreignParticipantId,
+        encounterId: foreignEncounterId,
+        sessionId,
+      });
+    } catch {
+      // acceptable: getCombatState may throw for an encounter the user does not own
+    }
+
+    const [foreignStatus] = await db
+      .select()
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, foreignParticipantId))
+      .limit(1);
+    expect(foreignStatus.currentHp).toBe(4);
+
+    expect(await poolRemaining(layOnHandsId)).toBe(5);
   });
 });
