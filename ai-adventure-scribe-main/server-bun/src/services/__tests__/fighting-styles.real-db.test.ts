@@ -303,4 +303,56 @@ describeWithDb('fighting styles on the live attack route (#824)', () => {
       random.mockRestore();
     }
   });
+  test('#1532 refuses a second proposal after a level-1 Fighter commits an attack', async () => {
+    const className = 'Fighter';
+    const level = 1;
+    const attacks = 1;
+    await db
+      .update(characters)
+      .set({ class: className, level })
+      .where(eq(characters.id, characterId));
+    await equip([], ['Longsword']);
+    const send = async (phase: 'propose' | 'commit') => {
+      const expectedVersion = await version();
+      return app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${userId}` },
+          body: JSON.stringify({
+            ...(phase === 'propose' ? { phase } : {}),
+            intent: {
+              type: 'attack',
+              actorId: heroId,
+              targetId,
+              expectedVersion,
+              ...(phase === 'commit' ? { d20: 2, actionId: testId('attack') } : {}),
+            },
+            origin: 'action_bar',
+          }),
+        }),
+      );
+    };
+    for (let index = 0; index < attacks; index++) {
+      const proposal = await send('propose');
+      expect(proposal.status, await proposal.text()).toBe(200);
+      const commit = await send('commit');
+      expect(commit.status, await commit.text()).toBe(200);
+    }
+    const proposal = await send('propose');
+    expect(proposal.status).toBe(422);
+    expect(await proposal.json()).toMatchObject({ error: 'Action already used this turn' });
+
+    const { armActionSurge } = await import('../combat/combat-turn-resources.js');
+    await armActionSurge(sessionId, { encounterId, participantId: heroId, round: 1 });
+    const surgeProposal = await send('propose');
+    expect(surgeProposal.status, await surgeProposal.text()).toBe(200);
+    const surgeCommit = await send('commit');
+    expect(surgeCommit.status, await surgeCommit.text()).toBe(200);
+    const afterSurge = await send('propose');
+    expect(afterSurge.status).toBe(422);
+    expect(await afterSurge.json()).toMatchObject({ error: 'Action already used this turn' });
+  });
+
+  test.todo('#1536 level-5 Fighter may propose and commit a second swing', () => {});
+  test.todo('#1536 level-5 Paladin may propose and commit a second swing', () => {});
 });
