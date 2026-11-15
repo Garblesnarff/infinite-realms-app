@@ -6,6 +6,7 @@
  * instead, except for a hit on the player, whose own HP is theirs to see (`targetHp`, #2378).
  */
 import { formatSpellEngineParts } from './combat-spell-transcript';
+import { damagePartsSentence, type DamagePart } from './damage-parts';
 import { describeDeathSave, describeWake } from './death-save-lines';
 import {
   facingName,
@@ -23,6 +24,8 @@ import {
   type EngineResultCard,
 } from './engine-result-card';
 import { combatEndPhrase } from './player-combat-wording';
+
+export type { DamagePart };
 
 export { formatRefusedSpellOutcome, formatRefusedSpellPart } from './combat-spell-transcript';
 
@@ -53,16 +56,6 @@ type PlayerExitOutcome = {
     finalDamage?: number;
   } | null;
 };
-
-/** One damage type inside a hit's total (#1522): the weapon's, and a rider's (Divine Smite's radiant). */
-export interface DamagePart {
-  damageType: string;
-  amount: number;
-  /** The rider that added this part, e.g. "Divine Smite". Absent on the weapon's part. */
-  source?: string;
-  /** The rider's dice, e.g. "2d8". */
-  dice?: string;
-}
 
 export interface CombatEngineResult {
   resolvedAs?: string;
@@ -177,20 +170,9 @@ function formatModifier(value: number): string {
  * The d20 portion of an attack line. Advantage/disadvantage rolled two dice: the line names
  * both and the kept one (#263 CB-028). `d20Rolls` is `[kept, dropped]`.
  */
-/**
- * `7 slashing + 11 radiant (Divine Smite 2d8) = 18 damage` for a hit whose damage the engine
- * split by type (#1522). Null when there is no split, so the caller keeps the single-type line.
- */
+/** The split-damage sentence for a hit, or null when the hit has no split (#1522). */
 export function damagePartsText(result: CombatEngineResult): string | null {
-  const parts = result.damageParts;
-  if (!parts || parts.length < 2 || !isFiniteNumber(result.finalDamage)) return null;
-  const text = parts
-    .map((part) => {
-      const rider = part.source ? ` (${part.source}${part.dice ? ` ${part.dice}` : ''})` : '';
-      return `${part.amount} ${part.damageType}${rider}`;
-    })
-    .join(' + ');
-  return `${text} = ${result.finalDamage} damage`;
+  return damagePartsSentence(result.damageParts, result.finalDamage);
 }
 
 function formatD20Roll(result: CombatEngineResult): string {
