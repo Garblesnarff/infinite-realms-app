@@ -1,8 +1,7 @@
 /**
- * #761 remainder: a single-class Warlock's slots are pact slots and are labelled
- * 'Pact Magic — recovers on a Short Rest'. Other casters get no pact label.
- * Long Rest keeps its line: the server's long rest restores every slot row,
- * pact rows included (rest-service.ts, takeLongRest).
+ * #761: a single-class Warlock's slots are pact slots. 2014 Pact Magic recovers
+ * on a short or long rest, so the row and the button name say that. Other
+ * casters get no pact label. The button still takes a long rest.
  */
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -35,7 +34,12 @@ const ability = (score: number): { score: number; modifier: number; savingThrow:
   savingThrow: false,
 });
 
-function makeCaster(classId: string, name: string, level: number, classLevels?: unknown): Character {
+function makeCaster(
+  classId: string,
+  name: string,
+  level: number,
+  classLevels?: unknown,
+): Character {
   return {
     id: `char-${classId}`,
     user_id: 'user-1',
@@ -85,7 +89,12 @@ describe('#761 pact slot label on the sheet', () => {
         />
       </TooltipProvider>,
     );
-    expect(screen.getByText('Pact Magic — recovers on a Short Rest')).toBeInTheDocument();
+    expect(
+      screen.getByText('Pact Magic slots recover on a short or long rest'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Pact Magic slots recover on a short or long rest' }),
+    ).toBeInTheDocument();
   });
 
   it('shows no pact label when there is no pact slot level', () => {
@@ -106,11 +115,12 @@ describe('#761 pact slot label on the sheet', () => {
     const user = userEvent.setup();
     render(<SpellsTab character={makeCaster('warlock', 'Test Warlock', 2)} onUpdate={() => {}} />);
     await user.click(await screen.findByRole('tab', { name: /spell slots/i }, { timeout: 4000 }));
-    expect(screen.getByText('Pact Magic — recovers on a Short Rest')).toBeInTheDocument();
-    // Long Rest keeps its line.
     expect(
-      screen.getByRole('button', { name: 'Recover all spell slots and sorcery points' }),
+      screen.getByText('Pact Magic slots recover on a short or long rest'),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Pact Magic slots recover on a short or long rest' }),
+    ).toHaveTextContent('Long Rest');
   });
 
   it('a level-2 wizard gets no pact label', async () => {
