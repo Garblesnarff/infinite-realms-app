@@ -7,6 +7,7 @@ import { useCombatLegalActions } from '../use-combat-legal-actions';
 import type { ChatMessage } from '@/types/game';
 
 import { requestPlayerAttackRoll } from '@/services/combat/player-roll-bridge';
+import { engineRollWasRefused } from '@/services/combat/roll-outcome-display';
 import { requestSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
 
 vi.mock('@/services/combat/player-roll-bridge', () => ({
@@ -118,6 +119,43 @@ describe('useCombatLegalActions', () => {
     await waitFor(() => expect(result.current.actions).toHaveLength(1));
 
     expect(fetchSpy).toHaveBeenCalled();
+  });
+
+  it('does not restore a stale Attack after a newer spent-action refresh', async () => {
+    let resolveOld!: (response: Response) => void;
+    const old = new Promise<Response>((resolve) => {
+      resolveOld = resolve;
+    });
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ actorId: 'pc-1', actions: [{ type: 'attack', label: 'Attack' }] }),
+      } as Response)
+      .mockReturnValueOnce(old)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ actorId: 'pc-1', actions: [] }),
+      } as Response);
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendText: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+    let first!: Promise<void>;
+    act(() => {
+      first = result.current.retryLoad();
+    });
+    await act(async () => {
+      await result.current.retryLoad();
+    });
+    expect(result.current.actions).toEqual([]);
+    await act(async () => {
+      resolveOld({
+        ok: true,
+        json: async () => ({ actorId: 'pc-1', actions: [{ type: 'attack', label: 'Attack' }] }),
+      } as Response);
+      await first;
+    });
+    expect(result.current.actions).toEqual([]);
   });
 
   it('refuses an unknown engine-only action instead of sending its label as chat (#1276)', async () => {
@@ -592,62 +630,97 @@ describe('useCombatLegalActions inspiration (#1414)', () => {
     label: 'Spend Inspiration — advantage on your next roll',
   };
 
-  function routeFetch(
-    legalActions: Array<Record<string, unknown>>,
-  ): MockInstance<typeof fetch> {
-    return vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: unknown, init?: unknown) => {
-      const href = String(url);
-      if (href.includes('/legal-actions')) {
-        return {
-          ok: true,
-          json: async () => ({ actorId: 'pc-1', actions: legalActions }),
-        } as Response;
-      }
-      if (href.includes('/intent')) {
-        const body = JSON.parse(String((init as { body?: string }).body ?? '{}')) as {
-          intent?: { type?: string };
-          phase?: string;
-        };
-        if (body.phase === 'propose') {
-          if (body.intent?.type === 'spell') {
+  function routeFetch(legalActions: Array<Record<string, unknown>>): MockInstance<typeof fetch> {
+    return vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (url: unknown, init?: unknown) => {
+        const href = String(url);
+        if (href.includes('/legal-actions')) {
+          return {
+            ok: true,
+            json: async () => ({ actorId: 'pc-1', actions: legalActions }),
+          } as Response;
+        }
+        if (href.includes('/intent')) {
+          const body = JSON.parse(String((init as { body?: string }).body ?? '{}')) as {
+            intent?: { type?: string };
+            phase?: string;
+          };
+          if (body.phase === 'propose') {
+            if (body.intent?.type === 'spell') {
+              return {
+                ok: true,
+                json: async () => ({
+                  proposal: {
+                    movementOnly: false,
+                    spellId: 'acid-arrow',
+                    spellName: 'Acid Arrow',
+                    kind: 'attack',
+                    attackBonus: 5,
+                    saveDC: 13,
+                    targetAc: 11,
+                    advantage: false,
+                    disadvantage: false,
+                    targetLabel: 'Rubble Sentinel',
+                  },
+                }),
+              } as Response;
+            }
             return {
               ok: true,
               json: async () => ({
                 proposal: {
                   movementOnly: false,
-                  spellId: 'acid-arrow',
-                  spellName: 'Acid Arrow',
-                  kind: 'attack',
+                  weaponName: 'Quarterstaff',
+                  targetLabel: 'Rubble Sentinel',
                   attackBonus: 5,
-                  saveDC: 13,
                   targetAc: 11,
                   advantage: false,
                   disadvantage: false,
-                  targetLabel: 'Rubble Sentinel',
                 },
               }),
             } as Response;
           }
+          return { ok: true, json: async () => ({ accepted: true, result: {} }) } as Response;
+        }
+        return { ok: false, status: 404 } as Response;
+      });
+  }
+
+  it('surfaces a refused attack after the player rolled and clears its result', async () => {
+    vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 8, rollId: 'refused-test-roll' });
+    const attack = { type: 'attack', label: 'Attack', weaponId: 'sword', targetIds: ['monster-1'] };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+      const path = String(url);
+      if (path.includes('/legal-actions'))
+        return { ok: true, json: async () => ({ actorId: 'pc-1', actions: [attack] }) } as Response;
+      if (path.includes('/status'))
+        return { ok: true, json: async () => ({ encounter: { version: 7 } }) } as Response;
+      if (path.includes('/intent')) {
+        const body = JSON.parse(String(init?.body));
+        if (body.phase === 'propose')
           return {
             ok: true,
-            json: async () => ({
-              proposal: {
-                movementOnly: false,
-                weaponName: 'Quarterstaff',
-                targetLabel: 'Rubble Sentinel',
-                attackBonus: 5,
-                targetAc: 11,
-                advantage: false,
-                disadvantage: false,
-              },
-            }),
+            json: async () => ({ proposal: { weaponName: 'Sword', attackBonus: 5, targetAc: 14 } }),
           } as Response;
-        }
-        return { ok: true, json: async () => ({ accepted: true, result: {} }) } as Response;
+        return {
+          ok: false,
+          status: 422,
+          json: async () => ({ error: 'Action already used this turn' }),
+        } as Response;
       }
-      return { ok: false, status: 404 } as Response;
+      throw new Error(`Unexpected request ${path}`);
     });
-  }
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+    await act(async () => {
+      await result.current.runAction(result.current.actions[0]);
+    });
+    expect(result.current.error).toBe('Action already used this turn');
+    expect(engineRollWasRefused('refused-test-roll')).toBe(true);
+  });
 
   it('an armed attack spends nothing in runAction — the popup is the single spend site (round 2, B2)', async () => {
     inspirationHolder.armed = true;
