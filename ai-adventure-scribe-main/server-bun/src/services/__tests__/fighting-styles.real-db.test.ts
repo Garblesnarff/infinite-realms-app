@@ -520,4 +520,112 @@ describeWithDb('fighting styles on the live attack route (#824)', () => {
     );
     expect(response.status, await response.text()).toBe(200);
   });
+
+  test('#1536 two attack commits racing for the last swing: one lands, one is refused, HP moves once', async () => {
+    await db
+      .update(characters)
+      .set({ class: 'Fighter', level: 1, classLevels: null })
+      .where(eq(characters.id, characterId));
+    await equip([], ['Longsword']);
+    const expectedVersion = await version();
+    const send = (body: unknown) =>
+      app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${userId}` },
+          body: JSON.stringify(body),
+        }),
+      );
+    for (let index = 0; index < 2; index++) {
+      const proposed = await send({
+        phase: 'propose',
+        intent: { type: 'attack', actorId: heroId, targetId, expectedVersion },
+        origin: 'action_bar',
+      });
+      expect(proposed.status, await proposed.text()).toBe(200);
+    }
+    const commit = (actionId: string) =>
+      send({
+        intent: { type: 'attack', actorId: heroId, targetId, expectedVersion, d20: 20, actionId },
+        origin: 'action_bar',
+      });
+    const settled = await Promise.all(
+      [testId('race-a'), testId('race-b')].map(async (actionId) => {
+        const response = await commit(actionId);
+        return { status: response.status, json: (await response.json()) as Record<string, any> };
+      }),
+    );
+    const landed = settled.filter((row) => row.status === 200);
+    const refused = settled.filter((row) => row.status === 422);
+    expect(landed).toHaveLength(1);
+    expect(refused).toHaveLength(1);
+    expect(refused[0].json).toMatchObject({ error: 'Action already used this turn' });
+    const [target] = await db
+      .select({ currentHp: combatParticipantStatus.currentHp })
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, targetId));
+    expect(target.currentHp).toBe(400 - landed[0].json.result.finalDamage);
+  });
+
+  test('#1536 Fighter 5: one swing, Action Surge on a spell, the leftover swing is allowed, then refused', async () => {
+    await db
+      .update(characters)
+      .set({ class: 'Fighter', level: 5, classLevels: null })
+      .where(eq(characters.id, characterId));
+    await equip([], ['Longsword']);
+    const send = async (phase: 'propose' | 'commit', intent: Record<string, unknown>) => {
+      const response = await app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${userId}` },
+          body: JSON.stringify({
+            ...(phase === 'propose' ? { phase } : {}),
+            intent: { ...intent, expectedVersion: await version() },
+            origin: 'action_bar',
+          }),
+        }),
+      );
+      return response;
+    };
+    const swing = (phase: 'propose' | 'commit', actionId?: string) =>
+      send(phase, {
+        type: 'attack',
+        actorId: heroId,
+        targetId,
+        ...(phase === 'commit' ? { d20: 20, actionId } : {}),
+      });
+    const castFireBolt = (phase: 'propose' | 'commit', actionId?: string) =>
+      send(phase, {
+        type: 'spell',
+        actorId: heroId,
+        targetIds: [targetId],
+        spellId: 'fire-bolt',
+        spellName: 'Fire Bolt',
+        ...(phase === 'commit' ? { d20: 20, actionId } : {}),
+      });
+
+    const firstProposal = await swing('propose');
+    expect(firstProposal.status, await firstProposal.text()).toBe(200);
+    const firstCommit = await swing('commit', testId('surge-first'));
+    expect(firstCommit.status, await firstCommit.text()).toBe(200);
+
+    const { armActionSurge, readActionSurgeMark } =
+      await import('../combat/combat-turn-resources.js');
+    await armActionSurge(sessionId, { encounterId, participantId: heroId, round: 1 });
+
+    const spellProposal = await castFireBolt('propose');
+    expect(spellProposal.status, await spellProposal.text()).toBe(200);
+    const spellCommit = await castFireBolt('commit', testId('surge-spell'));
+    expect(spellCommit.status, await spellCommit.text()).toBe(200);
+    expect(await readActionSurgeMark(sessionId)).toBeNull();
+
+    const leftoverProposal = await swing('propose');
+    expect(leftoverProposal.status, await leftoverProposal.text()).toBe(200);
+    const leftoverCommit = await swing('commit', testId('surge-leftover'));
+    expect(leftoverCommit.status, await leftoverCommit.text()).toBe(200);
+
+    const refused = await swing('propose');
+    expect(refused.status).toBe(422);
+    expect(await refused.json()).toMatchObject({ error: 'Action already used this turn' });
+  });
 });
