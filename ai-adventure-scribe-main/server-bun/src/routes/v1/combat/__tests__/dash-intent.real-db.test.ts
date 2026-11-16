@@ -203,12 +203,24 @@ describeWithDb('Dash More-menu body resolves through the real route (#613)', () 
       }),
     );
     const legalActions = (await legalActionsResponse.json()) as {
+      actorId?: string;
       actions?: Array<{ type?: string }>;
     };
     expect(legalActionsResponse.status).toBe(200);
     expect(legalActions.actions).toEqual(
       expect.arrayContaining([expect.objectContaining({ type: 'move' })]),
     );
+    // The turn stays the player's after Dash: still the hero's actor, still on the
+    // encounter's turn pointer, and the player can still end the turn.
+    expect(legalActions.actorId).toBe(DASH_ACTOR_ID);
+    expect(legalActions.actions).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'end_turn' })]),
+    );
+    const [afterDash] = await db
+      .select({ currentTurnOrder: combatEncounters.currentTurnOrder })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    expect(afterDash.currentTurnOrder).toBe(0);
 
     const [map] = await db
       .select({ state: tacticalMaps.state })
@@ -218,5 +230,26 @@ describeWithDb('Dash More-menu body resolves through the real route (#613)', () 
       map.state as { entities: Array<{ id: string; movementRemaining: number }> }
     ).entities.find((entity) => entity.id === DASH_ACTOR_ID);
     expect(hero?.movementRemaining).toBe(60);
+
+    // The Action is spent: a second Dash in the same turn is refused and adds no movement.
+    const secondDash = await app!.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${userId}`, 'content-type': 'application/json' },
+        body: JSON.stringify(dashIntentBody()),
+      }),
+    );
+    expect(secondDash.status).toBe(422);
+    expect(await secondDash.json()).toEqual(
+      expect.objectContaining({ error: 'Action already used this turn' }),
+    );
+    const [mapAfterRefusal] = await db
+      .select({ state: tacticalMaps.state })
+      .from(tacticalMaps)
+      .where(eq(tacticalMaps.sessionId, sessionId));
+    const heroAfterRefusal = (
+      mapAfterRefusal.state as { entities: Array<{ id: string; movementRemaining: number }> }
+    ).entities.find((entity) => entity.id === DASH_ACTOR_ID);
+    expect(heroAfterRefusal?.movementRemaining).toBe(60);
   });
 });
