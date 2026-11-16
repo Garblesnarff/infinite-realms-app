@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { SHEET_ATTUNE_ROW_ID } from '../../../../shared/test-fixtures/sheet-attune-wire';
+
 import type { Issue1784EquipmentRow } from '@/services/issue-1784-api';
 
 import { equipmentRowsToInventory } from '@/utils/character/equipment-rows-to-inventory';
@@ -33,5 +35,21 @@ describe('equipmentRowsToInventory (#1327 item 3)', () => {
   it('passes a positive quantity through unchanged', () => {
     const [item] = equipmentRowsToInventory([{ ...baseRow, quantity: 20 }]);
     expect(item.quantity).toBe(20);
+  });
+
+  it('keeps the item name in itemId and carries the row id attune posts', () => {
+    const [item] = equipmentRowsToInventory([
+      {
+        ...baseRow,
+        id: SHEET_ATTUNE_ROW_ID,
+        item_name: 'Cloak of Protection',
+        requires_attunement: true,
+        is_attuned: false,
+      },
+    ]);
+    expect(item.itemId).toBe('Cloak of Protection');
+    expect(item.equipmentId).toBe(SHEET_ATTUNE_ROW_ID);
+    expect(item.requiresAttunement).toBe(true);
+    expect(item.isAttuned).toBe(false);
   });
 });

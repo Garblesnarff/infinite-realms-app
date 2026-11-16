@@ -64,7 +64,7 @@ vi.mock('../../../../db/client', () => ({
 vi.mock('drizzle-orm', async () => {
   const actual = await vi.importActual('drizzle-orm');
   return {
-    ...actual as any,
+    ...(actual as any),
   };
 });
 
@@ -85,7 +85,7 @@ function mockDbSelectChain(resolvedValue: any) {
     Object.assign(Promise.resolve(resolvedValue), {
       limit: vi.fn().mockResolvedValue(resolvedValue),
       orderBy: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue(resolvedValue) }),
-    })
+    }),
   );
   return {
     from: vi.fn().mockReturnValue({
@@ -135,8 +135,9 @@ describe('InventoryService Security', () => {
         itemType: 'consumable',
       };
 
-      await expect(InventoryService.addItem(input as any, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(InventoryService.addItem(input as any, mockUserId)).rejects.toThrow(
+        NotFoundError,
+      );
     });
 
     it('should succeed if insertion returns the created item', async () => {
@@ -167,8 +168,9 @@ describe('InventoryService Security', () => {
         quantity: 1,
       };
 
-      await expect(InventoryService.useConsumable(input as any, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(InventoryService.useConsumable(input as any, mockUserId)).rejects.toThrow(
+        NotFoundError,
+      );
     });
 
     it('should use atomic insert for log entry with ownership verification', async () => {
@@ -185,9 +187,9 @@ describe('InventoryService Security', () => {
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([{ ...mockItem, quantity: 4 }])
-          })
-        })
+            returning: vi.fn().mockResolvedValue([{ ...mockItem, quantity: 4 }]),
+          }),
+        }),
       });
 
       const input = {
@@ -231,12 +233,14 @@ describe('InventoryService Security', () => {
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([{ id: mockItemId }])
-          })
-        })
+            returning: vi.fn().mockResolvedValue([{ id: mockItemId }]),
+          }),
+        }),
       });
 
-      await InventoryService.updateItem(mockItemId, mockCharacterId, mockUserId, { name: 'New Name' });
+      await InventoryService.updateItem(mockItemId, mockCharacterId, mockUserId, {
+        name: 'New Name',
+      });
 
       expect(db.update).toHaveBeenCalled();
     });
@@ -246,8 +250,8 @@ describe('InventoryService Security', () => {
     it('should include exists check in where clause for delete', async () => {
       (db.delete as any).mockReturnValue({
         where: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([{ id: mockItemId }])
-        })
+          returning: vi.fn().mockResolvedValue([{ id: mockItemId }]),
+        }),
       });
 
       const result = await InventoryService.removeItem(mockItemId, mockCharacterId, mockUserId);
@@ -262,10 +266,10 @@ describe('InventoryService Security', () => {
         from: vi.fn().mockReturnValue({
           leftJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([{ item: { id: '1', weight: '1', quantity: 1 } }])
-            })
-          })
-        })
+              orderBy: vi.fn().mockResolvedValue([{ item: { id: '1', weight: '1', quantity: 1 } }]),
+            }),
+          }),
+        }),
       });
 
       const result = await InventoryService.getInventory(mockCharacterId, mockUserId);
@@ -278,16 +282,16 @@ describe('InventoryService Security', () => {
         from: vi.fn().mockReturnValue({
           leftJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([{ characterId: mockCharacterId, item: null }])
-            })
-          })
-        })
+              orderBy: vi.fn().mockResolvedValue([{ characterId: mockCharacterId, item: null }]),
+            }),
+          }),
+        }),
       });
 
       const result = await InventoryService.getInventory(mockCharacterId, mockUserId, {
         itemType: 'weapon',
         equipped: true,
-        attuned: false
+        attuned: false,
       });
       expect(result.items).toHaveLength(0);
       expect(db.select).toHaveBeenCalled();
@@ -298,14 +302,15 @@ describe('InventoryService Security', () => {
         from: vi.fn().mockReturnValue({
           leftJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              orderBy: vi.fn().mockResolvedValue([])
-            })
-          })
-        })
+              orderBy: vi.fn().mockResolvedValue([]),
+            }),
+          }),
+        }),
       });
 
-      await expect(InventoryService.getInventory(mockCharacterId, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(InventoryService.getInventory(mockCharacterId, mockUserId)).rejects.toThrow(
+        NotFoundError,
+      );
     });
   });
 
@@ -315,10 +320,10 @@ describe('InventoryService Security', () => {
         from: vi.fn().mockReturnValue({
           innerJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([{ item: { id: mockItemId } }])
-            })
-          })
-        })
+              limit: vi.fn().mockResolvedValue([{ item: { id: mockItemId } }]),
+            }),
+          }),
+        }),
       });
 
       const result = await InventoryService.getItemById(mockItemId, mockCharacterId, mockUserId);
@@ -331,9 +336,9 @@ describe('InventoryService Security', () => {
       (db.select as any).mockReturnValue({
         from: vi.fn().mockReturnValue({
           innerJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([{ totalWeight: '10.5' }])
-          })
-        })
+            where: vi.fn().mockResolvedValue([{ totalWeight: '10.5' }]),
+          }),
+        }),
       });
 
       const result = await InventoryService.calculateTotalWeight(mockCharacterId, mockUserId);
@@ -348,11 +353,11 @@ describe('InventoryService Security', () => {
           innerJoin: vi.fn().mockReturnValue({
             leftJoin: vi.fn().mockReturnValue({
               where: vi.fn().mockReturnValue({
-                groupBy: vi.fn().mockResolvedValue([{ strength: 10, totalWeight: '50' }])
-              })
-            })
-          })
-        })
+                groupBy: vi.fn().mockResolvedValue([{ strength: 10, totalWeight: '50' }]),
+              }),
+            }),
+          }),
+        }),
       });
 
       const result = await InventoryService.checkEncumbrance(mockCharacterId, mockUserId);
@@ -367,15 +372,16 @@ describe('InventoryService Security', () => {
           innerJoin: vi.fn().mockReturnValue({
             leftJoin: vi.fn().mockReturnValue({
               where: vi.fn().mockReturnValue({
-                groupBy: vi.fn().mockResolvedValue([])
-              })
-            })
-          })
-        })
+                groupBy: vi.fn().mockResolvedValue([]),
+              }),
+            }),
+          }),
+        }),
       });
 
-      await expect(InventoryService.checkEncumbrance(mockCharacterId, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(InventoryService.checkEncumbrance(mockCharacterId, mockUserId)).rejects.toThrow(
+        NotFoundError,
+      );
     });
 
     it('should handle encumbered status', async () => {
@@ -384,11 +390,11 @@ describe('InventoryService Security', () => {
           innerJoin: vi.fn().mockReturnValue({
             leftJoin: vi.fn().mockReturnValue({
               where: vi.fn().mockReturnValue({
-                groupBy: vi.fn().mockResolvedValue([{ strength: 10, totalWeight: '60' }])
-              })
-            })
-          })
-        })
+                groupBy: vi.fn().mockResolvedValue([{ strength: 10, totalWeight: '60' }]),
+              }),
+            }),
+          }),
+        }),
       });
 
       const result = await InventoryService.checkEncumbrance(mockCharacterId, mockUserId);
@@ -401,11 +407,11 @@ describe('InventoryService Security', () => {
           innerJoin: vi.fn().mockReturnValue({
             leftJoin: vi.fn().mockReturnValue({
               where: vi.fn().mockReturnValue({
-                groupBy: vi.fn().mockResolvedValue([{ strength: 10, totalWeight: '110' }])
-              })
-            })
-          })
-        })
+                groupBy: vi.fn().mockResolvedValue([{ strength: 10, totalWeight: '110' }]),
+              }),
+            }),
+          }),
+        }),
       });
 
       const result = await InventoryService.checkEncumbrance(mockCharacterId, mockUserId);
@@ -419,12 +425,15 @@ describe('InventoryService Security', () => {
         (db.select as any).mockReturnValue({
           from: vi.fn().mockReturnValue({
             innerJoin: vi.fn().mockReturnValue({
-              where: vi.fn().mockResolvedValue([{ item: { id: 'attuned-1', isAttuned: true } }])
-            })
-          })
+              where: vi.fn().mockResolvedValue([{ item: { id: 'attuned-1', isAttuned: true } }]),
+            }),
+          }),
         });
 
-        const result = await InventoryAttunementService.getAttunedItems(mockCharacterId, mockUserId);
+        const result = await InventoryAttunementService.getAttunedItems(
+          mockCharacterId,
+          mockUserId,
+        );
         expect(result).toHaveLength(1);
         expect(result[0].isAttuned).toBe(true);
       });
@@ -435,7 +444,11 @@ describe('InventoryService Security', () => {
         // attuneItem uses db.select().from().innerJoin().where().limit() in a single query.
         // Empty result means item not found.
         (db.select as any).mockReturnValue(mockDbSelectChain([]));
-        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        const result = await InventoryAttunementService.attuneItem(
+          mockCharacterId,
+          mockItemId,
+          mockUserId,
+        );
         expect(result.success).toBe(false);
         expect(result.error).toBe('Item not found');
       });
@@ -443,9 +456,15 @@ describe('InventoryService Security', () => {
       it('should fail if item does not require attunement', async () => {
         // Return item that does not require attunement; attunedCount irrelevant for this branch.
         (db.select as any).mockReturnValue(
-          mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: false }, attunedCount: 0 }])
+          mockDbSelectChain([
+            { item: { id: mockItemId, requiresAttunement: false }, attunedCount: 0 },
+          ]),
         );
-        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        const result = await InventoryAttunementService.attuneItem(
+          mockCharacterId,
+          mockItemId,
+          mockUserId,
+        );
         expect(result.success).toBe(false);
         expect(result.error).toBe('Item does not require attunement');
       });
@@ -453,9 +472,18 @@ describe('InventoryService Security', () => {
       it('should fail if item is already attuned', async () => {
         // Item requires attunement but is already attuned.
         (db.select as any).mockReturnValue(
-          mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: true }, attunedCount: 1 }])
+          mockDbSelectChain([
+            {
+              item: { id: mockItemId, requiresAttunement: true, isAttuned: true },
+              attunedCount: 1,
+            },
+          ]),
         );
-        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        const result = await InventoryAttunementService.attuneItem(
+          mockCharacterId,
+          mockItemId,
+          mockUserId,
+        );
         expect(result.success).toBe(false);
         expect(result.error).toBe('Item is already attuned');
       });
@@ -463,44 +491,84 @@ describe('InventoryService Security', () => {
       it('should fail if max attuned count reached', async () => {
         // attunedCount of 3 == MAX_ATTUNED_ITEMS, so attunement is blocked.
         (db.select as any).mockReturnValue(
-          mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 3 }])
+          mockDbSelectChain([
+            {
+              item: { id: mockItemId, requiresAttunement: true, isAttuned: false },
+              attunedCount: 3,
+            },
+          ]),
         );
-        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        const result = await InventoryAttunementService.attuneItem(
+          mockCharacterId,
+          mockItemId,
+          mockUserId,
+        );
         expect(result.success).toBe(false);
         expect(result.error).toContain('Cannot attune to more than 3 items');
       });
 
       it('should succeed if under max count', async () => {
         // attunedCount of 1 is under the limit; item is eligible. update completes the attunement.
-        (db.select as any).mockReturnValue(
-          mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 1 }])
-        );
+        // The second select is the short rest the attune spends. Later selects build the owner check.
+        let selectCalls = 0;
+        (db.select as any).mockImplementation(() => {
+          selectCalls += 1;
+          if (selectCalls === 2) return mockDbSelectChain([{ id: 'rest-1' }]);
+          return mockDbSelectChain([
+            {
+              item: { id: mockItemId, requiresAttunement: true, isAttuned: false },
+              attunedCount: 1,
+            },
+          ]);
+        });
         (db.update as any).mockReturnValue({
           set: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              returning: vi.fn().mockResolvedValue([{ id: mockItemId, isAttuned: true }])
-            })
-          })
+              returning: vi.fn().mockResolvedValue([{ id: mockItemId, isAttuned: true }]),
+            }),
+          }),
         });
-        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        const result = await InventoryAttunementService.attuneItem(
+          mockCharacterId,
+          mockItemId,
+          mockUserId,
+        );
         expect(result.success).toBe(true);
         // currentAttunedCount = attunedCount + 1 = 1 + 1 = 2
         expect(result.currentAttunedCount).toBe(2);
       });
 
       it('should fail if update fails during attunement', async () => {
-        // Item is valid but update returns [] (e.g. race condition or DB error).
-        (db.select as any).mockReturnValue(
-          mockDbSelectChain([{ item: { id: mockItemId, requiresAttunement: true, isAttuned: false }, attunedCount: 0 }])
-        );
-        (db.update as any).mockReturnValue({
-          set: vi.fn().mockReturnValue({
-            where: vi.fn().mockReturnValue({
-              returning: vi.fn().mockResolvedValue([])
-            })
-          })
+        // Item is valid but the attune update returns [] (e.g. race condition or DB error).
+        // The first update claims the short rest; the second is the item write; the third releases the rest.
+        let selectCalls = 0;
+        (db.select as any).mockImplementation(() => {
+          selectCalls += 1;
+          if (selectCalls === 2) return mockDbSelectChain([{ id: 'rest-1' }]);
+          return mockDbSelectChain([
+            {
+              item: { id: mockItemId, requiresAttunement: true, isAttuned: false },
+              attunedCount: 0,
+            },
+          ]);
         });
-        const result = await InventoryAttunementService.attuneItem(mockCharacterId, mockItemId, mockUserId);
+        let updateCalls = 0;
+        (db.update as any).mockImplementation(() => {
+          updateCalls += 1;
+          const rows = updateCalls === 2 ? [] : [{ id: 'rest-1' }];
+          return {
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                returning: vi.fn().mockResolvedValue(rows),
+              }),
+            }),
+          };
+        });
+        const result = await InventoryAttunementService.attuneItem(
+          mockCharacterId,
+          mockItemId,
+          mockUserId,
+        );
         expect(result.success).toBe(false);
         expect(result.error).toBe('Failed to attune to item');
       });
@@ -511,11 +579,15 @@ describe('InventoryService Security', () => {
         (db.update as any).mockReturnValue({
           set: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              returning: vi.fn().mockResolvedValue([{ id: mockItemId, isAttuned: false }])
-            })
-          })
+              returning: vi.fn().mockResolvedValue([{ id: mockItemId, isAttuned: false }]),
+            }),
+          }),
         });
-        const result = await InventoryAttunementService.unattuneItem(mockItemId, mockCharacterId, mockUserId);
+        const result = await InventoryAttunementService.unattuneItem(
+          mockItemId,
+          mockCharacterId,
+          mockUserId,
+        );
         expect(result?.isAttuned).toBe(false);
       });
     });
@@ -531,9 +603,9 @@ describe('InventoryService Security', () => {
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([])
-          })
-        })
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
       });
       // Diagnostic: getItemById returns null → "Item not found"
       vi.spyOn(InventoryService, 'getItemById').mockResolvedValue(null);
@@ -548,12 +620,15 @@ describe('InventoryService Security', () => {
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([])
-          })
-        })
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
       });
       // Diagnostic: item exists but is a consumable → "Only weapons and armor can be equipped"
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({ id: mockItemId, itemType: 'consumable' } as any);
+      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({
+        id: mockItemId,
+        itemType: 'consumable',
+      } as any);
 
       const result = await InventoryService.equipItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(false);
@@ -567,9 +642,9 @@ describe('InventoryService Security', () => {
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([{ id: mockItemId, isEquipped: true }])
-          })
-        })
+            returning: vi.fn().mockResolvedValue([{ id: mockItemId, isEquipped: true }]),
+          }),
+        }),
       });
 
       const result = await InventoryService.equipItem(mockCharacterId, mockItemId, mockUserId);
@@ -582,12 +657,15 @@ describe('InventoryService Security', () => {
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([])
-          })
-        })
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
       });
       // Diagnostic: item is a weapon but update failed for another reason → "Failed to equip item"
-      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({ id: mockItemId, itemType: 'weapon' } as any);
+      vi.spyOn(InventoryService, 'getItemById').mockResolvedValue({
+        id: mockItemId,
+        itemType: 'weapon',
+      } as any);
 
       const result = await InventoryService.equipItem(mockCharacterId, mockItemId, mockUserId);
       expect(result.success).toBe(false);
@@ -601,10 +679,10 @@ describe('InventoryService Security', () => {
         from: vi.fn().mockReturnValue({
           innerJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([{ stats: { strength: 15 } }])
-            })
-          })
-        })
+              limit: vi.fn().mockResolvedValue([{ stats: { strength: 15 } }]),
+            }),
+          }),
+        }),
       });
 
       const result = await InventoryService.getCarryingCapacity(mockCharacterId, mockUserId);
@@ -616,14 +694,15 @@ describe('InventoryService Security', () => {
         from: vi.fn().mockReturnValue({
           innerJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue([])
-            })
-          })
-        })
+              limit: vi.fn().mockResolvedValue([]),
+            }),
+          }),
+        }),
       });
 
-      await expect(InventoryService.getCarryingCapacity(mockCharacterId, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(
+        InventoryService.getCarryingCapacity(mockCharacterId, mockUserId),
+      ).rejects.toThrow(NotFoundError);
     });
 
     it('should throw NotFoundError if statsResult is null', async () => {
@@ -631,14 +710,15 @@ describe('InventoryService Security', () => {
         from: vi.fn().mockReturnValue({
           innerJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
-              limit: vi.fn().mockResolvedValue(null)
-            })
-          })
-        })
+              limit: vi.fn().mockResolvedValue(null),
+            }),
+          }),
+        }),
       });
 
-      await expect(InventoryService.getCarryingCapacity(mockCharacterId, mockUserId))
-        .rejects.toThrow(NotFoundError);
+      await expect(
+        InventoryService.getCarryingCapacity(mockCharacterId, mockUserId),
+      ).rejects.toThrow(NotFoundError);
     });
   });
 
@@ -649,14 +729,17 @@ describe('InventoryService Security', () => {
           innerJoin: vi.fn().mockReturnValue({
             where: vi.fn().mockReturnValue({
               orderBy: vi.fn().mockReturnValue({
-                limit: vi.fn().mockResolvedValue([{ log: { id: 'log-1' } }])
-              })
-            })
-          })
-        })
+                limit: vi.fn().mockResolvedValue([{ log: { id: 'log-1' } }]),
+              }),
+            }),
+          }),
+        }),
       });
 
-      const result = await InventoryService.getUsageHistory({ characterId: mockCharacterId }, mockUserId);
+      const result = await InventoryService.getUsageHistory(
+        { characterId: mockCharacterId },
+        mockUserId,
+      );
       expect(result).toHaveLength(1);
     });
   });
@@ -671,15 +754,18 @@ describe('InventoryService Security', () => {
       // When newQuantity <= 0 the service calls db.delete (not removeItem); exists() subquery uses db.select internally.
       (db.delete as any).mockReturnValue({
         where: vi.fn().mockReturnValue({
-          returning: vi.fn().mockResolvedValue([])
-        })
+          returning: vi.fn().mockResolvedValue([]),
+        }),
       });
 
-      const result = await InventoryService.useConsumable({
-        characterId: mockCharacterId,
-        itemId: mockItemId,
-        quantity: 1,
-      }, mockUserId);
+      const result = await InventoryService.useConsumable(
+        {
+          characterId: mockCharacterId,
+          itemId: mockItemId,
+          quantity: 1,
+        },
+        mockUserId,
+      );
       expect(result.itemDeleted).toBe(true);
       expect(db.delete).toHaveBeenCalled();
     });
@@ -688,26 +774,28 @@ describe('InventoryService Security', () => {
       (db.select as any).mockReturnValue({
         from: vi.fn().mockReturnValue({
           innerJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([])
-          })
-        })
+            where: vi.fn().mockResolvedValue([]),
+          }),
+        }),
       });
 
-      await expect(InventoryService.useAmmunition(mockCharacterId, mockUserId, 'Arrow'))
-        .rejects.toThrow(NotFoundError);
+      await expect(
+        InventoryService.useAmmunition(mockCharacterId, mockUserId, 'Arrow'),
+      ).rejects.toThrow(NotFoundError);
     });
 
     it('should throw NotFoundError if ammunition result item is missing', async () => {
       (db.select as any).mockReturnValue({
         from: vi.fn().mockReturnValue({
           innerJoin: vi.fn().mockReturnValue({
-            where: vi.fn().mockResolvedValue([{ something: 'else' }])
-          })
-        })
+            where: vi.fn().mockResolvedValue([{ something: 'else' }]),
+          }),
+        }),
       });
 
-      await expect(InventoryService.useAmmunition(mockCharacterId, mockUserId, 'Arrow'))
-        .rejects.toThrow(NotFoundError);
+      await expect(
+        InventoryService.useAmmunition(mockCharacterId, mockUserId, 'Arrow'),
+      ).rejects.toThrow(NotFoundError);
     });
   });
 
@@ -717,17 +805,22 @@ describe('InventoryService Security', () => {
       // Then db.update().set().where().returning() with exists(db.select().from().where()) subquery.
       // mockDbSelectChain covers both the innerJoin path (main query) and the from().where() path (subquery).
       (db.select as any).mockReturnValue(
-        mockDbSelectChain([{ item: { id: mockItemId, quantity: 10 } }])
+        mockDbSelectChain([{ item: { id: mockItemId, quantity: 10 } }]),
       );
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([{ id: mockItemId, quantity: 15 }])
-          })
-        })
+            returning: vi.fn().mockResolvedValue([{ id: mockItemId, quantity: 15 }]),
+          }),
+        }),
       });
 
-      const result = await InventoryService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5);
+      const result = await InventoryService.recoverAmmunition(
+        mockCharacterId,
+        mockUserId,
+        'Arrow',
+        5,
+      );
       expect(result.quantity).toBe(15);
     });
 
@@ -738,7 +831,12 @@ describe('InventoryService Security', () => {
         .mockReturnValueOnce(mockDbSelectChain([{ one: 1 }]));
       mockInsertValuesReturning([{ id: 'new-ammo', quantity: 5 }]);
 
-      const result = await InventoryService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5);
+      const result = await InventoryService.recoverAmmunition(
+        mockCharacterId,
+        mockUserId,
+        'Arrow',
+        5,
+      );
       expect(result.id).toBe('new-ammo');
       expect(db.insert).toHaveBeenCalled();
     });
@@ -746,38 +844,41 @@ describe('InventoryService Security', () => {
     it('should throw InternalServerError if update fails', async () => {
       // Item found, but db.update returns [] (0 rows updated) → InternalServerError.
       (db.select as any).mockReturnValue(
-        mockDbSelectChain([{ item: { id: mockItemId, quantity: 10 } }])
+        mockDbSelectChain([{ item: { id: mockItemId, quantity: 10 } }]),
       );
       (db.update as any).mockReturnValue({
         set: vi.fn().mockReturnValue({
           where: vi.fn().mockReturnValue({
-            returning: vi.fn().mockResolvedValue([])
-          })
-        })
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
       });
 
-      await expect(InventoryService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5))
-        .rejects.toThrow('Failed to update ammunition');
+      await expect(
+        InventoryService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5),
+      ).rejects.toThrow('Failed to update ammunition');
     });
 
     it('should throw InternalServerError if result item is missing', async () => {
       // Result has no .item property → InternalServerError before attempting the update.
-      (db.select as any).mockReturnValue(
-        mockDbSelectChain([{ something: 'else' }])
-      );
+      (db.select as any).mockReturnValue(mockDbSelectChain([{ something: 'else' }]));
 
-      await expect(InventoryService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5))
-        .rejects.toThrow('Failed to find ammunition item');
+      await expect(
+        InventoryService.recoverAmmunition(mockCharacterId, mockUserId, 'Arrow', 5),
+      ).rejects.toThrow('Failed to find ammunition item');
     });
   });
 
   describe('unequipItem', () => {
     it('should call updateItem with isEquipped false', async () => {
-      const updateSpy = vi.spyOn(InventoryService, 'updateItem').mockResolvedValue({ id: mockItemId, isEquipped: false } as any);
+      const updateSpy = vi
+        .spyOn(InventoryService, 'updateItem')
+        .mockResolvedValue({ id: mockItemId, isEquipped: false } as any);
       const result = await InventoryService.unequipItem(mockItemId, mockCharacterId, mockUserId);
       expect(result?.isEquipped).toBe(false);
-      expect(updateSpy).toHaveBeenCalledWith(mockItemId, mockCharacterId, mockUserId, { isEquipped: false });
+      expect(updateSpy).toHaveBeenCalledWith(mockItemId, mockCharacterId, mockUserId, {
+        isEquipped: false,
+      });
     });
   });
-
 });

@@ -348,6 +348,12 @@ export interface Character {
   // Equipment & Inventory
   inventory?: Array<{
     itemId: string;
+    /**
+     * Row id the attune route receives (`character_equipment.id` or
+     * `inventory_items.id`). The game sheet keeps the item name in `itemId`
+     * so weapon and armour resolution stay on the name.
+     */
+    equipmentId?: string;
     /** #205: the item's display name, loaded from character_equipment.item_name. */
     itemName?: string;
     itemType?: string;

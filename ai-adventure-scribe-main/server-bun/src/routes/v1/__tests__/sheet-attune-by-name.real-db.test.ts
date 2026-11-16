@@ -18,10 +18,16 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
-import { characters, characterEquipment, inventoryItems } from '../../../../../db/schema/index';
+import {
+  characters,
+  characterEquipment,
+  inventoryItems,
+  restEvents,
+} from '../../../../../db/schema/index';
+import { sheetAttunePath } from '../../../../../shared/test-fixtures/sheet-attune-wire';
 import {
   closeRealDb,
   describeWithDb,
@@ -108,6 +114,19 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
       }),
     );
 
+  const grantShortRest = async () => {
+    await db.insert(restEvents).values({
+      characterId,
+      restType: 'short',
+      startedAt: new Date(),
+      completedAt: new Date(),
+      interrupted: false,
+      hpRestored: 0,
+      hitDiceSpent: 0,
+      notes: null,
+    });
+  };
+
   beforeAll(async () => {
     userId = testId('user-619');
     await grantLegendPlan(userId);
@@ -157,17 +176,14 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
     expect(cloakId).not.toBe('');
     expect(ringId).not.toBe('');
 
-    const byName = await request(
-      `/v1/characters/${characterId}/attune/${encodeURIComponent(CLOAK)}`,
-      'POST',
-    );
+    await grantShortRest();
+    await grantShortRest();
+
+    const byName = await request(sheetAttunePath(characterId, CLOAK), 'POST');
     const byNameText = await byName.text();
     expect(byName.status, byNameText.slice(0, 400)).toBe(200);
 
-    const byRowId = await request(
-      `/v1/characters/${characterId}/attune/${encodeURIComponent(ringId)}`,
-      'POST',
-    );
+    const byRowId = await request(sheetAttunePath(characterId, ringId), 'POST');
     const byRowIdText = await byRowId.text();
     expect(byRowId.status, byRowIdText.slice(0, 400)).toBe(200);
 
@@ -178,10 +194,7 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
     expect(attuned.find((row) => row.itemName === CLOAK)?.isAttuned).toBe(true);
     expect(attuned.find((row) => row.itemName === RING)?.isAttuned).toBe(true);
 
-    const kit = await request(
-      `/v1/characters/${characterId}/attune/${encodeURIComponent('Longsword')}`,
-      'POST',
-    );
+    const kit = await request(sheetAttunePath(characterId, 'Longsword'), 'POST');
     const kitText = await kit.text();
     expect(kit.status, kitText.slice(0, 400)).toBe(400);
     expect(kitText).toContain('does not require attunement');
@@ -196,20 +209,14 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
       isAttuned: true,
     });
 
-    const unattuneCloak = await request(
-      `/v1/characters/${characterId}/attune/${encodeURIComponent(cloakId)}`,
-      'DELETE',
-    );
+    const unattuneCloak = await request(sheetAttunePath(characterId, cloakId), 'DELETE');
     expect(unattuneCloak.status, (await unattuneCloak.text()).slice(0, 400)).toBe(200);
     const [mirror] = await db
       .select({ isAttuned: inventoryItems.isAttuned })
       .from(inventoryItems)
       .where(and(eq(inventoryItems.characterId, characterId), eq(inventoryItems.name, CLOAK)));
     expect(mirror?.isAttuned).toBe(false);
-    const unattuneRing = await request(
-      `/v1/characters/${characterId}/attune/${encodeURIComponent(ringId)}`,
-      'DELETE',
-    );
+    const unattuneRing = await request(sheetAttunePath(characterId, ringId), 'DELETE');
     expect(unattuneRing.status, (await unattuneRing.text()).slice(0, 400)).toBe(200);
 
     const cleared = await db
@@ -218,5 +225,136 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
       .where(eq(characterEquipment.characterId, characterId));
     expect(cleared.find((row) => row.itemName === CLOAK)?.isAttuned).toBe(false);
     expect(cleared.find((row) => row.itemName === RING)?.isAttuned).toBe(false);
+  });
+
+  it('refuses attune when no short rest is recorded and does not take one', async () => {
+    await db
+      .delete(restEvents)
+      .where(and(eq(restEvents.characterId, characterId), isNull(restEvents.notes)));
+    const [helm] = await db
+      .insert(characterEquipment)
+      .values({
+        characterId,
+        itemName: 'Helm of Telepathy',
+        itemType: 'equipment',
+        quantity: 1,
+        equipped: true,
+        isMagic: true,
+        requiresAttunement: true,
+        isAttuned: false,
+      })
+      .returning({ id: characterEquipment.id });
+    const before = await db
+      .select({ id: restEvents.id })
+      .from(restEvents)
+      .where(eq(restEvents.characterId, characterId));
+
+    const response = await request(sheetAttunePath(characterId, helm.id), 'POST');
+    const text = await response.text();
+    expect(response.status, text.slice(0, 400)).toBe(400);
+    expect(text).toContain('Attunement needs a short rest spent on this item');
+
+    const [row] = await db
+      .select({ isAttuned: characterEquipment.isAttuned })
+      .from(characterEquipment)
+      .where(eq(characterEquipment.id, helm.id));
+    expect(row?.isAttuned).toBe(false);
+    const after = await db
+      .select({ id: restEvents.id })
+      .from(restEvents)
+      .where(eq(restEvents.characterId, characterId));
+    expect(after).toHaveLength(before.length);
+  });
+
+  it('attunes an inventory_items row by its id and holds the 3-item cap across both tables', async () => {
+    const [wand] = await db
+      .insert(inventoryItems)
+      .values({
+        characterId,
+        name: 'Wand of Magic Missiles',
+        itemType: 'equipment',
+        requiresAttunement: true,
+        isAttuned: false,
+      })
+      .returning({ id: inventoryItems.id });
+    const [staff] = await db
+      .insert(inventoryItems)
+      .values({
+        characterId,
+        name: 'Staff of Power',
+        itemType: 'equipment',
+        requiresAttunement: true,
+        isAttuned: false,
+      })
+      .returning({ id: inventoryItems.id });
+
+    await grantShortRest();
+    await grantShortRest();
+    await grantShortRest();
+    await grantShortRest();
+
+    const equipment = await db
+      .select({ id: characterEquipment.id, itemName: characterEquipment.itemName })
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, characterId));
+    const cloakId = equipment.find((row) => row.itemName === CLOAK)?.id ?? '';
+    const ringId = equipment.find((row) => row.itemName === RING)?.id ?? '';
+
+    const wandResponse = await request(sheetAttunePath(characterId, wand.id), 'POST');
+    expect(wandResponse.status, (await wandResponse.text()).slice(0, 400)).toBe(200);
+    const cloakResponse = await request(sheetAttunePath(characterId, cloakId), 'POST');
+    expect(cloakResponse.status, (await cloakResponse.text()).slice(0, 400)).toBe(200);
+    const ringResponse = await request(sheetAttunePath(characterId, ringId), 'POST');
+    expect(ringResponse.status, (await ringResponse.text()).slice(0, 400)).toBe(200);
+
+    const fourth = await request(sheetAttunePath(characterId, staff.id), 'POST');
+    const fourthText = await fourth.text();
+    expect(fourth.status, fourthText.slice(0, 400)).toBe(400);
+    expect(fourthText).toContain('Cannot attune to more than 3');
+
+    const [staffRow] = await db
+      .select({ isAttuned: inventoryItems.isAttuned })
+      .from(inventoryItems)
+      .where(eq(inventoryItems.id, staff.id));
+    expect(staffRow?.isAttuned).toBe(false);
+    const openRests = await db
+      .select({ id: restEvents.id })
+      .from(restEvents)
+      .where(and(eq(restEvents.characterId, characterId), isNull(restEvents.notes)));
+    expect(openRests.length).toBeGreaterThan(0);
+
+    const [spent] = await db
+      .select({ notes: restEvents.notes })
+      .from(restEvents)
+      .where(eq(restEvents.notes, `attunement:${wand.id}`));
+    expect(spent?.notes).toBe(`attunement:${wand.id}`);
+  });
+
+  it('does not attune an item owned by someone else', async () => {
+    const otherUserId = testId('other-619');
+    await db
+      .update(characters)
+      .set({ userId: otherUserId, ownerId: otherUserId })
+      .where(eq(characters.id, characterId));
+    try {
+      const [cloak] = await db
+        .select({ id: characterEquipment.id })
+        .from(characterEquipment)
+        .where(
+          and(
+            eq(characterEquipment.characterId, characterId),
+            eq(characterEquipment.itemName, CLOAK),
+          ),
+        );
+      const response = await request(sheetAttunePath(characterId, cloak.id), 'POST');
+      const text = await response.text();
+      expect(response.status, text.slice(0, 400)).toBe(400);
+      expect(text).toContain('Item not found');
+    } finally {
+      await db
+        .update(characters)
+        .set({ userId, ownerId: userId })
+        .where(eq(characters.id, characterId));
+    }
   });
 });

@@ -1,16 +1,20 @@
 /**
- * Attunement (DMG p. 136, max 3).
- *
- * character_equipment is the source of truth. The token is that row's id
- * (the sheet) or the item name (the game loader). inventory_items is only
- * the fallback for a story grant that has no sheet row yet.
+ * Attunement (DMG p. 136, max 3). Sheet gear lives on character_equipment.
+ * The sheet posts that row id, or an inventory_items id. A name still matches.
+ * One completed short rest with empty notes is spent on the item. This service
+ * claims a rest the rest route already recorded. It does not heal.
  */
 
-import { eq, and, or } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull, or } from 'drizzle-orm';
 
 import { attunedNameCount, ownedBy, siblingName, tokenMatch } from './attunement-token.js';
 import { db } from '../../../../db/client';
-import { inventoryItems, characterEquipment, characters } from '../../../../db/schema/index';
+import {
+  inventoryItems,
+  characterEquipment,
+  characters,
+  restEvents,
+} from '../../../../db/schema/index';
 import { MAX_ATTUNED_ITEMS } from '../../types/inventory.js';
 
 import type { AttunedRecord, AttunementResult } from '../../types/inventory.js';
@@ -82,8 +86,15 @@ export class InventoryAttunementService {
       );
     }
 
+    if (!(await this.claimShortRest(characterId, item.id))) {
+      return refuse(attunedCount, 'Attunement needs a short rest spent on this item');
+    }
+
     const updated = await this.setAttuned(table, item.id, characterId, userId, true);
-    if (!updated) return refuse(attunedCount, 'Failed to attune to item');
+    if (!updated) {
+      await this.releaseShortRest(characterId, item.id);
+      return refuse(attunedCount, 'Failed to attune to item');
+    }
 
     return {
       success: true,
@@ -115,6 +126,40 @@ export class InventoryAttunementService {
       true,
     );
     return equipment ?? inventory ?? null;
+  }
+
+  private static async claimShortRest(characterId: string, itemId: string): Promise<boolean> {
+    const [rest] = await db
+      .select({ id: restEvents.id })
+      .from(restEvents)
+      .where(
+        and(
+          eq(restEvents.characterId, characterId),
+          eq(restEvents.restType, 'short'),
+          eq(restEvents.interrupted, false),
+          isNotNull(restEvents.completedAt),
+          isNull(restEvents.notes),
+        ),
+      )
+      .orderBy(asc(restEvents.completedAt))
+      .limit(1);
+    if (!rest) return false;
+
+    const [claimed] = await db
+      .update(restEvents)
+      .set({ notes: `attunement:${itemId}`, updatedAt: new Date() })
+      .where(and(eq(restEvents.id, rest.id), isNull(restEvents.notes)))
+      .returning({ id: restEvents.id });
+    return Boolean(claimed);
+  }
+
+  private static async releaseShortRest(characterId: string, itemId: string): Promise<void> {
+    await db
+      .update(restEvents)
+      .set({ notes: null, updatedAt: new Date() })
+      .where(
+        and(eq(restEvents.characterId, characterId), eq(restEvents.notes, `attunement:${itemId}`)),
+      );
   }
 
   private static async findOwnedItem(

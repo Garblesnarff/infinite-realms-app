@@ -3,6 +3,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { SHEET_ATTUNE_ROW_ID } from '../../../shared/test-fixtures/sheet-attune-wire';
 import { useMagicItemAttunement } from '../use-magic-item-attunement';
 
 import logger from '@/lib/logger';
@@ -152,6 +153,35 @@ describe('useMagicItemAttunement', () => {
           ]),
         }),
       );
+    });
+
+    it('posts the equipment row id and does not take a short rest', async () => {
+      const gameSheetCharacter = {
+        ...mockCharacter,
+        inventory: [
+          {
+            itemId: 'Cloak of Protection',
+            itemName: 'Cloak of Protection',
+            equipmentId: SHEET_ATTUNE_ROW_ID,
+            quantity: 1,
+            equipped: true,
+            isMagic: true,
+            requiresAttunement: true,
+            isAttuned: false,
+          },
+        ],
+      };
+      const { result } = renderHook(() =>
+        useMagicItemAttunement(gameSheetCharacter, mockOnCharacterUpdate),
+      );
+
+      const response = await act(async () => {
+        return await result.current.attuneToItem('Cloak of Protection');
+      });
+
+      expect(response.success).toBe(true);
+      expect(restApi.shortRest).not.toHaveBeenCalled();
+      expect(restApi.attuneItem).toHaveBeenCalledWith('char-123', SHEET_ATTUNE_ROW_ID);
     });
 
     it('should handle errors during attunement', async () => {
