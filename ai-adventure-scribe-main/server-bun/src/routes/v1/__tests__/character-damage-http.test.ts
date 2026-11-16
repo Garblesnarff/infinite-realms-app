@@ -1,6 +1,8 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
+import { DAMAGE_WIRE_BODY } from '../../../../../shared/test-fixtures/character-vitals-wire';
+
 /**
  * #621 Part A: the client now sends POST /v1/characters/:id/damage with
  * `{amount}` from the in-combat path too (previously no request was sent in
@@ -59,7 +61,10 @@ mock.module('../../../services/character-service.js', () => ({
   CharacterService: { getById: async () => ({ id: 'character-1' }) },
 }));
 mock.module('../../../services/character-vitals-service.js', () => ({
-  CharacterVitalsService: {},
+  CharacterVitalsService: {
+    heal: async () => ({}),
+    getVitals: async () => ({ currentHitPoints: 27, temporaryHitPoints: 0 }),
+  },
 }));
 mock.module('../../../services/subclass-service.js', () => ({
   SubclassService: {
@@ -67,8 +72,12 @@ mock.module('../../../services/subclass-service.js', () => ({
     setSubclass: async () => {},
   },
 }));
+mock.module('../../../services/combat-hp-service.js', () => ({
+  CombatHPService: { healDamage: async () => ({}) },
+}));
 mock.module('../../../services/combat/non-attack-damage.js', () => ({
   applyNonAttackDamage,
+  findLiveParticipant: async () => null,
 }));
 
 const { charactersRoutes } = await import('../characters.js');
@@ -83,7 +92,7 @@ describe('character damage route wire body (#621)', () => {
           authorization: 'Bearer test-token',
           'content-type': 'application/json',
         },
-        body: JSON.stringify({ amount: 8 }),
+        body: JSON.stringify(DAMAGE_WIRE_BODY),
       }),
     );
 

@@ -1,0 +1,72 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+/**
+ * #621 Part A guard. Damage and heals go to the server only. The client keeps a dev-only
+ * combat engine (local HP and death-save maths) until Part B deletes it. Nothing in production
+ * code may call it.
+ *
+ * The files below are the dev-only engine and the wiring that reaches it. They may keep
+ * referencing it. Any other non-test production file that references `dealDamage`,
+ * `healDamage` or `rollDeathSave` fails this test. Part B removes entries from this list.
+ */
+const SRC_ROOT = join(process.cwd(), 'src');
+
+const LOCAL_ENGINE_ALLOWLIST = [
+  'types/combat-encounter.ts',
+  'contexts/combat/use-take-action.ts',
+  'contexts/combat/health-handlers.ts',
+  'contexts/CombatContext.tsx',
+  'utils/combat/deathSaves.ts',
+];
+
+const LOCAL_ENGINE_REFERENCE = /\b(dealDamage|healDamage|rollDeathSave)\b/;
+
+function listProductionSourceFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(dir)) {
+    const full = join(dir, name);
+    if (statSync(full).isDirectory()) {
+      if (name === '__tests__' || name === 'test' || name === 'tests') continue;
+      out.push(...listProductionSourceFiles(full));
+      continue;
+    }
+    if (!/\.(ts|tsx)$/.test(name)) continue;
+    if (/\.test\.|\.spec\./.test(name)) continue;
+    out.push(full);
+  }
+  return out;
+}
+
+describe('local combat engine stays out of production calls (#621 Part A)', () => {
+  const files = listProductionSourceFiles(SRC_ROOT).map((f) =>
+    relative(SRC_ROOT, f).split('\\').join('/'),
+  );
+
+  it('no production file outside the allowlist references the local engine', () => {
+    const offenders = files.filter((rel) => {
+      if (LOCAL_ENGINE_ALLOWLIST.includes(rel)) return false;
+      return LOCAL_ENGINE_REFERENCE.test(readFileSync(join(SRC_ROOT, rel), 'utf8'));
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it('every allowlist entry still exists and still references the engine (no stale entries)', () => {
+    const stale = LOCAL_ENGINE_ALLOWLIST.filter((rel) => {
+      if (!files.includes(rel)) return true;
+      return !LOCAL_ENGINE_REFERENCE.test(readFileSync(join(SRC_ROOT, rel), 'utf8'));
+    });
+    expect(stale).toEqual([]);
+  });
+
+  it('the server-authoritative damage hook does not reference the local engine', () => {
+    const hook = readFileSync(
+      join(SRC_ROOT, 'contexts/game/use-damage-auto-application.ts'),
+      'utf8',
+    );
+    expect(LOCAL_ENGINE_REFERENCE.test(hook)).toBe(false);
+    expect(hook).toContain('applyCharacterDamage');
+  });
+});
