@@ -528,6 +528,9 @@ describeWithDb('fighting styles on the live attack route (#824)', () => {
   // and :262. The one-landed/one-refused and single-HP-write checks were not reached.
   test.todo(
     '#1536 two attack commits racing for the last swing: one lands, one is refused, HP moves once',
+    () => {
+      // Intentionally empty until the engine message matches the issue's wording.
+    },
   );
 
   test('#1536 Fighter 5: one swing, Action Surge on a spell, the leftover swing is allowed, then refused', async () => {
