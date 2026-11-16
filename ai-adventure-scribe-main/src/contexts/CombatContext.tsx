@@ -29,7 +29,7 @@ import { useParticipantManagement } from './combat/use-participant-management';
 import { useTakeAction } from './combat/use-take-action';
 import { createWeaponHandlers } from './combat/weapon-handlers';
 
-import type { CombatContextValue } from '@/types/combat';
+import type { CombatContextValue, DeathSaveTally } from '@/types/combat';
 
 // ===========================
 // Context Creation
@@ -78,6 +78,13 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
 
   const getActiveEncounter = useCallback(() => stateRef.current.activeEncounter, []);
   const refreshCombatState = useAuthoritativeCombatSync(sessionId, dispatch, getActiveEncounter);
+
+  // The death-save tally the engine just printed on a card (#906). Dispatch is stable.
+  const recordDeathSaveTally = useCallback(
+    (participantId: string, tally: DeathSaveTally) =>
+      dispatch({ type: 'RECORD_DEATH_SAVE_TALLY', participantId, tally }),
+    [],
+  );
 
   // ===========================
   // Extracted Handlers (stable references - dispatch never changes)
@@ -142,6 +149,7 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
       startCombat,
       endCombat,
       refreshCombatState,
+      recordDeathSaveTally,
       nextTurn,
       rollInitiative,
       takeAction,
@@ -175,6 +183,7 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
       startCombat,
       endCombat,
       refreshCombatState,
+      recordDeathSaveTally,
       nextTurn,
       rollInitiative,
       takeAction,

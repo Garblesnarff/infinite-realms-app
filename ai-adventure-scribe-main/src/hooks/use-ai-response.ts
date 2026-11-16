@@ -342,7 +342,7 @@ export const useAIResponse = (): {
   checkRestoredDefeat: (sessionId: string) => Promise<boolean>;
 } => {
   const { setGamePhase, state: gameState, cancelDiceRoll } = useGame();
-  const { refreshCombatState } = useCombat();
+  const { refreshCombatState, recordDeathSaveTally } = useCombat();
   const { user, userPlan } = useAuth();
   // #400: the owned character sheet (equipment/spells) for the suggestion filter. The
   // session context's character payload is identity+stats only, so it cannot source this.
@@ -1207,6 +1207,7 @@ export const useAIResponse = (): {
           activeEncounter,
           isInCombat,
           refreshCombatState,
+          recordDeathSaveTally,
           aiContext,
           conversationHistory,
           combatRound: activeEncounter?.currentRound,
@@ -1599,6 +1600,7 @@ export const useAIResponse = (): {
       gameState.currentPhase,
       gameState.diceRollQueue.pendingRolls.length,
       refreshCombatState,
+      recordDeathSaveTally,
       userPlan,
       user?.id,
       setGamePhase,

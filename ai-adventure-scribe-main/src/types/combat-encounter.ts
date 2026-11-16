@@ -70,6 +70,12 @@ export interface CombatEncounter {
 // Combat State Management
 // ===========================
 
+/** A death-save tally as the engine printed it: successes and failures, each of 0 to 3. */
+export interface DeathSaveTally {
+  successes: number;
+  failures: number;
+}
+
 export interface CombatState {
   activeEncounter: CombatEncounter | null;
   isInCombat: boolean;
@@ -82,6 +88,12 @@ export interface CombatState {
 
   // Pending actions (before confirmation)
   pendingAction?: Partial<CombatAction>;
+
+  /**
+   * The death-save tally the engine printed for a participant, from the last death save on the
+   * turn just resolved (#906). The dying tray shows it until the next authoritative refresh.
+   */
+  deathSaveTallies?: Record<string, DeathSaveTally>;
 
   // Reaction system
   activeReactionOpportunities: ReactionOpportunity[];
@@ -200,6 +212,9 @@ export interface CombatContextValue {
    * Callers that must not act on a stale render (the DM turn pipeline) await this first.
    */
   refreshCombatState: (signal?: AbortSignal) => Promise<CombatEncounter | null>;
+
+  /** Records the death-save tally the engine just printed, so the dying tray matches the card (#906). */
+  recordDeathSaveTally: (participantId: string, tally: DeathSaveTally) => void;
 
   // Turn management
   nextTurn: () => Promise<void>;

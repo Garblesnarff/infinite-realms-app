@@ -90,6 +90,13 @@ function blocksFor(result: Record<string, unknown>): CombatEngineBlock[] {
   return blocks;
 }
 
+/** The text a screen reader hears: everything outside aria-hidden subtrees (#906). */
+function accessibleText(root: HTMLElement): string {
+  const copy = root.cloneNode(true) as HTMLElement;
+  copy.querySelectorAll('[aria-hidden="true"]').forEach((node) => node.remove());
+  return copy.textContent ?? '';
+}
+
 const renderBlocks = (blocks: CombatEngineBlock[]) =>
   render(
     <DMMessage
@@ -112,7 +119,7 @@ const renderBlocks = (blocks: CombatEngineBlock[]) =>
   );
 
 describe('a dying hero who rolls three successes (#906)', () => {
-  it('prints the stable and unconscious sentence exactly once in the transcript', () => {
+  it('a screen reader hears the stable and unconscious sentence once', () => {
     // Real engine payload: the save that makes the third success, and the wake the fight-end adds.
     const third = realSave({ successes: 2, failures: 0 }, 13);
     expect(third.isStabilized).toBe(true);
@@ -123,10 +130,9 @@ describe('a dying hero who rolls three successes (#906)', () => {
       wake: [{ participantId: SCHOLAR.id, name: SCHOLAR.name, hours: 3 }],
     };
     const { container } = renderBlocks(blocksFor(result));
-    const text = container.textContent ?? '';
-    const count = text.split(STATE_SENTENCE).length - 1;
-    // Visible evidence for the report: how many times the sentence is on screen.
-    console.log('STABLE_SENTENCE_COUNT', count, JSON.stringify(text.slice(0, 600)));
-    expect(count).toBe(1);
+    // A screen reader hears what is outside aria-hidden subtrees. The card's visible detail is
+    // aria-hidden because its sr-only sentence already carries the line (#906).
+    const heard = accessibleText(container);
+    expect(heard.split(STATE_SENTENCE).length - 1).toBe(1);
   });
 });

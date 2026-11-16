@@ -91,6 +91,22 @@ describe('DyingComposerSlot (#2518)', () => {
     expect(screen.getByRole('img', { name: '0 of 3 successes, 2 of 3 failures' })).toBeTruthy();
   });
 
+  it('shows the tally the engine printed on the save card, not a snapshot that has not caught up (#906)', () => {
+    // The snapshot still reads the turn before the save: 0 successes, 2 failures. The card the
+    // engine just printed says 1 success, 2 failures. The tray must agree with the card.
+    vi.mocked(useOptionalCombat).mockReturnValue({
+      state: {
+        isInCombat: true,
+        activeEncounter: board({ holder: 'scholar' }),
+        deathSaveTallies: { [DYING_SCHOLAR_PARTICIPANT.id]: { successes: 1, failures: 2 } },
+      },
+    } as never);
+    renderSlot();
+
+    expect(screen.getByRole('img', { name: '1 of 3 successes, 2 of 3 failures' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: '0 of 3 successes, 2 of 3 failures' })).toBeNull();
+  });
+
   it('starts the dying turn on its own when the order reaches the player at 0 HP, once', () => {
     useCombatNow(board({ holder: 'scholar' }));
     const { onSendMessage, rerender } = renderSlot();

@@ -128,6 +128,11 @@ export interface CombatResolutionParams {
   encounterId: string;
   /** The session route is the stable client entry point for the autonomous turn loop. */
   sessionId?: string;
+  /** Records the tally the engine printed for a death save, so the dying tray matches it (#906). */
+  recordDeathSaveTally?: (
+    participantId: string,
+    tally: { successes: number; failures: number },
+  ) => void;
   combatActions: unknown[];
   /** The declaration the resolution narration is written against. */
   declarationText: string;
@@ -325,6 +330,7 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
   const {
     encounterId,
     sessionId,
+    recordDeathSaveTally,
     combatActions,
     declarationText,
     aiContext,
@@ -987,6 +993,14 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
         (save): save is EngineDeathSave =>
           Boolean(save) && typeof save.roll === 'number' && Number.isFinite(save.roll),
       );
+      // #906: the dying tray shows the tally this save printed, in the same render as its card.
+      const lastSave = rolledSaves[rolledSaves.length - 1];
+      if (lastSave && recordDeathSaveTally) {
+        recordDeathSaveTally(action.actor_id, {
+          successes: lastSave.successes ?? 0,
+          failures: lastSave.failures ?? 0,
+        });
+      }
       saveParts = saveParts.map((part, index) => {
         const save = rolledSaves[index];
         if (!save) return part;

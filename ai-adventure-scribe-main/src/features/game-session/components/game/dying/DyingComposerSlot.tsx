@@ -52,6 +52,11 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
   );
   const vital = player ? participantVital(player) : 'standing';
   const isOwnTurn = Boolean(player && encounter?.currentTurnParticipantId === player.id);
+  // #906: the tally the engine printed on this player's last death-save card. The snapshot
+  // catches up on the next refresh; until then the pips agree with the card on screen.
+  const printedTally = player ? combat?.state.deathSaveTallies?.[player.id] : undefined;
+  const successes = printedTally?.successes ?? player?.deathSaves.successes ?? 0;
+  const failures = printedTally?.failures ?? player?.deathSaves.failures ?? 0;
 
   const turnKey =
     encounter && player && vital === 'dying' && isOwnTurn
@@ -59,8 +64,8 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
           encounter.id,
           encounter.currentRound,
           encounter.currentTurnParticipantId,
-          player.deathSaves.successes,
-          player.deathSaves.failures,
+          successes,
+          failures,
         ].join(':')
       : null;
   const sentKeyRef = React.useRef<string | null>(null);
@@ -149,8 +154,8 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
     <DyingPanel
       name={player.displayName ?? player.name}
       state={vital === 'stable' ? 'stable' : 'dying'}
-      successes={player.deathSaves.successes}
-      failures={player.deathSaves.failures}
+      successes={successes}
+      failures={failures}
       isOwnTurn={isOwnTurn}
       promptOpen={promptOpen}
       onRoll={onRoll}
