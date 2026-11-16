@@ -1146,11 +1146,6 @@ export const useAIResponse = (): {
           releaseHeldSideEffects(result);
         }
 
-        // #266: a roll-result turn carries the engine's authoritative verdict for the roll, and
-        // the reply must follow it. A failed check narrated as a success (or the reverse) is
-        // rejected once with the verdict named, then replaced like any other gated reply. The
-        // harm check does not run here: the engine did resolve something, so harm claims may
-        // be legitimate — only contradiction of the verdict is gated.
         // #610: a failed check that narrates injury with no engine damage is logged (shadow only).
         if (isDiceRollMessage && sessionId) {
           await shadowFailedCheckHarm({
@@ -1163,6 +1158,11 @@ export const useAIResponse = (): {
             isStale: (outcome, history) => isRollOutcomeStale(outcome, history),
           });
         }
+        // #266: a roll-result turn carries the engine's authoritative verdict for the roll, and
+        // the reply must follow it. A failed check narrated as a success (or the reverse) is
+        // rejected once with the verdict named, then replaced like any other gated reply. The
+        // harm check does not run here: the engine did resolve something, so harm claims may
+        // be legitimate — only contradiction of the verdict is gated.
         if (isDiceRollMessage && sessionId) {
           result = await gateRollOutcomeContradiction({
             narration: result,

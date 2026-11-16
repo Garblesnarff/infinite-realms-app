@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { shadowFailedCheckHarm } from '../failed-check-harm-shadow';
+import { failedCheckHarmShadowPatterns, shadowFailedCheckHarm } from '../failed-check-harm-shadow';
 
 import logger from '@/lib/logger';
+import { reportNarrationShadowHit } from '@/services/client-failure-reporting';
 
 vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/services/ai-service', () => ({
   AIService: { lastRequestId: vi.fn(() => 'req-610') },
+}));
+vi.mock('@/services/client-failure-reporting', () => ({
+  reportNarrationShadowHit: vi.fn(),
 }));
 
 // #610 (Hark N3-030): an Athletics check fails and the DM narrates injury (rope burns, dragged to
@@ -21,6 +25,15 @@ const FAILED_ATHLETICS = {
 } as never;
 const HARM_REPLY =
   'Your grip slips and the rope burns across your palms. You are dragged to the edge of the ledge.';
+
+// Strategist FIX (#610): injury words about someone else, or not about a body, are not the hero's.
+const NOT_THE_HERO = [
+  'The merchant is dragged away.',
+  'Blood stains the floor from an old battle.',
+  'The bruised moon hangs over the ledge.',
+  'His blood runs cold.',
+  'The goblin bleeds.',
+];
 
 const run = (over: Partial<Parameters<typeof shadowFailedCheckHarm>[0]> = {}) =>
   shadowFailedCheckHarm({
@@ -39,17 +52,41 @@ const shadowLogged = () =>
 describe('#610: failed check narrates harm with no engine damage', () => {
   beforeEach(() => {
     vi.mocked(logger.warn).mockClear();
+    vi.mocked(reportNarrationShadowHit).mockClear();
   });
 
-  it('logs the injury claim as a shadow with the failed-check reason', async () => {
+  it('names the hero injury patterns (rope_burn, dragged) in the log and the report', async () => {
     await run();
     expect(logger.warn).toHaveBeenCalledWith(
       'DM_NARRATION_SHADOW',
       expect.objectContaining({
         reason: 'failed_check_harm_without_engine_damage',
-        claims: expect.arrayContaining(['rope burns', 'dragged']),
+        patterns: ['rope_burn', 'dragged'],
       }),
     );
+    expect(reportNarrationShadowHit).toHaveBeenCalledWith(
+      'failed_check_harm_without_engine',
+      's-610',
+      ['rope_burn', 'dragged'],
+    );
+    const logged = JSON.stringify(vi.mocked(logger.warn).mock.calls);
+    expect(logged).not.toContain('rope burns');
+  });
+
+  it.each([
+    ['You are wounded.', 'wounded_injured'],
+    ['You hit the hard, cold stone.', 'hit_hard_surface'],
+  ])('names the hero in "%s" as %s', (text, name) => {
+    expect(failedCheckHarmShadowPatterns(text)).toEqual([name]);
+  });
+
+  it.each(NOT_THE_HERO)('does not name "%s" (not the hero)', (text) => {
+    expect(failedCheckHarmShadowPatterns(text)).toEqual([]);
+  });
+
+  it('does not log a negated injury ("no rope burns")', async () => {
+    await run({ narration: { text: 'You slip, but there are no rope burns on your palms.' } });
+    expect(shadowLogged()).toBe(false);
   });
 
   it('does not log a successful check', async () => {
@@ -74,11 +111,6 @@ describe('#610: failed check narrates harm with no engine damage', () => {
 
   it('does not log a clean failed-check narration', async () => {
     await run({ narration: { text: 'The rope slips from your grip, and you catch the ledge.' } });
-    expect(shadowLogged()).toBe(false);
-  });
-
-  it('does not log a negated injury ("no rope burns")', async () => {
-    await run({ narration: { text: 'You slip, but there are no rope burns on your palms.' } });
     expect(shadowLogged()).toBe(false);
   });
 

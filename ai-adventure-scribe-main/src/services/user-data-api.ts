@@ -226,7 +226,8 @@ export type ClientFailureKind =
   | 'react_error_boundary'
   | 'client_turn_failure'
   | 'auth_refresh_check_skipped'
-  | 'narrated_death_without_engine';
+  | 'narrated_death_without_engine'
+  | 'failed_check_harm_without_engine';
 
 /** Optional context the server logs alongside a client failure (#2515). */
 export type ClientFailureDetails = {
