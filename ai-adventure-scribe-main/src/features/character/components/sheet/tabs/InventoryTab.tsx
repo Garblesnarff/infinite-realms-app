@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useMagicItemAttunement } from '@/hooks/use-magic-item-attunement';
+import { useToast } from '@/hooks/use-toast';
 
 interface InventoryTabProps {
   character: Character;
@@ -45,6 +46,7 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
 
   const { attuneToItem, removeAttunement, getAttunementSummary, isAttuning } =
     useMagicItemAttunement(character, onUpdate);
+  const { toast } = useToast();
   const [chooserOpen, setChooserOpen] = useState(false);
   const hasNoEquipment =
     !equipmentUnavailable && Array.isArray(character.inventory) && character.inventory.length === 0;
@@ -65,10 +67,9 @@ const InventoryTab: React.FC<InventoryTabProps> = ({
     const item = character.inventory?.find((invItem) => invItem.itemId === itemId);
     if (!item) return;
 
-    if (item.isAttuned) {
-      await removeAttunement(itemId);
-    } else {
-      await attuneToItem(itemId);
+    const result = item.isAttuned ? await removeAttunement(itemId) : await attuneToItem(itemId);
+    if (!result.success) {
+      toast({ title: 'Attunement failed', description: result.message, variant: 'destructive' });
     }
   };
 
