@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.48.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.47.2...v0.48.0) (2026-11-16)
+
+
+### Features
+
+* **combat:** track extra attack swings ([dcf1dda](https://github.com/Garblesnarff/infinite-realms-app/commit/dcf1ddaac2afa4c9e51a373c5e1c12f272cc9456))
+
+
+### Bug Fixes
+
+* **chronicle:** hide End session for a fallen hero ([#1546](https://github.com/Garblesnarff/infinite-realms-app/issues/1546)) ([090dad2](https://github.com/Garblesnarff/infinite-realms-app/commit/090dad2f54831ed4aa86076354a4506b5e014da9))
+* **death:** one stable line and death-save pips in step with the engine ([#906](https://github.com/Garblesnarff/infinite-realms-app/issues/906)) ([4a86432](https://github.com/Garblesnarff/infinite-realms-app/commit/4a864325b442fae9fea69347a10786540c0e4f36))
+* **dm:** strip a campaign tracker line anywhere in the narration ([#1556](https://github.com/Garblesnarff/infinite-realms-app/issues/1556)) ([99afb4b](https://github.com/Garblesnarff/infinite-realms-app/commit/99afb4b27ee41cd440ad317a8a16e6840765d7b1))
+* **dm:** the DM reads the server's check verdict, not the client line ([#1477](https://github.com/Garblesnarff/infinite-realms-app/issues/1477)) ([e990eeb](https://github.com/Garblesnarff/infinite-realms-app/commit/e990eeb22a16f66f26f68f64a936bd9f6964b956))
+* **inventory:** attune works for sheet items and needs no forced short rest ([#619](https://github.com/Garblesnarff/infinite-realms-app/issues/619)) ([f87cdb9](https://github.com/Garblesnarff/infinite-realms-app/commit/f87cdb96e8c6ab7e968c931c249e18b345922a8d))
+* **paladin:** in-fight Lay on Hands heals inside the draw transaction ([#1545](https://github.com/Garblesnarff/infinite-realms-app/issues/1545)) ([c25dbe7](https://github.com/Garblesnarff/infinite-realms-app/commit/c25dbe7940d530cfef6c22fabc2a6ef10e7a7ae2))
+* **rules:** Oath of Devotion spells, granted by the server as always prepared ([#1555](https://github.com/Garblesnarff/infinite-realms-app/issues/1555)) ([7ceaca7](https://github.com/Garblesnarff/infinite-realms-app/commit/7ceaca784eb7a4c575a8556f0366f3e7c4df0786))
+* **sheet:** Inspiration is a read-only coin ([#1537](https://github.com/Garblesnarff/infinite-realms-app/issues/1537)) ([26cc1d5](https://github.com/Garblesnarff/infinite-realms-app/commit/26cc1d5a053036df082328029733f2f309ae4785))
+* **table:** one chronicle dialog, readable prompt lines, a steady enemy condition word ([#1557](https://github.com/Garblesnarff/infinite-realms-app/issues/1557)) ([927f68b](https://github.com/Garblesnarff/infinite-realms-app/commit/927f68b45b99b3fd8534a16710aeccfffd869a16))
+
+
+### Tests
+
+* **combat:** behaviour pins for [#613](https://github.com/Garblesnarff/infinite-realms-app/issues/613) [#314](https://github.com/Garblesnarff/infinite-realms-app/issues/314) [#390](https://github.com/Garblesnarff/infinite-realms-app/issues/390) [#604](https://github.com/Garblesnarff/infinite-realms-app/issues/604) ([2e03972](https://github.com/Garblesnarff/infinite-realms-app/commit/2e039720bf277da6d4098afd8ff837e3235e3eb6))
+* **combat:** pin six October combat bugs on main ([#613](https://github.com/Garblesnarff/infinite-realms-app/issues/613) [#604](https://github.com/Garblesnarff/infinite-realms-app/issues/604) [#263](https://github.com/Garblesnarff/infinite-realms-app/issues/263) [#314](https://github.com/Garblesnarff/infinite-realms-app/issues/314) [#390](https://github.com/Garblesnarff/infinite-realms-app/issues/390) [#612](https://github.com/Garblesnarff/infinite-realms-app/issues/612)) ([d38c985](https://github.com/Garblesnarff/infinite-realms-app/commit/d38c98531205c939286583bbaa0eb6aca676807c))
+* **sheet:** a party defeat keeps the inventory ([#571](https://github.com/Garblesnarff/infinite-realms-app/issues/571)) ([4eec9d6](https://github.com/Garblesnarff/infinite-realms-app/commit/4eec9d6ffea582ca9b6bfaa0d72b0bd52045766f))
+
 ## [0.47.2](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.47.1...v0.47.2) (2026-11-15)
 
 
