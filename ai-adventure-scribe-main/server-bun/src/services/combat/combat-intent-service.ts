@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 import { spendRangedAmmunition } from './ammunition-spend.js';
 import { ammunitionForWeapon } from './ammunition.js';
+import { attackBudgetPlan } from './attack-budget-service.js';
 import { describeRefusedSpell, describeResolvedSpell } from './attack-narration.js';
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
 import { executeCombatCheck } from './combat-check-service.js';
@@ -14,7 +15,6 @@ import { trackCombatEvent } from './combat-events.js';
 import { resolveCombatIntentRefsWithRetry } from './combat-intent-refs.js';
 import { assertActorTurn } from './combat-intent-turn.js';
 import { resolveUseItem, type ResolveUseItemResult } from './combat-item-service.js';
-import { resolveFlexibleCasting, type FlexibleCastingResult } from './flexible-casting-resolver.js';
 import { resolveWeaponName } from '../../../../shared/equipment-weapon-resolver';
 import { slotOrdinal } from '../../../../shared/slot-ordinal';
 import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
@@ -27,7 +27,6 @@ import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
   claimTurnVersion,
-  readActionSurgeMark,
   setDefensiveAction,
 } from './combat-turn-resources.js';
 import { buildCombatWeaponOptions, type WeaponTargetResolution } from './combat-weapon-options.js';
@@ -56,6 +55,7 @@ import {
   type ActionSurgeResult,
   type SecondWindResult,
 } from './fighter-features-service.js';
+import { resolveFlexibleCasting, type FlexibleCastingResult } from './flexible-casting-resolver.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import {
   hasLeftTheBoard,
@@ -1043,6 +1043,12 @@ export async function proposeCombatAttack(
   const groundedWeaponId = isUnarmedWeaponClaim(resolvedAttack.weaponId)
     ? UNARMED_STRIKE.id
     : grounding.weaponId;
+  if ((actor as unknown as TurnResourceView).actionUsed) {
+    const available = await attackBudgetPlan(encounterId, actor.id);
+    if (!available.plan) {
+      throw new BusinessLogicError('Action already used this turn', { participantId: actor.id });
+    }
+  }
   const approach = await decideAttackApproach({
     sessionId: encounter.sessionId,
     actorId: resolvedAttack.actorId,
@@ -1052,17 +1058,6 @@ export async function proposeCombatAttack(
     weapon: grounding.weapon,
   });
   if (approach.movementOnly) return { movementOnly: true, result: approach.result };
-  if ((actor as unknown as TurnResourceView).actionUsed) {
-    const surge = await readActionSurgeMark(encounter.sessionId);
-    if (
-      !surge ||
-      surge.encounterId !== encounterId ||
-      surge.participantId !== actor.id ||
-      surge.round !== encounter.currentRound
-    ) {
-      throw new BusinessLogicError('Action already used this turn', { participantId: actor.id });
-    }
-  }
   const attackService = await createCombatAttackService();
   const proposal = await attackService.proposeAttack(
     encounterId,
@@ -1140,6 +1135,7 @@ async function proposeCombatSpell(
       spellId: resolved.spellId,
       spellName: resolved.spellName,
       slotLevel: resolved.slotLevel,
+      metamagic: resolved.metamagic,
     },
     userId,
   );
@@ -1543,7 +1539,7 @@ export async function executeCombatIntent(
         };
         // The stack claim and damage must commit together, including for unkeyed player attacks.
         const attack =
-          actorIsPlayer && ammunitionForWeapon(weapon.name) && !inNpcTransaction
+          actorIsPlayer && !inNpcTransaction
             ? await (
                 await import('../../../../db/client')
               ).withNpcActionTransaction(encounterId, resolveAttack)
@@ -2332,7 +2328,10 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     }
   }
   const profile = await getParticipantAbilityProfile(actor);
-  if (!actor.actionUsed) {
+  const canAttack =
+    !actor.actionUsed ||
+    (actor.participantType === 'player' && !!(await attackBudgetPlan(encounterId, actor.id)).plan);
+  if (canAttack) {
     const [equippedWeapons, attackerConditions] = await Promise.all([
       listEquippedWeaponProfiles(actor),
       getActiveConditionNames(actor.id),
@@ -2468,7 +2467,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     // #1147: one Use chip per healing consumable on the sheet, gated on being hurt
     // like Second Wind below: the resolver refuses at full health before spending
     // anything, so a chip at full health could only produce a refusal.
-    if (actor.participantType === 'player' && actor.characterId) {
+    if (!actor.actionUsed && actor.participantType === 'player' && actor.characterId) {
       const actorCurrentHp = actor.status?.currentHp ?? actor.maxHp ?? 0;
       if (actorCurrentHp < (actor.maxHp ?? 0)) {
         const consumables = await listHealingConsumables(actor.characterId);
@@ -2481,11 +2480,12 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         }
       }
     }
-    actions.push(
-      { type: 'dash', label: 'Dash' },
-      { type: 'dodge', label: 'Dodge' },
-      { type: 'disengage', label: 'Disengage' },
-    );
+    if (!actor.actionUsed)
+      actions.push(
+        { type: 'dash', label: 'Dash' },
+        { type: 'dodge', label: 'Dodge' },
+        { type: 'disengage', label: 'Disengage' },
+      );
   }
   // #1233: Flexible Casting is a bonus action, offered to a Sorcerer with a sorcery-point pool
   // (no pool, not a Sorcerer, means no offer). Convert: one offer per spell slot the character

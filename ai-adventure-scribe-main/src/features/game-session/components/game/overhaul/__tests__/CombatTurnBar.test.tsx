@@ -75,6 +75,18 @@ const bar = (round: number, turnIndex: number, busy: 'casting' | 'acting' | null
 };
 
 describe('turn bar (#2417, copy #85)', () => {
+  it('shows the engine swing count on the table turn bar', () => {
+    document.body.classList.add('ir-table-look');
+    const state = encounter(2, 0);
+    state.participants[0].actionTaken = true;
+    state.participants[0].attackSwingsRemaining = 1;
+    const summary = summarizeCombatTurn(state)!;
+    render(<CombatTurnBar summary={summary} busy={null} />);
+    expect(screen.getByTestId('combat-turn-sub')).toHaveTextContent('1 attack remaining');
+    expect(screen.getByTestId('combat-turn-sentence')).toHaveTextContent('1 attack remaining');
+    document.body.classList.remove('ir-table-look');
+  });
+
   it('names whose turn it is and the round, and shows the next line', () => {
     bar(2, 0);
 

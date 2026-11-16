@@ -17,6 +17,13 @@ vi.mock('../combat-hp-service.js', () => ({
   CombatHPService: { applyDamage: vi.fn() },
 }));
 
+vi.mock('../combat/attack-budget-service.js', () => ({
+  claimAttackSwing: vi.fn(async (encounterId: string, participantId: string, version: number) => {
+    const { claimTurnAction } = await import('../combat/combat-turn-resources.js');
+    await claimTurnAction(participantId, encounterId, version);
+  }),
+}));
+
 // Mock the db client
 vi.mock('../../../../db/client', () => ({
   db: {

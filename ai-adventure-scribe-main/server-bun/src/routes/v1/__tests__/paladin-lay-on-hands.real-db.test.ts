@@ -991,4 +991,161 @@ describeWithDb('paladin Lay on Hands pool (#712)', () => {
 
     expect(await poolRemaining(layOnHandsId)).toBe(5);
   });
+
+  it('in-fight refund failure rolls back HP, pool, and usage log (#1545)', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+    await db
+      .update(characterStats)
+      .set({ currentHitPoints: 10 })
+      .where(eq(characterStats.characterId, paladinId));
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 10 })
+      .where(eq(combatParticipantStatus.participantId, participantId));
+
+    const [poolRow] = await db
+      .select({ id: characterFeatures.id })
+      .from(characterFeatures)
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      )
+      .limit(1);
+    const poolRowId = poolRow.id;
+
+    const suffix = testId('1545-refund')
+      .replace(/[^a-z0-9_]/gi, '_')
+      .toLowerCase();
+    const fnName = `loh_fail_refund_${suffix}`;
+    const trgName = `loh_fail_refund_trg_${suffix}`;
+    try {
+      await db.execute(
+        sql.raw(
+          `CREATE OR REPLACE FUNCTION "${fnName}"() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'injected refund failure'; END; $$ LANGUAGE plpgsql`,
+        ),
+      );
+      await db.execute(
+        sql.raw(
+          `CREATE TRIGGER "${trgName}" BEFORE UPDATE ON character_features FOR EACH ROW WHEN (OLD.id = '${poolRowId}' AND NEW.uses_remaining > OLD.uses_remaining) EXECUTE FUNCTION "${fnName}"()`,
+        ),
+      );
+
+      await expect(
+        resolveLayOnHands({
+          characterId: paladinId,
+          userId: paladinUserId,
+          participantId,
+          encounterId,
+          targetCharacterId: paladinId,
+          amount: 4,
+          sessionId,
+          context: 'combat-refund-failure-1545',
+        }),
+      ).rejects.toThrow();
+    } finally {
+      await db.execute(sql.raw(`DROP TRIGGER IF EXISTS "${trgName}" ON character_features`));
+      await db.execute(sql.raw(`DROP FUNCTION IF EXISTS "${fnName}"()`));
+    }
+
+    const [stats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, paladinId))
+      .limit(1);
+    expect(stats.currentHitPoints).toBe(10);
+
+    const [status] = await db
+      .select()
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, participantId))
+      .limit(1);
+    expect(status.currentHp).toBe(10);
+
+    expect(await poolRemaining(layOnHandsId)).toBe(5);
+
+    const logs = await db
+      .select()
+      .from(featureUsageLog)
+      .where(
+        and(
+          eq(featureUsageLog.characterId, paladinId),
+          eq(featureUsageLog.context, 'combat-refund-failure-1545'),
+        ),
+      );
+    expect(logs.length).toBe(0);
+  });
+
+  it('a party member owned by another user in the paladin campaign is refused by heal and nothing is spent (#1545)', async () => {
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 5 })
+      .where(
+        and(
+          eq(characterFeatures.characterId, paladinId),
+          eq(characterFeatures.featureId, layOnHandsId),
+        ),
+      );
+
+    const otherUserId = testId('1545-other-user');
+    const [{ id: allyId }] = await db
+      .insert(characters)
+      .values({
+        userId: otherUserId,
+        ownerId: otherUserId,
+        campaignId,
+        name: testId('1545-other-owner-ally'),
+        class: 'Fighter',
+        level: 1,
+      })
+      .returning({ id: characters.id });
+
+    await db.insert(characterStats).values({
+      characterId: allyId,
+      maxHitPoints: 12,
+      currentHitPoints: 5,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+
+    await expect(
+      resolveLayOnHands({
+        characterId: paladinId,
+        userId: paladinUserId,
+        targetCharacterId: allyId,
+        sessionId,
+        context: 'other-owner-ally-1545',
+      }),
+    ).rejects.toThrow();
+
+    const [allyStats] = await db
+      .select()
+      .from(characterStats)
+      .where(eq(characterStats.characterId, allyId))
+      .limit(1);
+    expect(allyStats.currentHitPoints).toBe(5);
+
+    expect(await poolRemaining(layOnHandsId)).toBe(5);
+
+    const logs = await db
+      .select()
+      .from(featureUsageLog)
+      .where(
+        and(
+          eq(featureUsageLog.characterId, paladinId),
+          eq(featureUsageLog.context, 'other-owner-ally-1545'),
+        ),
+      );
+    expect(logs.length).toBe(0);
+  });
 });

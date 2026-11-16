@@ -1,5 +1,6 @@
 import { and, eq, sql, type SQL } from 'drizzle-orm';
 
+import { clearAttackBudget } from './attack-budget-service.js';
 import { db } from '../../../../db/client';
 import { combatEncounters, combatParticipants, gameSessions } from '../../../../db/schema/index';
 import { BusinessLogicError } from '../../lib/errors.js';
@@ -447,7 +448,10 @@ export async function resetTurnResources(participantId: string, round: number): 
       .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
       .where(eq(combatParticipants.id, participantId))
       .limit(1);
-    if (row?.characterId) await clearActionSurgeMark(row.sessionId, participantId);
+    if (row?.characterId) {
+      await clearActionSurgeMark(row.sessionId, participantId);
+      await clearAttackBudget(row.sessionId, participantId);
+    }
   } catch (error) {
     logger.error({ msg: 'ACTION_SURGE_MARK_CLEAR_FAILED', participantId, error });
   }

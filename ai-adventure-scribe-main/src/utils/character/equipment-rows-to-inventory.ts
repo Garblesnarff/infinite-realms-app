@@ -5,15 +5,17 @@ import type { Character } from '@/types/character';
  * `character_equipment` rows (the `/v1/characters/:id/equipment` response) as the game
  * character's inventory.
  *
- * `itemId` is the item NAME, not the row id: that is what the character wizard puts there and
- * what `transformEquipmentForStorage` writes back as `item_name`, and the game sheet resolves
- * weapons and armour from it. Only the fields the game sheet reads are carried.
+ * `itemId` stays the item NAME. The wizard writes that back as `item_name`, and the game
+ * sheet resolves weapons and armour from it. `equipmentId` is the row id. Attune posts that
+ * id, not the name.
  */
 export function equipmentRowsToInventory(
   rows: Issue1784EquipmentRow[],
 ): NonNullable<Character['inventory']> {
   return rows.map((row) => ({
     itemId: row.item_name,
+    itemName: row.item_name,
+    equipmentId: row.id,
     itemType: row.item_type || undefined,
     quantity: row.quantity ?? 1,
     // The rows carry no weight. Unset, the encumbrance rule counts 1 lb per unit and would take
@@ -22,5 +24,7 @@ export function equipmentRowsToInventory(
     equipped: row.equipped || false,
     isMagic: row.is_magic || false,
     magicBonus: row.magic_bonus || 0,
+    requiresAttunement: row.requires_attunement || false,
+    isAttuned: row.is_attuned || false,
   }));
 }

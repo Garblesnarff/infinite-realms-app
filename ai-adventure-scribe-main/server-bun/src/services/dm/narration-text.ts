@@ -102,7 +102,44 @@ function matchingTrackerRun(
   return { index: match.index, inners };
 }
 
+/**
+ * #1556: a tracker run is two or more adjacent bracket groups, each shaped
+ * like a tracker group, at least one anchored (HP/Clock/Scene or `Key: value`),
+ * and nothing else on its own line. Such a line is removed wherever it sits
+ * (leading, middle or trailing). A run that shares a line with prose is not a
+ * whole-line run and is left to the trailing strip below.
+ */
+const WHOLE_LINE_BRACKET_RUN = new RegExp(`^[ \\t]*(${BRACKET_RUN})$`);
+
+function stripWholeLineTrackerRuns(text: string): string {
+  const kept: string[] = [];
+  let removed = false;
+  for (const line of text.split('\n')) {
+    if (matchingTrackerRun(line, WHOLE_LINE_BRACKET_RUN)) {
+      removed = true;
+      continue;
+    }
+    kept.push(line);
+  }
+  if (!removed) return text;
+  // Collapse the blank lines a removed line leaves behind, and drop blank
+  // lines at the very start, so the join reads as one paragraph break.
+  const collapsed: string[] = [];
+  for (const line of kept) {
+    const blank = line.trim() === '';
+    if (blank && (collapsed.length === 0 || collapsed[collapsed.length - 1].trim() === '')) {
+      continue;
+    }
+    collapsed.push(line);
+  }
+  return collapsed.join('\n').trimEnd();
+}
+
 export function stripTrackerLine(text: string): string {
+  return stripTrailingTrackerRun(stripWholeLineTrackerRuns(text));
+}
+
+function stripTrailingTrackerRun(text: string): string {
   const strict = matchingTrackerRun(text, TRAILING_BRACKET_RUN);
   if (strict) return text.slice(0, strict.index).trimEnd();
   const punctuated = matchingTrackerRun(text, TRAILING_HP_RUN_WITH_PUNCT);

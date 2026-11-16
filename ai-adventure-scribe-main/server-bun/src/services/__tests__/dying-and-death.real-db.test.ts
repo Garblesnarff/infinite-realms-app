@@ -38,6 +38,7 @@ import {
 } from './fixtures/real-db.js';
 import {
   campaigns,
+  characterEquipment,
   characterStats,
   characters,
   combatDamageLog,
@@ -166,6 +167,9 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       await db.delete(gameSessions).where(inArray(gameSessions.id, created.sessions));
     }
     if (created.characters.length) {
+      await db
+        .delete(characterEquipment)
+        .where(inArray(characterEquipment.characterId, created.characters));
       await db
         .delete(characterStats)
         .where(inArray(characterStats.characterId, created.characters));
@@ -671,6 +675,79 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
     expect((await encounterOf(scene.encounterId)).endedReason).toBe('party_defeated');
     const facts = (await consumeDmTacticalFacts(scene.sessionId)).join('\n');
     expect(facts).toContain('is DEAD');
+  });
+
+  test('#571: a party defeat leaves character_equipment unchanged', async () => {
+    const scene = await dropHero();
+    await db.insert(characterEquipment).values([
+      {
+        characterId: scene.characterId,
+        itemName: 'Longsword',
+        itemType: 'weapon',
+        quantity: 1,
+        equipped: true,
+        isMagic: false,
+        magicBonus: 0,
+        magicItemRarity: 'common',
+      },
+      {
+        characterId: scene.characterId,
+        itemName: 'Backpack',
+        itemType: 'equipment',
+        quantity: 1,
+        equipped: false,
+        isMagic: false,
+        magicBonus: 0,
+        magicItemRarity: 'common',
+      },
+      {
+        characterId: scene.characterId,
+        itemName: 'Rations',
+        itemType: 'equipment',
+        quantity: 5,
+        equipped: false,
+        isMagic: false,
+        magicBonus: 0,
+        magicItemRarity: 'common',
+      },
+    ]);
+
+    const snapshot = await db
+      .select({
+        id: characterEquipment.id,
+        itemName: characterEquipment.itemName,
+        itemType: characterEquipment.itemType,
+        quantity: characterEquipment.quantity,
+        equipped: characterEquipment.equipped,
+      })
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, scene.characterId))
+      .orderBy(asc(characterEquipment.itemName));
+
+    expect(snapshot).toHaveLength(3);
+
+    for (const d20 of [5, 6]) {
+      await deathSave(scene, d20);
+      await giveTurnTo(scene.encounterId, scene.heroId);
+    }
+    const third = await deathSave(scene, 4);
+
+    expect(third.endedReason).toBe('party_defeated');
+    expect(await sheetOf(scene.characterId)).toMatchObject({ vitalState: 'dead' });
+
+    const after = await db
+      .select({
+        id: characterEquipment.id,
+        itemName: characterEquipment.itemName,
+        itemType: characterEquipment.itemType,
+        quantity: characterEquipment.quantity,
+        equipped: characterEquipment.equipped,
+      })
+      .from(characterEquipment)
+      .where(eq(characterEquipment.characterId, scene.characterId))
+      .orderBy(asc(characterEquipment.itemName));
+
+    expect(after).toEqual(snapshot);
   });
 
   test('#261: third failed death save stamps vitalState dead on the character_stats mirror (read directly from DB)', async () => {

@@ -179,6 +179,22 @@ describe('turn bar copy (#85)', () => {
     expect(turnBarSub(summary!, null)).toBe('Round 2 · action used · bonus action and move left');
   });
 
+  it('shows the engine remaining swings after an Attack action', () => {
+    const summary = summarizeCombatTurn({
+      currentRound: 2,
+      currentTurnParticipantId: 'hero',
+      participants: [
+        baseParticipant({
+          id: 'hero',
+          participantType: 'player',
+          actionTaken: true,
+          attackSwingsRemaining: 1,
+        }),
+      ],
+    });
+    expect(turnBarSub(summary!, null)).toBe('Round 2 · 1 attack remaining');
+  });
+
   it('names the enemy turn and the wait', () => {
     const summary = summarizeCombatTurn({
       currentRound: 2,
