@@ -31,6 +31,7 @@ const hp = new Map<string, number>([
 ]);
 const damageCalls: Array<{ participantId: string; amount: number }> = [];
 
+let merlinActionUsed = false;
 const participantRow = (
   id: string,
   name: string,
@@ -41,6 +42,7 @@ const participantRow = (
   id,
   name,
   participantType,
+  actionUsed: id === MERLIN_ID && merlinActionUsed,
   isActive: true,
   characterId: participantType === 'player' ? 'char-merlin' : null,
   armorClass,
@@ -593,6 +595,7 @@ const spellIntent = () => ({
 
 beforeEach(() => {
   setRngSeed(902);
+  merlinActionUsed = false;
   balthazarX = 4;
   extraSpellIds = [];
   concentration = null;
@@ -969,6 +972,25 @@ describe('#1143 a Cast chosen from the ActionBar, through the real route and res
 
   beforeEach(() => {
     extraSpellIds = ['chill-touch'];
+  });
+
+  it('refuses an Action spell proposal after the Action is spent', async () => {
+    merlinActionUsed = true;
+    const response = await postIntent({
+      phase: 'propose',
+      source: 'player',
+      origin: 'action_bar',
+      intent: {
+        type: 'spell',
+        actorId: MERLIN_ID,
+        targetIds: [BALTHAZAR_ID],
+        spellId: 'chill-touch',
+        spellName: 'Chill Touch',
+        expectedVersion: ENCOUNTER_VERSION,
+      },
+    });
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ error: 'Action already used this turn' });
   });
 
   it('Chill Touch at 25 ft resolves as a ranged spell attack with the player die, no approach', async () => {

@@ -15,11 +15,14 @@
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { claimAttackSwing } from './attack-budget-service.js';
 import { logAttackResolution, participantSlug } from './attack-telemetry.js';
 import { appliesBlessDie } from './bless-rider.js';
 import { mookGroupAttackBonus } from './boss-moves.js';
+import { CombatEncounterService } from './combat-encounter-service.js';
 import { resolveAttackRules } from './combat-rules.js';
 import {
+  readActionSurgeMark,
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
   claimTurnReactionAndResolve,
@@ -1060,9 +1063,12 @@ export class CombatAttackService {
         throw new InternalServerError('Attack succeeded but damage application failed', { error });
       }
     };
-    return isReaction
-      ? claimTurnReactionAndResolve(attackerId, encounterId, resolveAttackRoll)
-      : claimTurnActionAndResolve(attackerId, encounterId, expectedVersion, resolveAttackRoll);
+    if (isReaction) return claimTurnReactionAndResolve(attackerId, encounterId, resolveAttackRoll);
+    if (attackerData.participant.participantType === 'player') {
+      await claimAttackSwing(encounterId, attackerId, expectedVersion);
+      return resolveAttackRoll();
+    }
+    return claimTurnActionAndResolve(attackerId, encounterId, expectedVersion, resolveAttackRoll);
   }
 
   /**
@@ -1241,6 +1247,30 @@ export class CombatAttackService {
   }> {
     const { spell, spellRules, seatedAcByTarget, spellAttackBonus, casterData } =
       await this.prepareSpellCast(encounterId, input, userId);
+    const bonusAction = spell.castingTime.toLowerCase().includes('bonus action');
+    const participant = casterData.participant as typeof casterData.participant & {
+      actionUsed?: boolean;
+      bonusActionUsed?: boolean;
+    };
+    if (bonusAction && participant.bonusActionUsed) {
+      throw new BusinessLogicError('Bonus action already used this turn', {
+        participantId: input.casterId,
+      });
+    }
+    if (!bonusAction && participant.actionUsed) {
+      const state = await CombatEncounterService.getCombatState(encounterId, userId);
+      const surge = await readActionSurgeMark(state.encounter.sessionId);
+      if (
+        !surge ||
+        surge.encounterId !== encounterId ||
+        surge.participantId !== input.casterId ||
+        surge.round !== state.encounter.currentRound
+      ) {
+        throw new BusinessLogicError('Action already used this turn', {
+          participantId: input.casterId,
+        });
+      }
+    }
     const rules = spellRules.get(input.targetIds[0]);
     return {
       spellId: spell.id,

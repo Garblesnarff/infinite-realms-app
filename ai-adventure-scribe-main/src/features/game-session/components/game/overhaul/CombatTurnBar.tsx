@@ -177,7 +177,7 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
   // #1521: same word as the chip (#1507).
   const title = tableLook && down ? 'Unconscious' : baseTitle;
   const sub = tableLook
-    ? `Round ${summary.round} · Turn ${summary.turn} of ${summary.actors.length}${normalSub && !normalSub.startsWith('Round ') ? ` · ${normalSub}` : ''}`
+    ? `Round ${summary.round} · Turn ${summary.turn} of ${summary.actors.length}${(summary.active.attackSwingsRemaining ?? 0) > 0 ? ` · ${summary.active.attackSwingsRemaining} ${summary.active.attackSwingsRemaining === 1 ? 'attack' : 'attacks'} remaining` : normalSub && !normalSub.startsWith('Round ') ? ` · ${normalSub}` : ''}`
     : normalSub;
   const edge = down ? 'bad' : summary.active.isPlayer ? 'gold' : 'teal';
   const titleClassName = down

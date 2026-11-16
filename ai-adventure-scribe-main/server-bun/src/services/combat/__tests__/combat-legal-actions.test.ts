@@ -6,6 +6,14 @@ import type { WeaponRuleProfile } from '../combat-rules.js';
 
 process.env.DATABASE_URL ??= 'postgres://test.invalid/unused';
 
+let remainingSwing = false;
+mock.module('../attack-budget-service.js', () => ({
+  attackBudgetPlan: async () => ({ plan: remainingSwing ? { payment: 'remaining' } : null }),
+  attackBudgetPreservingState: (incoming: unknown) => incoming,
+  clearAttackBudget: async () => {},
+  claimAttackSwing: async () => {},
+}));
+
 const player = {
   id: 'player-1',
   name: 'The Veteran',
@@ -705,6 +713,22 @@ describe('getLegalCombatActions', () => {
     expect(result.actions.some((action) => action.type === 'flee' || action.type === 'yield')).toBe(
       false,
     );
+  });
+
+  test('offers attacks but not other actions when an Extra Attack swing remains', async () => {
+    player.actionUsed = true;
+    remainingSwing = true;
+    map.entities[1].x = 7;
+    map.entities[1].y = 6;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      expect(result.actions.some((action) => action.type === 'attack')).toBe(true);
+      expect(
+        result.actions.some((action) => action.type === 'dash' || action.type === 'dodge'),
+      ).toBe(false);
+    } finally {
+      remainingSwing = false;
+    }
   });
 
   test('offers no cast once the action is spent', async () => {
