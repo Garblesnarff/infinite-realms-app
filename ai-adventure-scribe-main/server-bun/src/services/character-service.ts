@@ -13,6 +13,7 @@
 import { TRPCError } from '@trpc/server';
 import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
 
+import { grantAlwaysPreparedSubclassSpells } from './character/always-prepared-spell-grant.js';
 import {
   hasDraconicBloodlineSubclass,
   readArmorClassEquipment,
@@ -27,8 +28,10 @@ import {
 import { checkEnvelopeMetamagic, checkMetamagicRepick } from './character-metamagic.js';
 import { CharacterVitalsService } from './character-vitals-service.js';
 import { ClassFeaturesService } from './class-features-service.js';
+import { classLevelOf } from './progression/limited-feature-uses.js';
 import { RestHitDiceService } from './rest/rest-hit-dice-service.js';
 import { SpellSlotDataAccess } from './spell-slots/spell-slot-data-access.js';
+import { parseClassLevels, SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 import { db } from '../../../db/client';
 import {
   characterPermissions,
@@ -39,6 +42,7 @@ import {
   characterStats,
   characters,
 } from '../../../db/schema/index';
+import { ALWAYS_PREPARED_SUBCLASS_SPELLS } from '../../../shared/always-prepared-subclass-spells';
 import { computeArmorClass, type ArmorClassEquipmentItem } from '../../../shared/armor-class';
 import {
   isDraconicBloodline,
@@ -56,9 +60,7 @@ import {
 } from '../../../shared/level-1-hit-points';
 import { XP_TO_REACH_LEVEL } from '../../../shared/xp-tables';
 import { BusinessLogicError, InternalServerError, ValidationError } from '../lib/errors.js';
-import { classLevelOf } from './progression/limited-feature-uses.js';
 import { AVAILABLE_SUBCLASSES, SUBCLASS_CHOICE_LEVELS } from '../types/class-features.js';
-import { parseClassLevels, SpellSlotMechanics } from './spell-slots/spell-slot-mechanics.js';
 
 import type { Character, NewCharacter, NewCharacterStats } from '../../../db/schema/index';
 
@@ -724,6 +726,9 @@ export class CharacterService {
               userId,
             );
           }
+        }
+        if (resolvedSubclass && ALWAYS_PREPARED_SUBCLASS_SPELLS[resolvedSubclass]) {
+          await grantAlwaysPreparedSubclassSpells(created.id, userId);
         }
       } catch (grantError) {
         try {

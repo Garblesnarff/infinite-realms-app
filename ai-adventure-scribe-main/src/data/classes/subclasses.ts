@@ -1,3 +1,5 @@
+import { ALWAYS_PREPARED_SUBCLASS_SPELLS } from '../../../shared/always-prepared-subclass-spells';
+
 import type { CharacterSubclass } from '@/types/character';
 
 export const classSubclasses: Record<string, CharacterSubclass[]> = {
@@ -26,13 +28,7 @@ export const classSubclasses: Record<string, CharacterSubclass[]> = {
     armorProficiencies: ['Heavy armor'],
     // Domain spells are always prepared and do not count against the number
     // of spells the cleric can prepare, keyed by cleric level.
-    domainSpells: {
-      1: ['Bless', 'Cure Wounds'],
-      3: ['Lesser Restoration', 'Spiritual Weapon'],
-      5: ['Beacon of Hope', 'Revivify'],
-      7: ['Death Ward', 'Guardian of Faith'],
-      9: ['Mass Cure Wounds', 'Raise Dead'],
-    },
+    domainSpells: ALWAYS_PREPARED_SUBCLASS_SPELLS['Life Domain'],
     features: [
       { id: 'bonus-proficiency', name: 'Bonus Proficiency', level: 1, description: 'You gain proficiency with heavy armor.' },
       { id: 'disciple-of-life', name: 'Disciple of Life', level: 1, description: 'Healing spells restore 2 + the spell level additional hit points.' },
@@ -73,6 +69,9 @@ export const classSubclasses: Record<string, CharacterSubclass[]> = {
   }],
   paladin: [{
     id: 'devotion', name: 'Oath of Devotion', description: 'The ideal of the knight in shining armor acting with honor and compassion.',
+    // Oath spells are always prepared and do not count against the number
+    // of spells the paladin can prepare, keyed by paladin level.
+    domainSpells: ALWAYS_PREPARED_SUBCLASS_SPELLS['Oath of Devotion'],
     features: [
       { id: 'sacred-weapon', name: 'Channel Divinity: Sacred Weapon', level: 3, description: 'Imbue a weapon, adding Charisma to attack rolls and making it magical.' },
       { id: 'turn-the-unholy', name: 'Channel Divinity: Turn the Unholy', level: 3, description: 'Turn fiends and undead that fail a Wisdom save.' },

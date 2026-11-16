@@ -10,10 +10,12 @@
 
 import { eq, and, exists, or } from 'drizzle-orm';
 
+import { grantAlwaysPreparedSubclassSpells } from './character/always-prepared-spell-grant.js';
 import { ClassFeaturesService } from './class-features-service.js';
 import { SpellSlotDataAccess } from './spell-slots/spell-slot-data-access.js';
 import { db } from '../../../db/client';
 import { classFeaturesLibrary, characterSubclasses, characters } from '../../../db/schema/index';
+import { ALWAYS_PREPARED_SUBCLASS_SPELLS } from '../../../shared/always-prepared-subclass-spells';
 import {
   NotFoundError,
   ConflictError,
@@ -114,6 +116,9 @@ export class SubclassService {
     // This reduces database round-trips from O(N) to O(1).
     const featureIds = subclassFeatures.map((f) => f.id);
     await ClassFeaturesService.grantFeaturesBatch(characterId, featureIds, level, userId);
+    if (ALWAYS_PREPARED_SUBCLASS_SPELLS[subclassName]) {
+      await grantAlwaysPreparedSubclassSpells(characterId, userId);
+    }
 
     const newFeatures = subclassFeatures;
 

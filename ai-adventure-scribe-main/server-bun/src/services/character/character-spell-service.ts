@@ -14,6 +14,7 @@
 import { TRPCError } from '@trpc/server';
 import { and, eq, exists, inArray, or, sql, type SQL } from 'drizzle-orm';
 
+import { grantAlwaysPreparedSubclassSpells } from './always-prepared-spell-grant.js';
 import { db } from '../../../../db/client';
 import {
   characterPermissions,
@@ -419,6 +420,8 @@ export class CharacterSpellService {
       },
       { fillEmptyOnly: true },
     );
+
+    await grantAlwaysPreparedSubclassSpells(characterId, userId);
 
     return { success: true, message: 'Character spells saved successfully' };
   }
