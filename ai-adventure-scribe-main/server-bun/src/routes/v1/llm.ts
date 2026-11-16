@@ -49,6 +49,7 @@ import {
   type CombatEntryContext,
 } from '../../services/combat-entry-pipeline.js';
 import { enforceCombatTransitionContract } from '../../services/combat-transition-enforcement.js';
+import { lastCheckLine, reconcileCheckVerdict } from '../../services/dm/check-verdict-prompt.js';
 import { preserveDeclaredToolCheck } from '../../services/dm/declared-tool-check.js';
 import {
   refuseFeaturesCharacterLacks,
@@ -933,17 +934,26 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
         }
 
-        // #1477: the DM reads the server's verdict for the last narrative check, not the client's
-        // word on the formatter line. Shadow mode: the server word is sent; a disagreement is logged
-        // as a count only. A lookup that fails keeps the client line and logs the failure.
-        if (sessionId && typeof prompt === 'string' && Array.isArray(history)) {
+        // #1477: the DM reads the server's verdict for the roll this turn answers (matched by
+        // `dmReply.rollRequestId`), not the client's word on its formatter line. Shadow mode: the
+        // server word is sent; a disagreement or a missing row is logged as a count only. A lookup
+        // that fails keeps the client line and logs the failure.
+        if (sessionId && typeof prompt === 'string' && lastCheckLine(history) !== null) {
           try {
             const { SessionMessageService } =
               await import('../../services/session/session-message-service.js');
-            const { reconcileCheckVerdict } =
-              await import('../../services/dm/check-verdict-prompt.js');
-            const rows = await SessionMessageService.latestServerCheckRows(sessionId, userId);
-            const verdict = reconcileCheckVerdict({ history, prompt, rows });
+            const rollRequestId = requestedDmReply?.rollRequestId;
+            const rows = rollRequestId
+              ? await SessionMessageService.serverCheckRowsForRequest(
+                  sessionId,
+                  userId,
+                  rollRequestId,
+                )
+              : [];
+            const verdict = reconcileCheckVerdict({ history, prompt, rollRequestId, rows });
+            if (verdict.status === 'no_row') {
+              logger.warn({ msg: 'DM_CHECK_VERDICT_NO_ROW', sessionId, count: 1 });
+            }
             if (verdict.status === 'disagree') {
               logger.warn({ msg: 'DM_CHECK_VERDICT_MISMATCH', sessionId, count: 1 });
               history = verdict.history;

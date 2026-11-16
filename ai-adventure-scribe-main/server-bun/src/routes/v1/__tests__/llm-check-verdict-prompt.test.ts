@@ -11,13 +11,21 @@ import { Elysia } from 'elysia';
 import { ABILITY_CHECK_ROW_FAIL } from '../../../../../shared/test-fixtures/ability-check-saves';
 
 type CapturedInput = Record<string, unknown>;
+type SavedCheck = { rollRequestId: string; message: string; verdict: 'SUCCESS' | 'FAIL' };
+
 let generatedInputs: CapturedInput[] = [];
-let serverCheckRows: Array<{ message: string; verdict: 'SUCCESS' | 'FAIL' }> = [];
+// The session's saved check rows, newest first. The stub returns them all; the route's matcher
+// must pick by roll request id, not by the first row that looks the same.
+let savedChecks: SavedCheck[] = [];
+let lookupCalls = 0;
+let warnings: Array<Record<string, unknown>> = [];
 
 const testLogger = {
   debug: () => {},
   info: () => {},
-  warn: () => {},
+  warn: (line: unknown) => {
+    if (line && typeof line === 'object') warnings.push(line as Record<string, unknown>);
+  },
   error: () => {},
   child: () => testLogger,
 };
@@ -65,8 +73,6 @@ mock.module('../../../services/llm-provider-service.js', () => ({
     },
   },
 }));
-// The persistence read the server does for the saved verdict. Stubbed: the rows are the
-// server's saved check rows for this session (newest first).
 mock.module('../../../services/session/session-message-service.js', () => ({
   SessionMessageService: {
     withRollTurn: async (
@@ -77,7 +83,10 @@ mock.module('../../../services/session/session-message-service.js', () => ({
       _replyId: string | undefined,
       generate: () => Promise<unknown>,
     ) => generate(),
-    latestServerCheckRows: async () => serverCheckRows,
+    serverCheckRowsForRequest: async () => {
+      lookupCalls += 1;
+      return savedChecks;
+    },
   },
 }));
 
@@ -85,14 +94,18 @@ const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { llmRoutes } = await import('../llm.js');
 const app = createRequestPipelineApp().use(llmRoutes);
 
-// The client's own word is `success`. The server's saved row for the same roll says FAIL
-// (total 9 < DC 15).
-const CLIENT_LINE = 'Athletics check: 9 (nat 4+5) success';
-const SERVER_LINE = 'Athletics check: 9 (nat 4+5) fail';
+// Two rolls with the same label and total (Athletics 12), against different DCs.
+// The row for the easier DC (10) saved SUCCESS; the row for DC 15 saved FAIL.
+const EASY_ROLL = 'roll-easy-dc10';
+const HARD_ROLL = 'roll-hard-dc15';
+const TWELVE_SUCCESS = 'Athletics check: 12 (nat 7+5) success';
+const TWELVE_FAIL = 'Athletics check: 12 (nat 7+5) fail';
+const TWELVE_CLIENT_SUCCESS = 'Athletics check: 12 (nat 7+5) success';
 
 const postTurn = (
   history: Array<{ role: 'user' | 'assistant'; content: string }>,
   playerInput: string,
+  dmReply?: { rollRequestId: string },
 ) =>
   app.handle(
     new Request('http://localhost/v1/llm/generate', {
@@ -103,6 +116,15 @@ const postTurn = (
         prompt: `The party reaches the ledge.\n\n<player_input>${playerInput}</player_input>`,
         player_input: playerInput,
         history,
+        ...(dmReply
+          ? {
+              dmReply: {
+                messageId: '33333333-3333-4333-8333-333333333333',
+                inCombat: false,
+                ...dmReply,
+              },
+            }
+          : {}),
         maxTokens: 1000,
         temperature: 0.8,
         provider: 'openrouter',
@@ -111,53 +133,137 @@ const postTurn = (
     }),
   );
 
-describe('#1477: the DM prompt carries the server verdict for a narrative check', () => {
+const verdictLogs = () =>
+  warnings.filter((line) => String(line.msg).startsWith('DM_CHECK_VERDICT'));
+
+describe('#1477: the DM prompt carries the server verdict for the roll being answered', () => {
   beforeEach(() => {
     generatedInputs = [];
-    serverCheckRows = [{ message: ABILITY_CHECK_ROW_FAIL.text, verdict: 'FAIL' }];
+    warnings = [];
+    lookupCalls = 0;
+    savedChecks = [
+      { rollRequestId: HARD_ROLL, message: TWELVE_FAIL, verdict: 'FAIL' },
+      { rollRequestId: EASY_ROLL, message: TWELVE_SUCCESS, verdict: 'SUCCESS' },
+    ];
   });
 
-  it('replaces a client SUCCESS line with the server FAIL verdict in the history and the prompt', async () => {
+  it('uses the row for the current roll request, not an identical-looking row from another roll', async () => {
     const response = await postTurn(
-      [
-        { role: 'assistant', content: 'Make an Athletics check to climb.' },
-        { role: 'user', content: CLIENT_LINE },
-      ],
-      CLIENT_LINE,
+      [{ role: 'user', content: TWELVE_CLIENT_SUCCESS }],
+      TWELVE_CLIENT_SUCCESS,
+      { rollRequestId: HARD_ROLL },
     );
 
     expect(response.status).toBe(200);
-    expect(generatedInputs).toHaveLength(1);
     const sent = generatedInputs[0]!;
-    const history = sent.history as Array<{ role: string; content: string }>;
-    expect(history.at(-1)).toEqual({ role: 'user', content: SERVER_LINE });
-    expect(String(sent.prompt)).toContain(SERVER_LINE);
-    expect(String(sent.prompt)).not.toContain(CLIENT_LINE);
+    expect((sent.history as Array<{ content: string }>).at(-1)?.content).toBe(TWELVE_FAIL);
+    expect(String(sent.prompt)).toContain(TWELVE_FAIL);
+    expect(String(sent.prompt)).not.toContain(TWELVE_CLIENT_SUCCESS);
+    expect(verdictLogs().map((line) => line.msg)).toEqual(['DM_CHECK_VERDICT_MISMATCH']);
   });
 
-  it('leaves the line alone when the client word already matches the server verdict', async () => {
-    serverCheckRows = [
-      {
-        message: 'Athletics check: 17 (nat 12+5) success',
-        verdict: 'SUCCESS',
-      },
+  it('agrees with the easier roll when that is the request being answered', async () => {
+    const response = await postTurn(
+      [{ role: 'user', content: TWELVE_CLIENT_SUCCESS }],
+      TWELVE_CLIENT_SUCCESS,
+      { rollRequestId: EASY_ROLL },
+    );
+
+    expect(response.status).toBe(200);
+    const sent = generatedInputs[0]!;
+    expect((sent.history as Array<{ content: string }>).at(-1)?.content).toBe(
+      TWELVE_CLIENT_SUCCESS,
+    );
+    expect(String(sent.prompt)).toContain(TWELVE_CLIENT_SUCCESS);
+    expect(verdictLogs()).toEqual([]);
+  });
+
+  it('keeps the client line and logs the no-row count when the current roll has no saved row', async () => {
+    const response = await postTurn(
+      [{ role: 'user', content: TWELVE_CLIENT_SUCCESS }],
+      TWELVE_CLIENT_SUCCESS,
+      { rollRequestId: 'roll-not-saved' },
+    );
+
+    expect(response.status).toBe(200);
+    const sent = generatedInputs[0]!;
+    expect((sent.history as Array<{ content: string }>).at(-1)?.content).toBe(
+      TWELVE_CLIENT_SUCCESS,
+    );
+    expect(String(sent.prompt)).toContain(TWELVE_CLIENT_SUCCESS);
+    expect(verdictLogs()).toEqual([
+      expect.objectContaining({ msg: 'DM_CHECK_VERDICT_NO_ROW', count: 1 }),
+    ]);
+  });
+
+  it('keeps the client line and logs the no-row count when the turn names no roll request', async () => {
+    const response = await postTurn(
+      [{ role: 'user', content: TWELVE_CLIENT_SUCCESS }],
+      TWELVE_CLIENT_SUCCESS,
+    );
+
+    expect(response.status).toBe(200);
+    expect((generatedInputs[0]!.history as Array<{ content: string }>).at(-1)?.content).toBe(
+      TWELVE_CLIENT_SUCCESS,
+    );
+    expect(verdictLogs().map((line) => line.msg)).toEqual(['DM_CHECK_VERDICT_NO_ROW']);
+  });
+
+  it('replaces a client SUCCESS with the server FAIL for the saved check row of the request (#1477 fixture)', async () => {
+    savedChecks = [
+      { rollRequestId: 'roll-fixture', message: ABILITY_CHECK_ROW_FAIL.text, verdict: 'FAIL' },
     ];
-    const agreeing = 'Athletics check: 17 (nat 12+5) success';
-    const response = await postTurn([{ role: 'user', content: agreeing }], agreeing);
+    const client = 'Athletics check: 9 (nat 4+5) success';
+    const response = await postTurn([{ role: 'user', content: client }], client, {
+      rollRequestId: 'roll-fixture',
+    });
 
     expect(response.status).toBe(200);
     const sent = generatedInputs[0]!;
-    expect((sent.history as Array<{ content: string }>).at(-1)?.content).toBe(agreeing);
-    expect(String(sent.prompt)).toContain(agreeing);
+    expect((sent.history as Array<{ content: string }>).at(-1)?.content).toBe(
+      'Athletics check: 9 (nat 4+5) fail',
+    );
+    expect(String(sent.prompt)).toContain('Athletics check: 9 (nat 4+5) fail');
   });
 
-  it('sends the client line unchanged when no saved check row matches it', async () => {
-    serverCheckRows = [];
-    const response = await postTurn([{ role: 'user', content: CLIENT_LINE }], CLIENT_LINE);
+  it('sends a turn with no check line byte-for-byte as the client wrote it, with no lookup and no verdict log', async () => {
+    const history: Array<{ role: 'user' | 'assistant'; content: string }> = [
+      {
+        role: 'assistant',
+        content: 'The ledge is slick with rain. Make an Athletics check to climb.',
+      },
+      { role: 'user', content: 'I search the room for a rope.' },
+    ];
+    const playerInput = 'I search the room for a rope.';
+    const prompt = `The party reaches the ledge.\n\n<player_input>${playerInput}</player_input>`;
+    const response = await app.handle(
+      new Request('http://localhost/v1/llm/generate', {
+        method: 'POST',
+        headers: { authorization: 'Bearer <redacted>', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: 'session-verdict-1477',
+          prompt,
+          player_input: playerInput,
+          history,
+          dmReply: {
+            messageId: '33333333-3333-4333-8333-333333333333',
+            inCombat: false,
+            rollRequestId: EASY_ROLL,
+          },
+          maxTokens: 1000,
+          temperature: 0.8,
+          provider: 'openrouter',
+          requestType: 'user',
+        }),
+      }),
+    );
 
     expect(response.status).toBe(200);
     const sent = generatedInputs[0]!;
-    expect((sent.history as Array<{ content: string }>).at(-1)?.content).toBe(CLIENT_LINE);
-    expect(String(sent.prompt)).toContain(CLIENT_LINE);
+    // Byte-for-byte: the provider gets the same prompt and history text the client sent.
+    expect(sent.prompt).toBe(prompt);
+    expect(JSON.stringify(sent.history)).toBe(JSON.stringify(history));
+    expect(lookupCalls).toBe(0);
+    expect(verdictLogs()).toEqual([]);
   });
 });
