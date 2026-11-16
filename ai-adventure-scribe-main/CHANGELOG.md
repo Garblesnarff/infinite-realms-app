@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.49.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.48.0...v0.49.0) (2026-11-16)
+
+
+### Features
+
+* **engine:** the DM can grant Inspiration, shadow first ([#1537](https://github.com/Garblesnarff/infinite-realms-app/issues/1537)) ([a111dd8](https://github.com/Garblesnarff/infinite-realms-app/commit/a111dd8f1490e1cfeb1fdbd8cc4eaa981e5d8b49))
+
+
+### Bug Fixes
+
+* **dm:** no narrated death without an engine death ([#468](https://github.com/Garblesnarff/infinite-realms-app/issues/468)) ([212c13b](https://github.com/Garblesnarff/infinite-realms-app/commit/212c13b70aa4cac0c2fe8b20b6003e1395e2d2a7))
+* **inventory:** attunement uses a fresh short rest, in one transaction ([#1553](https://github.com/Garblesnarff/infinite-realms-app/issues/1553)) ([093ec8a](https://github.com/Garblesnarff/infinite-realms-app/commit/093ec8ad33d42b56a015b0804e9909d6be5160bc))
+* **sheet:** Pact Magic slots recover on a short rest ([#761](https://github.com/Garblesnarff/infinite-realms-app/issues/761)) ([a6c2632](https://github.com/Garblesnarff/infinite-realms-app/commit/a6c26327c911eccdf5741e398bc66234fb8eac70))
+* **table:** readable text in DM bubbles; hold back a partial tracker line ([#1562](https://github.com/Garblesnarff/infinite-realms-app/issues/1562)) ([6f1837d](https://github.com/Garblesnarff/infinite-realms-app/commit/6f1837dd02c79200e19f991a325d8c1cda1af5ee))
+
+
+### Tests
+
+* **combat:** Extra Attack race and Action Surge pins ([#1536](https://github.com/Garblesnarff/infinite-realms-app/issues/1536)) ([b543aa8](https://github.com/Garblesnarff/infinite-realms-app/commit/b543aa8ee8b13589e711c6b6d2fe01f7917329e6))
+
 ## [0.48.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.47.2...v0.48.0) (2026-11-16)
 
 
