@@ -15,6 +15,8 @@ interface SheetRestControlsProps {
   character: Character;
   /** Persist the rest-applied character; resolves true when saved. */
   onUpdate: CharacterSheetUpdateFn;
+  /** Which rests to offer. The default is both, as on the Main and Features tabs. */
+  offers?: 'both' | 'short' | 'long';
 }
 
 /**
@@ -27,7 +29,11 @@ interface SheetRestControlsProps {
  * sheet's integration tests (#224) in this environment, and a small inline stepper
  * interrupts the flow less than a modal.
  */
-export const SheetRestControls: React.FC<SheetRestControlsProps> = ({ character, onUpdate }) => {
+export const SheetRestControls: React.FC<SheetRestControlsProps> = ({
+  character,
+  onUpdate,
+  offers = 'both',
+}) => {
   const { toast } = useToast();
   const [promptOpen, setPromptOpen] = useState(false);
   const [diceToSpend, setDiceToSpend] = useState('0');
@@ -86,7 +92,10 @@ export const SheetRestControls: React.FC<SheetRestControlsProps> = ({ character,
 
   return (
     <div className="space-y-2">
-      <RestActionButtons onRest={handleRest} />
+      <RestActionButtons
+        onRest={handleRest}
+        offers={offers === 'both' ? ['short', 'long'] : [offers]}
+      />
       {promptOpen && (
         <div
           role="group"
