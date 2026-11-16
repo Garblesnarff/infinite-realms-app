@@ -403,12 +403,12 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
       },
       [],
     );
+    const isFallenState =
+      terminalUiState !== null ||
+      (completionUiState !== null && completionUiState.sessionId === sessionId);
     React.useEffect(() => {
-      onFallenChange?.(
-        terminalUiState !== null ||
-          (completionUiState !== null && completionUiState.sessionId === sessionId),
-      );
-    }, [onFallenChange, terminalUiState, completionUiState, sessionId]);
+      onFallenChange?.(isFallenState);
+    }, [onFallenChange, isFallenState]);
     // Queue state, not getCurrentDiceRoll(): that getter reads a ref and lags one render.
     // The queue's current roll is the only request with a visible control (the dice popup in
     // MessageListContainer), so it alone may raise the pill, the banner, and the input lock.
@@ -530,6 +530,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                     onRightToggle={onRightToggle}
                     onSceneBlurbToggle={onSceneBlurbToggle}
                     endSession={chronicleEndSession}
+                    isFallen={isFallenState}
                   />
                   <TargetNumbersToggle />
                   <GameSettingsButton />

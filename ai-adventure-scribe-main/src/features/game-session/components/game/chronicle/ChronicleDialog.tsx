@@ -17,6 +17,7 @@ interface ChronicleDialogProps {
   open: boolean;
   onClose: () => void;
   endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  isFallen?: boolean;
 }
 
 function splitParagraphs(text: string | null | undefined): string[] {
@@ -32,6 +33,7 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({
   open,
   onClose,
   endSession,
+  isFallen,
 }) => {
   const { userPlan } = useAuth();
   const navigate = useNavigate();
@@ -83,7 +85,7 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({
   const renderEmptyState = (): React.ReactNode => (
     <div className="ir-chronicle-state">
       <p>Your chronicle is written when you end the session.</p>
-      {endSession && sessionId ? (
+      {endSession && sessionId && !isFallen ? (
         <div className="mt-3">
           <EndSessionButton
             sessionId={sessionId}

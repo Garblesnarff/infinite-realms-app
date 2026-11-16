@@ -574,4 +574,25 @@ describe('empty chronicle state (#1523)', () => {
     ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'End session' })).toBeNull();
   });
+
+  it('hides the End session button for a fallen hero but keeps the message (#1546)', () => {
+    vi.mocked(trpc.chronicles.getBySessionId.useQuery).mockReturnValue(mockSuccessResult(null));
+
+    render(
+      <MemoryRouter>
+        <ChronicleDialog
+          sessionId="session-1"
+          open
+          onClose={vi.fn()}
+          endSession={{ campaignId: 'campaign-1', starterCampaignId: null }}
+          isFallen={true}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(
+      screen.getByText('Your chronicle is written when you end the session.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'End session' })).toBeNull();
+  });
 });
