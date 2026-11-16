@@ -22,6 +22,7 @@ interface GamePanelControlsProps {
   onSceneBlurbToggle: () => void;
   sessionId?: string | null;
   endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  isFallen?: boolean;
 }
 
 export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
@@ -34,6 +35,7 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
     onSceneBlurbToggle,
     sessionId,
     endSession,
+    isFallen,
   }) => {
     return (
       <div className="flex max-w-full min-w-0 items-center gap-2 overflow-x-auto">
@@ -91,7 +93,7 @@ export const GamePanelControls: React.FC<GamePanelControlsProps> = memo(
           </TooltipContent>
         </Tooltip>
 
-        <GameChronicleButton sessionId={sessionId} endSession={endSession} />
+        <GameChronicleButton sessionId={sessionId} endSession={endSession} isFallen={isFallen} />
         <GameFeedbackButton />
       </div>
     );

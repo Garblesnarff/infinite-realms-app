@@ -8,11 +8,13 @@ import { Button } from '@/components/ui/button';
 interface GameChronicleButtonProps {
   sessionId?: string | null;
   endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  isFallen?: boolean;
 }
 
 export const GameChronicleButton: React.FC<GameChronicleButtonProps> = ({
   sessionId: sessionIdProp,
   endSession,
+  isFallen,
 }) => {
   const [searchParams] = useSearchParams();
   const sessionId = sessionIdProp !== undefined ? sessionIdProp : searchParams.get('session');
@@ -38,6 +40,7 @@ export const GameChronicleButton: React.FC<GameChronicleButtonProps> = ({
         open={open}
         onClose={() => setOpen(false)}
         endSession={endSession}
+        isFallen={isFallen}
       />
     </>
   );
