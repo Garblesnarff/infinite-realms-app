@@ -463,3 +463,10 @@ body.ir-table-look .ir-brass-sheen::after {
     animation: ir-brass-sheen 3.6s ease-in-out infinite;
   }
 }
+
+/* #1562: index.css .clamp-fade::after paints a dark band (rgba(11,23,41,0.9))
+   over the last 90px of a clamped long message; on the Table look the DM
+   bubble is parchment, so override the fade to parchment. */
+body.ir-table-look .dm-bubble .clamp-fade::after {
+  background: linear-gradient(to bottom, rgba(242, 231, 205, 0), var(--ir-parchment-2));
+}

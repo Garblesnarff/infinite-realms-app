@@ -57,6 +57,7 @@ vi.mock('../../../../db/client', () => ({
         returning: vi.fn(),
       })),
     })),
+    transaction: vi.fn(async (fn: any) => fn(db)),
   },
 }));
 

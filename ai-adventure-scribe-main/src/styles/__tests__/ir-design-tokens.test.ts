@@ -48,6 +48,12 @@ const hex = (value: string): Rgb => {
   return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as Rgb;
 };
 
+const rgba = (value: string): Rgb => {
+  const m = value.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  expect(m, `${value} is an rgba color`).not.toBeNull();
+  return [Number(m![1]), Number(m![2]), Number(m![3])] as Rgb;
+};
+
 const luminance = ([r, g, b]: Rgb): number => {
   const lin = (c: number): number => {
     const s = c / 255;
@@ -258,5 +264,60 @@ describe('design token wiring (#2258)', () => {
     checkSuppression('#mkt-float');
 
     document.body.removeChild(containerReduced);
+  });
+});
+
+describe('DM bubble contrast (#1562)', () => {
+  const tableCss = read('../ir-table.css');
+
+  const cssVar = (name: string, css: string = tableCss): string => {
+    const match = css.match(new RegExp(`${name}:\\s*([^;]+);`));
+    expect(match, `${name} is defined`).not.toBeNull();
+    return (match?.[1] ?? '').trim();
+  };
+
+  it('keeps the Table bubble ink legible on both parchment tokens (>=4.5:1)', () => {
+    const inkRgb = hex(cssVar('--ir-ink'));
+    const p1 = hex(cssVar('--ir-parchment-1'));
+    const p2 = hex(cssVar('--ir-parchment-2'));
+    expect(ratio(inkRgb, p1)).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(inkRgb, p2)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('has no .dm-bubble * rule in ir-table.css', () => {
+    expect(tableCss).not.toMatch(/\.dm-bubble\s*\*/);
+  });
+
+  it('does not force ink on descendants with their own background', () => {
+    expect(tableCss).not.toMatch(/\.dm-bubble\s*\*\s*\{[^}]*!important/);
+  });
+
+  it('Table-look clamp-fade::after override ends on --ir-parchment-2', () => {
+    const idx = tableCss.indexOf('.clamp-fade::after');
+    expect(idx).toBeGreaterThanOrEqual(0);
+    const block = tableCss.slice(tableCss.indexOf('{', idx), tableCss.indexOf('}', idx));
+    expect(block).toContain('var(--ir-parchment-2)');
+    expect(block).toContain('rgba(242, 231, 205, 0)');
+  });
+
+  it('keeps ink legible over the Table-look fade end', () => {
+    const inkRgb = hex(cssVar('--ir-ink'));
+    const p2 = hex(cssVar('--ir-parchment-2'));
+    expect(ratio(inkRgb, p2)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('default fade end color stays legible vs white-ish text (#eaeefa) (>=4.5:1)', () => {
+    const idx = indexCss.indexOf('.clamp-fade::after');
+    expect(idx).toBeGreaterThanOrEqual(0);
+    const block = indexCss.slice(indexCss.indexOf('{', idx), indexCss.indexOf('}', idx));
+    const matches = block.match(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*[\d.]+\s*\)/g) ?? [];
+    expect(matches.length).toBeGreaterThan(0);
+    const endColor = rgba(matches[matches.length - 1]);
+    expect(ratio(endColor, hex('#eaeefa'))).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('keeps overhaul narrative ink legible on the navy bubble (>=4.5:1)', () => {
+    expect(ratio(hex('#eaeefa'), hex('#161e30'))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(hex('#eaeefa'), hex('#2d2a5f'))).toBeGreaterThanOrEqual(4.5);
   });
 });

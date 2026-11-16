@@ -11,7 +11,7 @@
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { TRPCError } from '@trpc/server';
-import { and, desc, eq, exists, inArray, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import { grantAlwaysPreparedSubclassSpells } from './character/always-prepared-spell-grant.js';
 import {
@@ -22,6 +22,7 @@ import {
 import { CharacterSpellService } from './character/character-spell-service.js';
 import {
   envelopeInspiration,
+  parseEnvelopeObject,
   mergeClientEnvelope,
   withoutEngineOwnedKeys,
 } from './character-envelope.js';
@@ -391,6 +392,65 @@ export class CharacterService {
       return { success: true, inspiration: false };
     }
     return { success: false, reason: 'no_inspiration' };
+  }
+
+  /**
+   * #1537: grant Inspiration server-side. The DM awards it for good roleplay (2014 SRD), and a
+   * hero holds at most one. The write is conditional on the envelope still not holding the flag,
+   * so two grants racing each other cannot both succeed, and every other envelope key is kept.
+   * Text that is not a JSON object is refused rather than overwritten.
+   */
+  static async grantInspiration(
+    characterId: string,
+    userId: string,
+  ): Promise<
+    | { success: true; inspiration: true }
+    | {
+        success: false;
+        reason: 'not_found' | 'forbidden' | 'already_held' | 'unreadable_envelope' | 'conflict';
+      }
+  > {
+    const character = await CharacterService.getById(characterId, userId);
+    if (!character) return { success: false, reason: 'not_found' };
+    const [writable] = await db
+      .select({ one: sql`1` })
+      .from(characters)
+      .where(characterWriteCondition(characterId, userId))
+      .limit(1);
+    if (!writable) return { success: false, reason: 'forbidden' };
+    const attempt = async (raw: string | null): Promise<boolean> => {
+      const parsed = parseEnvelopeObject(raw) ?? {};
+      const next = JSON.stringify({ ...parsed, inspiration: true });
+      const [updated] = await db
+        .update(characters)
+        .set({ personalityNotes: next, updatedAt: new Date() })
+        .where(
+          and(
+            characterWriteCondition(characterId, userId),
+            raw === null
+              ? isNull(characters.personalityNotes)
+              : eq(characters.personalityNotes, raw),
+          ),
+        )
+        .returning({ id: characters.id });
+      return updated !== undefined;
+    };
+    const raw = character.personalityNotes ?? null;
+    if (raw !== null && parseEnvelopeObject(raw) === null) {
+      return { success: false, reason: 'unreadable_envelope' };
+    }
+    if (envelopeInspiration(raw)) return { success: false, reason: 'already_held' };
+    if (await attempt(raw)) return { success: true, inspiration: true };
+    // A conflicting write to another envelope key fails the compare-and-set but not the grant.
+    // Re-read once; a grant that won the race already set the flag and is refused here.
+    const reread = await CharacterService.getById(characterId, userId);
+    const freshRaw = reread?.personalityNotes ?? null;
+    if (freshRaw !== null && parseEnvelopeObject(freshRaw) === null) {
+      return { success: false, reason: 'unreadable_envelope' };
+    }
+    if (envelopeInspiration(freshRaw)) return { success: false, reason: 'already_held' };
+    if (await attempt(freshRaw)) return { success: true, inspiration: true };
+    return { success: false, reason: 'conflict' };
   }
 
   /**

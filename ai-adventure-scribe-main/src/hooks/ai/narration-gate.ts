@@ -1,5 +1,6 @@
 import { inventedExtraStrikeClaims } from '../../../shared/narration-extra-strike';
 import {
+  playerDeathShadowPatterns,
   spliceContradictingSentences,
   type OutcomeClaim,
 } from '../../../shared/narration-harm';
@@ -16,6 +17,7 @@ import {
 } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import { reportNarrationShadowHit } from '@/services/client-failure-reporting';
 import {
   createPlayerMessageFromOption,
   parseMessageOptions,
@@ -42,6 +44,9 @@ export const NEUTRAL_NO_EFFECT_LINE =
   '*(Nothing comes of that — the moment passes without effect.)*';
 
 export const NARRATION_REJECTED_REASON = 'harm_claim_without_engine_event';
+
+/** #468: a player death narrated with no engine event, logged in shadow only (not enforced). */
+export const PLAYER_DEATH_SHADOW_REASON = 'player_death_without_engine_event';
 
 /** #266: the reply contradicted the engine's authoritative verdict for the turn. */
 export const NARRATION_OUTCOME_REJECTED_REASON = 'outcome_contradicts_engine';
@@ -165,6 +170,20 @@ export async function enforceNarrationGate<T extends GatedNarration>(
       )
     : narrationViolationNote(claims);
   if (!violations.length) {
+    if (!engineOutcome) {
+      const shadow = playerDeathShadowPatterns(narration.text);
+      if (shadow.length) {
+        logger.warn('DM_NARRATION_SHADOW', {
+          reason: PLAYER_DEATH_SHADOW_REASON,
+          sessionId,
+          requestId: AIService.lastRequestId(),
+          branch,
+          patterns: shadow,
+          ...(encounterId ? { encounterId } : {}),
+        });
+        reportNarrationShadowHit('narrated_death_without_engine', sessionId, shadow);
+      }
+    }
     releaseHeldSideEffects(narration);
     return { narration, outcome: 'clean' };
   }

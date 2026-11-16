@@ -133,7 +133,8 @@ const PHASE_BASELINES: Record<
   Exclude<DmResponsePhase, 'full'>,
   { unions: number; optionals: number; keywords: number }
 > = {
-  narrative: { unions: 5, optionals: 19, keywords: 6 },
+  // #1537: narrative +1 optional (inspiration_grant). Still under the 24-optional Anthropic cap.
+  narrative: { unions: 5, optionals: 20, keywords: 6 },
   combat: { unions: 15, optionals: 7, keywords: 4 },
   tactical: { unions: 16, optionals: 20, keywords: 5 },
 };
