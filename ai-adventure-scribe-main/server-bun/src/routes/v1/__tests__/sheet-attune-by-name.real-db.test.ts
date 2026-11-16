@@ -128,6 +128,17 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
     });
   };
 
+  const freeAttunementSlots = async () => {
+    await db
+      .update(characterEquipment)
+      .set({ isAttuned: false })
+      .where(eq(characterEquipment.characterId, characterId));
+    await db
+      .update(inventoryItems)
+      .set({ isAttuned: false })
+      .where(eq(inventoryItems.characterId, characterId));
+  };
+
   beforeAll(async () => {
     userId = testId('user-619');
     await grantLegendPlan(userId);
@@ -360,6 +371,7 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
   });
 
   it('claims the most recent of two unused short rests, not the older one', async () => {
+    await freeAttunementSlots();
     // Clean unused rests so the two we grant are the only candidates.
     await db
       .delete(restEvents)
@@ -409,6 +421,7 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
   });
 
   it('a short rest completed before the item was gained cannot pay', async () => {
+    await freeAttunementSlots();
     await db
       .delete(restEvents)
       .where(and(eq(restEvents.characterId, characterId), isNull(restEvents.notes)));
@@ -449,6 +462,7 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
   });
 
   it('a short rest completed after the item was gained does pay', async () => {
+    await freeAttunementSlots();
     await db
       .delete(restEvents)
       .where(and(eq(restEvents.characterId, characterId), isNull(restEvents.notes)));
@@ -481,6 +495,7 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
   });
 
   it('unattune does not give the rest back', async () => {
+    await freeAttunementSlots();
     await db
       .delete(restEvents)
       .where(and(eq(restEvents.characterId, characterId), isNull(restEvents.notes)));
