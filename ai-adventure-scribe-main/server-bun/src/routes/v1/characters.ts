@@ -30,6 +30,8 @@ import { db } from '../../../../db/client';
 import {
   characterEquipment,
   characterSpells,
+  combatEncounters,
+  combatParticipants,
   inventoryItems,
   spells,
 } from '../../../../db/schema/index';
@@ -1009,6 +1011,21 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         await import('../../services/progression/paladin-features-service.js');
       const userId = user!.userId;
       const cure = body.cure;
+      // #1554: in combat the Lay on Hands is an Action. The sheet route would heal without
+      // spending one, so it refuses while the character holds a seat in an active encounter.
+      const [inFight] = await db
+        .select({ encounterId: combatParticipants.encounterId })
+        .from(combatParticipants)
+        .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+        .where(
+          and(eq(combatParticipants.characterId, params.id), eq(combatEncounters.status, 'active')),
+        )
+        .limit(1);
+      if (inFight) {
+        throw new BusinessLogicError('Use Lay on Hands from the combat actions', {
+          reason: 'in_combat',
+        });
+      }
       if (!cure && body.amount !== undefined) {
         const pool = await layOnHandsPool(params.id, userId);
         if (pool && body.amount > pool.remaining) {

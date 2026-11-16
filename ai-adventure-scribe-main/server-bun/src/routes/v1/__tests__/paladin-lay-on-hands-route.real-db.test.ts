@@ -3,21 +3,24 @@
  * /v1/characters/:id/lay-on-hands). The sheet body is the shared fixture the client sends.
  * Runs only in the real-DB CI job (TEST_DATABASE_URL); never against a shared database.
  */
-import { afterAll, beforeAll, beforeEach, expect, it } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, expect, it, mock } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
 
-import {
-  LAY_ON_HANDS_SHEET_CURE_BODY,
-  LAY_ON_HANDS_SHEET_HEAL_BODY,
-} from '../../../../../shared/test-fixtures/lay-on-hands-intent';
 import {
   campaigns,
   characterFeatures,
   characterStats,
   characters,
   classFeaturesLibrary,
+  combatEncounters,
+  combatParticipants,
   featureUsageLog,
+  gameSessions,
 } from '../../../../../db/schema/index';
+import {
+  LAY_ON_HANDS_SHEET_CURE_BODY,
+  LAY_ON_HANDS_SHEET_HEAL_BODY,
+} from '../../../../../shared/test-fixtures/lay-on-hands-intent';
 import {
   closeRealDb,
   describeWithDb,
@@ -37,6 +40,17 @@ if (hasRealDb) {
   process.env.PORT ??= '8888';
 }
 
+const lohUserId = testId('1554-user');
+mock.module('../../../lib/auth.js', () => ({
+  authenticateRequest: async (request: Request) =>
+    request.headers.get('authorization') === 'Bearer 1554-test-token'
+      ? {
+          user: { userId: lohUserId, email: 'test@example.test', plan: 'free' },
+          error: null,
+        }
+      : { user: null, error: 'Unauthorized' },
+}));
+
 const pipeline = await importWithRealDb(async () => {
   const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
   const { charactersRoutes } = await import('../characters.js');
@@ -45,7 +59,7 @@ const pipeline = await importWithRealDb(async () => {
 
 describeWithDb('POST /v1/characters/:id/lay-on-hands (#1554)', () => {
   let db: ReturnType<typeof realDb>;
-  const userId = testId('1554-user');
+  const userId = lohUserId;
   let campaignId: string;
   let paladinId: string;
   let featureId: string;
@@ -54,7 +68,7 @@ describeWithDb('POST /v1/characters/:id/lay-on-hands (#1554)', () => {
     pipeline.handle(
       new Request(`http://localhost/v1/characters/${paladinId}/lay-on-hands`, {
         method: 'POST',
-        headers: { authorization: `Bearer ${userId}`, 'content-type': 'application/json' },
+        headers: { authorization: 'Bearer 1554-test-token', 'content-type': 'application/json' },
         body: JSON.stringify(body),
       }),
     );
@@ -173,6 +187,42 @@ describeWithDb('POST /v1/characters/:id/lay-on-hands (#1554)', () => {
     expect(await hpNow()).toBe(7);
     expect(await pool()).toBe(0);
     expect(await usageRows()).toBe(1);
+  });
+
+  it('refuses the sheet heal in an active encounter (422) and spends nothing', async () => {
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({ campaignId, characterId: paladinId, sessionNumber: 2, status: 'active' })
+      .returning({ id: gameSessions.id });
+    const [{ id: encounterId }] = await db
+      .insert(combatEncounters)
+      .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
+      .returning({ id: combatEncounters.id });
+    const [{ id: participantId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId,
+        characterId: paladinId,
+        name: 'Test Paladin',
+        participantType: 'player',
+        turnOrder: 0,
+        initiative: 10,
+        maxHp: 12,
+      })
+      .returning({ id: combatParticipants.id });
+    try {
+      const response = await post(LAY_ON_HANDS_SHEET_HEAL_BODY);
+      expect(response.status).toBe(422);
+      expect(await response.json()).toMatchObject({
+        error: 'Use Lay on Hands from the combat actions',
+      });
+      expect(await hpNow()).toBe(7);
+      expect(await usageRows()).toBe(0);
+    } finally {
+      await db.delete(combatParticipants).where(eq(combatParticipants.id, participantId));
+      await db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId));
+      await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    }
   });
 
   it('an amount over the pool is 422 and spends nothing', async () => {

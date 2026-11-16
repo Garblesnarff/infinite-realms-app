@@ -3,11 +3,18 @@
  * /v1/combat/:id/intent). The body is the shared fixture's shape (heal 5) with the real ids and
  * the live encounter version. Runs only in the real-DB CI job; never against a shared database.
  */
-import { afterAll, beforeAll, beforeEach, expect, it } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, expect, it, mock } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
 import { Elysia } from 'elysia';
 
-import { LAY_ON_HANDS_HEAL_INTENT_BODY } from '../../../../shared/test-fixtures/lay-on-hands-intent';
+import {
+  closeRealDb,
+  describeWithDb,
+  hasRealDb,
+  importWithRealDb,
+  realDb,
+  testId,
+} from './fixtures/real-db.js';
 import {
   campaigns,
   characterFeatures,
@@ -20,14 +27,7 @@ import {
   featureUsageLog,
   gameSessions,
 } from '../../../../db/schema/index';
-import {
-  closeRealDb,
-  describeWithDb,
-  hasRealDb,
-  importWithRealDb,
-  realDb,
-  testId,
-} from './fixtures/real-db.js';
+import { LAY_ON_HANDS_HEAL_INTENT_BODY } from '../../../../shared/test-fixtures/lay-on-hands-intent';
 
 if (hasRealDb && !process.env.DATABASE_URL && process.env.TEST_DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -39,6 +39,17 @@ if (hasRealDb) {
   process.env.PORT ??= '8888';
 }
 
+const lohUserId = testId('1554-combat-user');
+mock.module('../../lib/auth.js', () => ({
+  authenticateRequest: async (request: Request) =>
+    request.headers.get('authorization') === 'Bearer 1554-test-token'
+      ? {
+          user: { userId: lohUserId, email: 'test@example.test', plan: 'free' },
+          error: null,
+        }
+      : { user: null, error: 'Unauthorized' },
+}));
+
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
 const { intentRoutes } = await importWithRealDb(() => import('../../routes/v1/combat/intents.js'));
 
@@ -48,7 +59,7 @@ const app = hasRealDb
 
 describeWithDb('Lay on Hands combat intent through the real route (#1554)', () => {
   let db: ReturnType<typeof realDb>;
-  const userId = testId('1554-combat-user');
+  const userId = lohUserId;
   let campaignId: string;
   let sessionId: string;
   let encounterId: string;
@@ -78,7 +89,7 @@ describeWithDb('Lay on Hands combat intent through the real route (#1554)', () =
     return app!.handle(
       new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${userId}` },
+        headers: { 'content-type': 'application/json', authorization: 'Bearer 1554-test-token' },
         body: JSON.stringify(body),
       }),
     );

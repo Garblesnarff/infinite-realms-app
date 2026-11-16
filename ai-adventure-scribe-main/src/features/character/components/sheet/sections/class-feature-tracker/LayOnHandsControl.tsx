@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useIsInCombatOptional } from '@/contexts/in-combat-flag';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
@@ -20,6 +21,8 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
   const { toast } = useToast();
   const [amount, setAmount] = useState('1');
   const [busy, setBusy] = useState(false);
+  // In combat the Lay on Hands is an Action: the sheet control steps aside for the combat chips.
+  const inCombat = useIsInCombatOptional();
   const parsed = Math.trunc(Number(amount));
   const validAmount = Number.isInteger(parsed) && parsed >= 1 && parsed <= pool;
 
@@ -40,6 +43,14 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
       setBusy(false);
     }
   };
+
+  if (inCombat) {
+    return (
+      <p className="mt-2 text-xs text-muted-foreground">
+        In combat, use Lay on Hands from the combat actions.
+      </p>
+    );
+  }
 
   return (
     <div className="mt-2 space-y-2" aria-label="Lay on Hands controls">
