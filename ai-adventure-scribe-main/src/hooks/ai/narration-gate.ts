@@ -1,6 +1,6 @@
 import { inventedExtraStrikeClaims } from '../../../shared/narration-extra-strike';
 import {
-  playerDeathShadowClaims,
+  playerDeathShadowPatterns,
   spliceContradictingSentences,
   type OutcomeClaim,
 } from '../../../shared/narration-harm';
@@ -17,6 +17,7 @@ import {
 } from '@/hooks/ai/silent-player-turn';
 import logger from '@/lib/logger';
 import { AIService } from '@/services/ai-service';
+import { reportNarrationShadowHit } from '@/services/client-failure-reporting';
 import {
   createPlayerMessageFromOption,
   parseMessageOptions,
@@ -170,16 +171,17 @@ export async function enforceNarrationGate<T extends GatedNarration>(
     : narrationViolationNote(claims);
   if (!violations.length) {
     if (!engineOutcome) {
-      const shadow = playerDeathShadowClaims(narration.text);
+      const shadow = playerDeathShadowPatterns(narration.text);
       if (shadow.length) {
         logger.warn('DM_NARRATION_SHADOW', {
           reason: PLAYER_DEATH_SHADOW_REASON,
           sessionId,
           requestId: AIService.lastRequestId(),
           branch,
-          claims: shadow,
+          patterns: shadow,
           ...(encounterId ? { encounterId } : {}),
         });
+        reportNarrationShadowHit('narrated_death_without_engine', sessionId, shadow);
       }
     }
     releaseHeldSideEffects(narration);

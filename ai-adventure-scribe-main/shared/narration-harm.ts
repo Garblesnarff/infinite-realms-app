@@ -208,31 +208,52 @@ export function fabricatedOutcomeClaimSpans(
 
 /**
  * #468 shadow: player deaths the DM narrates in phrasing `HARM_PATTERNS` does not list
- * ("You strike the rocks and die."). Reported by `playerDeathShadowClaims` and logged by the
- * gate, never enforced here. Enforcement waits for the logged counts (log and count, then enforce).
+ * ("You strike the rocks and die."). Each pattern carries a name; the gate logs and counts the
+ * names only, never the matched text. Enforcement waits for the logged counts.
  */
-const PLAYER_DEATH_SHADOW_PATTERNS: RegExp[] = [
-  /\byou\b[^.!?]{0,40}?\b(?:die|dies|perish(?:es|ed)?)\b/gi,
-  /\bbreathe\s+your\s+last\b/gi,
-  /\byou(?:['’]re|\s+are|\s+were)\s+(?:killed|slain)\b/gi,
-  /\byour\s+life\s+ends\b/gi,
-  /\bfall\s+to\s+your\s+doom\b/gi,
+const PLAYER_DEATH_SHADOW_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
+  { name: 'you_die', re: /\byou\b[^.!?]{0,40}?\b(?:die|dies|perish(?:es|ed)?)\b/gi },
+  { name: 'breathe_last', re: /\bbreathe\s+your\s+last\b/gi },
+  { name: 'you_killed', re: /\byou(?:['’]re|\s+are|\s+were)\s+(?:killed|slain)\b/gi },
+  { name: 'life_ends', re: /\byour\s+life\s+ends\b/gi },
+  { name: 'fall_to_doom', re: /\bfall\s+to\s+your\s+doom\b/gi },
 ];
 
-/** Player-death phrasings outside `fabricatedOutcomeClaims` (#468 shadow). Empty when clean. */
-export function playerDeathShadowClaims(text: string | null | undefined): string[] {
+/** A sentence that makes a death a hypothetical, a threat, a perception or an NPC's act (#468). */
+const PLAYER_DEATH_SHADOW_EXCLUDED =
+  /\b(?:would|could|might|may|can|will|shall|if|almost|nearly|watch(?:es|ing)?|see(?:s|ing)?|saw|hear(?:s)?|heard|witness(?:es)?|notice(?:s)?|try|tries|trying)\b/i;
+
+/**
+ * The names of the player-death shadow patterns that match in the text (#468). Empty when clean.
+ * Returns names, not the matched text: the caller logs and reports these.
+ */
+export function playerDeathShadowPatterns(text: string | null | undefined): string[] {
   const source = text ?? '';
-  const phrases = new Set<string>();
-  for (const pattern of PLAYER_DEATH_SHADOW_PATTERNS) {
-    for (const match of source.matchAll(pattern)) {
+  const names = new Set<string>();
+  for (const { name, re } of PLAYER_DEATH_SHADOW_PATTERNS) {
+    for (const match of source.matchAll(re)) {
       const index = match.index ?? 0;
       const matched = match[0];
       if (isNegated(source, index, matched)) continue;
       if (isHypotheticalDeath(source, index, matched)) continue;
-      phrases.add(matched.trim().toLowerCase().slice(0, 80));
+      // "for you to die": an infinitive, not a death.
+      if (/\bto\s+(?:die|dies|perish\w*)\b/i.test(matched)) continue;
+      const boundary = Math.max(
+        source.lastIndexOf('.', index - 1),
+        source.lastIndexOf('!', index - 1),
+        source.lastIndexOf('?', index - 1),
+      );
+      const rest = source.slice(index + matched.length);
+      const stop = /[.!?]/.exec(rest);
+      const sentence = source.slice(
+        boundary + 1,
+        stop ? index + matched.length + stop.index : source.length,
+      );
+      if (PLAYER_DEATH_SHADOW_EXCLUDED.test(sentence)) continue;
+      names.add(name);
     }
   }
-  return [...phrases].slice(0, 5);
+  return [...names];
 }
 
 export function suspectsFabricatedOutcome(
