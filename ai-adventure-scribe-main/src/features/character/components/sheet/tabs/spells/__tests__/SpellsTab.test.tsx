@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { Character, CharacterClass } from '@/types/character';
 
 import { cleric } from '@/data/classes/cleric';
+import { paladin } from '@/data/classes/paladin';
 import SpellsTab from '@/features/character/components/sheet/tabs/SpellsTab';
 import { restApi } from '@/services/rest-api';
 
@@ -158,6 +159,33 @@ describe('SpellsTab', () => {
     }
     const bane = screen.getByText('Bane').closest('.border.rounded-lg')!;
     expect(within(bane as HTMLElement).queryByText('Always prepared')).not.toBeInTheDocument();
+  });
+
+  it('labels each Oath of Devotion spell once and leaves a chosen spell unlabelled', async () => {
+    const user = userEvent.setup();
+    const character = {
+      ...makeCleric(),
+      class: paladin,
+      level: 3,
+      classFeatures: {
+        'sacred-oath': {
+          name: 'Sacred Oath',
+          description: '',
+          choice: 'Oath of Devotion',
+        },
+      },
+      knownSpells: ['protection-from-evil-and-good', 'sanctuary', 'bless'],
+      preparedSpells: ['bless'],
+    } as Character;
+    render(<SpellsTab character={character} onUpdate={() => {}} />);
+    await user.click(screen.getByRole('tab', { name: /^spells/i }));
+    for (const name of ['Protection from Evil and Good', 'Sanctuary']) {
+      const row = screen.getByText(name).closest('.border.rounded-lg')!;
+      expect(within(row as HTMLElement).getAllByText('Always prepared')).toHaveLength(1);
+    }
+    expect(screen.getAllByText('Always prepared')).toHaveLength(2);
+    const bless = screen.getByText('Bless').closest('.border.rounded-lg')!;
+    expect(within(bless as HTMLElement).queryByText('Always prepared')).not.toBeInTheDocument();
   });
 
   it('keeps the spell tabs mounted after a rejected Long Rest and shows the inline error', async () => {
