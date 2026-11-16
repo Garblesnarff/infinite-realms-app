@@ -740,15 +740,15 @@ async function resolveLayOnHandsAgainstPool(
     // The sheet heal runs on this transaction, so a failed refund or commit rolls
     // back the heal with the claim and usage row.
     if (participantId && encounterId) {
-      // Gap (#1531): CombatHPService.healDamage cannot take a transaction; it opens
-      // its own. In combat, a failure after healDamage returns (the refund or the
-      // commit) leaves the heal applied while the claim rolls back.
+      // The combat heal runs on this transaction, so a failed refund or commit rolls
+      // back the heal with the claim and usage row.
       await CombatHPService.healDamage(
         participantId,
         encounterId,
         healAmount,
         'Lay on Hands',
         userId,
+        tx,
       );
     } else {
       await CharacterVitalsService.heal(targetId, userId, healAmount, tx);
