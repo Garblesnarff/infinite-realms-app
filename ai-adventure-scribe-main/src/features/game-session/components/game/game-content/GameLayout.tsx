@@ -147,6 +147,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
     const rightPanel = (
       <GameRightPanel
         sessionId={sessionId}
+        isFallen={isFallen}
         isCollapsed={!tableDrawerOpen}
         initialTab={tableDrawerTab}
         initialTabRequest={tableDrawerRequest}

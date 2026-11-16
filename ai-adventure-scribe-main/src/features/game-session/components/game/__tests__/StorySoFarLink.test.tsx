@@ -9,6 +9,7 @@ vi.mock('../chronicle/ChronicleDialog', () => ({
     sessionId: string | null;
     open: boolean;
     endSession?: { campaignId: string | null; starterCampaignId: string | null };
+    isFallen?: boolean;
   }) => {
     viewerSpy(props);
     return props.open ? <div role="dialog">Chronicle for {props.sessionId}</div> : null;
@@ -32,5 +33,22 @@ describe('StorySoFarLink', () => {
     expect(button).toHaveAttribute('aria-haspopup', 'dialog');
     expect(button.className).toContain('min-h-11');
     expect(within(button).getByText('Story so far')).toBeInTheDocument();
+  });
+
+  it('passes isFallen through to ChronicleDialog when opened', () => {
+    const endSession = { campaignId: 'campaign-1', starterCampaignId: null };
+    render(<StorySoFarLink sessionId="game-1" endSession={endSession} isFallen />);
+    fireEvent.click(screen.getByRole('button', { name: /Read the chronicle/ }));
+    expect(viewerSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true, isFallen: true }),
+    );
+  });
+
+  it('does not pass isFallen: true on the default living-hero path', () => {
+    const endSession = { campaignId: 'campaign-1', starterCampaignId: null };
+    render(<StorySoFarLink sessionId="game-1" endSession={endSession} />);
+    fireEvent.click(screen.getByRole('button', { name: /Read the chronicle/ }));
+    const last = viewerSpy.mock.calls[viewerSpy.mock.calls.length - 1][0];
+    expect(last.isFallen).not.toBe(true);
   });
 });

@@ -6,6 +6,7 @@ import ChronicleDialog from './chronicle/ChronicleDialog';
 interface StorySoFarLinkProps {
   sessionId: string;
   endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  isFallen?: boolean;
 }
 
 /**
@@ -14,7 +15,11 @@ interface StorySoFarLinkProps {
  * From the cloud session's commit 5c957c7 (claude/design-implementation-a2qxny),
  * restyled to the Panels board's link card (#1429).
  */
-export const StorySoFarLink: React.FC<StorySoFarLinkProps> = ({ sessionId, endSession }) => {
+export const StorySoFarLink: React.FC<StorySoFarLinkProps> = ({
+  sessionId,
+  endSession,
+  isFallen,
+}) => {
   const [open, setOpen] = useState(false);
 
   return (
@@ -49,6 +54,7 @@ export const StorySoFarLink: React.FC<StorySoFarLinkProps> = ({ sessionId, endSe
           open
           onClose={() => setOpen(false)}
           endSession={endSession}
+          isFallen={isFallen}
         />
       )}
     </>
