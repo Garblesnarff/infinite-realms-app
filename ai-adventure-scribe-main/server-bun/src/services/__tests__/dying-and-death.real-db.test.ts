@@ -49,7 +49,10 @@ import {
   gameSessions,
   tacticalMaps,
 } from '../../../../db/schema/index';
-import { formatCombatEndLine } from '../../../../shared/combat-outcome-transcript';
+import {
+  formatCombatEndLine,
+  formatDeathSaveParts,
+} from '../../../../shared/combat-outcome-transcript';
 import { describeDeathSave } from '../../../../shared/death-save-lines';
 import {
   actionBarFleeIntentBody,
@@ -783,6 +786,50 @@ describeWithDb('dying and death follow SRD 5.1, one death save per player turn',
       .where(eq(characterStats.characterId, scene.characterId));
     expect(mirror.vitalState).toBe('dead');
     expect(mirror.diedAt).not.toBeNull();
+  });
+
+  test('#314 CB-075: a monster killed in one blow gets no death-save lines on the transcript or the client render', async () => {
+    const scene = await seedScene({ heroHp: 7, heroStrength: 20 });
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 1 })
+      .where(eq(combatParticipantStatus.participantId, scene.spiderId));
+    await giveTurnTo(scene.encounterId, scene.heroId);
+    const result = (await executeCombatIntent(
+      scene.encounterId,
+      {
+        type: 'attack',
+        actorId: scene.heroId,
+        targetId: scene.spiderId,
+        d20: 20,
+        expectedVersion: (await encounterOf(scene.encounterId)).version,
+      },
+      userId,
+      'player',
+    )) as Record<string, any>;
+
+    expect(formatDeathSaveParts(result)).toEqual([]);
+    const facts = (await consumeDmTacticalFacts(scene.sessionId)).join('\n');
+    expect(facts).not.toMatch(/death saving throw|death-save|of 3 failures|✕/);
+    const [spiderStatus] = await db
+      .select({ currentHp: combatParticipantStatus.currentHp })
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, scene.spiderId));
+    expect(spiderStatus.currentHp).toBe(0);
+  });
+
+  test("#314 CB-075: the dying hero's save prints one line per save, on the server transcript and in the client render", async () => {
+    const scene = await seedScene({ heroHp: 0 });
+    const save = (await deathSave(scene, 14)) as Record<string, any>;
+
+    const clientLines = formatDeathSaveParts(save);
+    expect(clientLines).toHaveLength(1);
+    expect(clientLines[0].line).toContain('rolled 14 on their death saving throw');
+    const serverLines = (await consumeDmTacticalFacts(scene.sessionId)).filter((fact) =>
+      fact.includes('death saving throw'),
+    );
+    expect(serverLines).toHaveLength(1);
+    expect(serverLines[0]).toContain('rolled 14 on their death saving throw — SUCCESS');
   });
 
   test('a death save out of turn, or from a character who is not dying, is refused', async () => {
