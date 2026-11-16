@@ -114,12 +114,13 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
       }),
     );
 
-  const grantShortRest = async () => {
+  const grantShortRest = async (completedAt?: Date) => {
+    const when = completedAt ?? new Date();
     await db.insert(restEvents).values({
       characterId,
       restType: 'short',
-      startedAt: new Date(),
-      completedAt: new Date(),
+      startedAt: when,
+      completedAt: when,
       interrupted: false,
       hpRestored: 0,
       hitDiceSpent: 0,
@@ -356,5 +357,166 @@ describeWithDb('sheet attune resolves the equipment row, not inventory_items.id 
         .set({ userId, ownerId: userId })
         .where(eq(characters.id, characterId));
     }
+  });
+
+  it('claims the most recent of two unused short rests, not the older one', async () => {
+    // Clean unused rests so the two we grant are the only candidates.
+    await db
+      .delete(restEvents)
+      .where(and(eq(restEvents.characterId, characterId), isNull(restEvents.notes)));
+
+    const [helm] = await db
+      .insert(characterEquipment)
+      .values({
+        characterId,
+        itemName: 'Helm of the Most Recent',
+        itemType: 'equipment',
+        quantity: 1,
+        equipped: true,
+        isMagic: true,
+        requiresAttunement: true,
+        isAttuned: false,
+      })
+      .returning({ id: characterEquipment.id });
+
+    const older = new Date(Date.now() - 60_000);
+    const newer = new Date();
+    await grantShortRest(older);
+    await grantShortRest(newer);
+
+    const response = await request(sheetAttunePath(characterId, helm.id), 'POST');
+    const text = await response.text();
+    expect(response.status, text.slice(0, 400)).toBe(200);
+
+    const claimed = await db
+      .select({ notes: restEvents.notes, completedAt: restEvents.completedAt })
+      .from(restEvents)
+      .where(eq(restEvents.notes, `attunement:${helm.id}`));
+    expect(claimed).toHaveLength(1);
+    expect(claimed[0]?.completedAt?.getTime()).toBe(newer.getTime());
+
+    const olderStillOpen = await db
+      .select({ id: restEvents.id })
+      .from(restEvents)
+      .where(
+        and(
+          eq(restEvents.characterId, characterId),
+          isNull(restEvents.notes),
+          eq(restEvents.completedAt, older),
+        ),
+      );
+    expect(olderStillOpen.length).toBe(1);
+  });
+
+  it('a short rest completed before the item was gained cannot pay', async () => {
+    await db
+      .delete(restEvents)
+      .where(and(eq(restEvents.characterId, characterId), isNull(restEvents.notes)));
+
+    const oldRest = new Date(Date.now() - 60_000);
+    await grantShortRest(oldRest);
+
+    const [helm] = await db
+      .insert(characterEquipment)
+      .values({
+        characterId,
+        itemName: 'Helm Gained Later',
+        itemType: 'equipment',
+        quantity: 1,
+        equipped: true,
+        isMagic: true,
+        requiresAttunement: true,
+        isAttuned: false,
+      })
+      .returning({ id: characterEquipment.id });
+
+    const response = await request(sheetAttunePath(characterId, helm.id), 'POST');
+    const text = await response.text();
+    expect(response.status, text.slice(0, 400)).toBe(400);
+    expect(text).toContain('Attunement needs a short rest spent on this item');
+
+    const [row] = await db
+      .select({ isAttuned: characterEquipment.isAttuned })
+      .from(characterEquipment)
+      .where(eq(characterEquipment.id, helm.id));
+    expect(row?.isAttuned).toBe(false);
+
+    const notes = await db
+      .select({ notes: restEvents.notes })
+      .from(restEvents)
+      .where(eq(restEvents.completedAt, oldRest));
+    expect(notes[0]?.notes).toBeNull();
+  });
+
+  it('a short rest completed after the item was gained does pay', async () => {
+    await db
+      .delete(restEvents)
+      .where(and(eq(restEvents.characterId, characterId), isNull(restEvents.notes)));
+
+    const [helm] = await db
+      .insert(characterEquipment)
+      .values({
+        characterId,
+        itemName: 'Helm Gained Earlier',
+        itemType: 'equipment',
+        quantity: 1,
+        equipped: true,
+        isMagic: true,
+        requiresAttunement: true,
+        isAttuned: false,
+      })
+      .returning({ id: characterEquipment.id });
+
+    await grantShortRest(new Date());
+
+    const response = await request(sheetAttunePath(characterId, helm.id), 'POST');
+    const text = await response.text();
+    expect(response.status, text.slice(0, 400)).toBe(200);
+
+    const claimed = await db
+      .select({ notes: restEvents.notes })
+      .from(restEvents)
+      .where(eq(restEvents.notes, `attunement:${helm.id}`));
+    expect(claimed).toHaveLength(1);
+  });
+
+  it('unattune does not give the rest back', async () => {
+    await db
+      .delete(restEvents)
+      .where(and(eq(restEvents.characterId, characterId), isNull(restEvents.notes)));
+
+    const [helm] = await db
+      .insert(characterEquipment)
+      .values({
+        characterId,
+        itemName: 'Helm Unattune Test',
+        itemType: 'equipment',
+        quantity: 1,
+        equipped: true,
+        isMagic: true,
+        requiresAttunement: true,
+        isAttuned: false,
+      })
+      .returning({ id: characterEquipment.id });
+
+    await grantShortRest(new Date());
+
+    const attuneResponse = await request(sheetAttunePath(characterId, helm.id), 'POST');
+    expect(attuneResponse.status, (await attuneResponse.text()).slice(0, 400)).toBe(200);
+
+    const unattuneResponse = await request(sheetAttunePath(characterId, helm.id), 'DELETE');
+    expect(unattuneResponse.status, (await unattuneResponse.text()).slice(0, 400)).toBe(200);
+
+    const restAfter = await db
+      .select({ notes: restEvents.notes })
+      .from(restEvents)
+      .where(eq(restEvents.notes, `attunement:${helm.id}`));
+    expect(restAfter).toHaveLength(1);
+    expect(restAfter[0]?.notes).toBe(`attunement:${helm.id}`);
+
+    const secondAttune = await request(sheetAttunePath(characterId, helm.id), 'POST');
+    const secondText = await secondAttune.text();
+    expect(secondAttune.status, secondText.slice(0, 400)).toBe(400);
+    expect(secondText).toContain('Attunement needs a short rest spent on this item');
   });
 });
