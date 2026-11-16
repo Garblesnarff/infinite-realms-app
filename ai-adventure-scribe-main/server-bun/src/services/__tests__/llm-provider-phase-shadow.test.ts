@@ -198,9 +198,7 @@ describe('findPhaseShadowMismatch: #1258 keys are phase-schema fields', () => {
     ).toBeNull();
   });
   it('combat + scene_spec is not a mismatch', () => {
-    expect(
-      findPhaseShadowMismatch({ ...BASE_REPLY, scene_spec: SCENE_SPEC }, 'combat'),
-    ).toBeNull();
+    expect(findPhaseShadowMismatch({ ...BASE_REPLY, scene_spec: SCENE_SPEC }, 'combat')).toBeNull();
   });
   it('tactical + damage is not a mismatch', () => {
     expect(
@@ -343,7 +341,14 @@ describe('phaseOmittedExtensionSections', () => {
   });
 
   it('combat and tactical omit the narrative-only story extensions', () => {
-    const story = ['xp_award', 'items', 'conditions', 'campaign_ending', 'tracker_changes'];
+    const story = [
+      'xp_award',
+      'items',
+      'conditions',
+      'campaign_ending',
+      'tracker_changes',
+      'inspiration_grant',
+    ];
     expect(phaseOmittedExtensionSections('combat')).toEqual(story);
     expect(phaseOmittedExtensionSections('tactical')).toEqual(story);
   });

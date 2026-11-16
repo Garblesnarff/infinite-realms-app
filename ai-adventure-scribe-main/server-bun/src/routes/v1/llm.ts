@@ -1594,6 +1594,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         const storyEffectPossible = Boolean(
           featuresToSpend ||
           envelope?.xp_award ||
+          envelope?.inspiration_grant ||
           envelope?.items ||
           envelope?.conditions ||
           envelope?.rest ||
@@ -1737,6 +1738,31 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             });
           } catch (error) {
             logger.warn({ msg: 'DM_STORY_REST_APPLY_FAILED', sessionId: castSessionId, error });
+          }
+        }
+        // #1537: the DM grants Inspiration for good roleplay. The engine validates the named
+        // character (the sender's, not already held) and writes it only when LLM_INSPIRATION_GRANT=on;
+        // shadow mode logs and counts the grant. A refused grant never costs the player the turn.
+        if (
+          envelope?.inspiration_grant &&
+          dmReply &&
+          dmReply.inCombat !== true &&
+          castSessionId &&
+          combatEntry &&
+          !envelope.combat_entry_pending &&
+          !storyEffectsClosed
+        ) {
+          try {
+            const { applyStoryInspiration } =
+              await import('../../services/dm/story-inspiration.js');
+            await applyStoryInspiration({
+              userId,
+              sessionId: castSessionId,
+              grant: envelope.inspiration_grant,
+              rollRequested,
+            });
+          } catch (error) {
+            logger.warn({ msg: 'DM_INSPIRATION_GRANT_FAILED', sessionId: castSessionId, error });
           }
         }
         // #610 (#218 step 6): damage the story deals out of combat reaches the sheet
