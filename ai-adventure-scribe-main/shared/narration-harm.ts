@@ -206,6 +206,35 @@ export function fabricatedOutcomeClaimSpans(
   return claims;
 }
 
+/**
+ * #468 shadow: player deaths the DM narrates in phrasing `HARM_PATTERNS` does not list
+ * ("You strike the rocks and die."). Reported by `playerDeathShadowClaims` and logged by the
+ * gate, never enforced here. Enforcement waits for the logged counts (log and count, then enforce).
+ */
+const PLAYER_DEATH_SHADOW_PATTERNS: RegExp[] = [
+  /\byou\b[^.!?]{0,40}?\b(?:die|dies|perish(?:es|ed)?)\b/gi,
+  /\bbreathe\s+your\s+last\b/gi,
+  /\byou(?:['’]re|\s+are|\s+were)\s+(?:killed|slain)\b/gi,
+  /\byour\s+life\s+ends\b/gi,
+  /\bfall\s+to\s+your\s+doom\b/gi,
+];
+
+/** Player-death phrasings outside `fabricatedOutcomeClaims` (#468 shadow). Empty when clean. */
+export function playerDeathShadowClaims(text: string | null | undefined): string[] {
+  const source = text ?? '';
+  const phrases = new Set<string>();
+  for (const pattern of PLAYER_DEATH_SHADOW_PATTERNS) {
+    for (const match of source.matchAll(pattern)) {
+      const index = match.index ?? 0;
+      const matched = match[0];
+      if (isNegated(source, index, matched)) continue;
+      if (isHypotheticalDeath(source, index, matched)) continue;
+      phrases.add(matched.trim().toLowerCase().slice(0, 80));
+    }
+  }
+  return [...phrases].slice(0, 5);
+}
+
 export function suspectsFabricatedOutcome(
   text: string | null | undefined,
   options?: { playerMayHaveActed?: boolean },
@@ -297,12 +326,36 @@ const YOU_FAILURE: OutcomePattern[] = [
  * noun: "his eyes go wide" is not a miss.
  */
 const ATTACK_MISS: OutcomePattern[] = [
-  { re: new RegExp(`\\b(?:${MISS_NOUN})s?\\b[^.!?]{0,40}?\\bmiss(?:es|ed)?\\b`, 'gi'), soft: false, miss: true },
-  { re: new RegExp(`\\bmiss(?:es|ed)?\\b[^.!?]{0,40}?\\b(?:${MISS_NOUN})s?\\b`, 'gi'), soft: false, miss: true },
-  { re: new RegExp(`\\b(?:${MISS_NOUN})s?\\b[^.!?]{0,40}?\\b(?:go|goes|went)\\s+wide\\b`, 'gi'), soft: false, miss: true },
-  { re: new RegExp(`\\b(?:go|goes|went)\\s+wide\\b[^.!?]{0,40}?\\b(?:${MISS_NOUN})s?\\b`, 'gi'), soft: false, miss: true },
-  { re: new RegExp(`\\b(?:${MISS_NOUN})s?\\b[^.!?]{0,40}?\\b(?:fall|falls|fell)\\s+short\\b`, 'gi'), soft: false, miss: true },
-  { re: new RegExp(`\\b(?:fall|falls|fell)\\s+short\\b[^.!?]{0,40}?\\b(?:${MISS_NOUN})s?\\b`, 'gi'), soft: false, miss: true },
+  {
+    re: new RegExp(`\\b(?:${MISS_NOUN})s?\\b[^.!?]{0,40}?\\bmiss(?:es|ed)?\\b`, 'gi'),
+    soft: false,
+    miss: true,
+  },
+  {
+    re: new RegExp(`\\bmiss(?:es|ed)?\\b[^.!?]{0,40}?\\b(?:${MISS_NOUN})s?\\b`, 'gi'),
+    soft: false,
+    miss: true,
+  },
+  {
+    re: new RegExp(`\\b(?:${MISS_NOUN})s?\\b[^.!?]{0,40}?\\b(?:go|goes|went)\\s+wide\\b`, 'gi'),
+    soft: false,
+    miss: true,
+  },
+  {
+    re: new RegExp(`\\b(?:go|goes|went)\\s+wide\\b[^.!?]{0,40}?\\b(?:${MISS_NOUN})s?\\b`, 'gi'),
+    soft: false,
+    miss: true,
+  },
+  {
+    re: new RegExp(`\\b(?:${MISS_NOUN})s?\\b[^.!?]{0,40}?\\b(?:fall|falls|fell)\\s+short\\b`, 'gi'),
+    soft: false,
+    miss: true,
+  },
+  {
+    re: new RegExp(`\\b(?:fall|falls|fell)\\s+short\\b[^.!?]{0,40}?\\b(?:${MISS_NOUN})s?\\b`, 'gi'),
+    soft: false,
+    miss: true,
+  },
 ];
 
 /**
@@ -462,7 +515,9 @@ export function actionKeywords(outcome: EngineOutcome): string[] {
  */
 function attackNameKeywords(outcome: EngineOutcome): string[] {
   const description = outcome.description ?? '';
-  const name = /^(.*?)\s+(?:spell\s+)?attack\s+(?:vs|on|against)\s+/i.exec(description)?.[1]?.trim();
+  const name = /^(.*?)\s+(?:spell\s+)?attack\s+(?:vs|on|against)\s+/i
+    .exec(description)?.[1]
+    ?.trim();
   if (!name) return [];
   const words = name
     .toLowerCase()
@@ -600,7 +655,10 @@ const MISS_TARGET_GENERIC_VERBS = new Set([
 function missTargetKeywords(outcome: EngineOutcome): string[] {
   const missNouns = new Set(MISS_NOUN.split('|'));
   const requestWords = new Set(
-    (outcome.requestType ?? '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean),
+    (outcome.requestType ?? '')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean),
   );
   const seen = new Set<string>();
   for (const word of (outcome.description ?? '').toLowerCase().split(/[^a-z0-9]+/)) {
@@ -628,10 +686,7 @@ function isPlayerMiss(sentence: string, name: string | undefined, outcome: Engin
   }
   // Unpossessed ("an arrow misses"): only if the clause names the rolled target.
   const targets = missTargetKeywords(outcome);
-  return (
-    targets.length > 0 &&
-    targets.some((target) => sentence.toLowerCase().includes(target))
-  );
+  return targets.length > 0 && targets.some((target) => sentence.toLowerCase().includes(target));
 }
 
 /**
@@ -646,9 +701,7 @@ export function contradictsEngineOutcome(
   outcome: EngineOutcome,
 ): OutcomeClaim[] {
   const source = text ?? '';
-  const base = outcome.success
-    ? [...YOU_FAILURE, ...ATTACK_MISS, ...ATTACK_DISMISS]
-    : YOU_SUCCESS;
+  const base = outcome.success ? [...YOU_FAILURE, ...ATTACK_MISS, ...ATTACK_DISMISS] : YOU_SUCCESS;
   // The name crosses the HTTP boundary on combatEntry (llm.ts), so it is validated here
   // rather than trusted: a non-string must not reach the pattern builder.
   const rawName = outcome.characterName;
@@ -662,10 +715,7 @@ export function contradictsEngineOutcome(
   if (outcome.success && nameKeywords.length > 0) {
     const kwAlt = nameKeywords.map(escapeRegExp).join('|');
     patterns.push({
-      re: new RegExp(
-        `\\bignor(?:e|es|ed|ing)\\s+your\\b[^.!?,;:]{0,40}?\\b(?:${kwAlt})\\b`,
-        'gi',
-      ),
+      re: new RegExp(`\\bignor(?:e|es|ed|ing)\\s+your\\b[^.!?,;:]{0,40}?\\b(?:${kwAlt})\\b`, 'gi'),
       soft: false,
       miss: false,
       dismiss: true,
@@ -746,5 +796,8 @@ export function spliceContradictingSentences(
     at = span.end;
   });
   out += text.slice(at);
-  return out.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+  return out
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
