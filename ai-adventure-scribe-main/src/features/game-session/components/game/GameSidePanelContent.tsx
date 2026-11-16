@@ -16,6 +16,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export interface GameSidePanelContentProps {
   sessionId?: string;
+  endSession?: { campaignId: string | null; starterCampaignId: string | null };
   sessionData: ExtendedGameSession | null;
   updateGameSessionState: (newState: Partial<ExtendedGameSession>) => Promise<void>;
   combatMode: boolean;
@@ -55,6 +56,7 @@ export interface GameSidePanelContentProps {
 export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.memo(
   ({
     sessionId,
+    endSession,
     sessionData,
     updateGameSessionState,
     activeTab,
@@ -152,6 +154,7 @@ export const GameSidePanelContent: React.FC<GameSidePanelContentProps> = React.m
             <ScrollArea className="h-full">
               <JournalTabContent
                 sessionId={sessionId}
+                endSession={endSession}
                 sessionNotesId={sessionNotesId}
                 localSessionNotes={localSessionNotes}
                 setLocalSessionNotes={setLocalSessionNotes}

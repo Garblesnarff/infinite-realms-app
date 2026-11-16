@@ -221,13 +221,36 @@ describe('ActionOptions', () => {
     });
 
     it('sets the option prompt in the parchment ink in Table look (#1521)', () => {
+      const inkClass = '[body.ir-table-look_&]:!text-[color:var(--ir-ink)]';
+      const style = document.createElement('style');
+      // .text-muted-foreground is !important in index.css, so a non-important
+      // ink utility stays the pale muted color. This sheet is that cascade.
+      style.textContent = `
+        body.ir-table-look { --ir-ink: #2a1a0c; --muted-foreground: rgba(234, 238, 250, 0.65); }
+        .text-muted-foreground { color: var(--muted-foreground) !important; }
+        body.ir-table-look .${CSS.escape(inkClass)} { color: var(--ir-ink) !important; }
+      `;
+      document.head.appendChild(style);
+      document.body.classList.add('ir-table-look');
       render(<ActionOptions options={mockOptions} onOptionSelect={onOptionSelect} delay={0} />);
       act(() => {
         vi.advanceTimersByTime(0);
       });
 
       const prompt = screen.getByText(/Select an option to submit it immediately/i);
-      expect(prompt).toHaveClass('[body.ir-table-look_&]:text-[color:var(--ir-ink)]');
+      const ownAction = screen.getByText('Or describe your own action in the chat');
+      expect(prompt).toHaveClass(inkClass);
+      expect(ownAction).toHaveClass(inkClass);
+      const pale = document.createElement('p');
+      pale.className = 'text-muted-foreground';
+      document.body.appendChild(pale);
+      expect(getComputedStyle(pale).color).toBe('var(--muted-foreground)');
+      expect(getComputedStyle(prompt).color).toBe('var(--ir-ink)');
+      expect(getComputedStyle(ownAction).color).toBe('var(--ir-ink)');
+      expect(getComputedStyle(document.body).getPropertyValue('--ir-ink').trim()).toBe('#2a1a0c');
+      pale.remove();
+      document.body.classList.remove('ir-table-look');
+      style.remove();
     });
 
     it('does not flicker back to loading state or reset timer when rerendered with equivalent option array', () => {

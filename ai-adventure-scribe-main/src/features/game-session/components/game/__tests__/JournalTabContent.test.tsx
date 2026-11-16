@@ -5,7 +5,7 @@ import { JournalTabContent } from '../JournalTabContent';
 
 import type { JournalHandoutEntry } from '@/services/user-data-api';
 
-vi.mock('@/components/chronicles/ChronicleViewer', () => ({
+vi.mock('../chronicle/ChronicleDialog', () => ({
   default: (props: { sessionId: string | null; open: boolean }) => {
     return props.open ? <div role="dialog">Chronicle for {props.sessionId}</div> : null;
   },
@@ -48,10 +48,7 @@ describe('JournalTabContent (#1429)', () => {
       state: { campaign: { id: 'camp-1', description: 'Find the lost ledger.' } },
     } as never);
     render(
-      <JournalTabContent
-        {...baseProps}
-        journalEntries={[handout('h1', 2), handout('h2', null)]}
-      />,
+      <JournalTabContent {...baseProps} journalEntries={[handout('h1', 2), handout('h2', null)]} />,
     );
 
     expect(screen.getByRole('heading', { name: 'Journal' })).toBeInTheDocument();

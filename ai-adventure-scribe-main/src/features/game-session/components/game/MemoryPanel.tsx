@@ -125,6 +125,13 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
 
     const { data: journal, isLoading: journalLoading } = useCampaignJournal(sessionData?.id);
     const journalEntries = journal?.entries || [];
+    const chronicleEndSession = useMemo(
+      () => ({
+        campaignId: routeCampaignId ?? sessionData?.campaign_id ?? null,
+        starterCampaignId: sessionData?.starter_campaign_id ?? null,
+      }),
+      [routeCampaignId, sessionData?.campaign_id, sessionData?.starter_campaign_id],
+    );
 
     const handleTabChange = useCallback(
       (value: 'character' | 'memory' | 'combat' | 'journal'): void => {
@@ -183,6 +190,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                 />
                 <GameSidePanelContent
                   sessionId={sessionId}
+                  endSession={chronicleEndSession}
                   sessionData={sessionData}
                   updateGameSessionState={updateGameSessionState}
                   combatMode={combatMode}
@@ -253,6 +261,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
     return (
       <DesktopGameSidePanel
         sessionId={sessionId}
+        endSession={chronicleEndSession}
         panelRef={panelRef}
         panelWidth={panelWidth}
         dragHandleRef={dragHandleRef}

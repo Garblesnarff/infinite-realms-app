@@ -12,6 +12,7 @@ import { HandoutCard } from '@/features/game-session/components/handouts/Handout
 
 export interface JournalTabContentProps {
   sessionId?: string;
+  endSession?: { campaignId: string | null; starterCampaignId: string | null };
   sessionNotesId: string;
   localSessionNotes: string;
   setLocalSessionNotes: (notes: string) => void;
@@ -30,6 +31,7 @@ export interface JournalTabContentProps {
  */
 export const JournalTabContent: React.FC<JournalTabContentProps> = ({
   sessionId,
+  endSession,
   sessionNotesId,
   localSessionNotes,
   setLocalSessionNotes,
@@ -108,7 +110,7 @@ export const JournalTabContent: React.FC<JournalTabContentProps> = ({
         </Button>
       </section>
 
-      {sessionId && <StorySoFarLink sessionId={sessionId} />}
+      {sessionId && <StorySoFarLink sessionId={sessionId} endSession={endSession} />}
     </div>
   );
 };

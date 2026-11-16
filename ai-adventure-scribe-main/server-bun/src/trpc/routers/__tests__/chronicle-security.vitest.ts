@@ -201,6 +201,47 @@ describe('Chronicles Security', () => {
       expect(selectArg).toHaveProperty('sessionNumber');
     });
 
+    it('getBySessionId reports the campaign list rank when the stored number is 1 (#1557)', async () => {
+      const caller = chroniclesRouter.createCaller(mockCtx);
+      const makeQb = (results: unknown[]) => {
+        const qb: any = {
+          from: vi.fn().mockReturnThis(),
+          leftJoin: vi.fn().mockReturnThis(),
+          where: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockReturnThis(),
+          _results: results,
+          then: vi.fn(function (this: any, resolve: any) {
+            return Promise.resolve(this._results).then(resolve);
+          }),
+        };
+        return qb;
+      };
+      const chronicleQb = makeQb([
+        {
+          id: 'chronicle-123',
+          sessionId: mockSessionId,
+          sessionNumber: 1,
+          campaignId: '323e4567-e89b-12d3-a456-426614174000',
+        },
+      ]);
+      const siblings = Array.from({ length: 9 }, (_, index) => ({
+        id: index === 8 ? mockSessionId : `sibling-${index}`,
+        createdAt: new Date(Date.UTC(2026, 7, index + 1)),
+      }));
+      const siblingQb = makeQb(siblings);
+      const selects = [chronicleQb, siblingQb];
+      let n = 0;
+      mockCtx.db.select.mockImplementation(() => selects[n++] ?? siblingQb);
+
+      const result = await caller.getBySessionId({ sessionId: mockSessionId });
+
+      expect(result?.sessionNumber).toBe(9);
+      expect(result).not.toHaveProperty('campaignId');
+      expect(siblingQb.where).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'eq', b: '323e4567-e89b-12d3-a456-426614174000' }),
+      );
+    });
+
     it('generate should filter by userId when checking existing chronicles', async () => {
       const caller = chroniclesRouter.createCaller(mockCtx);
 

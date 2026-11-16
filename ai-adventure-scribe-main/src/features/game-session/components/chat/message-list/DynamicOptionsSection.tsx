@@ -84,7 +84,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
         return (
           <div
             data-testid="no-action-options-notice"
-            className="mt-2 text-sm text-muted-foreground italic"
+            className="mt-2 text-sm text-muted-foreground italic [body.ir-table-look_&]:!text-[color:var(--ir-ink)]"
           >
             No suggested actions for this beat — the story is open, so tell the DM what you do.
           </div>

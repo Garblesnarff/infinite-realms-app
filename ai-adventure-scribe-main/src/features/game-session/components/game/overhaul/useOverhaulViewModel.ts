@@ -30,6 +30,7 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { getExperienceForLevel } from '@/data/levelProgression';
 import { isHostileParticipantType } from '@/services/combat/engine-result-card';
+import { healthConditionForCombat } from '@/services/combat/health-condition';
 import { participantVital } from '@/services/combat/participant-vital';
 import { getCharacterSheetHitPoints } from '@/utils/character/character-sheet-hit-points';
 import { formatClassWithSubclass } from '@/utils/character/class-with-subclass';
@@ -465,6 +466,30 @@ export function buildCharacterSheet(
   };
 }
 
+function enemyConditionFromHitPoints(participant: {
+  participantType: string;
+  healthCondition?: CombatantVM['healthCondition'];
+  currentHitPoints: number;
+  maxHitPoints: number;
+  isUnconscious?: boolean;
+  isDead?: boolean;
+}): CombatantVM['healthCondition'] {
+  if (
+    !isHostileParticipantType(participant.participantType) ||
+    !Number.isFinite(participant.currentHitPoints) ||
+    !Number.isFinite(participant.maxHitPoints) ||
+    participant.maxHitPoints <= 0
+  ) {
+    return participant.healthCondition;
+  }
+  return healthConditionForCombat(
+    participant.currentHitPoints,
+    participant.maxHitPoints,
+    participant.isUnconscious !== true,
+    participant.isDead === true,
+  );
+}
+
 export function buildEncounterCombatants(
   encounter: CombatEncounter | null,
   turn: ReturnType<typeof summarizeCombatTurn>,
@@ -479,7 +504,7 @@ export function buildEncounterCombatants(
       // #876: the tracker shows the same facing name as the feed and turn bar.
       name: p.displayName ?? p.name,
       isEnemy: isHostileParticipantType(p.participantType),
-      healthCondition: p.healthCondition,
+      healthCondition: enemyConditionFromHitPoints(p),
       isActive: encounter?.currentTurnParticipantId === p.id,
       vitalState: participantVital(p),
       state: turn?.actors.find((actor) => actor.id === p.id)?.state,

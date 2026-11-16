@@ -21,6 +21,7 @@ import {
   campaigns,
   characters,
 } from '../../../../db/schema/index';
+import { getCampaignSessionNumbers } from '../../../../shared/campaign-session-numbers.js';
 import { planHasPaidFeatures } from '../../../../shared/plan-features.js';
 import { logger } from '../../lib/logger.js';
 import { resolveUserPlanStrict } from '../../lib/user-plan.js';
@@ -108,6 +109,7 @@ export const chroniclesRouter = router({
           shareToken: sessionChronicles.shareToken,
           shareEnabled: sessionChronicles.shareEnabled,
           sessionNumber: gameSessions.sessionNumber,
+          campaignId: gameSessions.campaignId,
           generatedAt: sessionChronicles.generatedAt,
           errorMessage: sessionChronicles.errorMessage,
           createdAt: sessionChronicles.createdAt,
@@ -142,7 +144,36 @@ export const chroniclesRouter = router({
       const row = rows[0];
       // If the left join resulted in nulls for chronicle columns, then no chronicle exists for this user/session.
       // We check for the presence of the chronicle ID to determine existence.
-      return row.id ? row : null;
+      if (!row.id) return null;
+
+      // The sessions list numbers by creation order. The stored session_number
+      // is a continuation value and is often 1, so the chronicle eyebrow uses
+      // the same rank as the list.
+      let sessionNumber = row.sessionNumber ?? null;
+      if (row.campaignId) {
+        const siblings = await ctx.db
+          .select({
+            id: gameSessions.id,
+            createdAt: gameSessions.createdAt,
+          })
+          .from(gameSessions)
+          .where(eq(gameSessions.campaignId, row.campaignId));
+        const numbers = getCampaignSessionNumbers(
+          siblings.map((session) => ({
+            id: session.id,
+            created_at:
+              session.createdAt instanceof Date
+                ? session.createdAt.toISOString()
+                : session.createdAt
+                  ? String(session.createdAt)
+                  : null,
+          })),
+        );
+        sessionNumber = numbers.get(row.sessionId) ?? sessionNumber;
+      }
+
+      const { campaignId: _campaignId, ...chronicle } = row;
+      return { ...chronicle, sessionNumber };
     }),
 
   /**
