@@ -345,3 +345,10 @@ describe('#1067 follow-up: the stream is normalized too', () => {
     expect(held.includes('[HP')).toBe(false);
   });
 });
+
+describe('extractPartialNarration #1562 half-arrived tracker line', () => {
+  it('omits a half-arrived tracker fragment from the preview', () => {
+    const acc = '{"text": "The king smiles and says nothing more. [HP 28/28] [Cl"}';
+    expect(extractPartialNarration(acc)).toBe('The king smiles and says nothing more.');
+  });
+});
