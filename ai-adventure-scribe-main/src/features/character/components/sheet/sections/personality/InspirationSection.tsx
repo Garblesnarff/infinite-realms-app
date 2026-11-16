@@ -1,4 +1,4 @@
-import { Calendar, Lightbulb, Star } from 'lucide-react';
+import { Calendar, Lightbulb } from 'lucide-react';
 import React from 'react';
 
 import type { InspirationEntry } from '@/features/character/hooks/use-personality-manager';
@@ -6,6 +6,7 @@ import type { InspirationEntry } from '@/features/character/hooks/use-personalit
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { InspirationCoinFace } from '@/features/game-session/components/game/InspirationCoin';
 
 interface InspirationSectionProps {
   hasInspiration: boolean;
@@ -34,20 +35,10 @@ export const InspirationSection: React.FC<InspirationSectionProps> = ({
       <CardContent>
         <div className="space-y-4">
           <div className="flex items-center gap-4">
-            <div
-              className={`w-16 h-16 rounded-full border-4 flex items-center justify-center ${
-                hasInspiration
-                  ? 'border-infinite-gold bg-infinite-gold/15'
-                  : 'border-border bg-muted'
-              }`}
-              aria-label={label}
-            >
-              <Star
-                className={`w-8 h-8 ${hasInspiration ? 'text-infinite-gold animate-pulse' : 'text-muted-foreground'}`}
-              />
-            </div>
+            <InspirationCoinFace hasInspiration={hasInspiration} readOnly ariaLabel={label}>
+              {label}
+            </InspirationCoinFace>
             <div className="flex-1">
-              <h3 className="font-medium">{label}</h3>
               <p className="text-sm text-muted-foreground">
                 {hasInspiration
                   ? 'You can use inspiration to gain advantage on one ability check, attack roll, or saving throw.'
