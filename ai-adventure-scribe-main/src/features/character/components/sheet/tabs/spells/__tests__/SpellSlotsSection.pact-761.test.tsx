@@ -1,7 +1,8 @@
 /**
  * #761: a single-class Warlock's slots are pact slots. 2014 Pact Magic recovers
- * on a short or long rest. The pact block offers the sheet's short rest
- * (SheetRestControls). Other casters keep Long Rest and get no pact label.
+ * on a short or long rest, so the pact block offers both sheet rests, Short Rest
+ * first. With no sheet updater, that block keeps the Long Rest button. Other
+ * casters keep Long Rest and get no pact label.
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -100,7 +101,7 @@ describe('#761 pact slot label on the sheet', () => {
     vi.mocked(restApi.longRest).mockResolvedValue({ ...shortRestResult, restType: 'long' });
   });
 
-  it('labels the pact row and does not offer Long Rest', () => {
+  it('labels the pact row and shows the rests it is given, Short Rest first', () => {
     render(
       <TooltipProvider>
         <SpellSlotsSection
@@ -109,15 +110,49 @@ describe('#761 pact slot label on the sheet', () => {
           resting={false}
           restError={null}
           pactSlotLevel={1}
-          pactRest={<button type="button">Short Rest</button>}
+          pactRest={
+            <>
+              <button type="button">Short Rest</button>
+              <button type="button">Long Rest</button>
+            </>
+          }
         />
       </TooltipProvider>,
     );
     expect(
       screen.getByText('Pact Magic slots recover on a short or long rest'),
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Short Rest' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /long rest/i })).toBeNull();
+    const names = screen.getAllByRole('button').map((button) => button.textContent);
+    expect(names).toEqual(['Short Rest', 'Long Rest']);
+    expect(
+      screen.queryByRole('button', { name: 'Recover all spell slots and sorcery points' }),
+    ).toBeNull();
+  });
+
+  it('a pact row with no sheet rest falls back to Long Rest', async () => {
+    const user = userEvent.setup();
+    const longRest = vi.fn().mockResolvedValue(undefined);
+    render(
+      <TooltipProvider>
+        <SpellSlotsSection
+          spellSlots={{ 1: { total: 2, used: 0 } }}
+          longRest={longRest}
+          resting={false}
+          restError={null}
+          pactSlotLevel={1}
+        />
+      </TooltipProvider>,
+    );
+    expect(
+      screen.getByText('Pact Magic slots recover on a short or long rest'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /short rest/i })).toBeNull();
+    const button = screen.getByRole('button', {
+      name: 'Recover all spell slots and sorcery points',
+    });
+    expect(button).toHaveTextContent('Long Rest');
+    await user.click(button);
+    expect(longRest).toHaveBeenCalledTimes(1);
   });
 
   it('a caster without pact slots keeps Long Rest', async () => {
@@ -143,7 +178,7 @@ describe('#761 pact slot label on the sheet', () => {
     ).toHaveTextContent('Long Rest');
   });
 
-  it('a level-2 warlock takes the sheet short rest', async () => {
+  it('a level-2 warlock takes a short rest and a long rest, Short Rest first', async () => {
     const user = userEvent.setup();
     render(
       <SpellsTab
@@ -156,12 +191,43 @@ describe('#761 pact slot label on the sheet', () => {
     expect(
       screen.getByText('Pact Magic slots recover on a short or long rest'),
     ).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /long rest/i })).toBeNull();
-    await user.click(screen.getByRole('button', { name: /short rest/i }));
+    const restButtons = screen
+      .getAllByRole('button')
+      .filter((button) => /^(Short|Long) Rest$/.test((button.textContent ?? '').trim()));
+    expect(restButtons.map((button) => button.textContent?.trim())).toEqual([
+      'Short Rest',
+      'Long Rest',
+    ]);
+    expect(
+      screen.queryByRole('button', { name: 'Recover all spell slots and sorcery points' }),
+    ).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Short Rest' }));
     await waitFor(() => {
       expect(restApi.shortRest).toHaveBeenCalledWith('char-warlock', 0);
     });
-    expect(restApi.longRest).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Long Rest' }));
+    await waitFor(() => {
+      expect(restApi.longRest).toHaveBeenCalledWith('char-warlock');
+    });
+  });
+
+  it('a warlock with no sheet updater keeps Long Rest', async () => {
+    const user = userEvent.setup();
+    render(<SpellsTab character={makeCaster('warlock', 'Test Warlock', 2)} onUpdate={() => {}} />);
+    await user.click(await screen.findByRole('tab', { name: /spell slots/i }, { timeout: 4000 }));
+    expect(
+      screen.getByText('Pact Magic slots recover on a short or long rest'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Short Rest' })).toBeNull();
+    const button = screen.getByRole('button', {
+      name: 'Recover all spell slots and sorcery points',
+    });
+    expect(button).toHaveTextContent('Long Rest');
+    await user.click(button);
+    await waitFor(() => {
+      expect(restApi.longRest).toHaveBeenCalledWith('char-warlock');
+    });
+    expect(restApi.shortRest).not.toHaveBeenCalled();
   });
 
   it('a warlock with hit dice gets the same short-rest prompt', async () => {

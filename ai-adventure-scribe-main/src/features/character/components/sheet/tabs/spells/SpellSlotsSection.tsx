@@ -15,8 +15,8 @@ interface SpellSlotsSectionProps {
   /** #761: the single-class Warlock pact slot level, when the character has pact slots. */
   pactSlotLevel?: number | null;
   /**
-   * #761: the sheet's short rest, shown instead of Long Rest when this row is Pact Magic.
-   * The control is SheetRestControls, the same action the Main and Features tabs use.
+   * #761: both sheet rests for a Pact Magic row (Short Rest first). When this is
+   * missing, the block keeps the Long Rest button below.
    */
   pactRest?: React.ReactNode;
 }
@@ -37,7 +37,7 @@ const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
           <Circle className="w-5 h-5 text-infinite-purple" aria-hidden="true" />
           Spell Slots
         </CardTitle>
-        {pact ? (
+        {pact && pactRest ? (
           pactRest
         ) : (
           <Tooltip>

@@ -20,7 +20,7 @@ import { getAlwaysPreparedSpells } from '@/utils/character/subclass-grants';
 interface SpellsTabProps {
   character: Character;
   onUpdate: () => void;
-  /** Persists a rest. Pact Magic uses it for the same short rest as the Main and Features tabs. */
+  /** Persists a rest. Pact Magic uses it for the same short and long rest as the Main and Features tabs. */
   onCharacterUpdate?: CharacterSheetUpdateFn;
 }
 
@@ -195,7 +195,7 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate, onCharacterU
                     <SheetRestControls
                       character={character}
                       onUpdate={onCharacterUpdate}
-                      offers="short"
+                      offers="both"
                     />
                   ) : null
                 }

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 
 interface RestActionButtonsProps {
   onRest: (restType: 'short' | 'long') => void;
-  /** Which rests to show. The default is both. Pact Magic offers short only. */
+  /** Which rests to show. The default is both, Short Rest first. */
   offers?: ReadonlyArray<'short' | 'long'>;
 }
 
