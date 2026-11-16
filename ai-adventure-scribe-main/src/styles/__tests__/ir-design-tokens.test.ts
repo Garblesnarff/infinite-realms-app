@@ -320,4 +320,34 @@ describe('DM bubble contrast (#1562)', () => {
     expect(ratio(hex('#eaeefa'), hex('#161e30'))).toBeGreaterThanOrEqual(4.5);
     expect(ratio(hex('#eaeefa'), hex('#2d2a5f'))).toBeGreaterThanOrEqual(4.5);
   });
+
+  it('does not force ink onto a descendant that paints its own background', () => {
+    const style = document.createElement('style');
+    style.textContent = `${tableCss}\n.own-bg-chip { background: #161e30; color: #eaeefa; }`;
+    document.head.appendChild(style);
+    document.body.classList.add('ir-table-look');
+
+    try {
+      const bubble = document.createElement('article');
+      bubble.className = 'ir-parchment dm-bubble';
+      const chip = document.createElement('span');
+      chip.className = 'own-bg-chip';
+      chip.textContent = 'chip';
+      bubble.appendChild(chip);
+      document.body.appendChild(bubble);
+
+      const chipStyle = window.getComputedStyle(chip);
+      const color = chipStyle.color;
+      const background = chipStyle.backgroundColor;
+
+      // Ink must not be forced onto the painted descendant.
+      expect(color).not.toBe('rgb(42, 26, 12)');
+      expect(ratio(rgba(color), rgba(background))).toBeGreaterThanOrEqual(4.5);
+
+      bubble.remove();
+    } finally {
+      document.body.classList.remove('ir-table-look');
+      style.remove();
+    }
+  });
 });
