@@ -55,6 +55,16 @@ if (hasRealDb && !process.env.DATABASE_URL && process.env.TEST_DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
 }
 
+if (hasRealDb) {
+  // The plan lookup reads lib/env, which refuses to open a connection until
+  // these are set. A missing one is a thrown lookup, which the route reports
+  // as 503 PLAN_UNAVAILABLE.
+  process.env.CORS_ORIGIN ??= 'http://localhost:5173';
+  process.env.WORKOS_API_KEY ??= 'test-workos-api-key';
+  process.env.WORKOS_CLIENT_ID ??= 'test-workos-client-id';
+  process.env.PORT ??= '8888';
+}
+
 describeWithDb('always-prepared subclass spells (#1555)', () => {
   let db: ReturnType<typeof realDb>;
   let request: (body: unknown) => Promise<Response>;
