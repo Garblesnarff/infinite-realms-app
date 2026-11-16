@@ -19,10 +19,8 @@ import { claimAttackSwing } from './attack-budget-service.js';
 import { logAttackResolution, participantSlug } from './attack-telemetry.js';
 import { appliesBlessDie } from './bless-rider.js';
 import { mookGroupAttackBonus } from './boss-moves.js';
-import { CombatEncounterService } from './combat-encounter-service.js';
 import { resolveAttackRules } from './combat-rules.js';
 import {
-  readActionSurgeMark,
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
   claimTurnReactionAndResolve,
@@ -1258,6 +1256,8 @@ export class CombatAttackService {
       });
     }
     if (!bonusAction && participant.actionUsed) {
+      const { CombatEncounterService } = await import('./combat-encounter-service.js');
+      const { readActionSurgeMark } = await import('./combat-turn-resources.js');
       const state = await CombatEncounterService.getCombatState(encounterId, userId);
       const surge = await readActionSurgeMark(state.encounter.sessionId);
       if (

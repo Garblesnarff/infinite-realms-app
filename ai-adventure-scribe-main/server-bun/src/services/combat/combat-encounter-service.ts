@@ -997,7 +997,9 @@ export class CombatEncounterService {
         : budget.plan.payment === 'remaining'
           ? budget.plan.budget.remaining + 1
           : budget.plan.budget.capacity;
-      Object.assign(currentParticipant, { attackSwingsRemaining: remaining });
+      if (currentParticipant.actionUsed && remaining > 0) {
+        Object.assign(currentParticipant, { attackSwingsRemaining: remaining });
+      }
     }
 
     // Build turn order entries in-memory
