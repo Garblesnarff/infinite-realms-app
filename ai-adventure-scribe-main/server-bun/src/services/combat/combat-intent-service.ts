@@ -204,6 +204,19 @@ export type CombatIntent =
       direction: 'convert' | 'create';
       slotLevel: number;
       expectedVersion: number;
+    }
+  /**
+   * #1554: Lay on Hands, an Action. `targetId` is the actor (self) or an adjacent player-side
+   * ally. `amount` heals that many HP from the pool; `cure` (5 points) cures a disease or
+   * poison instead and takes no amount. The engine draws the pool in resolveLayOnHands.
+   */
+  | {
+      type: 'lay_on_hands';
+      actorId: string;
+      targetId: string;
+      amount?: number;
+      cure?: 'disease' | 'poison';
+      expectedVersion: number;
     };
 
 export type CombatActionSource = 'player' | 'dm';
@@ -245,6 +258,8 @@ const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
   // #1147: an item spend is the player's own resource, same as a feature spend.
   'use_item',
   'flexible_casting',
+  // #1554: a Lay on Hands is the player's own pool, same as a feature spend.
+  'lay_on_hands',
 ]);
 
 /**
@@ -320,6 +335,8 @@ export const VERSIONED_INTENT_TYPES = new Set([
   'use_item',
   // #1233: a Flexible Casting intent spends the player's sorcery points and slot ledger.
   'flexible_casting',
+  // #1554: a Lay on Hands intent draws the player's pool and the target's HP.
+  'lay_on_hands',
 ]);
 
 /**
@@ -570,7 +587,7 @@ async function recordFeatureActionFact(
   sessionId: string,
   state: CombatState,
   actorId: string,
-  kind: 'second_wind' | 'action_surge' | 'divine_sense' | 'flexible_casting',
+  kind: 'second_wind' | 'action_surge' | 'divine_sense' | 'flexible_casting' | 'lay_on_hands',
   result: SecondWindResult | ActionSurgeResult | { message: string },
 ): Promise<void> {
   const participant = state.participants.find((p) => p.id === actorId);
@@ -583,7 +600,9 @@ async function recordFeatureActionFact(
         ? `${label} used Action Surge and has one additional action this turn.`
         : kind === 'flexible_casting'
           ? `${label} used Flexible Casting. ${(result as { message: string }).message}`
-          : `${label} used Divine Sense. ${(result as { message: string }).message}`;
+          : kind === 'lay_on_hands'
+            ? `${label} used Lay on Hands. ${(result as { message: string }).message}`
+            : `${label} used Divine Sense. ${(result as { message: string }).message}`;
   await recordDmTacticalFact(sessionId, fact, {
     kind,
     actorSlug: engineSlugForParticipant(map, actorId, label),
@@ -1986,6 +2005,93 @@ export async function executeCombatIntent(
         'divine_sense',
         result as { message: string },
       );
+    } else if (intent.type === 'lay_on_hands') {
+      // #1554: Lay on Hands is an Action. The claim wraps the draw, so every refusal below
+      // (not on the sheet, out of reach, not enough in the pool, already at full health)
+      // throws inside the claim: the Action is refunded and neither the pool nor HP moves.
+      const actorCharacterId = (actor as unknown as { characterId?: string | null }).characterId;
+      const lohMap = await loadActiveTacticalMap(encounter.sessionId);
+      const actorMapEntity = lohMap?.entities.find((entity) => entity.id === intent.actorId);
+      result = await claimTurnActionAndResolve(
+        intent.actorId,
+        encounterId,
+        intent.expectedVersion,
+        async () => {
+          if (!actorCharacterId) {
+            throw new BusinessLogicError("Lay on Hands is not on this character's sheet", {
+              reason: 'feature_not_on_sheet',
+              featureName: 'Lay on Hands',
+            });
+          }
+          const { layOnHandsPool, resolveLayOnHands } =
+            await import('../progression/paladin-features-service.js');
+          const targetIsSelf = intent.targetId === intent.actorId;
+          const target = state.participants.find((p) => p.id === intent.targetId) as
+            | { id: string; characterId?: string | null; participantType?: string }
+            | undefined;
+          const targetEntity = lohMap?.entities.find((entity) => entity.id === intent.targetId);
+          const inReach =
+            targetIsSelf ||
+            (target?.participantType === 'player' &&
+              Boolean(target.characterId) &&
+              Boolean(actorMapEntity) &&
+              Boolean(targetEntity) &&
+              getDistance(actorMapEntity!, targetEntity!) <= 5);
+          if (!inReach || (!targetIsSelf && !target?.characterId)) {
+            throw new BusinessLogicError('Lay on Hands reaches yourself or an adjacent ally', {
+              reason: 'lay_on_hands_target_out_of_reach',
+              targetId: intent.targetId,
+            });
+          }
+          const pool = await layOnHandsPool(actorCharacterId, userId);
+          if (
+            !intent.cure &&
+            intent.amount !== undefined &&
+            pool &&
+            intent.amount > pool.remaining
+          ) {
+            throw new BusinessLogicError(
+              `Lay on Hands has ${pool.remaining} of ${pool.max} points left, not ${intent.amount}`,
+              {
+                reason: 'insufficient_pool',
+                poolRemaining: pool.remaining,
+                poolMax: pool.max,
+              },
+            );
+          }
+          const spent = await resolveLayOnHands({
+            characterId: actorCharacterId,
+            userId,
+            participantId: intent.targetId,
+            encounterId,
+            targetCharacterId: targetIsSelf ? actorCharacterId : (target!.characterId as string),
+            ...(intent.cure ? { cure: intent.cure } : {}),
+            ...(!intent.cure && intent.amount !== undefined ? { amount: intent.amount } : {}),
+            sessionId: encounter.sessionId,
+            context: intent.cure ? `lay-on-hands-cure-${intent.cure}` : 'lay-on-hands',
+          });
+          if (!spent.ok) {
+            throw new BusinessLogicError(spent.message, {
+              reason: spent.reason,
+              poolRemaining: spent.poolRemaining,
+              poolMax: spent.poolMax,
+            });
+          }
+          if (!intent.cure && spent.healed === 0) {
+            throw new BusinessLogicError('That target is already at full health', {
+              reason: 'target_full_hp',
+            });
+          }
+          return spent;
+        },
+      );
+      await recordFeatureActionFact(
+        encounter.sessionId,
+        state,
+        intent.actorId,
+        'lay_on_hands',
+        result as { message: string },
+      );
     } else if (intent.type === 'use_item') {
       // #1147: drinking a healing consumable costs the Action. The claim wraps the
       // resolution, so a refusal inside (not owned, not a consumable, no healing
@@ -2603,6 +2709,67 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         sense.row.usesRemaining > 0
       ) {
         actions.push({ type: 'divine_sense', label: 'Divine Sense' });
+      }
+      // #1554: Lay on Hands is an Action. One chip per reachable target (self, then adjacent
+      // player-side allies), each with the engine's amount: the missing HP, capped at the pool.
+      // A cure chip per target (5 points) for poison and for disease.
+      const { layOnHandsPool } = await import('../progression/paladin-features-service.js');
+      const loh = await layOnHandsPool(actor.characterId, userId);
+      if (!actor.actionUsed && loh && loh.remaining > 0) {
+        const lohEntities = map?.entities ?? [];
+        const actorEntity = lohEntities.find((entity) => entity.id === actor.id);
+        const reachable = state.participants.filter((participant) => {
+          const p = participant as unknown as {
+            id: string;
+            participantType?: string;
+            characterId?: string | null;
+            isActive?: boolean;
+          };
+          if (p.id === actor.id) return true;
+          if (p.participantType !== 'player' || !p.characterId || p.isActive === false)
+            return false;
+          const entity = lohEntities.find((candidate) => candidate.id === p.id);
+          return Boolean(actorEntity && entity && getDistance(actorEntity, entity) <= 5);
+        });
+        for (const target of reachable) {
+          const t = target as unknown as {
+            id: string;
+            name?: string;
+            displayName?: string | null;
+            status?: { currentHp?: number };
+            currentHitPoints?: number;
+            maxHitPoints?: number;
+            maxHp?: number;
+          };
+          const current = t.status?.currentHp ?? t.currentHitPoints;
+          const max = t.maxHp ?? t.maxHitPoints ?? 0;
+          const missing = typeof current === 'number' ? Math.max(0, max - current) : 0;
+          const name = t.displayName ?? t.name ?? 'ally';
+          const who = t.id === actor.id ? 'yourself' : name;
+          const amount = Math.min(missing, loh.remaining);
+          if (amount > 0) {
+            actions.push({
+              type: 'lay_on_hands',
+              targetId: t.id,
+              amount,
+              label: `Lay on Hands — heal ${who} ${amount} HP`,
+            });
+          }
+          if (loh.remaining >= 5) {
+            actions.push({
+              type: 'lay_on_hands',
+              targetId: t.id,
+              cure: 'poison',
+              label: `Lay on Hands — cure poison on ${who} (5 points)`,
+            });
+            actions.push({
+              type: 'lay_on_hands',
+              targetId: t.id,
+              cure: 'disease',
+              label: `Lay on Hands — cure disease on ${who} (5 points)`,
+            });
+          }
+        }
       }
     }
     // #1414: Inspiration is not an action in 5e — it arms advantage on the next roll — so

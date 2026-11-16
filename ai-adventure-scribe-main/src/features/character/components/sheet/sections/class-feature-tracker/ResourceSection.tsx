@@ -1,6 +1,8 @@
 import { Zap } from 'lucide-react';
 import React from 'react';
 
+import { LayOnHandsControl } from './LayOnHandsControl';
+
 import type { CharacterResources } from '@/types/combat';
 
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +16,8 @@ interface ResourceSectionProps {
    * static class-table values below — those never changed after a rest.
    */
   hitDice?: { total: number; remaining: number; type: string };
+  /** #1554: the character the Lay on Hands control spends for. Absent, the row is read-only. */
+  characterId?: string;
 }
 
 /**
@@ -22,6 +26,7 @@ interface ResourceSectionProps {
 export const ResourceSection: React.FC<ResourceSectionProps> = ({
   characterResources,
   hitDice,
+  characterId,
 }) => {
   return (
     <Card>
@@ -296,6 +301,12 @@ export const ResourceSection: React.FC<ResourceSectionProps> = ({
                 className="h-2"
                 aria-label="Lay on Hands remaining"
               />
+              {characterId && (
+                <LayOnHandsControl
+                  characterId={characterId}
+                  pool={characterResources.layOnHands.current}
+                />
+              )}
             </div>
           </div>
         )}

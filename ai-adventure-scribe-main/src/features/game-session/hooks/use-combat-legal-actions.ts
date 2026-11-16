@@ -62,6 +62,10 @@ export type LegalAction = {
   spellId?: string;
   /** #1147: the inventory item a Use chip spends. */
   itemId?: string;
+  /** #1554: a Lay on Hands chip: the target participant, the engine's heal amount or a cure. */
+  targetId?: string;
+  amount?: number;
+  cure?: 'disease' | 'poison';
   /**
    * #1206: the slot a leveled spell chip spends: the lowest remaining slot at or above the
    * spell's level. Absent when the engine has no slot ledger for the character. For a
@@ -441,6 +445,40 @@ export function useCombatLegalActions(input: {
               actorId,
               direction: action.direction,
               slotLevel: action.slotLevel,
+            },
+            'player',
+            Date.now(),
+            'action_bar',
+          );
+          window.dispatchEvent(new CustomEvent('character-state-updated'));
+          const parts = [
+            ...formatCombatActionParts(
+              { actor_id: actorId, action_type: action.type },
+              result,
+              roster,
+            ),
+            ...formatWakeParts(result),
+          ];
+          await sendEngineNotice(input.onSendMessage, {
+            text: parts.map((part) => part.line).join('\n\n'),
+            cards: parts.map((part) => part.card),
+          });
+          await refreshCombatState();
+        } else if (action.type === 'lay_on_hands') {
+          // #1554: Lay on Hands is an Action. The chip carries the engine's amount (or the cure) and
+          // its target; the engine draws the pool, prints its line, and the turn settles like an
+          // attack, because the Action is spent.
+          if (!action.targetId || (action.amount === undefined && !action.cure)) {
+            setError('That option could not be used. Nothing was spent.');
+            return;
+          }
+          const result = await executeAuthoritativeCombatIntent(
+            encounter.id,
+            {
+              type: 'lay_on_hands',
+              actorId,
+              targetId: action.targetId,
+              ...(action.cure ? { cure: action.cure } : { amount: action.amount }),
             },
             'player',
             Date.now(),

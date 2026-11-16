@@ -13,6 +13,8 @@ export const LEGAL_ACTION_TYPES = [
   'second_wind',
   'action_surge',
   'divine_sense',
+  /** #1554: Lay on Hands, an Action: heal self or an adjacent ally from the pool, or cure 5 points. */
+  'lay_on_hands',
   'divine_smite',
   /** #1233: Flexible Casting, a bonus action: convert a slot to sorcery points, or create a slot. */
   'flexible_casting',

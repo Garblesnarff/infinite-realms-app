@@ -164,6 +164,20 @@ const itemFields = {
   itemId: t.String({ minLength: 1, maxLength: 255 }),
 };
 
+/**
+ * #1554: Lay on Hands, an Action. `targetId` is the actor or an adjacent player-side ally; `amount`
+ * is HP from the pool (the engine caps and refuses it), and `cure` spends 5 points on a disease or
+ * poison instead. Versioned, because it mutates the pool and the target's HP.
+ */
+const layOnHandsFields = {
+  type: t.Literal('lay_on_hands'),
+  actorId: participantId,
+  actionId,
+  targetId: participantId,
+  amount: t.Optional(t.Integer({ minimum: 1, maximum: 999 })),
+  cure: t.Optional(t.Union([t.Literal('disease'), t.Literal('poison')])),
+};
+
 const playerCombatIntentSchema = t.Union([
   ...unversionedIntentVariants,
   t.Object({ ...attackFields, expectedVersion }),
@@ -173,6 +187,7 @@ const playerCombatIntentSchema = t.Union([
   t.Object({ ...fighterFeatureFields, expectedVersion }),
   t.Object({ ...itemFields, expectedVersion }),
   t.Object({ ...flexibleCastingFields, expectedVersion }),
+  t.Object({ ...layOnHandsFields, expectedVersion }),
 ]);
 
 /**
@@ -192,6 +207,7 @@ const dmCombatIntentSchema = t.Union([
   t.Object({ ...fighterFeatureFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...itemFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...flexibleCastingFields, expectedVersion: t.Optional(expectedVersion) }),
+  t.Object({ ...layOnHandsFields, expectedVersion: t.Optional(expectedVersion) }),
 ]);
 
 /**

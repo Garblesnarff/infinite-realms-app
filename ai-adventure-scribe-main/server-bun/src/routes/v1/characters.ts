@@ -994,6 +994,61 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
     { body: t.Object({}) },
   )
 
+  /**
+   * POST /v1/characters/:id/lay-on-hands
+   *
+   * #1554: Lay on Hands out of combat, on the sheet's resource row. The engine draws the pool
+   * and heals (or cures) through resolveLayOnHands, the same resolver the combat intent uses.
+   * An amount the pool cannot cover, or a target already at full HP, is refused with 422 and
+   * nothing is spent. Out of combat the target is the paladin or a campaign character id.
+   */
+  .post(
+    '/:id/lay-on-hands',
+    async ({ params, body, user }) => {
+      const { layOnHandsPool, resolveLayOnHands } =
+        await import('../../services/progression/paladin-features-service.js');
+      const userId = user!.userId;
+      const cure = body.cure;
+      if (!cure && body.amount !== undefined) {
+        const pool = await layOnHandsPool(params.id, userId);
+        if (pool && body.amount > pool.remaining) {
+          throw new BusinessLogicError(
+            `Lay on Hands has ${pool.remaining} of ${pool.max} points left, not ${body.amount}`,
+            { reason: 'insufficient_pool', poolRemaining: pool.remaining, poolMax: pool.max },
+          );
+        }
+      }
+      const result = await resolveLayOnHands({
+        characterId: params.id,
+        userId,
+        ...(cure ? { cure } : {}),
+        ...(!cure && body.amount !== undefined ? { amount: body.amount } : {}),
+        ...(body.targetCharacterId ? { targetCharacterId: body.targetCharacterId } : {}),
+        context: cure ? `lay-on-hands-cure-${cure}` : 'lay-on-hands-sheet',
+      });
+      if (!result.ok) {
+        throw new BusinessLogicError(result.message, {
+          reason: result.reason,
+          poolRemaining: result.poolRemaining,
+          poolMax: result.poolMax,
+        });
+      }
+      if (!cure && result.healed === 0) {
+        throw new BusinessLogicError('That target is already at full health', {
+          reason: 'target_full_hp',
+        });
+      }
+      return result;
+    },
+    {
+      body: t.Object({
+        amount: t.Optional(t.Integer({ minimum: 1, maximum: 999 })),
+        cure: t.Optional(t.Union([t.Literal('disease'), t.Literal('poison')])),
+        targetCharacterId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+      }),
+    },
+  )
+
   .put(
     '/:id/stats',
     async ({ params, body, user }) => {

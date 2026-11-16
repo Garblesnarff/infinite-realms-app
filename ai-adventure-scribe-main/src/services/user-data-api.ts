@@ -756,6 +756,18 @@ export const userDataApi = {
       body: JSON.stringify({}),
     }),
   /**
+   * #1554: Lay on Hands out of combat. The body is the shared sheet body (see
+   * shared/test-fixtures/lay-on-hands-intent.ts); the engine draws the pool and heals.
+   */
+  layOnHands: (
+    characterId: string,
+    body: { amount?: number; cure?: 'disease' | 'poison'; targetCharacterId?: string },
+  ): Promise<{ healed: number; poolRemaining: number; poolMax: number; message: string }> =>
+    request(`/v1/characters/${encodeURIComponent(characterId)}/lay-on-hands`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  /**
    * #214: 2014 5e temp HP do not stack — the server keeps the higher of the
    * current and the new value.
    */

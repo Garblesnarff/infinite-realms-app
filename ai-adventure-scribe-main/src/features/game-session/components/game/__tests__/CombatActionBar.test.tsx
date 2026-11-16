@@ -447,6 +447,7 @@ describe('CombatActionBar', () => {
         second_wind: secondWindAction,
         action_surge: actionSurgeAction,
         divine_sense: { type: 'divine_sense', label: 'Divine Sense' },
+        lay_on_hands: { type: 'lay_on_hands', label: 'Lay on Hands', targetId: 'ally', amount: 5 },
         divine_smite: smiteAction,
         // #1233: Flexible Casting rides the More menu, like the other bonus-action options.
         metamagic: {
