@@ -6,7 +6,7 @@ import SpellcastingOverview from './spells/SpellcastingOverview';
 import SpellSlotsSection from './spells/SpellSlotsSection';
 import { useSpells } from './spells/useSpells';
 
-import type { Character } from '@/types/character';
+import type { Character, CharacterSheetUpdateFn } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,17 +14,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { getPactMagicProgression, hasPactMagic } from '@/data/spellcastingFeatures';
+import { SheetRestControls } from '@/features/character/components/sheet/sections/class-feature-tracker/SheetRestControls';
 import { getAlwaysPreparedSpells } from '@/utils/character/subclass-grants';
 
 interface SpellsTabProps {
   character: Character;
   onUpdate: () => void;
+  /** Persists a rest. Pact Magic uses it for the same short rest as the Main and Features tabs. */
+  onCharacterUpdate?: CharacterSheetUpdateFn;
 }
 
 /**
  * Spells tab with spell slot tracking and spell management
  */
-const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
+const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate, onCharacterUpdate }) => {
   // #761: a single-class Warlock's slots are pact slots (the server's pact rows).
   const pactSlotLevel =
     hasPactMagic(character.class?.id ?? '') && (character.classLevels?.length ?? 0) <= 1
@@ -187,6 +190,15 @@ const SpellsTab: React.FC<SpellsTabProps> = ({ character, onUpdate }) => {
                 resting={resting}
                 restError={restError}
                 pactSlotLevel={pactSlotLevel}
+                pactRest={
+                  pactSlotLevel !== null && onCharacterUpdate ? (
+                    <SheetRestControls
+                      character={character}
+                      onUpdate={onCharacterUpdate}
+                      offers="short"
+                    />
+                  ) : null
+                }
               />
             </TabsContent>
           </div>

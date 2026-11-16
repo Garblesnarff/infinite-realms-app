@@ -14,6 +14,11 @@ interface SpellSlotsSectionProps {
   restError: string | null;
   /** #761: the single-class Warlock pact slot level, when the character has pact slots. */
   pactSlotLevel?: number | null;
+  /**
+   * #761: the sheet's short rest, shown instead of Long Rest when this row is Pact Magic.
+   * The control is SheetRestControls, the same action the Main and Features tabs use.
+   */
+  pactRest?: React.ReactNode;
 }
 
 const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
@@ -22,7 +27,9 @@ const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
   resting,
   restError,
   pactSlotLevel = null,
+  pactRest = null,
 }) => {
+  const pact = pactSlotLevel !== null;
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -30,30 +37,26 @@ const SpellSlotsSection: React.FC<SpellSlotsSectionProps> = ({
           <Circle className="w-5 h-5 text-infinite-purple" aria-hidden="true" />
           Spell Slots
         </CardTitle>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              size="sm"
-              onClick={longRest}
-              disabled={resting}
-              aria-label={
-                pactSlotLevel !== null
-                  ? 'Pact Magic slots recover on a short or long rest'
-                  : 'Recover all spell slots and sorcery points'
-              }
-            >
-              {resting ? 'Resting…' : 'Long Rest'}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p>
-              {pactSlotLevel !== null
-                ? 'Pact Magic slots recover on a short or long rest'
-                : 'Recover all spell slots and sorcery points'}
-            </p>
-          </TooltipContent>
-        </Tooltip>
+        {pact ? (
+          pactRest
+        ) : (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                onClick={longRest}
+                disabled={resting}
+                aria-label="Recover all spell slots and sorcery points"
+              >
+                {resting ? 'Resting…' : 'Long Rest'}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Recover all spell slots and sorcery points</p>
+            </TooltipContent>
+          </Tooltip>
+        )}
       </CardHeader>
       <CardContent>
         {restError && (
