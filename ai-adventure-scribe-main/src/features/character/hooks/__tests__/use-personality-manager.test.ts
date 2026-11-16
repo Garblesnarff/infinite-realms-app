@@ -65,95 +65,39 @@ describe('usePersonalityManager', () => {
     expect(result.current.inspirationHistory).toEqual([]);
   });
 
-  describe('toggleInspiration', () => {
-    it('should toggle inspiration on', async () => {
+  describe('inspiration (read-only)', () => {
+    it('does not expose toggleInspiration or awardInspiration', () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
-
-      await act(async () => {
-        await result.current.toggleInspiration();
-      });
-
-      expect(mockOnUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          inspiration: true,
-          personalityIntegration: expect.objectContaining({
-            lastInspiration: '2024-02-20T12:00:00.000Z',
-          }),
-        }),
-      );
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Inspiration Gained!',
-        }),
-      );
+      expect((result.current as any).toggleInspiration).toBeUndefined();
+      expect((result.current as any).awardInspiration).toBeUndefined();
     });
 
-    it('should toggle inspiration off', async () => {
+    it('hasInspiration follows character.inspiration', () => {
       const inspiredCharacter = { ...mockCharacter, inspiration: true };
-      const { result } = renderHook(() => usePersonalityManager(inspiredCharacter, mockOnUpdate));
-
-      await act(async () => {
-        await result.current.toggleInspiration();
-      });
-
-      expect(mockOnUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          inspiration: false,
-        }),
+      const { result: r1 } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
+      const { result: r2 } = renderHook(() =>
+        usePersonalityManager(inspiredCharacter, mockOnUpdate),
       );
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Inspiration Used',
-        }),
-      );
+      expect(r1.current.hasInspiration).toBe(false);
+      expect(r2.current.hasInspiration).toBe(true);
     });
-  });
 
-  describe('awardInspiration', () => {
-    it('should award inspiration and add to history', async () => {
+    it('addPersonalityElement payload has no inspiration key', async () => {
       const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
-
       await act(async () => {
-        await result.current.awardInspiration('New Trigger', 'ideal', 'New Description');
+        await result.current.addPersonalityElement('trait', 'New Trait');
       });
-
-      expect(mockOnUpdate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          inspiration: true,
-          personalityIntegration: expect.objectContaining({
-            inspirationHistory: expect.arrayContaining([
-              mockCharacter.personalityIntegration.inspirationHistory[0],
-              {
-                date: '2024-02-20T12:00:00.000Z',
-                trigger: 'New Trigger',
-                source: 'ideal',
-                description: 'New Description',
-              },
-            ]),
-          }),
-        }),
-      );
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Inspiration Awarded!',
-        }),
-      );
+      const payload = mockOnUpdate.mock.calls[0][0];
+      expect(payload).not.toHaveProperty('inspiration');
     });
 
-    it('should not award inspiration if already present', async () => {
-      const inspiredCharacter = { ...mockCharacter, inspiration: true };
-      const { result } = renderHook(() => usePersonalityManager(inspiredCharacter, mockOnUpdate));
-
+    it('removePersonalityElement payload has no inspiration key', async () => {
+      const { result } = renderHook(() => usePersonalityManager(mockCharacter, mockOnUpdate));
       await act(async () => {
-        await result.current.awardInspiration('Trigger', 'trait', 'Description');
+        await result.current.removePersonalityElement('trait', 0);
       });
-
-      expect(mockOnUpdate).not.toHaveBeenCalled();
-      expect(mockToast).toHaveBeenCalledWith(
-        expect.objectContaining({
-          variant: 'destructive',
-        }),
-      );
+      const payload = mockOnUpdate.mock.calls[0][0];
+      expect(payload).not.toHaveProperty('inspiration');
     });
   });
 
