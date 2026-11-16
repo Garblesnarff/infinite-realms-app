@@ -260,3 +260,19 @@ describe('design token wiring (#2258)', () => {
     document.body.removeChild(containerReduced);
   });
 });
+
+describe('DM bubble contrast (#1562)', () => {
+  const tableCss = read('../ir-table.css');
+
+  it('keeps the Table bubble on parchment with ink text (>=4.5:1)', () => {
+    expect(ratio(hex('#2a1a0c'), hex('#f2e7cd'))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(hex('#2a1a0c'), hex('#dcc79c'))).toBeGreaterThanOrEqual(4.5);
+    expect(tableCss).toMatch(/body\.ir-table-look\s+\.dm-bubble/);
+    expect(tableCss).toContain('var(--ir-ink)');
+  });
+
+  it('keeps overhaul narrative ink legible on the navy bubble (>=4.5:1)', () => {
+    expect(ratio(hex('#eaeefa'), hex('#161e30'))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio(hex('#eaeefa'), hex('#2d2a5f'))).toBeGreaterThanOrEqual(4.5);
+  });
+});
