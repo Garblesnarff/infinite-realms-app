@@ -27,6 +27,7 @@ type ServerParticipant = {
   maxHp: number;
   speed: number;
   actionUsed?: boolean;
+  attackSwingsRemaining?: number;
   bonusActionUsed?: boolean;
   reactionUsed?: boolean;
   isActive?: boolean;
@@ -77,6 +78,7 @@ export function mapAuthoritativeCombat(payload: AuthoritativeCombatPayload): Com
         temporaryHitPoints: participant.status?.tempHp ?? 0,
         speed: participant.speed,
         actionTaken: participant.actionUsed ?? false,
+        attackSwingsRemaining: participant.attackSwingsRemaining,
         bonusActionTaken: participant.bonusActionUsed ?? false,
         reactionTaken: participant.reactionUsed ?? false,
         isUnconscious: participant.status ? !participant.status.isConscious : false,

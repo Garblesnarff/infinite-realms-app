@@ -1060,9 +1060,13 @@ export class CombatAttackService {
         throw new InternalServerError('Attack succeeded but damage application failed', { error });
       }
     };
-    return isReaction
-      ? claimTurnReactionAndResolve(attackerId, encounterId, resolveAttackRoll)
-      : claimTurnActionAndResolve(attackerId, encounterId, expectedVersion, resolveAttackRoll);
+    if (isReaction) return claimTurnReactionAndResolve(attackerId, encounterId, resolveAttackRoll);
+    if (attackerData.participant.participantType === 'player') {
+      const { claimAttackSwing } = await import('./attack-budget-service.js');
+      await claimAttackSwing(encounterId, attackerId, expectedVersion);
+      return resolveAttackRoll();
+    }
+    return claimTurnActionAndResolve(attackerId, encounterId, expectedVersion, resolveAttackRoll);
   }
 
   /**
@@ -1224,7 +1228,10 @@ export class CombatAttackService {
    */
   async proposeSpellAttack(
     encounterId: string,
-    input: Pick<SpellAttackInput, 'casterId' | 'targetIds' | 'spellId' | 'spellName' | 'slotLevel'>,
+    input: Pick<
+      SpellAttackInput,
+      'casterId' | 'targetIds' | 'spellId' | 'spellName' | 'slotLevel' | 'metamagic'
+    >,
     userId: string,
   ): Promise<{
     spellId: string;
@@ -1241,6 +1248,33 @@ export class CombatAttackService {
   }> {
     const { spell, spellRules, seatedAcByTarget, spellAttackBonus, casterData } =
       await this.prepareSpellCast(encounterId, input, userId);
+    const bonusAction =
+      spell.castingTime.toLowerCase().includes('bonus action') || input.metamagic === 'quickened';
+    const participant = casterData.participant as typeof casterData.participant & {
+      actionUsed?: boolean;
+      bonusActionUsed?: boolean;
+    };
+    if (bonusAction && participant.bonusActionUsed) {
+      throw new BusinessLogicError('Bonus action already used this turn', {
+        participantId: input.casterId,
+      });
+    }
+    if (!bonusAction && participant.actionUsed) {
+      const { CombatEncounterService } = await import('./combat-encounter-service.js');
+      const { readActionSurgeMark } = await import('./combat-turn-resources.js');
+      const state = await CombatEncounterService.getCombatState(encounterId, userId);
+      const surge = await readActionSurgeMark(state.encounter.sessionId);
+      if (
+        !surge ||
+        surge.encounterId !== encounterId ||
+        surge.participantId !== input.casterId ||
+        surge.round !== state.encounter.currentRound
+      ) {
+        throw new BusinessLogicError('Action already used this turn', {
+          participantId: input.casterId,
+        });
+      }
+    }
     const rules = spellRules.get(input.targetIds[0]);
     return {
       spellId: spell.id,

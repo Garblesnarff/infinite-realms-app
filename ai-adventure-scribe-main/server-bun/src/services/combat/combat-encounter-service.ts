@@ -989,6 +989,18 @@ export class CombatEncounterService {
     // Filter active participants and determine current turn in-memory
     const activeParticipants = participants.filter((p) => p.isActive);
     const currentParticipant = activeParticipants[encounter.currentTurnOrder] || null;
+    if (currentParticipant?.participantType === 'player' && currentParticipant.characterId) {
+      const { attackBudgetPlan } = await import('./attack-budget-service.js');
+      const budget = await attackBudgetPlan(encounterId, currentParticipant.id);
+      const remaining = !budget.plan
+        ? 0
+        : budget.plan.payment === 'remaining'
+          ? budget.plan.budget.remaining + 1
+          : budget.plan.budget.capacity;
+      if (currentParticipant.actionUsed && remaining > 0) {
+        Object.assign(currentParticipant, { attackSwingsRemaining: remaining });
+      }
+    }
 
     // Build turn order entries in-memory
     const turnOrder: TurnOrderEntry[] = InitiativeMechanics.getTurnOrderEntries(

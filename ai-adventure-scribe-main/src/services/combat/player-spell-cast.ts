@@ -124,6 +124,7 @@ export async function askPlayerForSpellCast(
         targetIds: action.target_ids,
         ...(action.spell_id ? { spellId: action.spell_id } : {}),
         spellName: spell.name,
+        ...(action.metamagic ? { metamagic: action.metamagic } : {}),
         ...(typeof action.slot_level === 'number' && action.slot_level >= 1
           ? { slotLevel: action.slot_level }
           : {}),

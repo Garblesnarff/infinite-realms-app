@@ -76,6 +76,7 @@ export function createCombatParticipant(
     isUnconscious: partial.isUnconscious,
     ...(partial.isActive === false ? { isActive: false } : {}),
     actionTaken: partial.actionTaken || false,
+    attackSwingsRemaining: partial.attackSwingsRemaining,
     bonusActionTaken: partial.bonusActionTaken || false,
     reactionTaken: partial.reactionTaken || false,
     movementUsed: partial.movementUsed || 0,

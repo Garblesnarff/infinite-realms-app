@@ -28,6 +28,7 @@ export interface TurnActor {
   currentHitPoints?: number;
   /** Whether this actor already spent their action this turn (#85 copy: "action used"). */
   actionTaken: boolean;
+  attackSwingsRemaining?: number;
   state: TurnActorState;
 }
 
@@ -97,6 +98,7 @@ export function summarizeCombatTurn(
       vitalState: participantVital(participant),
       currentHitPoints: participant.currentHitPoints,
       actionTaken: participant.actionTaken === true,
+      attackSwingsRemaining: participant.attackSwingsRemaining,
       state: isDown
         ? 'down'
         : index < activeIndex
@@ -223,6 +225,10 @@ export function turnBarSub(
 ): string {
   const { active, round } = summary;
   if (actorIsDying(active, playerDown)) return '0 HP · roll a death saving throw';
+  if (active.isPlayer && (active.attackSwingsRemaining ?? 0) > 0) {
+    const remaining = active.attackSwingsRemaining!;
+    return `Round ${round} · ${remaining} ${remaining === 1 ? 'attack' : 'attacks'} remaining`;
+  }
   if (active.isPlayer && active.actionTaken) {
     return `Round ${round} · action used · bonus action and move left`;
   }

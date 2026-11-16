@@ -68,6 +68,7 @@ export interface CombatParticipant {
 
   // Turn tracking
   actionTaken: boolean;
+  attackSwingsRemaining?: number;
   bonusActionTaken: boolean;
   reactionTaken: boolean;
   movementUsed: number;
