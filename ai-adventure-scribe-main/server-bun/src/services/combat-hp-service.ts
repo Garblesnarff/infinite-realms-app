@@ -42,7 +42,7 @@ import {
 } from './combat/hp-data-access.js';
 import { HPMechanics } from './combat/hp-mechanics.js';
 
-import type { CombatResolvedVitals } from './character-vitals-service.js';
+import type { CombatResolvedVitals, VitalsTx } from './character-vitals-service.js';
 import type { CombatParticipantStatus, CombatDamageLog } from '../../../db/schema/index';
 import type {
   DamageResult,
@@ -91,6 +91,8 @@ interface WriteThroughRequest {
    * already recorded finds the Action spent and rolls nothing (#2518).
    */
   spendAction?: boolean;
+  /** Caller's transaction; when present, writes run on it instead of opening their own. */
+  tx?: VitalsTx;
 }
 
 /**
@@ -212,6 +214,7 @@ export class CombatHPService {
       character,
       expectedDying,
       spendAction,
+      tx: callerTx,
     } = request;
 
     const spend = async (writer: StatusWriter): Promise<void> => {
@@ -234,13 +237,25 @@ export class CombatHPService {
     if (!characterId) {
       if (!spendAction) {
         await this.updateParticipantStatus(
-          db,
+          callerTx ?? db,
           participantId,
           encounterId,
           status,
           userId,
           expectedDying,
         );
+        return;
+      }
+      if (callerTx) {
+        await this.updateParticipantStatus(
+          callerTx,
+          participantId,
+          encounterId,
+          status,
+          userId,
+          expectedDying,
+        );
+        await spend(callerTx);
         return;
       }
       await db.transaction(async (tx) => {
@@ -254,6 +269,34 @@ export class CombatHPService {
         );
         await spend(tx);
       });
+      return;
+    }
+
+    if (callerTx) {
+      const mirrored = await CharacterVitalsService.mirrorFromCombat(
+        callerTx,
+        characterId,
+        character,
+      );
+      if (!mirrored) {
+        logger.warn({
+          msg: 'COMBAT_HP_MIRROR_SKIPPED',
+          reason: 'no character_stats row',
+          encounterId,
+          participantId,
+          characterId,
+        });
+      }
+
+      await this.updateParticipantStatus(
+        callerTx,
+        participantId,
+        encounterId,
+        status,
+        userId,
+        expectedDying,
+      );
+      await spend(callerTx);
       return;
     }
 
@@ -448,6 +491,7 @@ export class CombatHPService {
     healingAmount: number,
     _sourceDescription?: string,
     userId?: string,
+    tx?: VitalsTx,
   ): Promise<HealingResult> {
     if (healingAmount < 0) {
       throw new ValidationError('Healing amount must be non-negative', { healingAmount });
@@ -487,6 +531,7 @@ export class CombatHPService {
         deathSavesSuccesses,
         deathSavesFailures,
       },
+      tx,
     });
 
     if (healingAmount > 0) {
