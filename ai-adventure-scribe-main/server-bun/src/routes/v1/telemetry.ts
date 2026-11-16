@@ -44,7 +44,14 @@ const ALLOWED_CLIENT_FAILURE_KINDS = [
   'react_error_boundary',
   'client_turn_failure',
   'auth_refresh_check_skipped',
+  'narrated_death_without_engine',
 ] as const;
+
+/** Shadow counts: logged as CLIENT_FAILURE for the count, never paged to Slack (#468). */
+const LOG_ONLY_CLIENT_KINDS: readonly string[] = [
+  'auth_refresh_check_skipped',
+  'narrated_death_without_engine',
+];
 type ClientFailureKind = (typeof ALLOWED_CLIENT_FAILURE_KINDS)[number];
 
 const isAllowedKind = (kind: string): kind is ClientFailureKind =>
@@ -131,7 +138,7 @@ export const telemetryRoutes = new Elysia({ prefix: '/v1/telemetry' })
 
     // Scheduled refresh decisions are diagnostic breadcrumbs, not failures:
     // keep them in the structured log without paging the alert channel.
-    if (payload.kind !== 'auth_refresh_check_skipped') {
+    if (!LOG_ONLY_CLIENT_KINDS.includes(payload.kind)) {
       alert(payload.kind, {
         sessionId: payload.sessionId,
         error: payload.error ?? payload.message,
