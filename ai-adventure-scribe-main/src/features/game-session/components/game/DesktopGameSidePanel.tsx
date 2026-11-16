@@ -29,6 +29,7 @@ export interface DesktopGameSidePanelProps {
   setIsExpanded: (expanded: boolean) => void;
   onToggle: () => void;
   endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  isFallen?: boolean;
   sessionNotesId: string;
   localSessionNotes: string;
   setLocalSessionNotes: (notes: string) => void;
@@ -63,6 +64,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
     setIsExpanded,
     onToggle,
     endSession,
+    isFallen,
     sessionNotesId,
     localSessionNotes,
     setLocalSessionNotes,
@@ -216,6 +218,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                     <JournalTabContent
                       sessionId={sessionId}
                       endSession={endSession}
+                      isFallen={isFallen}
                       sessionNotesId={sessionNotesId}
                       localSessionNotes={localSessionNotes}
                       setLocalSessionNotes={setLocalSessionNotes}

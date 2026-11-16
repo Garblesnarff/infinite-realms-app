@@ -26,6 +26,7 @@ interface GameRightPanelProps {
   combatMode: boolean;
   spellCastHandlerRef: SpellCastHandlerRef;
   onToggle: () => void;
+  isFallen?: boolean;
 }
 
 export const GameRightPanel: React.FC<GameRightPanelProps> = memo(
@@ -39,12 +40,14 @@ export const GameRightPanel: React.FC<GameRightPanelProps> = memo(
     combatMode,
     spellCastHandlerRef,
     onToggle,
+    isFallen,
   }) => {
     if (!isCollapsed) {
       return (
         <div className="w-full md:w-auto min-h-0 transition-all duration-300">
           <GameSidePanel
             sessionId={sessionId}
+            isFallen={isFallen}
             initialTab={initialTab}
             initialTabRequest={initialTabRequest}
             sessionData={sessionData}

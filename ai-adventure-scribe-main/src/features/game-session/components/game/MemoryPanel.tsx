@@ -34,6 +34,7 @@ interface GameSidePanelProps extends MemoryPanelProps {
   initialTabRequest?: number;
   isCollapsed: boolean;
   onToggle: () => void;
+  isFallen?: boolean;
 }
 
 /**
@@ -52,6 +53,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
     initialTabRequest,
     isCollapsed,
     onToggle,
+    isFallen,
   }) => {
     // Get contexts
     const { memories = [], isLoading: memoriesLoading } = useMemoryContext();
@@ -191,6 +193,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
                 <GameSidePanelContent
                   sessionId={sessionId}
                   endSession={chronicleEndSession}
+                  isFallen={isFallen}
                   sessionData={sessionData}
                   updateGameSessionState={updateGameSessionState}
                   combatMode={combatMode}
@@ -262,6 +265,7 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
       <DesktopGameSidePanel
         sessionId={sessionId}
         endSession={chronicleEndSession}
+        isFallen={isFallen}
         panelRef={panelRef}
         panelWidth={panelWidth}
         dragHandleRef={dragHandleRef}
