@@ -13,6 +13,7 @@ import {
   closeRealDb,
   describeWithDb,
   hasRealDb,
+  grantLegendPlan,
   importWithRealDb,
   realDb,
   testId,
@@ -83,6 +84,7 @@ describeWithDb('always-prepared subclass spells (#1555)', () => {
 
   beforeAll(async () => {
     userId = testId('user-1555');
+    await grantLegendPlan(userId);
     db = realDb();
     const pipeline = await importWithRealDb(async () => {
       const { createRequestPipelineApp } = await import('../../http-pipeline.js');
