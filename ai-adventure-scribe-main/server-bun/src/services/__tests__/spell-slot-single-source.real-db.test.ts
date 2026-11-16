@@ -106,6 +106,13 @@ const creationPipeline = await importWithRealDb(async () => {
   return createRequestPipelineApp().use(charactersRoutes);
 });
 
+// #761: the sheet posts { hitDiceToSpend } and {} through the real rest routes.
+const restPipeline = await importWithRealDb(async () => {
+  const { createRequestPipelineApp } = await import('../../http-pipeline.js');
+  const { restRoutes } = await import('../../routes/v1/rest.js');
+  return createRequestPipelineApp().use(restRoutes);
+});
+
 // #420 FIX round: the subclass route must grant slots at once, so the test
 // goes through the real POST /v1/class-features/characters/:id/subclass.
 const subclassPipeline = await importWithRealDb(async () => {
@@ -450,6 +457,48 @@ describeWithDb('creation seeds slot rows from the single slot source (#270)', ()
     expect(spentOnLong.success).toBe(true);
     expect(await totals(id)).toEqual([[1, 1, 1]]);
     await RestService!.takeLongRest(id, creationUserId);
+    expect(await totals(id)).toEqual([[1, 1, 0]]);
+  });
+
+  it('POST short and long rest each restore a warlock’s spent pact slot (#761)', async () => {
+    const id = await createViaRoute(testId('wlkRoute'), 'Warlock', 1);
+    const spend = async (): Promise<void> => {
+      const spent = await SpellSlotsService!.useSpellSlot(
+        { characterId: id, spellName: 'Hex', spellLevel: 1, slotLevelUsed: 1 },
+        creationUserId,
+      );
+      expect(spent.success).toBe(true);
+      expect(await totals(id)).toEqual([[1, 1, 1]]);
+    };
+    const postRest = async (
+      kind: 'short' | 'long',
+      body: Record<string, number>,
+    ): Promise<Record<string, { max: number; current: number }>> => {
+      const response = await restPipeline.handle(
+        new Request(`http://localhost/v1/rest/characters/${id}/${kind}`, {
+          method: 'POST',
+          headers: {
+            authorization: 'Bearer <redacted>',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        }),
+      );
+      expect(response.status).toBe(200);
+      const payload = (await response.json()) as {
+        spellSlots: Record<string, { max: number; current: number }>;
+      };
+      return payload.spellSlots;
+    };
+
+    await spend();
+    expect(await postRest('short', { hitDiceToSpend: 0 })).toEqual({
+      '1': { max: 1, current: 1 },
+    });
+    expect(await totals(id)).toEqual([[1, 1, 0]]);
+
+    await spend();
+    expect(await postRest('long', {})).toEqual({ '1': { max: 1, current: 1 } });
     expect(await totals(id)).toEqual([[1, 1, 0]]);
   });
 

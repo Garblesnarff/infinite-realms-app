@@ -424,9 +424,9 @@ describe('stripTrackerLine #1556 tracker run in any position', () => {
   });
 
   test('strips the issue line when it sits in the middle', () => {
-    expect(
-      stripTrackerLine(`The bout starts.\n\n${ISSUE_1556_LINE}\n\nWhat do you do?`),
-    ).toBe('The bout starts.\n\nWhat do you do?');
+    expect(stripTrackerLine(`The bout starts.\n\n${ISSUE_1556_LINE}\n\nWhat do you do?`)).toBe(
+      'The bout starts.\n\nWhat do you do?',
+    );
   });
 
   test('strips the issue line when it trails the narration', () => {
@@ -453,5 +453,17 @@ describe('normalizeReplyNarration #1556 tracker run in any position', () => {
     };
     normalizeReplyNarration(envelope);
     expect(envelope.text).toBe('The bout ends. What do you do?');
+  });
+});
+
+describe('normalizePartialNarration #1562 half-arrived tracker line', () => {
+  const story = 'The king smiles and says nothing more.';
+
+  test('omits a half-arrived tracker line fragment', () => {
+    expect(normalizePartialNarration(story + ' [HP 28/28] [Cl')).toBe(story);
+  });
+
+  test('strips the complete tracker line once it arrives', () => {
+    expect(normalizePartialNarration(story + ' [HP 28/28] [Clues found: none]')).toBe(story);
   });
 });

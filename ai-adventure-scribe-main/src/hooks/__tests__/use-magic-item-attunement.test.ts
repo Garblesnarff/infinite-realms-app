@@ -216,6 +216,20 @@ describe('useMagicItemAttunement', () => {
     });
   });
 
+  it('returns the server reason when attuneItem rejects', async () => {
+    (restApi.attuneItem as any).mockRejectedValueOnce(
+      new Error('Attunement needs a short rest spent on this item'),
+    );
+    const { result } = renderHook(() =>
+      useMagicItemAttunement(mockCharacter, mockOnCharacterUpdate),
+    );
+    const response = await act(async () => {
+      return await result.current.attuneToItem('magic-sword');
+    });
+    expect(response.success).toBe(false);
+    expect(response.message).toBe('Attunement needs a short rest spent on this item');
+  });
+
   describe('removeAttunement', () => {
     it('should fail if item is not found in inventory', async () => {
       const { result } = renderHook(() =>

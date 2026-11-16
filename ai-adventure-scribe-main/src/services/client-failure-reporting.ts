@@ -124,3 +124,16 @@ export function installGlobalClientFailureReporting(): () => void {
   installedCleanup = cleanup;
   return cleanup;
 }
+
+/**
+ * #468 shadow count: one `narrated_death_without_engine` report per shadow hit. The body carries
+ * the session id and the pattern names only, never the reply text (#468 strategist FIX).
+ */
+export function reportNarrationShadowHit(
+  kind: 'narrated_death_without_engine',
+  sessionId: string | undefined,
+  patterns: string[],
+): void {
+  const names = patterns.join(',');
+  userDataApi.reportClientFailure(kind, sessionId, names, { message: names });
+}

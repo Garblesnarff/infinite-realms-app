@@ -52,7 +52,16 @@ export const useMagicItemAttunement = (
           return { success: false, message: 'Character must be saved before attuning an item' };
         }
 
-        await restApi.attuneItem(character.id, item.equipmentId ?? itemId);
+        try {
+          await restApi.attuneItem(character.id, item.equipmentId ?? itemId);
+        } catch (error) {
+          logger.error('Error attuning to item:', error);
+          const message =
+            error instanceof Error && typeof error.message === 'string' && error.message.length > 0
+              ? error.message
+              : 'Failed to attune to item';
+          return { success: false, message };
+        }
 
         // Create updated character with attuned item
         const updatedCharacter = {

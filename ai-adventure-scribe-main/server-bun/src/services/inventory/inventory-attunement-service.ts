@@ -5,7 +5,7 @@
  * claims a rest the rest route already recorded. It does not heal.
  */
 
-import { and, asc, eq, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, gte, isNotNull, isNull, or } from 'drizzle-orm';
 
 import { attunedNameCount, ownedBy, siblingName, tokenMatch } from './attunement-token.js';
 import { db } from '../../../../db/client';
@@ -25,6 +25,7 @@ type AttunableItem = {
   id: string;
   requiresAttunement: boolean | null;
   isAttuned: boolean | null;
+  createdAt: Date | null;
 };
 
 function columns(table: AttunableTable) {
@@ -44,6 +45,9 @@ function columns(table: AttunableTable) {
 function refuse(currentAttunedCount: number, error: string): AttunementResult {
   return { success: false, currentAttunedCount, maxAttunedCount: MAX_ATTUNED_ITEMS, error };
 }
+
+/** A transaction handle from `db.transaction`. */
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export class InventoryAttunementService {
   /** Sheet attunements. Story-only grants stay off this list until Part B. */
@@ -86,19 +90,38 @@ export class InventoryAttunementService {
       );
     }
 
-    if (!(await this.claimShortRest(characterId, item.id))) {
-      return refuse(attunedCount, 'Attunement needs a short rest spent on this item');
+    const itemCreatedAt = (item as AttunableItem).createdAt ?? null;
+
+    let updated: AttunedRecord | undefined;
+    try {
+      await db.transaction(async (tx) => {
+        const claimed = await this.claimShortRest(characterId, item.id, itemCreatedAt, tx);
+        if (!claimed) {
+          throw new Error('__no_rest__');
+        }
+        const result = await this.setAttuned(table, item.id, characterId, userId, true, false, tx);
+        if (!result) {
+          throw new Error('__update_failed__');
+        }
+        updated = result;
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === '__no_rest__') {
+        return refuse(attunedCount, 'Attunement needs a short rest spent on this item');
+      }
+      if (error instanceof Error && error.message === '__update_failed__') {
+        return refuse(attunedCount, 'Failed to attune to item');
+      }
+      throw error;
     }
 
-    const updated = await this.setAttuned(table, item.id, characterId, userId, true);
     if (!updated) {
-      await this.releaseShortRest(characterId, item.id);
       return refuse(attunedCount, 'Failed to attune to item');
     }
 
     return {
       success: true,
-      attunedItem: updated,
+      attunedItem: updated as AttunedRecord,
       currentAttunedCount: attunedCount + 1,
       maxAttunedCount: MAX_ATTUNED_ITEMS,
     };
@@ -128,38 +151,37 @@ export class InventoryAttunementService {
     return equipment ?? inventory ?? null;
   }
 
-  private static async claimShortRest(characterId: string, itemId: string): Promise<boolean> {
-    const [rest] = await db
-      .select({ id: restEvents.id })
+  private static async claimShortRest(
+    characterId: string,
+    itemId: string,
+    itemCreatedAt: Date | null,
+    executor: DbTx = db as any,
+  ): Promise<boolean> {
+    const conditions = [
+      eq(restEvents.characterId, characterId),
+      eq(restEvents.restType, 'short'),
+      eq(restEvents.interrupted, false),
+      isNotNull(restEvents.completedAt),
+      isNull(restEvents.notes),
+    ];
+    if (itemCreatedAt) {
+      conditions.push(gte(restEvents.completedAt, itemCreatedAt));
+    }
+
+    const [rest] = await executor
+      .select({ id: restEvents.id, completedAt: restEvents.completedAt, notes: restEvents.notes })
       .from(restEvents)
-      .where(
-        and(
-          eq(restEvents.characterId, characterId),
-          eq(restEvents.restType, 'short'),
-          eq(restEvents.interrupted, false),
-          isNotNull(restEvents.completedAt),
-          isNull(restEvents.notes),
-        ),
-      )
-      .orderBy(asc(restEvents.completedAt))
+      .where(and(...conditions))
+      .orderBy(desc(restEvents.completedAt))
       .limit(1);
     if (!rest) return false;
 
-    const [claimed] = await db
+    const [claimed] = await executor
       .update(restEvents)
       .set({ notes: `attunement:${itemId}`, updatedAt: new Date() })
       .where(and(eq(restEvents.id, rest.id), isNull(restEvents.notes)))
       .returning({ id: restEvents.id });
     return Boolean(claimed);
-  }
-
-  private static async releaseShortRest(characterId: string, itemId: string): Promise<void> {
-    await db
-      .update(restEvents)
-      .set({ notes: null, updatedAt: new Date() })
-      .where(
-        and(eq(restEvents.characterId, characterId), eq(restEvents.notes, `attunement:${itemId}`)),
-      );
   }
 
   private static async findOwnedItem(
@@ -198,6 +220,7 @@ export class InventoryAttunementService {
     userId: string,
     isAttuned: boolean,
     matchToken = false,
+    executor: DbTx = db as any,
   ): Promise<AttunedRecord | undefined> {
     const column = columns(table);
     const other = columns(table === characterEquipment ? inventoryItems : characterEquipment);
@@ -212,7 +235,7 @@ export class InventoryAttunementService {
       itemId,
     );
     const identity = matchToken ? (or(direct, across) ?? direct) : eq(column.id, itemId);
-    const [updated] = await db
+    const [updated] = await executor
       .update(table)
       .set({ isAttuned, updatedAt: new Date() })
       .where(

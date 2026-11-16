@@ -60,10 +60,26 @@ const authedRequest = (body: unknown) =>
     body: JSON.stringify(body),
   });
 
+import { NARRATED_DEATH_SHADOW_REPORT_BODY } from '../../../../../shared/test-fixtures/narration-shadow-telemetry.js';
+
 describe('POST /v1/telemetry/client-failure', () => {
   beforeEach(() => {
     loggedInfo.length = 0;
     alertCalls.length = 0;
+  });
+
+  // #468 shadow count: the exact body the client sends is accepted, logged as a count, and does
+  // not page the alert channel (LOG_ONLY_CLIENT_KINDS in telemetry.ts).
+  it('accepts the #468 shadow body exactly as the client sends it, logs it, and does not page', async () => {
+    const response = await app.handle(authedRequest(NARRATED_DEATH_SHADOW_REPORT_BODY));
+    expect(response.status).toBe(204);
+    const line = loggedInfo.find((entry) => entry.msg === 'CLIENT_FAILURE');
+    expect(line).toMatchObject({
+      kind: 'narrated_death_without_engine',
+      sessionId: 'sess-468-fixture',
+      message: 'you_die',
+    });
+    expect(alertCalls).toHaveLength(0);
   });
 
   it('no bearer and no body returns 401 (auth runs before body validation, #2120)', async () => {
