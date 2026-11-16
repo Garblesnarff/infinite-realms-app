@@ -58,14 +58,17 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
   const successes = printedTally?.successes ?? player?.deathSaves.successes ?? 0;
   const failures = printedTally?.failures ?? player?.deathSaves.failures ?? 0;
 
+  // The key reads the snapshot, not the printed tally. Recording a tally must not look like a new
+  // turn: the auto-send below fires once per key, so a changed key before the refresh moves the
+  // turn would send a second death save (#906).
   const turnKey =
     encounter && player && vital === 'dying' && isOwnTurn
       ? [
           encounter.id,
           encounter.currentRound,
           encounter.currentTurnParticipantId,
-          successes,
-          failures,
+          player.deathSaves.successes,
+          player.deathSaves.failures,
         ].join(':')
       : null;
   const sentKeyRef = React.useRef<string | null>(null);

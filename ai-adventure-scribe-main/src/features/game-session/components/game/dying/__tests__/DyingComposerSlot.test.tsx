@@ -107,6 +107,57 @@ describe('DyingComposerSlot (#2518)', () => {
     expect(screen.queryByRole('img', { name: '0 of 3 successes, 2 of 3 failures' })).toBeNull();
   });
 
+  it('three successes printed on the card are three on the tray (#906)', () => {
+    vi.mocked(useOptionalCombat).mockReturnValue({
+      state: {
+        isInCombat: true,
+        activeEncounter: board({ holder: 'spider' }),
+        deathSaveTallies: { [DYING_SCHOLAR_PARTICIPANT.id]: { successes: 3, failures: 0 } },
+      },
+    } as never);
+    renderSlot();
+
+    expect(screen.getByRole('img', { name: '3 of 3 successes, 0 of 3 failures' })).toBeTruthy();
+  });
+
+  it('three failures printed on the card are three on the tray (#906)', () => {
+    vi.mocked(useOptionalCombat).mockReturnValue({
+      state: {
+        isInCombat: true,
+        activeEncounter: board({ holder: 'spider' }),
+        deathSaveTallies: { [DYING_SCHOLAR_PARTICIPANT.id]: { successes: 0, failures: 3 } },
+      },
+    } as never);
+    renderSlot();
+
+    expect(screen.getByRole('img', { name: '0 of 3 successes, 3 of 3 failures' })).toBeTruthy();
+  });
+
+  it('recording a printed tally does not re-send the death save before the turn moves (#906)', () => {
+    // Snapshot: the player's turn, 0 successes and 2 failures. The auto-send fires once for it.
+    useCombatNow(board({ holder: 'scholar' }));
+    const { onSendMessage, rerender } = renderSlot();
+    expect(onSendMessage).toHaveBeenCalledTimes(1);
+
+    // The save's card records its tally. The snapshot has not moved yet: the turn is still the
+    // player's. A changed key here would send a second death save.
+    vi.mocked(useOptionalCombat).mockReturnValue({
+      state: {
+        isInCombat: true,
+        activeEncounter: board({ holder: 'scholar' }),
+        deathSaveTallies: { [DYING_SCHOLAR_PARTICIPANT.id]: { successes: 1, failures: 2 } },
+      },
+    } as never);
+    rerender(
+      <DyingComposerSlot onSendMessage={onSendMessage} isProcessing={false} promptOpen={false}>
+        <textarea data-testid="composer" />
+      </DyingComposerSlot>,
+    );
+
+    expect(onSendMessage).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('img', { name: '1 of 3 successes, 2 of 3 failures' })).toBeTruthy();
+  });
+
   it('starts the dying turn on its own when the order reaches the player at 0 HP, once', () => {
     useCombatNow(board({ holder: 'scholar' }));
     const { onSendMessage, rerender } = renderSlot();

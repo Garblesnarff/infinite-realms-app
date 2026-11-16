@@ -13,7 +13,7 @@ import {
 } from './combat-notice';
 import { enforceNarrationGate, gateInventedExtraStrike } from './narration-gate';
 import { SILENT_PLAYER_TURN_SETUP, silentPlayerTurnPayload } from './silent-player-turn';
-import { describeDeathSaveRollLine } from '../../../shared/death-save-lines';
+import { describeDeathSaveRollLine, ownDeathSaveTally } from '../../../shared/death-save-lines';
 import {
   facingName,
   playerFacingWeaponName,
@@ -994,13 +994,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
           Boolean(save) && typeof save.roll === 'number' && Number.isFinite(save.roll),
       );
       // #906: the dying tray shows the tally this save printed, in the same render as its card.
-      const lastSave = rolledSaves[rolledSaves.length - 1];
-      if (lastSave && recordDeathSaveTally) {
-        recordDeathSaveTally(action.actor_id, {
-          successes: lastSave.successes ?? 0,
-          failures: lastSave.failures ?? 0,
-        });
-      }
+      // Only the actor's own saves count: a dying teammate's boundary save can sit in the same result.
+      const ownTally = ownDeathSaveTally(rolledSaves, action.actor_id);
+      if (ownTally && recordDeathSaveTally) recordDeathSaveTally(action.actor_id, ownTally);
       saveParts = saveParts.map((part, index) => {
         const save = rolledSaves[index];
         if (!save) return part;

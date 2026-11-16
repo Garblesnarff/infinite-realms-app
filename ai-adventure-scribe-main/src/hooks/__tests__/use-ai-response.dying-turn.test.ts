@@ -363,9 +363,7 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
         cards?: Array<{ kind: string }>;
       }>;
       expect(blocks[0]).toMatchObject({ source: 'player' });
-      expect(blocks[0].lines.join('\n')).toContain(
-        'Death saving throw: 14 — success (1/3)',
-      );
+      expect(blocks[0].lines.join('\n')).toContain('Death saving throw: 14 — success (1/3)');
       expect(blocks[0].cards?.[0]).toMatchObject({ kind: 'death_save' });
       // No NPC block in the response context anymore — the spider's strike arrives as a
       // server-delivered row.
@@ -496,12 +494,14 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
     });
     // After the fight the hero is awake on 1 HP: the session reads as alive.
     vi.mocked(userDataApi.fetchSessionFallenState).mockResolvedValue(null);
+    const recordDeathSaveTally = vi.fn();
     vi.mocked(useCombat).mockReturnValue({
       state: { isInCombat: true, activeEncounter: encounterAt('scholar') },
       refreshCombatState: vi
         .fn()
         .mockResolvedValueOnce(encounterAt('scholar'))
         .mockResolvedValue(null),
+      recordDeathSaveTally,
     } as any);
 
     const { result } = renderHook(() => useAIResponse());
@@ -526,6 +526,8 @@ describe('useAIResponse: the dying player’s turn (#2518)', () => {
       .flatMap((block) => block.lines)
       .join('\n');
     expect(lines).toContain('the third success. The Scholar is stable.');
+    // #906: the resolution step records the tally its card printed, for the actor only.
+    expect(recordDeathSaveTally).toHaveBeenCalledWith(SCHOLAR.id, { successes: 3, failures: 0 });
     expect(lines).toContain(
       'The Scholar is stable and unconscious for 3 hours (1d4). The Scholar wakes with 1 HP.',
     );
