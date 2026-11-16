@@ -236,7 +236,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
             <div className="space-y-3 animate-in fade-in-0 duration-500">
               <div
                 id={instructionsId}
-                className="text-xs text-muted-foreground text-center mb-3 [body.ir-table-look_&]:text-[color:var(--ir-ink)]"
+                className="text-xs text-muted-foreground text-center mb-3 [body.ir-table-look_&]:!text-[color:var(--ir-ink)]"
               >
                 {instructions ??
                   'What would you like to do? Select an option to submit it immediately.'}
@@ -342,7 +342,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
 
               {/* Help text */}
               {!selectedOption && (
-                <div className="text-xs text-muted-foreground text-center pt-2 opacity-75">
+                <div className="text-xs text-muted-foreground text-center pt-2 opacity-75 [body.ir-table-look_&]:!text-[color:var(--ir-ink)]">
                   Or describe your own action in the chat
                 </div>
               )}

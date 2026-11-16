@@ -82,4 +82,37 @@ describe('buildEncounterCombatants', () => {
     const monster = result.find((c) => c.id === 'm-2');
     expect(monster?.name).toBe('Goblin');
   });
+
+  it('names a living enemy condition from hit points when the wire omitted the word (#1557)', () => {
+    const payload: AuthoritativeCombatPayload = {
+      encounter: {
+        id: 'enc-4',
+        sessionId: 's-1',
+        status: 'active',
+        currentRound: 1,
+        currentTurnOrder: 0,
+        startedAt: '2026-11-15T00:00:00Z',
+      },
+      participants: [
+        {
+          id: 'm-hp',
+          name: 'Wraith',
+          participantType: 'monster',
+          initiative: 10,
+          initiativeModifier: 1,
+          armorClass: 13,
+          maxHp: 20,
+          speed: 30,
+          healthCondition: 'unharmed',
+          status: { currentHp: 6, maxHp: 20, tempHp: 0, isConscious: true },
+        },
+      ],
+    };
+
+    const [foe] = buildEncounterCombatants(mapAuthoritativeCombat(payload), null);
+    expect(foe?.healthCondition).toBe('bloodied');
+    expect(foe).not.toHaveProperty('currentHitPoints');
+    expect(foe).not.toHaveProperty('maxHitPoints');
+    expect(JSON.stringify(foe)).not.toMatch(/\/\s*20/);
+  });
 });

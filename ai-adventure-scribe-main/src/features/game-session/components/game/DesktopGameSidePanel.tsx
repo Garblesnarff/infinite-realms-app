@@ -28,6 +28,7 @@ export interface DesktopGameSidePanelProps {
   isExpanded: boolean;
   setIsExpanded: (expanded: boolean) => void;
   onToggle: () => void;
+  endSession?: { campaignId: string | null; starterCampaignId: string | null };
   sessionNotesId: string;
   localSessionNotes: string;
   setLocalSessionNotes: (notes: string) => void;
@@ -61,6 +62,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
     isExpanded,
     setIsExpanded,
     onToggle,
+    endSession,
     sessionNotesId,
     localSessionNotes,
     setLocalSessionNotes,
@@ -213,6 +215,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                   <ScrollArea className="flex-1 bg-black/10">
                     <JournalTabContent
                       sessionId={sessionId}
+                      endSession={endSession}
                       sessionNotesId={sessionNotesId}
                       localSessionNotes={localSessionNotes}
                       setLocalSessionNotes={setLocalSessionNotes}

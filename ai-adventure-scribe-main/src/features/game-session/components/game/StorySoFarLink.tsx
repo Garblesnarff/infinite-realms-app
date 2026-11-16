@@ -1,10 +1,11 @@
 import { ArrowRight } from 'lucide-react';
 import React, { useState } from 'react';
 
-import ChronicleViewer from '@/components/chronicles/ChronicleViewer';
+import ChronicleDialog from './chronicle/ChronicleDialog';
 
 interface StorySoFarLinkProps {
   sessionId: string;
+  endSession?: { campaignId: string | null; starterCampaignId: string | null };
 }
 
 /**
@@ -13,7 +14,7 @@ interface StorySoFarLinkProps {
  * From the cloud session's commit 5c957c7 (claude/design-implementation-a2qxny),
  * restyled to the Panels board's link card (#1429).
  */
-export const StorySoFarLink: React.FC<StorySoFarLinkProps> = ({ sessionId }) => {
+export const StorySoFarLink: React.FC<StorySoFarLinkProps> = ({ sessionId, endSession }) => {
   const [open, setOpen] = useState(false);
 
   return (
@@ -42,7 +43,14 @@ export const StorySoFarLink: React.FC<StorySoFarLinkProps> = ({ sessionId }) => 
           />
         </button>
       </div>
-      {open && <ChronicleViewer sessionId={sessionId} open onClose={() => setOpen(false)} />}
+      {open && (
+        <ChronicleDialog
+          sessionId={sessionId}
+          open
+          onClose={() => setOpen(false)}
+          endSession={endSession}
+        />
+      )}
     </>
   );
 };

@@ -41,7 +41,27 @@ describe('DynamicOptionsSection no-action-options notice (GP-015, #219)', () => 
       />,
     );
 
-    expect(screen.getByTestId('no-action-options-notice')).toBeInTheDocument();
+    const notice = screen.getByTestId('no-action-options-notice');
+    const inkClass = '[body.ir-table-look_&]:!text-[color:var(--ir-ink)]';
+    const style = document.createElement('style');
+    style.textContent = `
+      body.ir-table-look { --ir-ink: #2a1a0c; --muted-foreground: rgba(234, 238, 250, 0.65); }
+      .text-muted-foreground { color: var(--muted-foreground) !important; }
+      body.ir-table-look .${CSS.escape(inkClass)} { color: var(--ir-ink) !important; }
+    `;
+    document.head.appendChild(style);
+    document.body.classList.add('ir-table-look');
+    expect(notice).toBeInTheDocument();
+    expect(notice).toHaveClass(inkClass);
+    const pale = document.createElement('p');
+    pale.className = 'text-muted-foreground';
+    document.body.appendChild(pale);
+    expect(getComputedStyle(pale).color).toBe('var(--muted-foreground)');
+    expect(getComputedStyle(notice).color).toBe('var(--ir-ink)');
+    expect(getComputedStyle(document.body).getPropertyValue('--ir-ink').trim()).toBe('#2a1a0c');
+    pale.remove();
+    document.body.classList.remove('ir-table-look');
+    style.remove();
   });
 
   it('stays silent for a past message even when the turn had no choices', () => {
