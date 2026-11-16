@@ -49,6 +49,7 @@ import {
   type CombatEntryContext,
 } from '../../services/combat-entry-pipeline.js';
 import { enforceCombatTransitionContract } from '../../services/combat-transition-enforcement.js';
+import { lastCheckLine, reconcileCheckVerdict } from '../../services/dm/check-verdict-prompt.js';
 import { preserveDeclaredToolCheck } from '../../services/dm/declared-tool-check.js';
 import {
   refuseFeaturesCharacterLacks,
@@ -665,14 +666,12 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       }
 
       const {
-        prompt,
         // #352: the stable system block; prepended as the `system` message so
         // the provider caches on the prompt prefix.
         systemPrompt,
         model,
         maxTokens = 1000,
         temperature = 0.8,
-        history,
         provider = 'openrouter',
         requestType: rawRequestType = 'user',
         metrics,
@@ -685,6 +684,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         dmReply: requestedDmReply,
         stream,
       } = body || {};
+      // #1477: the prompt and history can be rewritten to the server's check verdict below.
+      let { prompt, history } = body || {};
       // #782 item 3: the DM reply schema is built server-side from the canonical
       // module. The client no longer sends `responseSchema`; a client-sent value
       // is ignored during the transition (the body type still accepts it).
@@ -931,6 +932,40 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             Math.max(1, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000)),
           );
           return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
+        }
+
+        // #1477: the DM reads the server's verdict for the roll this turn answers (matched by
+        // `dmReply.rollRequestId`), not the client's word on its formatter line. Shadow mode: the
+        // server word is sent; a disagreement or a missing row is logged as a count only. A lookup
+        // that fails keeps the client line and logs the failure.
+        if (sessionId && typeof prompt === 'string' && lastCheckLine(history) !== null) {
+          try {
+            const { SessionMessageService } =
+              await import('../../services/session/session-message-service.js');
+            const rollRequestId = requestedDmReply?.rollRequestId;
+            const rows = rollRequestId
+              ? await SessionMessageService.serverCheckRowsForRequest(
+                  sessionId,
+                  userId,
+                  rollRequestId,
+                )
+              : [];
+            const verdict = reconcileCheckVerdict({ history, prompt, rollRequestId, rows });
+            if (verdict.status === 'no_row') {
+              logger.warn({ msg: 'DM_CHECK_VERDICT_NO_ROW', sessionId, count: 1 });
+            }
+            if (verdict.status === 'disagree') {
+              logger.warn({ msg: 'DM_CHECK_VERDICT_MISMATCH', sessionId, count: 1 });
+              history = verdict.history;
+              prompt = verdict.prompt;
+            }
+          } catch (error) {
+            logger.warn({
+              msg: 'DM_CHECK_VERDICT_LOOKUP_FAILED',
+              sessionId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         }
 
         // #2533: server-counted prompt sections, one line per generate. Below

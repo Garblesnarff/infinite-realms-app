@@ -314,6 +314,64 @@ export class SessionMessageService {
   }
 
   /**
+   * #1477 item 1: the saved narrative check rows this session holds for one roll request. Owner-
+   * scoped: a session the user does not own returns []. The DM prompt matches one of these rows to
+   * the request's roll (`services/dm/check-verdict-prompt.ts`).
+   */
+  static async serverCheckRowsForRequest(
+    sessionId: string,
+    userId: string,
+    rollRequestId: string,
+    limit = 5,
+  ): Promise<Array<{ rollRequestId: string; message: string; verdict: 'SUCCESS' | 'FAIL' }>> {
+    const session = await db.query.gameSessions.findFirst({
+      where: (session, { and, eq }) =>
+        and(eq(session.id, sessionId), getOwnershipCondition(userId, session)),
+      columns: { id: true },
+    });
+    if (!session) return [];
+
+    const rows = await db
+      .select({ message: dialogueHistory.message, context: dialogueHistory.context })
+      .from(dialogueHistory)
+      .where(
+        and(
+          eq(dialogueHistory.sessionId, sessionId),
+          eq(dialogueHistory.speakerType, 'player'),
+          sql`${dialogueHistory.context} @> ${JSON.stringify({ rollRequestId })}::jsonb`,
+          sql`${dialogueHistory.context} @> '{"engineCards":[{"kind":"check"}]}'::jsonb`,
+        ),
+      )
+      .orderBy(desc(dialogueHistory.timestamp))
+      .limit(limit);
+
+    const verdicts: Array<{ rollRequestId: string; message: string; verdict: 'SUCCESS' | 'FAIL' }> =
+      [];
+    for (const row of rows) {
+      const context = row.context as { rollRequestId?: unknown; engineCards?: unknown } | null;
+      const cards = context?.engineCards;
+      const card = Array.isArray(cards)
+        ? cards.find(
+            (entry): entry is { kind: string; badge: { word: string } } =>
+              !!entry &&
+              typeof entry === 'object' &&
+              (entry as { kind?: unknown }).kind === 'check',
+          )
+        : undefined;
+      const word = card?.badge?.word;
+      if (typeof context?.rollRequestId !== 'string') continue;
+      if (word === 'SUCCESS' || word === 'FAIL') {
+        verdicts.push({
+          rollRequestId: context.rollRequestId,
+          message: row.message,
+          verdict: word,
+        });
+      }
+    }
+    return verdicts;
+  }
+
+  /**
    * Add message to session
    */
   static async addMessage(
