@@ -169,7 +169,7 @@ export const chroniclesRouter = router({
                   : null,
           })),
         );
-        sessionNumber = numbers.get(row.sessionId) ?? sessionNumber;
+        sessionNumber = numbers.get(input.sessionId) ?? sessionNumber;
       }
 
       const { campaignId: _campaignId, ...chronicle } = row;
