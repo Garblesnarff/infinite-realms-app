@@ -20,7 +20,6 @@ interface PersonalityManagerProps {
  * PersonalityManager component for managing character personality and inspiration
  */
 const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUpdate }) => {
-  const awardInspirationId = useId();
   const traitId = useId();
   const idealId = useId();
   const bondId = useId();
@@ -35,16 +34,12 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
     setNewBond,
     newFlaw,
     setNewFlaw,
-    inspirationNotes,
-    setInspirationNotes,
     personalityTraits,
     ideals,
     bonds,
     flaws,
     hasInspiration,
     inspirationHistory,
-    toggleInspiration,
-    awardInspiration,
     addPersonalityElement,
     removePersonalityElement,
   } = usePersonalityManager(character, onUpdate);
@@ -52,15 +47,7 @@ const PersonalityManager: React.FC<PersonalityManagerProps> = ({ character, onUp
   return (
     <div className="space-y-6">
       {/* Inspiration System */}
-      <InspirationSection
-        hasInspiration={hasInspiration}
-        toggleInspiration={toggleInspiration}
-        inspirationNotes={inspirationNotes}
-        setInspirationNotes={setInspirationNotes}
-        awardInspiration={awardInspiration}
-        inspirationHistory={inspirationHistory}
-        awardInspirationId={awardInspirationId}
-      />
+      <InspirationSection hasInspiration={hasInspiration} inspirationHistory={inspirationHistory} />
 
       {/* Personality Elements */}
       <Tabs defaultValue="traits" className="w-full">
