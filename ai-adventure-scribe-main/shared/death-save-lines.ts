@@ -171,3 +171,18 @@ function numberWord(value: number): string {
 export function describeWake(name: string, hours: number): string {
   return `${name} is stable and unconscious for ${hours} ${hours === 1 ? 'hour' : 'hours'} (1d4). ${name} wakes with 1 HP.`;
 }
+
+/**
+ * The tally the actor's own last death save printed (#906). A result can carry other creatures'
+ * saves too (a dying teammate's save at a turn boundary), so only saves for `actorId` count.
+ * Null when the actor rolled no save in the result.
+ */
+export function ownDeathSaveTally(
+  saves: ReadonlyArray<{ participantId?: string; successes?: number; failures?: number }>,
+  actorId: string,
+): { successes: number; failures: number } | null {
+  const own = saves.filter((save) => save.participantId === actorId);
+  const last = own[own.length - 1];
+  if (!last) return null;
+  return { successes: last.successes ?? 0, failures: last.failures ?? 0 };
+}

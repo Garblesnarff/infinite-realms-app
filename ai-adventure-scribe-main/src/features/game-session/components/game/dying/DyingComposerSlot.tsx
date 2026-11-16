@@ -52,7 +52,15 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
   );
   const vital = player ? participantVital(player) : 'standing';
   const isOwnTurn = Boolean(player && encounter?.currentTurnParticipantId === player.id);
+  // #906: the tally the engine printed on this player's last death-save card. The snapshot
+  // catches up on the next refresh; until then the pips agree with the card on screen.
+  const printedTally = player ? combat?.state.deathSaveTallies?.[player.id] : undefined;
+  const successes = printedTally?.successes ?? player?.deathSaves.successes ?? 0;
+  const failures = printedTally?.failures ?? player?.deathSaves.failures ?? 0;
 
+  // The key reads the snapshot, not the printed tally. Recording a tally must not look like a new
+  // turn: the auto-send below fires once per key, so a changed key before the refresh moves the
+  // turn would send a second death save (#906).
   const turnKey =
     encounter && player && vital === 'dying' && isOwnTurn
       ? [
@@ -149,8 +157,8 @@ export const DyingComposerSlot: React.FC<DyingComposerSlotProps> = ({
     <DyingPanel
       name={player.displayName ?? player.name}
       state={vital === 'stable' ? 'stable' : 'dying'}
-      successes={player.deathSaves.successes}
-      failures={player.deathSaves.failures}
+      successes={successes}
+      failures={failures}
       isOwnTurn={isOwnTurn}
       promptOpen={promptOpen}
       onRoll={onRoll}

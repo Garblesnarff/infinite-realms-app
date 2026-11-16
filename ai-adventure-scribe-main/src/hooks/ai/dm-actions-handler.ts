@@ -62,6 +62,11 @@ export interface HandleDmActionsParams {
   activeEncounter: any;
   isInCombat: boolean;
   refreshCombatState: (signal?: AbortSignal) => Promise<any>;
+  /** Records the death-save tally a card printed, so the dying tray matches it (#906). */
+  recordDeathSaveTally?: (
+    participantId: string,
+    tally: { successes: number; failures: number },
+  ) => void;
   aiContext: any;
   conversationHistory: any[];
   /** Round captured before preflight advances the authoritative encounter. */
@@ -190,6 +195,7 @@ export async function handleDmActionsAndTransitions(
   const {
     sessionId,
     refreshCombatState,
+    recordDeathSaveTally,
     aiContext,
     conversationHistory,
     userPlan,
@@ -979,6 +985,7 @@ export async function handleDmActionsAndTransitions(
     const narrationResult = await resolveDeclaredCombatActions({
       encounterId: activeEncounter.id,
       sessionId,
+      recordDeathSaveTally,
       combatActions: result.combat_actions || [],
       declarationText: entryWasSeated
         ? 'Combat entry was confirmed. Narrate only authoritative engine results; the player declaration itself is not an outcome.'

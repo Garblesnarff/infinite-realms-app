@@ -12,6 +12,7 @@ import type {
   CombatAction as CombatActionType,
   ReactionOpportunity,
   ActionType,
+  DeathSaveTally,
 } from '@/types/combat';
 
 /**
@@ -49,7 +50,8 @@ export type ReducerAction =
   | { type: 'ADD_REACTION_OPPORTUNITY'; opportunity: ReactionOpportunity }
   | { type: 'REMOVE_REACTION_OPPORTUNITY'; opportunityId: string }
   | { type: 'CLEAR_REACTION_OPPORTUNITIES' }
-  | { type: 'SET_PENDING_REACTION'; opportunityId: string; selectedReaction: ActionType };
+  | { type: 'SET_PENDING_REACTION'; opportunityId: string; selectedReaction: ActionType }
+  | { type: 'RECORD_DEATH_SAVE_TALLY'; participantId: string; tally: DeathSaveTally };
 
 /**
  * Reducer function for combat state management
@@ -65,10 +67,18 @@ export type ReducerAction =
 export function combatReducer(state: CombatState, action: ReducerAction): CombatState {
   switch (action.type) {
     case 'SET_ENCOUNTER':
+      // A fresh server read is the truth again: it replaces any tally recorded from a card (#906).
       return {
         ...state,
         activeEncounter: action.encounter,
         isInCombat: action.encounter.phase === 'active',
+        deathSaveTallies: undefined,
+      };
+
+    case 'RECORD_DEATH_SAVE_TALLY':
+      return {
+        ...state,
+        deathSaveTallies: { ...state.deathSaveTallies, [action.participantId]: action.tally },
       };
 
     case 'START_COMBAT':
