@@ -15,7 +15,6 @@
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { claimAttackSwing } from './attack-budget-service.js';
 import { logAttackResolution, participantSlug } from './attack-telemetry.js';
 import { appliesBlessDie } from './bless-rider.js';
 import { mookGroupAttackBonus } from './boss-moves.js';
@@ -1063,6 +1062,7 @@ export class CombatAttackService {
     };
     if (isReaction) return claimTurnReactionAndResolve(attackerId, encounterId, resolveAttackRoll);
     if (attackerData.participant.participantType === 'player') {
+      const { claimAttackSwing } = await import('./attack-budget-service.js');
       await claimAttackSwing(encounterId, attackerId, expectedVersion);
       return resolveAttackRoll();
     }
@@ -1228,7 +1228,10 @@ export class CombatAttackService {
    */
   async proposeSpellAttack(
     encounterId: string,
-    input: Pick<SpellAttackInput, 'casterId' | 'targetIds' | 'spellId' | 'spellName' | 'slotLevel'>,
+    input: Pick<
+      SpellAttackInput,
+      'casterId' | 'targetIds' | 'spellId' | 'spellName' | 'slotLevel' | 'metamagic'
+    >,
     userId: string,
   ): Promise<{
     spellId: string;
@@ -1245,7 +1248,8 @@ export class CombatAttackService {
   }> {
     const { spell, spellRules, seatedAcByTarget, spellAttackBonus, casterData } =
       await this.prepareSpellCast(encounterId, input, userId);
-    const bonusAction = spell.castingTime.toLowerCase().includes('bonus action');
+    const bonusAction =
+      spell.castingTime.toLowerCase().includes('bonus action') || input.metamagic === 'quickened';
     const participant = casterData.participant as typeof casterData.participant & {
       actionUsed?: boolean;
       bonusActionUsed?: boolean;

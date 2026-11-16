@@ -457,4 +457,67 @@ describeWithDb('fighting styles on the live attack route (#824)', () => {
     expect(proposed.status).toBe(422);
     expect(await proposed.json()).toMatchObject({ error: 'Action already used this turn' });
   });
+  test('#1536 a failed damage write rolls back the swing', async () => {
+    await db
+      .update(characters)
+      .set({ class: 'Fighter', level: 5, classLevels: null })
+      .where(eq(characters.id, characterId));
+    await equip([], ['Longsword']);
+    const { CombatHPService } = await import('../combat-hp-service.js');
+    const broken = spyOn(CombatHPService, 'applyDamage').mockRejectedValueOnce(
+      new Error('damage write failed'),
+    );
+    const send = async (phase: 'propose' | 'commit') =>
+      app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${userId}` },
+          body: JSON.stringify({
+            ...(phase === 'propose' ? { phase } : {}),
+            intent: {
+              type: 'attack',
+              actorId: heroId,
+              targetId,
+              expectedVersion: await version(),
+              ...(phase === 'commit' ? { d20: 20, actionId: testId('rollback') } : {}),
+            },
+            origin: 'action_bar',
+          }),
+        }),
+      );
+    try {
+      expect((await send('commit')).status).toBeGreaterThanOrEqual(400);
+    } finally {
+      broken.mockRestore();
+    }
+    const proposal = await send('propose');
+    expect(proposal.status, await proposal.text()).toBe(200);
+    const commit = await send('commit');
+    expect(commit.status, await commit.text()).toBe(200);
+    const second = await send('propose');
+    expect(second.status, await second.text()).toBe(200);
+  });
+
+  test('#1536 a stale session-state write cannot delete the remaining swing', async () => {
+    await db
+      .update(characters)
+      .set({ class: 'Fighter', level: 5, classLevels: null })
+      .where(eq(characters.id, characterId));
+    await equip([], ['Longsword']);
+    await attack(2);
+    const { SessionService } = await import('../session-service.js');
+    await SessionService.updateSession(sessionId, userId, { sessionState: { fixture: 'stale' } });
+    const response = await app!.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${userId}` },
+        body: JSON.stringify({
+          phase: 'propose',
+          intent: { type: 'attack', actorId: heroId, targetId, expectedVersion: await version() },
+          origin: 'action_bar',
+        }),
+      }),
+    );
+    expect(response.status, await response.text()).toBe(200);
+  });
 });

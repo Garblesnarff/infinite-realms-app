@@ -1135,6 +1135,7 @@ async function proposeCombatSpell(
       spellId: resolved.spellId,
       spellName: resolved.spellName,
       slotLevel: resolved.slotLevel,
+      metamagic: resolved.metamagic,
     },
     userId,
   );
