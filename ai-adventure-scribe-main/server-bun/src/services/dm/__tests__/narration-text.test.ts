@@ -413,3 +413,45 @@ describe('normalizePartialNarration #1067 V-008/V-009', () => {
     ).toBe(story);
   });
 });
+
+/** #1556: the exact line from Hark's 11-15 session. */
+const ISSUE_1556_LINE =
+  "[HP 28/28] [Clock 0/6] [Pledges left 3] [Scene: …] [Clues found: none yet] [Applause's escapes left 3/3]";
+
+describe('stripTrackerLine #1556 tracker run in any position', () => {
+  test('strips the issue line when it leads the narration', () => {
+    expect(stripTrackerLine(`${ISSUE_1556_LINE}\n\nThe bout ends.`)).toBe('The bout ends.');
+  });
+
+  test('strips the issue line when it sits in the middle', () => {
+    expect(
+      stripTrackerLine(`The bout starts.\n\n${ISSUE_1556_LINE}\n\nWhat do you do?`),
+    ).toBe('The bout starts.\n\nWhat do you do?');
+  });
+
+  test('strips the issue line when it trails the narration', () => {
+    expect(stripTrackerLine(`The bout ends.\n\n${ISSUE_1556_LINE}`)).toBe('The bout ends.');
+  });
+
+  test('keeps a quoted closed sign inside a sentence', () => {
+    expect(stripTrackerLine('The sign reads [CLOSED] in red paint.')).toBe(
+      'The sign reads [CLOSED] in red paint.',
+    );
+  });
+
+  test('keeps two unanchored bracket groups on their own line', () => {
+    expect(stripTrackerLine('The door says:\n[CLOSED] [OPEN]\nYou push it.')).toBe(
+      'The door says:\n[CLOSED] [OPEN]\nYou push it.',
+    );
+  });
+});
+
+describe('normalizeReplyNarration #1556 tracker run in any position', () => {
+  test('removes the leading issue line and keeps the reply', () => {
+    const envelope: Record<string, unknown> = {
+      text: `${ISSUE_1556_LINE}\n\nThe bout ends. What do you do?`,
+    };
+    normalizeReplyNarration(envelope);
+    expect(envelope.text).toBe('The bout ends. What do you do?');
+  });
+});
