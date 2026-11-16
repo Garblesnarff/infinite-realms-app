@@ -47,7 +47,7 @@ const selectMock = mock(() => makeSelectChain());
 const insertMock = mock((_table: any) => ({
   values: (vals: any) => {
     insertedSpells.push(...(Array.isArray(vals) ? vals : [vals]));
-    return Promise.resolve();
+    return Object.assign(Promise.resolve(), { onConflictDoUpdate: () => Promise.resolve() });
   },
 }));
 const updateMock = mock((table: any) => ({

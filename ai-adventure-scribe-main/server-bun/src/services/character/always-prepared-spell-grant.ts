@@ -133,45 +133,25 @@ export async function grantAlwaysPreparedSubclassSpells(
         sql`SELECT pg_advisory_xact_lock(hashtextextended(${characterId}::text, 0))`,
       );
       for (const entry of prepared) {
-        const held = await tx
-          .select({ id: characterSpells.id, spellId: characterSpells.spellId })
-          .from(characterSpells)
-          .where(
-            and(
-              eq(characterSpells.characterId, characterId),
-              inArray(
-                characterSpells.spellId,
-                entry.catalog.map((spell) => spell.id),
-              ),
-            ),
-          );
-        const heldIds = new Set(held.map((row) => row.spellId));
-        if (held.length > 0) {
-          await tx
-            .update(characterSpells)
-            .set({ isAlwaysPrepared: true, isPrepared: true, updatedAt: new Date() })
-            .where(
-              inArray(
-                characterSpells.id,
-                held.map((row) => row.id),
-              ),
-            );
-        }
-
-        const missing = entry.catalog.filter((spell) => !heldIds.has(spell.id));
-        if (missing.length > 0) {
-          await tx.insert(characterSpells).values(
-            missing.map((spell) => ({
-              characterId,
-              spellId: spell.id,
-              sourceClassId: entry.classId,
-              isPrepared: true,
-              isAlwaysPrepared: true,
-              sourceFeature: 'always-prepared',
-              spellLevelLearned: spell.level,
-            })),
-          );
-        }
+        await tx
+          .insert(characterSpells)
+          .values(
+            [...entry.catalog]
+              .sort((x, y) => x.id.localeCompare(y.id))
+              .map((spell) => ({
+                characterId,
+                spellId: spell.id,
+                sourceClassId: entry.classId,
+                isPrepared: true,
+                isAlwaysPrepared: true,
+                sourceFeature: 'always-prepared',
+                spellLevelLearned: spell.level,
+              })),
+          )
+          .onConflictDoUpdate({
+            target: [characterSpells.characterId, characterSpells.spellId],
+            set: { isAlwaysPrepared: true, isPrepared: true, updatedAt: new Date() },
+          });
       }
     });
   }

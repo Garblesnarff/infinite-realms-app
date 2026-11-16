@@ -217,6 +217,9 @@ build_replay_list() {
         # ALTERs session_chronicles, created by db/migrations/20251106_backfill_lost_drizzle_migrations.sql
         # (#1430); pinned after the newest migration so the table exists.
         0033_session_chronicle_share_enabled.sql) echo "20261107_000000	$f"; continue;;
+        # Indexes character_spells, created by db/migrations/20251106_backfill_lost_drizzle_migrations.sql
+        # (#1567); pinned after the newest migration so the table exists.
+        0036_character_spells_character_spell_unique.sql) echo "20261116_000000	$f"; continue;;
         # Deliberate no-op snapshot re-baseline; safe anywhere, pinned last.
         0004_schema_baseline.sql) echo "99999999_999999	$f"; continue;;
       esac
