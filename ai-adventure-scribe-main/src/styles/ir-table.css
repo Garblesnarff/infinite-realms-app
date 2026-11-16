@@ -464,21 +464,9 @@ body.ir-table-look .ir-brass-sheen::after {
   }
 }
 
-/* #1562: DM bubbles in Table look sit on parchment, not the navy gradient.
-   Force every descendant to the parchment ink so emphasis/dialogue/accent
-   colors (which keep their own hue on the navy look) cannot stay light. */
-body.ir-table-look .dm-bubble {
-  background-image:
-    url('/table/parchment.webp'), linear-gradient(var(--ir-parchment-1), var(--ir-parchment-2));
-  background-blend-mode: soft-light, normal;
-  background-color: var(--ir-parchment-1);
-  color: var(--ir-ink);
-  border-color: rgba(40, 32, 24, 0.18);
-  box-shadow: 0 6px 24px rgba(16, 12, 8, 0.18);
-}
-body.ir-table-look .dm-bubble * {
-  color: var(--ir-ink) !important;
-}
+/* #1562: index.css .clamp-fade::after paints a dark band (rgba(11,23,41,0.9))
+   over the last 90px of a clamped long message; on the Table look the DM
+   bubble is parchment, so override the fade to parchment. */
 body.ir-table-look .dm-bubble .clamp-fade::after {
   background: linear-gradient(to bottom, rgba(242, 231, 205, 0), var(--ir-parchment-2));
 }
