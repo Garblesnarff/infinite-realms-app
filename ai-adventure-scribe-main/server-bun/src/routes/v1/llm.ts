@@ -665,14 +665,12 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
       }
 
       const {
-        prompt,
         // #352: the stable system block; prepended as the `system` message so
         // the provider caches on the prompt prefix.
         systemPrompt,
         model,
         maxTokens = 1000,
         temperature = 0.8,
-        history,
         provider = 'openrouter',
         requestType: rawRequestType = 'user',
         metrics,
@@ -685,6 +683,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         dmReply: requestedDmReply,
         stream,
       } = body || {};
+      // #1477: the prompt and history can be rewritten to the server's check verdict below.
+      let { prompt, history } = body || {};
       // #782 item 3: the DM reply schema is built server-side from the canonical
       // module. The client no longer sends `responseSchema`; a client-sent value
       // is ignored during the transition (the body type still accepts it).
@@ -931,6 +931,31 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             Math.max(1, Math.ceil((new Date(quota.resetAt).getTime() - Date.now()) / 1000)),
           );
           return { error: 'AI quota exceeded', remaining: quota.remaining, resetAt: quota.resetAt };
+        }
+
+        // #1477: the DM reads the server's verdict for the last narrative check, not the client's
+        // word on the formatter line. Shadow mode: the server word is sent; a disagreement is logged
+        // as a count only. A lookup that fails keeps the client line and logs the failure.
+        if (sessionId && typeof prompt === 'string' && Array.isArray(history)) {
+          try {
+            const { SessionMessageService } =
+              await import('../../services/session/session-message-service.js');
+            const { reconcileCheckVerdict } =
+              await import('../../services/dm/check-verdict-prompt.js');
+            const rows = await SessionMessageService.latestServerCheckRows(sessionId, userId);
+            const verdict = reconcileCheckVerdict({ history, prompt, rows });
+            if (verdict.status === 'disagree') {
+              logger.warn({ msg: 'DM_CHECK_VERDICT_MISMATCH', sessionId, count: 1 });
+              history = verdict.history;
+              prompt = verdict.prompt;
+            }
+          } catch (error) {
+            logger.warn({
+              msg: 'DM_CHECK_VERDICT_LOOKUP_FAILED',
+              sessionId,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         }
 
         // #2533: server-counted prompt sections, one line per generate. Below
