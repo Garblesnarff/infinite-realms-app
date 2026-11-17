@@ -11,9 +11,30 @@ import type {
 } from '@/types/combat';
 
 import logger from '@/lib/logger';
+import {
+  executeAuthoritativeCombatIntent,
+  type ClientCombatIntent,
+} from '@/services/combat/combat-action-executor';
 import { userDataApi } from '@/services/user-data-api';
-import { createGrappledCondition, rollGrappleCheck, rollShoveCheck } from '@/utils/grappleUtils';
 import { processReactionResponse } from '@/utils/reactionSystem';
+
+/**
+ * The server intent for a player action that has one (#621 B2b). The server rolls the check and
+ * applies its result. Returns null for an action with no server intent, which stays on the local
+ * engine: help, ready, and a grapple or shove with no target.
+ */
+export const serverIntentForAction = (
+  actionType: ActionType,
+  actorId: string,
+  targetId?: string,
+): ClientCombatIntent | null => {
+  if (actionType === 'dash' || actionType === 'dodge') return { type: actionType, actorId };
+  if (actionType === 'hide') return { type: 'check', actorId, checkKind: 'hide' };
+  if ((actionType === 'grapple' || actionType === 'shove') && targetId) {
+    return { type: 'check', actorId, targetId, checkKind: actionType };
+  }
+  return null;
+};
 
 interface UseCombatActionHandlersProps {
   activeEncounter: CombatEncounter | null;
@@ -69,6 +90,20 @@ export const useCombatActionHandlers = ({
         return;
       }
 
+      // #621 B2b: dash, dodge, hide, grapple and shove go to the server. The server rolls the
+      // check and applies the grapple or prone condition, so the browser rolls no dice here.
+      const serverIntent = serverIntentForAction(actionType, participantId, targetId);
+      if (serverIntent) {
+        await executeAuthoritativeCombatIntent(
+          activeEncounter.id,
+          serverIntent,
+          'player',
+          undefined,
+          'action_bar',
+        );
+        return;
+      }
+
       // Create action for validation
       const action: Partial<CombatAction> = {
         participantId,
@@ -77,36 +112,6 @@ export const useCombatActionHandlers = ({
         description: `${participant.name} attempts to ${actionType}`,
         ...additionalData,
       };
-
-      if ((actionType === 'grapple' || actionType === 'shove') && targetId) {
-        const target = activeEncounter.participants.find((entry) => entry.id === targetId);
-        if (!target) return;
-        const check =
-          actionType === 'grapple'
-            ? rollGrappleCheck(participant, target)
-            : rollShoveCheck(participant, target);
-        action.attackRoll = check.roll;
-        action.hit = check.success;
-        action.description = `${participant.name} ${check.success ? 'succeeds' : 'fails'} to ${actionType} ${target.name} (${check.roll.total} vs ${check.opposingRoll.total})`;
-
-        if (check.success) {
-          const condition =
-            actionType === 'grapple'
-              ? createGrappledCondition(participantId, check.dc)
-              : {
-                  name: 'prone' as const,
-                  description: 'The creature is prone and must stand to end this condition.',
-                  duration: -1,
-                  concentrationRequired: false,
-                };
-          await updateParticipant(targetId, {
-            conditions: [
-              ...target.conditions.filter((entry) => entry.name !== condition.name),
-              condition,
-            ],
-          });
-        }
-      }
 
       // Validate action with AI rules interpreter
       try {
@@ -128,12 +133,13 @@ export const useCombatActionHandlers = ({
         await takeAction(action);
       }
     },
-    [activeEncounter, takeAction, updateParticipant, validateCombatAction],
+    [activeEncounter, takeAction, validateCombatAction],
   );
 
-  // Handle enemy attack with AI integration
+  // Handle enemy attack. The server rolls the enemy's attack and its damage (#621 B2b). The
+  // attack picked in the menu is not sent: the server resolves the enemy's own attack.
   const handleEnemyAttack = useCallback(
-    async (attack: MonsterAttack) => {
+    async (_attack: MonsterAttack) => {
       if (!selectedEnemy || !activeEncounter) {
         return;
       }
@@ -143,36 +149,23 @@ export const useCombatActionHandlers = ({
         return;
       }
 
-      await handleCombatAction(
-        'attack',
-        selectedEnemy,
-        activeEncounter.currentTurnParticipantId || '',
-        {
-          attackRoll: {
-            total: Math.floor(Math.random() * 20) + 1 + (attack.attackBonus || 0),
-            rolls: [Math.floor(Math.random() * 20) + 1],
-            modifier: attack.attackBonus || 0,
-          },
-          damageRolls: attack.damageRoll
-            ? [
-                {
-                  total: 0, // Will be calculated
-                  rolls: [],
-                  modifier: 0,
-                },
-              ]
-            : [],
-          damageType: attack.damageType,
-          description: `${enemy.name} uses ${attack.name}`,
-        },
-      );
+      const targetId = activeEncounter.currentTurnParticipantId;
+      if (targetId) {
+        await executeAuthoritativeCombatIntent(
+          activeEncounter.id,
+          { type: 'attack', actorId: selectedEnemy, targetId },
+          'dm',
+          Date.now(),
+          'typed',
+        );
+      }
 
       // Auto-advance turn after enemy action
       setTimeout(() => {
         nextTurn();
       }, 1500);
     },
-    [selectedEnemy, activeEncounter, handleCombatAction, nextTurn],
+    [selectedEnemy, activeEncounter, nextTurn],
   );
 
   // Handle reaction opportunities
