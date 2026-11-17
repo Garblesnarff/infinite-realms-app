@@ -7,7 +7,7 @@
  * Does not call the live DM.
  */
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 
 import {
   closeRealDb,
@@ -283,5 +283,63 @@ describeWithDb('always-prepared subclass spells (#1555)', () => {
         .sort(),
     ).toEqual(['Bless', 'Cure Wounds']);
     expect(granted.filter((spell) => spell.isPrepared && !spell.isAlwaysPrepared)).toHaveLength(0);
+  });
+
+  it('concurrent grants insert one character_spells row per spell (#1567)', async () => {
+    const id = await create({
+      name: `Concurrent ${testId('1567')}`,
+      race: 'Human',
+      class: 'Paladin',
+      subclass: 'Oath of Devotion',
+      level: 3,
+      stats: {
+        strength: 16,
+        dexterity: 10,
+        constitution: 14,
+        intelligence: 8,
+        wisdom: 10,
+        charisma: 16,
+        temporary_hit_points: 0,
+        hit_dice: '1d10',
+      },
+      class_levels: [{ classId: 'paladin', className: 'Paladin', level: 3 }],
+      total_level: 3,
+      known_spells: 'Bless',
+      prepared_spells: 'Bless',
+    });
+
+    // Creation already granted the oath spells; remove them so the grant has
+    // rows to insert and actually exercises the insert path.
+    await db.delete(characterSpells).where(eq(characterSpells.characterId, id));
+
+    const { grantAlwaysPreparedSubclassSpells } =
+      await import('../character/always-prepared-spell-grant.js');
+
+    await Promise.all([
+      grantAlwaysPreparedSubclassSpells(id, userId),
+      grantAlwaysPreparedSubclassSpells(id, userId),
+    ]);
+
+    const grantedSpellIds = await db
+      .select({ id: spells.id })
+      .from(spells)
+      .where(inArray(spells.name, ['Protection from Evil and Good', 'Sanctuary']));
+    expect(grantedSpellIds).toHaveLength(2);
+
+    const grouped = await db
+      .select({
+        spellId: characterSpells.spellId,
+        c: sql<number>`count(*)`,
+      })
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, id))
+      .groupBy(characterSpells.spellId);
+
+    const duplicates = grouped.filter((row) => Number(row.c) > 1);
+    expect(duplicates).toHaveLength(0);
+    for (const { id: spellId } of grantedSpellIds) {
+      const row = grouped.find((g) => g.spellId === spellId);
+      expect(Number(row?.c)).toBe(1);
+    }
   });
 });

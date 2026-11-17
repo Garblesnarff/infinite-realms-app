@@ -5,8 +5,10 @@ import { JournalTabContent } from '../JournalTabContent';
 
 import type { JournalHandoutEntry } from '@/services/user-data-api';
 
+const chronicleSpy = vi.fn();
 vi.mock('../chronicle/ChronicleDialog', () => ({
-  default: (props: { sessionId: string | null; open: boolean }) => {
+  default: (props: { sessionId: string | null; open: boolean; isFallen?: boolean }) => {
+    chronicleSpy(props);
     return props.open ? <div role="dialog">Chronicle for {props.sessionId}</div> : null;
   },
 }));
@@ -100,5 +102,22 @@ describe('JournalTabContent (#1429)', () => {
     render(<JournalTabContent {...baseProps} sessionId={undefined} />);
     expect(screen.getByText('No handouts delivered yet.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Read the chronicle/ })).not.toBeInTheDocument();
+  });
+
+  it('forwards isFallen to the chronicle when opened from the Journal', () => {
+    vi.mocked(useOptionalCampaign).mockReturnValue(undefined as never);
+    render(<JournalTabContent {...baseProps} isFallen />);
+    fireEvent.click(screen.getByRole('button', { name: /Read the chronicle/ }));
+    expect(chronicleSpy).toHaveBeenLastCalledWith(
+      expect.objectContaining({ open: true, isFallen: true }),
+    );
+  });
+
+  it('does not forward isFallen: true on the living-hero Journal path', () => {
+    vi.mocked(useOptionalCampaign).mockReturnValue(undefined as never);
+    render(<JournalTabContent {...baseProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /Read the chronicle/ }));
+    const last = chronicleSpy.mock.calls[chronicleSpy.mock.calls.length - 1][0];
+    expect(last.isFallen).not.toBe(true);
   });
 });

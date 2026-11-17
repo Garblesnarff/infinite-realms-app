@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.49.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.49.0...v0.49.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* **chronicle:** no End session from the Journal for a fallen hero ([#1557](https://github.com/Garblesnarff/infinite-realms-app/issues/1557)) ([9f686c6](https://github.com/Garblesnarff/infinite-realms-app/commit/9f686c655012f5744a2b498372f8cc119e9d450f))
+* **spells:** log missing always-prepared names and serialize grants ([#1567](https://github.com/Garblesnarff/infinite-realms-app/issues/1567)) ([13952ed](https://github.com/Garblesnarff/infinite-realms-app/commit/13952ed91cd845a0a2c81bd5eb8038c2522d0953))
+
+
+### Refactoring
+
+* **combat:** damage and heals go to the server only ([#621](https://github.com/Garblesnarff/infinite-realms-app/issues/621) part A) ([911024d](https://github.com/Garblesnarff/infinite-realms-app/commit/911024d37e505a232f55ed4d7dc6fd8999cccf6e))
+
+
+### Tests
+
+* **table:** clamp-fade end colour and descendant contrast ([#1562](https://github.com/Garblesnarff/infinite-realms-app/issues/1562)) ([61f17e5](https://github.com/Garblesnarff/infinite-realms-app/commit/61f17e5544d7d24b9b23cfbb01eac9dbea8dac78))
+
 ## [0.49.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.48.0...v0.49.0) (2026-11-16)
 
 
