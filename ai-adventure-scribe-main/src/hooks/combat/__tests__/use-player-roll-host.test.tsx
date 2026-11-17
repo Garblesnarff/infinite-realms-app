@@ -25,6 +25,7 @@ import {
   markPlayerRollCommitted,
   requestPlayerInitiativeRoll,
   requestPlayerAttackRoll,
+  requestPlayerCheckRoll,
   requestPlayerDeathSaveRoll,
   setPlayerRollHost,
   settlePendingPlayerRoll,
@@ -399,5 +400,66 @@ describe('usePlayerRollHost: the death saving throw prompt (#2518)', () => {
     });
     // The player's own die: autoRolled is false (only the 45 s timer reads as engine-rolled).
     await expect(pending).resolves.toEqual({ d20: 14, autoRolled: false });
+  });
+});
+
+// #157 wiring: a check spec's popup must follow the target-number setting. The shared describer
+// is tested on its own; this proves the host passes the flag (use-player-roll-host.ts).
+describe('usePlayerRollHost: check roll target numbers (#157)', () => {
+  const requestDiceRoll = vi.fn().mockReturnValue('check-roll-1');
+  const cancelDiceRoll = vi.fn();
+  const hideSpec = {
+    actorLabel: 'The Seeker',
+    checkLabel: 'Hide',
+    checkModifier: 5,
+    opposedByLabel: 'passive Perception 13',
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    settlePendingPlayerRoll({ d20: null });
+    setPlayerRollHost(null);
+    vi.clearAllMocks();
+    requestDiceRoll.mockReturnValue('check-roll-1');
+    vi.mocked(useGame).mockReturnValue({ requestDiceRoll, cancelDiceRoll } as never);
+    window.localStorage.clear();
+    vi.mocked(useCharacter).mockReturnValue({ state: { character: null } } as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('drops the passive score from the check popup when the setting is off (Hard, no choice)', async () => {
+    vi.mocked(useOptionalCampaign).mockReturnValue({
+      state: { campaign: { difficulty_level: 'Hard' } },
+    } as never);
+    const { unmount } = renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerCheckRoll(hideSpec);
+
+    const request = requestDiceRoll.mock.calls[0][0];
+    expect(request.description).toBe('Hide — 1d20+5');
+    expect(request.description).not.toContain('passive');
+
+    settlePendingPlayerRoll({ d20: 12 });
+    await expect(pending).resolves.toEqual({ d20: 12 });
+    unmount();
+  });
+
+  it('shows the passive score in the check popup when the player turned target numbers on', async () => {
+    window.localStorage.setItem('ui:showTargetNumbers:v1', 'on');
+    vi.mocked(useOptionalCampaign).mockReturnValue({
+      state: { campaign: { difficulty_level: 'Hard' } },
+    } as never);
+    const { unmount } = renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerCheckRoll(hideSpec);
+
+    expect(requestDiceRoll.mock.calls[0][0].description).toBe(
+      'Hide — 1d20+5 vs passive Perception 13',
+    );
+
+    settlePendingPlayerRoll({ d20: 12 });
+    await expect(pending).resolves.toEqual({ d20: 12 });
+    unmount();
   });
 });

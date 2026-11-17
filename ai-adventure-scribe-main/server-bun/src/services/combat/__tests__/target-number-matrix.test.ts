@@ -15,9 +15,23 @@ import { describeResolvedAttack, describeResolvedSpell } from '../attack-narrati
 import type { EngineResultCard } from '../../../../../shared/engine-result-card';
 
 /**
- * #157 matrix: attack / ability check / saving throw x setting on / off, over every surface
- * a player or the DM reads. "On" must show the target number; "off" must never show it, and
- * never show a placeholder such as "vs AC ?". Enemy HP is never named in any case.
+ * #157 matrix: which surfaces show a target number, and whether they follow the setting.
+ *
+ * Covered: weapon attack, spell attack and spell saving throw on the engine line (card aria label
+ * and math text) and the server narration; ability check on the roll dialog. "On" must show the
+ * number; "off" must never show it, and never show a placeholder such as "vs AC ?".
+ *
+ * NOT covered (do not read the green run as proof of these):
+ *  - No saving-throw dialog row. Saves are engine-rolled; no save popup exists.
+ *  - No server ability-check narration row. `describeOutcome` in combat-check-service.ts is not
+ *    exported, and importing that module pulls in the database chain.
+ *  - Unverified DM-bound text: `dmFact` and the raw engine card line (`card.line`:
+ *    shared/combat-outcome-transcript.ts:281, shared/combat-spell-transcript.ts:144 and :170), and
+ *    src/services/ai/npc-roll-handler.ts:87-88. Not traced to the DM prompt.
+ *  - Weapon server narration (`describeResolvedAttack`) carries no target number at all and takes
+ *    no setting, so its "on" case asserts the sentence as produced, not a number.
+ *
+ * Enemy HP: the DM-bound "N HP" wording in spell narration is kept by decision (strategist, PR #1590).
  */
 
 const TARGET_AC = 12;
@@ -110,19 +124,20 @@ describe('target numbers: attack', () => {
     expect(off).not.toMatch(TARGET_PATTERN);
   });
 
-  it('server narration (weapon): never carries a target number, on or off', () => {
-    const line = describeResolvedAttack(
-      'Rook',
-      'Goblin',
-      {
-        hit: true,
-        finalDamage: 4,
-        targetNewHp: 3,
-        targetIsConscious: true,
-      },
-      'Longsword',
+  it('server narration (weapon): no target number on or off; the on case asserts the sentence as produced', () => {
+    const outcome = {
+      hit: true,
+      finalDamage: 4,
+      targetNewHp: 3,
+      targetIsConscious: true,
+    };
+    // describeResolvedAttack takes no setting and prints no AC, so "on" and "off" are the same.
+    const on = describeResolvedAttack('Rook', 'Goblin', outcome, 'Longsword');
+    expect(on).toBe(
+      'Rook attacked Goblin with its Longsword: HIT for 4 damage. Goblin is now at 3 HP. Narrate this outcome; it already happened.',
     );
-    expect(line).not.toMatch(TARGET_PATTERN);
+    expect(on).not.toMatch(TARGET_PATTERN);
+    expect(describeResolvedAttack('Rook', 'Goblin', outcome, 'Longsword')).toBe(on);
   });
 
   it('server narration (spell attack): shows AC when on, never when off', () => {
