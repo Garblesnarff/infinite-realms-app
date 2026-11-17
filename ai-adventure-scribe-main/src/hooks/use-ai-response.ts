@@ -21,6 +21,7 @@ import {
   holdCombatEntryBeforeDm,
   recentNarrationFrom,
 } from '@/hooks/ai/combat-entry-hold';
+import { REST_IN_COMBAT_NOTICE, isRestRequest } from '@/hooks/ai/combat-notice';
 import {
   SPELL_CAST_CANCELLED_NOTICE,
   combatTurnErrorMessage,
@@ -730,6 +731,25 @@ export const useAIResponse = (): {
             localNotices: [{ text: notice, persist: true }],
           };
         };
+
+        // #614: a rest request in a fight is refused in words before the DM is called. A rest is
+        // not an action the engine resolves in a fight (SRD 5.1: a rest needs time out of combat).
+        // Same shape as the dead-foe refusal (#1595): the notice persists, the turn settles, and
+        // the player's own message stays in the timeline with the turn still theirs.
+        if (isInCombat && !isDiceRollMessage && isRestRequest(latestMessage.text)) {
+          logger.info('REST_IN_COMBAT_REFUSED', { sessionId });
+          setCombatTurnUiState(
+            combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
+          );
+          return {
+            text: '',
+            sender: 'dm',
+            timestamp: new Date().toISOString(),
+            context: { emotion: 'neutral', intent: 'response' },
+            localNotice: REST_IN_COMBAT_NOTICE,
+            localNotices: [{ text: REST_IN_COMBAT_NOTICE, persist: true }],
+          };
+        }
 
         // #2392: the sheet's Cast of a save spell asks the player before the DM is called; the
         // card needs no model output, and the DM's reply used to come first.
