@@ -130,7 +130,11 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
 
       {/* Character Resources */}
       {displayResources && (
-        <ResourceSection characterResources={displayResources} hitDice={character.hitDice} />
+        <ResourceSection
+          characterResources={displayResources}
+          hitDice={character.hitDice}
+          characterId={character.id}
+        />
       )}
 
       {/* Rest Actions */}

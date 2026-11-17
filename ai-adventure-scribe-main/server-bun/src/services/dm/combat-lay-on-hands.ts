@@ -32,7 +32,7 @@ export async function resolveCombatLayOnHands(input: {
   playerInput: string;
   sessionId: string;
   userId: string;
-}): Promise<string | null> {
+}): Promise<{ directive: string; engineLine: string } | null> {
   const { playerInput, sessionId, userId } = input;
   const declared = detectDeclaredLayOnHands(playerInput);
   if (!declared) return null;
@@ -44,9 +44,8 @@ export async function resolveCombatLayOnHands(input: {
     const character = await ownedSessionCharacter(sessionId, userId);
     if (!character) return null;
 
-    const { resolveLayOnHands, featureSpentSinceMessage, LAY_ON_HANDS_NAME } = await import(
-      '../progression/paladin-features-service.js'
-    );
+    const { resolveLayOnHands, featureSpentSinceMessage, LAY_ON_HANDS_NAME } =
+      await import('../progression/paladin-features-service.js');
     const { playerMessage } = await import('./story-spell-slots.js');
     // #712 FIX round 4: a Retry replays the same saved player message without
     // saving a new one. A Lay on Hands usage-log row at or after that message
@@ -106,7 +105,8 @@ export async function resolveCombatLayOnHands(input: {
       sessionId,
       context: 'combat-turn',
     });
-    return layOnHandsDirective(result);
+    // #1554: the engine's own line rides the reply too, so the client counts the turn as engine-resolved.
+    return { directive: layOnHandsDirective(result), engineLine: result.message };
   } catch (error) {
     logger.warn({ msg: 'COMBAT_LAY_ON_HANDS_FAILED', sessionId, error });
     return null;
@@ -117,8 +117,5 @@ function layOnHandsDirective(result: LayOnHandsResult): string {
   const truth = result.ok
     ? `The engine has already resolved it: ${result.message} Do NOT invent a different amount of healing. Narrate the healing truthfully as part of the turn.`
     : `The engine refused it: ${result.message} Narrate the failure clearly. Do NOT narrate any healing from Lay on Hands this turn.`;
-  return (
-    `<lay_on_hands>The player declared Lay on Hands. ` +
-    `${truth}</lay_on_hands>`
-  );
+  return `<lay_on_hands>The player declared Lay on Hands. ` + `${truth}</lay_on_hands>`;
 }

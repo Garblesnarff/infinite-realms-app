@@ -17,7 +17,7 @@
 
 /* eslint-disable max-lines */
 import { TRPCError } from '@trpc/server';
-import { and, count, eq, gt, inArray } from 'drizzle-orm';
+import { and, count, eq, gt, inArray, or } from 'drizzle-orm';
 import { Elysia, t } from 'elysia';
 
 import {
@@ -30,6 +30,9 @@ import { db } from '../../../../db/client';
 import {
   characterEquipment,
   characterSpells,
+  characters,
+  combatEncounters,
+  combatParticipants,
   inventoryItems,
   spells,
 } from '../../../../db/schema/index';
@@ -992,6 +995,100 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
       return { inspiration: false };
     },
     { body: t.Object({}) },
+  )
+
+  /**
+   * POST /v1/characters/:id/lay-on-hands
+   *
+   * #1554: Lay on Hands out of combat, on the sheet's resource row. The engine draws the pool
+   * and heals (or cures) through resolveLayOnHands, the same resolver the combat intent uses.
+   * An amount the pool cannot cover, or a target already at full HP, is refused with 422 and
+   * nothing is spent. Out of combat the target is the paladin or a campaign character id.
+   */
+  .post(
+    '/:id/lay-on-hands',
+    async ({ params, body, user, set }) => {
+      const { layOnHandsPool, resolveLayOnHands } =
+        await import('../../services/progression/paladin-features-service.js');
+      const userId = user!.userId;
+      const cure = body.cure;
+      try {
+        // Ownership first (RLS is off): only a character the caller owns is looked at further.
+        const [owned] = await db
+          .select({ id: characters.id })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, params.id),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+            ),
+          )
+          .limit(1);
+        if (!owned) throw new NotFoundError('Character', params.id);
+        // #1554: in combat the Lay on Hands is an Action. The sheet route would heal without
+        // spending one, so it refuses while the owned character holds a seat in an active encounter.
+        const [inFight] = await db
+          .select({ encounterId: combatParticipants.encounterId })
+          .from(combatParticipants)
+          .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+          .where(
+            and(
+              eq(combatParticipants.characterId, owned.id),
+              eq(combatEncounters.status, 'active'),
+            ),
+          )
+          .limit(1);
+        if (inFight) {
+          throw new BusinessLogicError('Use Lay on Hands from the combat actions', {
+            reason: 'in_combat',
+          });
+        }
+        if (!cure && body.amount !== undefined) {
+          const pool = await layOnHandsPool(params.id, userId);
+          if (pool && body.amount > pool.remaining) {
+            throw new BusinessLogicError(
+              `Lay on Hands has ${pool.remaining} of ${pool.max} points left, not ${body.amount}`,
+              { reason: 'insufficient_pool', poolRemaining: pool.remaining, poolMax: pool.max },
+            );
+          }
+        }
+        const result = await resolveLayOnHands({
+          characterId: params.id,
+          userId,
+          ...(cure ? { cure } : {}),
+          ...(!cure && body.amount !== undefined ? { amount: body.amount } : {}),
+          ...(body.targetCharacterId ? { targetCharacterId: body.targetCharacterId } : {}),
+          context: cure ? `lay-on-hands-cure-${cure}` : 'lay-on-hands-sheet',
+        });
+        if (!result.ok) {
+          throw new BusinessLogicError(result.message, {
+            reason: result.reason,
+            poolRemaining: result.poolRemaining,
+            poolMax: result.poolMax,
+          });
+        }
+        if (!cure && result.healed === 0) {
+          throw new BusinessLogicError('That target is already at full health', {
+            reason: 'target_full_hp',
+          });
+        }
+        return result;
+      } catch (error) {
+        // A refusal is a 422 with the rule, as the #1233 Metamagic path does (see CHARACTER_UPDATE).
+        if (error instanceof BusinessLogicError) {
+          set.status = 422;
+          return { error: error.message, code: 'BUSINESS_LOGIC_ERROR', details: error.details };
+        }
+        throw error;
+      }
+    },
+    {
+      body: t.Object({
+        amount: t.Optional(t.Integer({ minimum: 1, maximum: 999 })),
+        cure: t.Optional(t.Union([t.Literal('disease'), t.Literal('poison')])),
+        targetCharacterId: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+      }),
+    },
   )
 
   .put(

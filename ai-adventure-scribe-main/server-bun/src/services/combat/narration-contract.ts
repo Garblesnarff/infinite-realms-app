@@ -114,6 +114,7 @@ const KIND_LABEL: Record<ContractActionKind, string> = {
   divine_sense: 'Divine Sense',
   use_item: 'use item',
   flexible_casting: 'Flexible Casting',
+  lay_on_hands: 'Lay on Hands',
 };
 
 const outcomeLabel = (action: AggregatedContractAction): string => {

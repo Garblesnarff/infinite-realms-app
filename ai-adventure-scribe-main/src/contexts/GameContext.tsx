@@ -34,6 +34,7 @@ import type { DiceRollRequest, DiceRoll } from '@/types/combat';
 import type { ReactNode } from 'react';
 
 import { useCombat } from '@/contexts/CombatContext';
+import { InCombatFlagContext } from '@/contexts/in-combat-flag';
 import logger from '@/lib/logger';
 import { throttle } from '@/lib/utils';
 
@@ -68,7 +69,10 @@ const GameContext = createContext<GameContextValue | undefined>(undefined);
 /**
  * Game Context Provider
  */
-export const GameProvider: React.FC<{ children: ReactNode; characterId?: string | null }> = ({ children, characterId }) => {
+export const GameProvider: React.FC<{ children: ReactNode; characterId?: string | null }> = ({
+  children,
+  characterId,
+}) => {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const { state: combatState, refreshCombatState } = useCombat();
 
@@ -202,7 +206,13 @@ export const GameProvider: React.FC<{ children: ReactNode; characterId?: string 
     ],
   );
 
-  return <GameContext.Provider value={contextValue}>{children}</GameContext.Provider>;
+  return (
+    <GameContext.Provider value={contextValue}>
+      <InCombatFlagContext.Provider value={state.isInCombat}>
+        {children}
+      </InCombatFlagContext.Provider>
+    </GameContext.Provider>
+  );
 };
 
 /**

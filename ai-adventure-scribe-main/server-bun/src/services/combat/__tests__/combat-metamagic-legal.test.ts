@@ -243,6 +243,8 @@ mock.module('../../progression/paladin-features-service.js', () => ({
         : total;
     }, 0);
   },
+  // #1554: the Lay on Hands pool is not exercised by these legal-action fixtures: no chips.
+  layOnHandsPool: async () => null,
   divineSenseUses: async () =>
     divineSenseRemaining === null ? null : { row: { usesRemaining: divineSenseRemaining } },
 }));

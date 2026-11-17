@@ -1057,17 +1057,22 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // twice would spend the pool twice.
         // Dynamic import: the resolver pulls in the database client at load time.
         let layOnHandsDirective: string | null = null;
+        // #1554: the engine's line for a typed Lay on Hands, carried on the reply (see below).
+        let layOnHandsEngineLine: string | null = null;
         if (dmReply && defenseSessionId && typeof playerInput === 'string') {
           try {
             const { resolveCombatLayOnHands } =
               await import('../../services/dm/combat-lay-on-hands.js');
-            layOnHandsDirective = await resolveCombatLayOnHands({
+            const laid = await resolveCombatLayOnHands({
               playerInput,
               sessionId: defenseSessionId,
               userId,
             });
+            layOnHandsDirective = laid?.directive ?? null;
+            layOnHandsEngineLine = laid?.engineLine ?? null;
           } catch {
             layOnHandsDirective = null;
+            layOnHandsEngineLine = null;
           }
         }
         // #975: a typed Second Wind in combat executes the same `second_wind`
@@ -1800,6 +1805,12 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         }
         if (envelope?.damage && !storyDamageApplied) {
           envelope.damage = null;
+        }
+        // #1554: a typed Lay on Hands the engine resolved this turn rides the reply as its engine
+        // line. The client's combat resolution counts it as an engine event, so the narration gate
+        // does not replace the DM's reply with the no-effect line.
+        if (envelope && layOnHandsEngineLine) {
+          envelope.engine_lines = [layOnHandsEngineLine];
         }
         // #1020: an ending the story declares reaches the session, server-side: the
         // applier claims the ending engine row, then completes the session through

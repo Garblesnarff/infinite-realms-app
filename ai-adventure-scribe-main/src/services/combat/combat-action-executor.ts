@@ -137,6 +137,18 @@ export type ClientCombatIntent =
       slotLevel: number;
       expectedVersion?: number;
     }
+  /**
+   * #1554: Lay on Hands, an Action. `amount` heals the target from the pool; `cure` spends 5
+   * points on a disease or poison instead. The server caps the heal and refuses a full-HP target.
+   */
+  | {
+      type: 'lay_on_hands';
+      actorId: string;
+      targetId: string;
+      amount?: number;
+      cure?: 'disease' | 'poison';
+      expectedVersion?: number;
+    }
   /** #2580: the player's own exits — the way out of a fight nothing else can end. */
   | { type: 'flee' | 'yield'; actorId: string; expectedVersion?: number }
   /**
@@ -179,6 +191,7 @@ const INTENT_TYPES_REQUIRING_VERSION = new Set([
   'divine_sense',
   'use_item',
   'flexible_casting',
+  'lay_on_hands',
 ]);
 
 type VersionedClientIntent = Extract<ClientCombatIntent, { expectedVersion?: number }>;
