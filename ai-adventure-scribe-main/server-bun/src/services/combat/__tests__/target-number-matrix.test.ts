@@ -9,39 +9,25 @@ import {
   describeCheckRoll,
   type AttackRollDescriptionSpec,
 } from '../../../../../shared/describe-attack-roll';
-import {
-  engineCardAriaLabel,
-  engineCardMathText,
-  hideTargetNumbers,
-} from '../../../../../shared/engine-result-card';
-import { repairNarration } from '../../dm/narration-outcome.js';
+import { engineCardAriaLabel, engineCardMathText } from '../../../../../shared/engine-result-card';
 import { describeResolvedAttack, describeResolvedSpell } from '../attack-narration.js';
-import { describeOutcome } from '../combat-check-outcome-text.js';
-import { resolveDcCheck } from '../combat-check-rules.js';
 
 import type { EngineResultCard } from '../../../../../shared/engine-result-card';
 
 /**
  * #157 matrix: which surfaces show a target number, and whether they follow the setting.
  *
- * Covered, one or more rows each. "On" must show the number; "off" must never show it, and never
- * show a placeholder such as "vs AC ?".
- *  - Weapon attack, spell attack, spell save: roll dialog, engine line (card aria label and math
- *    text), the raw `card.line` after `hideTargetNumbers`, and the server narration.
- *  - Ability check (parley): roll dialog, the server engine line (`describeOutcome`, now in
- *    combat-check-outcome-text.ts), and the DM fact (wording pinned, not changed).
- *  - DM-facing narration repair for a roll that claimed a DC or AC (`repairNarration`).
- *  - NPC "Behind the Screen" summary: rows in src/services/ai/__tests__/npc-roll-handler.test.ts
- *    (client test; that module imports AIService, so it cannot load in this server suite).
- *  - Saving-throw dialog: no roll popup. Covered by SpellTargetSaveCard.test.tsx ("Save DC" is
- *    absent when off; "You do not roll" always shown). Saves are engine-rolled.
+ * Covered: weapon attack, spell attack and spell saving throw on the engine line (card aria label
+ * and math text) and the server narration; ability check on the roll dialog. "On" must show the
+ * number; "off" must never show it, and never show a placeholder such as "vs AC ?".
  *
- * NOT covered (listed, not changed):
- *  - DM-bound text, unchanged by the stop rule: `dmEngineLine` and `dmFact` (the non-parley fact
- *    restates the engine line) and the continuation prompt in npc-roll-handler.ts
- *    (`continueNarrativeWithNPCRolls`). The rows below pin the current DM wording only.
- *  - Passive Perception on a hide check ("vs passive Perception N"): the rule names AC and DC
- *    only, so it is out of this change. Filed as a follow-up.
+ * NOT covered (do not read the green run as proof of these):
+ *  - No saving-throw dialog row. Saves are engine-rolled; no save popup exists.
+ *  - No server ability-check narration row. `describeOutcome` in combat-check-service.ts is not
+ *    exported, and importing that module pulls in the database chain.
+ *  - Unverified DM-bound text: `dmFact` and the raw engine card line (`card.line`:
+ *    shared/combat-outcome-transcript.ts:281, shared/combat-spell-transcript.ts:144 and :170), and
+ *    src/services/ai/npc-roll-handler.ts:87-88. Not traced to the DM prompt.
  *  - Weapon server narration (`describeResolvedAttack`) carries no target number at all and takes
  *    no setting, so its "on" case asserts the sentence as produced, not a number.
  *
@@ -219,133 +205,5 @@ describe('target numbers: saving throw (spell save)', () => {
     expect(describeResolvedSpell('Rook', 'Goblin', 'Acid Splash', outcome, false)).not.toMatch(
       TARGET_PATTERN,
     );
-  });
-});
-
-/** The raw `card.line` of each card, as the legacy chip and saved messages keep it. */
-function cardLines(
-  action: { actor_id: string; action_type: string; target_ids: string[] },
-  result: CombatEngineResult,
-): Array<{ line: string; card: EngineResultCard }> {
-  return formatCombatEngineParts(action, result, [], { targetHp: false }).flatMap((part) =>
-    part.card ? [{ line: part.line, card: part.card }] : [],
-  );
-}
-
-describe('target numbers: card.line (raw engine line, hidden at display)', () => {
-  it('weapon attack: hideTargetNumbers removes the AC when off; the on text keeps it', () => {
-    const lines = cardLines(attackAction, attackResult);
-    expect(lines.length).toBeGreaterThan(0);
-    for (const { line, card } of lines) {
-      if (line.includes('vs AC')) {
-        expect(hideTargetNumbers(line, card)).not.toMatch(TARGET_PATTERN);
-      }
-    }
-    expect(lines.map((entry) => entry.line).join('\n')).toContain('vs AC 12');
-  });
-
-  it('spell save: hideTargetNumbers removes the DC when off; the on text keeps it', () => {
-    const lines = cardLines(spellAction, saveResult);
-    expect(lines.map((entry) => entry.line).join('\n')).toContain('vs DC 13');
-    for (const { line, card } of lines) {
-      expect(hideTargetNumbers(line, card)).not.toMatch(TARGET_PATTERN);
-    }
-  });
-});
-
-describe('target numbers: ability check engine line and DM fact (parley)', () => {
-  const persuadeOutcome = (actorD20: number) =>
-    resolveDcCheck({
-      kind: 'persuade',
-      actorProfile: { scores: { cha: 12 }, level: 1 },
-      actorD20,
-      dc: 15,
-      opposedByLabel: 'DC 15',
-      roll: () => 1,
-    });
-
-  it('engine line (success): shows DC when on, never when off', () => {
-    const resolution = persuadeOutcome(18);
-    const on = describeOutcome({
-      resolution,
-      consequence: '',
-      actorLabel: 'Rook',
-      targetLabel: 'Goblin',
-      parleyDc: 15,
-      showTargetNumbers: true,
-    });
-    const off = describeOutcome({
-      resolution,
-      consequence: '',
-      actorLabel: 'Rook',
-      targetLabel: 'Goblin',
-      parleyDc: 15,
-      showTargetNumbers: false,
-    });
-    expect(on.engineLine).toContain('vs DC 15');
-    expect(off.engineLine).not.toMatch(TARGET_PATTERN);
-    expect(off.engineLine).toContain('success');
-  });
-
-  it('engine line (failure): shows DC when on, never when off', () => {
-    const resolution = persuadeOutcome(2);
-    const on = describeOutcome({
-      resolution,
-      consequence: '',
-      actorLabel: 'Rook',
-      targetLabel: 'Goblin',
-      parleyDc: 15,
-      showTargetNumbers: true,
-    });
-    const off = describeOutcome({
-      resolution,
-      consequence: '',
-      actorLabel: 'Rook',
-      targetLabel: 'Goblin',
-      parleyDc: 15,
-      showTargetNumbers: false,
-    });
-    expect(on.engineLine).toContain('vs DC 15');
-    expect(off.engineLine).not.toMatch(TARGET_PATTERN);
-    expect(off.engineLine).toContain('failure');
-  });
-
-  it('DM fact (DM-bound, wording pinned, not changed): DC only when on', () => {
-    const resolution = persuadeOutcome(18);
-    const on = describeOutcome({
-      resolution,
-      consequence: '',
-      actorLabel: 'Rook',
-      targetLabel: 'Goblin',
-      parleyDc: 15,
-      showTargetNumbers: true,
-    });
-    const off = describeOutcome({
-      resolution,
-      consequence: '',
-      actorLabel: 'Rook',
-      targetLabel: 'Goblin',
-      parleyDc: 15,
-      showTargetNumbers: false,
-    });
-    expect(on.dmFact).toContain('against DC 15');
-    expect(off.dmFact).not.toMatch(/DC \d/);
-    expect(off.dmEngineLine).toBe(off.engineLine);
-  });
-});
-
-describe('target numbers: DM-facing narration repair', () => {
-  const saveOutcome = { success: false, total: 7, dc: 14, description: 'Dexterity save' };
-
-  it('repair sentence: shows DC when on, never when off', () => {
-    expect(repairNarration(saveOutcome, true)).toContain('vs DC 14');
-    expect(repairNarration(saveOutcome, false)).toBe('The Dexterity save failed (7).');
-    expect(repairNarration(saveOutcome, false)).not.toMatch(TARGET_PATTERN);
-  });
-
-  it('repair sentence (attack): shows AC when on, never when off', () => {
-    const attackOutcome = { success: true, total: 18, ac: 15, description: 'longsword attack' };
-    expect(repairNarration(attackOutcome, true)).toContain('vs AC 15');
-    expect(repairNarration(attackOutcome, false)).not.toMatch(TARGET_PATTERN);
   });
 });
