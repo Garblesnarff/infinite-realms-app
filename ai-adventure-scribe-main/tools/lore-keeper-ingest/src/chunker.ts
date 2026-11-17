@@ -598,9 +598,10 @@ function extractQuests(campaignId: string, content: string): CampaignChunk[] {
  * marker (including `####`), and at line-start numbered bold/italic items that
  * appear before the first `### ` heading; numbered items inside a `###` body stay
  * with the parent. A body ends at any line starting with `###` (which includes
- * `####`) or `## `. Numbered mode (no `### ` heading) splits at line-start
- * numbered bold/italic items, allowing single-star italics inside the bold name
- * (closing `**` is the last two stars).
+ * `####`) or `## `. Plain `###` headings with no marker also start a mechanic.
+ * Numbered mode (no `### ` heading) splits at line-start numbered bold/italic
+ * items, allowing single-star italics inside the bold name (closing `**` is the
+ * last two stars).
  */
 function extractMechanics(campaignId: string, content: string): CampaignChunk[] {
   const chunks: CampaignChunk[] = [];
@@ -669,6 +670,24 @@ function extractMechanics(campaignId: string, content: string): CampaignChunk[] 
           pushMechanic(parsed.name, body);
           i = end;
           continue;
+        }
+        // A plain `###` heading (exactly three `#`) with no marker still starts a mechanic.
+        if (/^###\s/.test(line)) {
+          const plainName = withoutNum.trim();
+          if (plainName) {
+            let end = lines.length;
+            for (let j = i + 1; j < lines.length; j++) {
+              if (/^###/.test(lines[j]) || /^##\s/.test(lines[j])) {
+                end = j;
+                break;
+              }
+            }
+            const bodyLines = lines.slice(i + 1, end);
+            const body = bodyLines.join('\n');
+            pushMechanic(plainName, body);
+            i = end;
+            continue;
+          }
         }
         i++;
         continue;
