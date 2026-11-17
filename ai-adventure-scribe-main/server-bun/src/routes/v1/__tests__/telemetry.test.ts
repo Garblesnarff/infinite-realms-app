@@ -62,6 +62,7 @@ const authedRequest = (body: unknown) =>
 
 import {
   FAILED_CHECK_SHADOW_REPORT_BODY,
+  NARRATED_DEAD_NPC_SHADOW_REPORT_BODY,
   NARRATED_DEATH_SHADOW_REPORT_BODY,
 } from '../../../../../shared/test-fixtures/narration-shadow-telemetry.js';
 
@@ -92,6 +93,18 @@ describe('POST /v1/telemetry/client-failure', () => {
       kind: 'narrated_death_without_engine',
       sessionId: 'sess-468-fixture',
       message: 'you_die',
+    });
+    expect(alertCalls).toHaveLength(0);
+  });
+
+  // #1595 shadow count: the exact dead-NPC body is accepted, logged as a count, and does not page.
+  it('accepts the #1595 dead-NPC shadow body exactly as the client sends it, logs it, and does not page', async () => {
+    const response = await app.handle(authedRequest(NARRATED_DEAD_NPC_SHADOW_REPORT_BODY));
+    expect(response.status).toBe(204);
+    expect(loggedInfo.find((entry) => entry.msg === 'CLIENT_FAILURE')).toMatchObject({
+      kind: 'narrated_dead_npc_acting',
+      sessionId: 'sess-1595-fixture',
+      message: 'attack,return_or_entry',
     });
     expect(alertCalls).toHaveLength(0);
   });
