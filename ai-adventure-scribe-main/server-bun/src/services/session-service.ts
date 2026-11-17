@@ -16,6 +16,7 @@ import { enginePreservingSessionState } from './combat/pending-combat-entry.js';
 import { trackerPreservingState } from './dm/story-tracker.js';
 import { pendingEndingXpPreservingState } from './dm/story-xp.js';
 import { RestService } from './rest-service.js';
+import { getOwnedCampaignSessionNumbers } from './session/owned-campaign-session-numbers.js';
 import { getOwnershipCondition } from './session/session-authorization.js';
 import { SessionMessageService, type MessagePage } from './session/session-message-service.js';
 import { db } from '../../../db/client';
@@ -576,13 +577,24 @@ export class SessionService {
       .limit(Math.min(filters.limit ?? 50, 100))
       .offset(filters.offset ?? 0);
 
-    return rows.map((row) =>
-      mapSessionListApiRow(
+    const campaignIds = [
+      ...new Set(
+        rows.map((row) => row.session.campaignId).filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const rankMaps = await Promise.all(
+      campaignIds.map((campaignId) => getOwnedCampaignSessionNumbers(db, campaignId, userId)),
+    );
+    const displayNumbers = new Map(rankMaps.flatMap((ranks) => [...ranks]));
+
+    return rows.map((row) => ({
+      ...mapSessionListApiRow(
         row.session,
         row.character?.id ? row.character : null,
         row.chronicle?.id ? [row.chronicle] : [],
       ),
-    );
+      display_session_number: displayNumbers.get(row.session.id) ?? null,
+    }));
   }
 
   static async updateSession(

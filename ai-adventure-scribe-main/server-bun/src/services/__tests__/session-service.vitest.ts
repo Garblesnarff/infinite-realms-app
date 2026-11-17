@@ -9,7 +9,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { db } from '../../../../db/client';
 import { gameSessions } from '../../../../db/schema/index';
 import { NotFoundError } from '../../lib/errors.js';
+import { getOwnedCampaignSessionNumbers } from '../session/owned-campaign-session-numbers.js';
 import { SessionService, buildSessionInsertValues } from '../session-service.js';
+
+// #1592: the owner-scoped rank is computed by the shared helper (its own real-DB test covers it).
+vi.mock('../session/owned-campaign-session-numbers.js', () => ({
+  getOwnedCampaignSessionNumbers: vi.fn(async () => new Map<string, number>()),
+}));
 
 // Mock the db client
 vi.mock('../../../../db/client', () => ({
@@ -199,15 +205,18 @@ describe('SessionService', () => {
       const where = vi.fn(() => ({ orderBy }));
       const builder: any = { leftJoin: vi.fn(() => builder), where };
       vi.mocked(db.select).mockReturnValue({ from: vi.fn(() => builder) } as any);
+      vi.mocked(getOwnedCampaignSessionNumbers).mockResolvedValueOnce(new Map([[sessionId, 1]]));
 
       const result = await SessionService.listSessions({ campaignId: 'campaign-1' }, userId);
 
+      expect(getOwnedCampaignSessionNumbers).toHaveBeenCalledWith(db, 'campaign-1', userId);
       expect(result[0]).toMatchObject({
         id: sessionId,
         campaign_id: 'campaign-1',
         character: rows[0].character,
         session_chronicles: [rows[0].chronicle],
         session_state: { scene: 'road' },
+        display_session_number: 1,
       });
     });
 
