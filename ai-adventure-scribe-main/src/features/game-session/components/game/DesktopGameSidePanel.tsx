@@ -113,14 +113,14 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
               >
                 <TabsTrigger
                   value="character"
-                  className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 text-[11px] font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold"
+                  className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 ir-text-min font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold"
                 >
                   <User className="h-4 w-4" aria-hidden="true" />
                   Sheet
                 </TabsTrigger>
                 <TabsTrigger
                   value="memory"
-                  className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 text-[11px] font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold"
+                  className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 ir-text-min font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold"
                 >
                   <List className="h-4 w-4" aria-hidden="true" />
                   Memory
@@ -128,7 +128,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                 {isInCombat && (
                   <TabsTrigger
                     value="combat"
-                    className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 text-[11px] font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold hover:bg-red-500/20 data-[state=active]:bg-red-500 data-[state=active]:text-white data-[state=active]:shadow-lg"
+                    className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 ir-text-min font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold hover:bg-red-500/20 data-[state=active]:bg-red-500 data-[state=active]:text-white data-[state=active]:shadow-lg"
                   >
                     <Sword className="h-4 w-4" aria-hidden="true" />
                     Combat
@@ -136,7 +136,7 @@ export const DesktopGameSidePanel: React.FC<DesktopGameSidePanelProps> = React.m
                 )}
                 <TabsTrigger
                   value="journal"
-                  className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 text-[11px] font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold"
+                  className="ir-hit-slop flex h-auto min-h-11 flex-col items-center justify-center gap-0.5 rounded-md px-1 py-1 ir-text-min font-medium leading-tight text-foreground/60 hover:bg-white/5 hover:text-infinite-gold data-[state=active]:bg-infinite-gold/15 data-[state=active]:text-infinite-gold data-[state=active]:shadow-glow-gold"
                 >
                   <BookOpen className="h-4 w-4" aria-hidden="true" />
                   Journal

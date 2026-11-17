@@ -11,6 +11,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DMMessageVoiceControls } from '@/components/game/voice/DMMessageVoiceControls';
+import DiceRoller from '@/components/ui/dice-roller';
 import { IRModRow, IRStatTile } from '@/components/ui/ir-primitives';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ChatInput } from '@/features/game-session/components/chat/ChatInput';
@@ -212,6 +213,9 @@ describe('game screen tap targets and text (#228)', () => {
         const tab = screen.getByRole('tab', { name });
         expect(tab.className).toContain('min-h-11');
         expectSlop(tab);
+        // 12 px floor: the tab label was text-[11px] on main.
+        expect(tab).toHaveClass('ir-text-min');
+        expect(tab.className).not.toMatch(/text-\[(9|10|11)px\]/);
       }
       for (const name of ['Expand', 'Close Panel']) {
         const button = screen.getByRole('button', { name });
@@ -252,6 +256,15 @@ describe('game screen tap targets and text (#228)', () => {
     });
   });
 
+  describe('sheet Quick Rolls (#228 MB-006)', () => {
+    it('gives each Quick Roll button a 44px tap on touch and keeps its 12px text', () => {
+      inApp(<DiceRoller dice="1d20" modifier={3} label="STR" />);
+      const roll = screen.getByRole('button', { name: 'Roll STR' });
+      expectSlop(roll);
+      expect(roll.className).not.toMatch(/text-\[(9|10|11)px\]/);
+    });
+  });
+
   describe('sidebar Party and Chapter, and sheet modifiers', () => {
     it('uses the 12px text floor', () => {
       inApp(
@@ -285,6 +298,9 @@ describe('guard: no sub-12px text classes on the game screen (#228)', () => {
   // Named game files plus RightSheet: every text-[9px]/text-[10px]/text-[11px]
   // must use the ir-text-min (12px) token instead.
   const GAME_SCREEN_FILES = [
+    'src/features/game-session/components/game/DesktopGameSidePanel.tsx',
+    'src/features/game-session/components/game/game-content/GameLayout.tsx',
+    'src/features/game-session/components/chat/message-list/EngineLine.tsx',
     'src/features/game-session/components/game/overhaul/RightSheet.tsx',
     'src/features/game-session/components/game/overhaul/CenterStagePreview.tsx',
     'src/features/game-session/components/game/overhaul/CombatTurnBar.tsx',

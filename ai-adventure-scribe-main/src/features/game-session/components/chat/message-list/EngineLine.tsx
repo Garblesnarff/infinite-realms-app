@@ -24,7 +24,7 @@ const PILL_CLASS: Record<EngineLineOutcome, string> = {
 };
 
 const KICKER_CLASS =
-  'block text-[11px] font-semibold uppercase tracking-[.1em] text-muted-foreground';
+  'ir-text-min block font-semibold uppercase tracking-[.1em] text-muted-foreground';
 
 /**
  * Check-board colours, read off the structured outcome rather than the word.
