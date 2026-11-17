@@ -6,20 +6,23 @@ export const NARRATED_DEAD_NPC_SHADOW_REASON = 'narrated_dead_npc_acting';
 
 /**
  * Acting verbs a reply can give a dead NPC (#1595, Run M16: "Dutch Pellam steps into the ring").
- * Each pattern carries a name; the shadow logs and reports names only, never the matched text.
+ * Present and past forms. Each pattern carries a name; the shadow logs and reports names only.
  */
-const ACTING_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
+const ACTING_PATTERNS: ReadonlyArray<{ name: string; verbs: string }> = [
   {
     name: 'attack',
-    re: /\b(?:attacks?|attacking|strikes?|struck|swings?|slash(?:es|ed)?|lunges?|stabs?|shoots?|hurls?|hits?|fights?|fighting|engages?|parr(?:y|ies|ied))\b/i,
+    verbs:
+      '(?:attacks?|attacked|attacking|strikes?|struck|swings?|swung|slash(?:es|ed)?|lunges?|lunged|stabs?|stabbed|shoots?|shot|hurls?|hurled|hits?|hit|fights?|fought|fighting|engages?|engaged|parr(?:y|ies|ied))',
   },
   {
     name: 'speech',
-    re: /\b(?:says?|said|speaks?|spoke|replies|replied|shouts?|shouted|growls?|asks?|asked|whispers?|answers?|answered|calls? out)\b/i,
+    verbs:
+      '(?:says?|said|speaks?|spoke|replies|replied|shouts?|shouted|growls?|growled|asks?|asked|whispers?|whispered|answers?|answered|calls? out|called out)',
   },
   {
     name: 'return_or_entry',
-    re: /\b(?:steps? (?:back )?(?:into|onto|forward|out)|enters?|entered|returns?|returned|comes? back|rises?|rose|stands? up|stood up|approaches|advances?|climbs?)\b/i,
+    verbs:
+      '(?:(?:steps?|stepped)(?: back)? (?:into|onto|forward|out)|enters?|entered|returns?|returned|comes? back|came back|rises?|rose|stands? up|stood up|approaches|approached|advances?|advanced|climbs?|climbed)',
   },
 ];
 
@@ -29,44 +32,53 @@ const QUOTED_RE = /"[^"]*"|“[^”]*”/g;
 /** A negated sentence ("does not attack") is not an act. */
 const NEGATION_RE = /\b(?:not|never|no longer|cannot|nothing|nor)\b|n['’]t\b/i;
 
+/** A status line the engine wrote and the scene shows as TRUE (not a `believes` line). */
+const ENGINE_DEAD_STATUS_RE = /^\s*status = \{[^}]*"state":"dead"[^}]*\}\s+\(engine\b/m;
+
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * The names of the NPCs the rendered `<scene_state>` marks dead (ledger `status = {"state":"dead"}`).
- * Renderer format: narrative-ledger-core.ts `renderSceneStateFromFacts`. Names only.
+ * The names of the NPCs the rendered `<scene_state>` marks dead by an engine-written status fact
+ * (narrative-ledger-core.ts `renderSceneStateFromFacts`). A `believes` line does not count.
  */
 export function deadNpcNamesFromSceneState(block: string | null | undefined): string[] {
   if (!block) return [];
   const names: string[] = [];
   for (const entity of block.matchAll(/<entity type="npc" name="([^"]+)">([\s\S]*?)<\/entity>/g)) {
-    if (/\bstatus = \{[^}]*"state":"dead"[^}]*\}/.test(entity[2] ?? '')) {
-      names.push(entity[1] ?? '');
-    }
+    if (ENGINE_DEAD_STATUS_RE.test(entity[2] ?? '')) names.push(entity[1] ?? '');
   }
   return names.filter(Boolean);
 }
 
 /**
- * The acting-pattern names found in a reply, for a dead NPC named in the same sentence. A bare
- * mention ("his body", "the late Dutch Pellam") is not an act and reports nothing.
+ * The acting-pattern names for a dead NPC who is the subject of the verb: the name, then at most
+ * two plain words, then the verb. "X's body hits", "X is dead, and ... shouts" and a bare mention
+ * ("the late X") do not match.
  */
+function subjectActRe(name: string, verbs: string): RegExp {
+  return new RegExp(
+    `\\b${escapeRegExp(name)}\\s+(?:(?!(?:is|was|were|are|lies|lay|be)\\b)[a-z]+\\s+){0,2}${verbs}\\b`,
+    'i',
+  );
+}
+
+/** The acting-pattern names found in a reply, sorted. Narration only: quoted speech is ignored. */
 export function narratedDeadNpcActingPatterns(
   text: string | null | undefined,
   deadNames: readonly string[],
 ): string[] {
   if (!text || deadNames.length === 0) return [];
   const names = new Set<string>();
-  const dead = deadNames.map((name) => new RegExp(`\\b${escapeRegExp(name)}\\b`, 'i'));
   for (const sentence of text.split(/(?<=[.!?])\s+|\n+/)) {
-    if (!dead.some((re) => re.test(sentence))) continue;
-    // Quoted speech is what the NPC says, not the narration's own claim: read the narration only.
     const narration = sentence.replace(QUOTED_RE, ' ');
     if (NEGATION_RE.test(narration)) continue;
-    for (const { name, re } of ACTING_PATTERNS) {
-      if (re.test(narration)) names.add(name);
+    for (const dead of deadNames) {
+      for (const { name, verbs } of ACTING_PATTERNS) {
+        if (subjectActRe(dead, verbs).test(narration)) names.add(name);
+      }
     }
   }
-  return [...names];
+  return [...names].sort();
 }
 
 export interface NarratedDeadNpcShadowParams {

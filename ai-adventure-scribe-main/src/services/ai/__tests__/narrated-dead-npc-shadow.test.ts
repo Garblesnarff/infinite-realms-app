@@ -47,8 +47,50 @@ describe('narratedDeadNpcActingPatterns', () => {
 
   it('reports the M16 shape: the dead NPC narrated stepping into the ring and attacking', () => {
     const reply =
-      'The gate groans open. Dutch Pellam steps into the ring, blade raised, and swings at you.';
+      'The gate groans open. Dutch Pellam steps into the ring. Dutch Pellam swings at you.';
     expect(narratedDeadNpcActingPatterns(reply, dead)).toEqual(['attack', 'return_or_entry']);
+  });
+
+  it('reports past-tense narration: "Dutch Pellam stepped into the ring"', () => {
+    expect(narratedDeadNpcActingPatterns('Dutch Pellam stepped into the ring.', dead)).toEqual([
+      'return_or_entry',
+    ]);
+  });
+
+  it('reports past-tense attacks and speech', () => {
+    expect(narratedDeadNpcActingPatterns('Dutch Pellam lunged at you.', dead)).toEqual(['attack']);
+    expect(narratedDeadNpcActingPatterns('Dutch Pellam shouted a warning.', dead)).toEqual([
+      'speech',
+    ]);
+    expect(narratedDeadNpcActingPatterns('Dutch Pellam came back up the sand.', dead)).toEqual([
+      'return_or_entry',
+    ]);
+  });
+
+  it('does not count a body or ghost as the dead NPC acting', () => {
+    expect(narratedDeadNpcActingPatterns("Dutch Pellam's body hits the sand.", dead)).toEqual([]);
+    expect(narratedDeadNpcActingPatterns("Dutch Pellam's ghost whispers.", dead)).toEqual([]);
+  });
+
+  it('does not count a crowd that shouts his name after the NPC is dead', () => {
+    expect(
+      narratedDeadNpcActingPatterns('Dutch Pellam is dead, and the crowd shouts his name.', dead),
+    ).toEqual([]);
+  });
+
+  it('ignores a believes status line and a status the engine did not write', () => {
+    const believes = `<scene_state>
+  <entity type="npc" name="dutch pellam">
+    believes status = {"state":"dead"}  (engine, turn 4)
+  </entity>
+</scene_state>`;
+    const dmSource = `<scene_state>
+  <entity type="npc" name="dutch pellam">
+    status = {"state":"dead"}  (dm, turn 4)
+  </entity>
+</scene_state>`;
+    expect(deadNpcNamesFromSceneState(believes)).toEqual([]);
+    expect(deadNpcNamesFromSceneState(dmSource)).toEqual([]);
   });
 
   it('reports a dead NPC narrated speaking', () => {
@@ -81,7 +123,7 @@ describe('shadowNarratedDeadNpcActing', () => {
   });
 
   it('reports the M16 shape with pattern names only and logs the shadow line', () => {
-    const reply = 'Dutch Pellam steps into the ring, blade raised, and swings at you.';
+    const reply = 'Dutch Pellam steps into the ring. Dutch Pellam swings at you.';
     shadowNarratedDeadNpcActing({
       narration: reply,
       sessionId: 'sess-1595-fixture',
