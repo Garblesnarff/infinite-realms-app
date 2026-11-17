@@ -11,6 +11,7 @@ import type { Character } from '@/types/character';
 import { CharacterListSkeleton } from '@/components/skeletons/CharacterListSkeleton';
 import { Button } from '@/components/ui/button';
 import { Z_INDEX } from '@/constants/z-index';
+import { useCampaignsList } from '@/features/campaign/hooks/use-campaigns-list';
 import { useCharacterListData } from '@/features/character/hooks/use-character-list-data';
 
 /**
@@ -28,6 +29,14 @@ const CharacterList: React.FC = () => {
     setSearchTerm,
     fetchCharacters,
   } = useCharacterListData();
+
+  // #209: characters carry only campaign_id; the name comes from the shared
+  // campaigns list (same cache key as the other campaign screens).
+  const { data: campaignRows } = useCampaignsList();
+  const campaignNames = new Map<string, string>();
+  for (const campaign of campaignRows ?? []) {
+    if (campaign.id && campaign.name) campaignNames.set(campaign.id, campaign.name);
+  }
 
   const copyLabels = new Map<string, string>();
   const sameNames = new Map<string, typeof characters>();
@@ -142,6 +151,9 @@ const CharacterList: React.FC = () => {
                 key={character.id}
                 character={character as Partial<Character> & { id: string; name: string }}
                 copyLabel={copyLabels.get(character.id)}
+                campaignName={
+                  character.campaign_id ? campaignNames.get(character.campaign_id) : undefined
+                }
                 onDelete={fetchCharacters}
               />
             );

@@ -59,6 +59,9 @@ const CharacterCardHoverContent = ({
     <div
       className={`hover-popup ${isHovered ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'} absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 transition-all duration-300 ease-out`}
       style={isHovered ? { zIndex: Z_INDEX.CARD_HOVER } : undefined}
+      // #209: hidden from assistive tech while not shown, so a card's Play and
+      // Delete are announced once (the caption carries them).
+      aria-hidden={!isHovered}
     >
       <div className="ir-panel backdrop-blur-sm p-4 max-w-xs">
         {/* Avatar Display */}
@@ -175,6 +178,7 @@ const CharacterCardHoverContent = ({
           ) : (
             <Button
               size="sm"
+              tabIndex={-1}
               className="bg-infinite-gold text-infinite-dark flex items-center gap-2 hover:bg-infinite-purple"
               aria-label="Play as this character"
               title="Play as this character"
@@ -187,6 +191,7 @@ const CharacterCardHoverContent = ({
           <Button
             size="sm"
             variant="outline"
+            tabIndex={-1}
             className="border-infinite-teal text-infinite-teal hover:bg-infinite-teal hover:text-infinite-dark"
             aria-label="View character details"
             title="View character details"
@@ -197,6 +202,7 @@ const CharacterCardHoverContent = ({
           <Button
             variant="ghost"
             size="sm"
+            tabIndex={-1}
             className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 hover:border-infinite-dark/20"
             onClick={onDelete}
             aria-label="Delete character"
