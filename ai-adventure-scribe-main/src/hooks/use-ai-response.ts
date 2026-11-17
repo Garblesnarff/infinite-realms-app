@@ -34,6 +34,7 @@ import {
 import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { DYING_ACTION_REFUSED_NOTICE, dyingTurnDeclaration } from '@/hooks/ai/dying-turn';
+import { shadowFailedCheckHarm } from '@/hooks/ai/failed-check-harm-shadow';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
 import {
   enforceNarrationGate,
@@ -1145,6 +1146,18 @@ export const useAIResponse = (): {
           releaseHeldSideEffects(result);
         }
 
+        // #610: a failed check that narrates injury with no engine damage is logged (shadow only).
+        if (isDiceRollMessage && sessionId) {
+          await shadowFailedCheckHarm({
+            narration: result,
+            sessionId,
+            inCombat: isInCombat || combatWasActiveAtRequestStart,
+            declaredDamage: result.damage,
+            conversationHistory,
+            getOutcome: (sid) => SessionStateService.getLatestRollOutcome(sid),
+            isStale: (outcome, history) => isRollOutcomeStale(outcome, history),
+          });
+        }
         // #266: a roll-result turn carries the engine's authoritative verdict for the roll, and
         // the reply must follow it. A failed check narrated as a success (or the reverse) is
         // rejected once with the verdict named, then replaced like any other gated reply. The

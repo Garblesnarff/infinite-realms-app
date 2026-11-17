@@ -6,12 +6,14 @@ vi.mock('@/services/auth/TokenService', () => ({
   loadCachedSession: vi.fn(),
 }));
 
-import { NARRATED_DEATH_SHADOW_REPORT_BODY } from '../../../shared/test-fixtures/narration-shadow-telemetry';
+import {
+  FAILED_CHECK_SHADOW_REPORT_BODY,
+  NARRATED_DEATH_SHADOW_REPORT_BODY,
+} from '../../../shared/test-fixtures/narration-shadow-telemetry';
 
 import { waitForAuth } from '@/lib/auth-gate';
 import { loadCachedSession } from '@/services/auth/TokenService';
 import { reportNarrationShadowHit } from '@/services/client-failure-reporting';
-
 
 // #468 shadow count: the client sends exactly the shared fixture body (AGENTS.md §4).
 describe('reportNarrationShadowHit (#468)', () => {
@@ -34,5 +36,14 @@ describe('reportNarrationShadowHit (#468)', () => {
     expect(url).toContain('/v1/telemetry/client-failure');
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body).toMatchObject(NARRATED_DEATH_SHADOW_REPORT_BODY);
+  });
+
+  it('posts the #610 failed-check fixture body with pattern names only', async () => {
+    reportNarrationShadowHit('failed_check_harm_without_engine', 'sess-610-fixture', ['rope_burn']);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toMatchObject(FAILED_CHECK_SHADOW_REPORT_BODY);
   });
 });
