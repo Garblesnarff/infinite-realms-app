@@ -122,7 +122,8 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
     instructions,
   }) => {
     const [visible, setVisible] = useState(false);
-    const [selectedOption, setSelectedOption] = useState<string | null>(null);
+    // #1594: keyed by the card's position, not option.id. The model's ids can repeat.
+    const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
     // #1407: true while a clicked option's send is in flight. The ref closes the
     // gap before React re-renders, so a double click cannot send twice.
     const [isSending, setIsSending] = useState(false);
@@ -160,7 +161,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
       } else if (!isLoading) {
         // Settled and empty: final-empty. Clear immediately — no grace period (#118).
         setDisplayedOptions([]);
-        setSelectedOption(null);
+        setSelectedIndex(null);
         setIsRefreshing(false);
       }
     }, [incomingOptions, isLoading, visible, delay, displayedOptions.length]);
@@ -184,24 +185,24 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
     }, [incomingOptions.length, delay, visible]);
 
     // Handle option selection
-    const handleOptionClick = (option: ActionOption): void => {
-      if (disabled || isRefreshing || selectedOption || sendingRef.current) return;
+    const handleOptionClick = (option: ActionOption, index: number): void => {
+      if (disabled || isRefreshing || selectedIndex !== null || sendingRef.current) return;
       logger.info('[ActionOptions] Option clicked:', option.text);
       sendingRef.current = true;
       setIsSending(true);
-      setSelectedOption(option.id);
+      setSelectedIndex(index);
       const completion = onOptionSelect(option);
       void Promise.resolve(completion).then(
         () => {
           sendingRef.current = false;
           setIsSending(false);
-          if (resetSelectionAfterCompletion) setSelectedOption(null);
+          if (resetSelectionAfterCompletion) setSelectedIndex(null);
         },
         () => {
           // A failed send re-enables the row (#1407).
           sendingRef.current = false;
           setIsSending(false);
-          setSelectedOption(null);
+          setSelectedIndex(null);
         },
       );
     };
@@ -249,12 +250,12 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
               >
                 {optionsToRender.map((option, index) => {
                   const IconComponent = getOptionIcon(option.text);
-                  const isSelected = selectedOption === option.id;
+                  const isSelected = selectedIndex === index;
                   const isDisabled =
                     disabled ||
                     isRefreshing ||
                     isSending ||
-                    (selectedOption && selectedOption !== option.id);
+                    (selectedIndex !== null && selectedIndex !== index);
                   // Numbered by position: the model's own numbers can repeat or be missing (#2256).
                   const displayNumber = index + 1;
 
@@ -268,7 +269,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() => handleOptionClick(option)}
+                            onClick={() => handleOptionClick(option, index)}
                             disabled={isDisabled as boolean}
                             aria-pressed={isSelected}
                             aria-label={
@@ -341,7 +342,7 @@ export const ActionOptions: React.FC<ActionOptionsProps> = React.memo(
               </div>
 
               {/* Help text */}
-              {!selectedOption && (
+              {selectedIndex === null && (
                 <div className="text-xs text-muted-foreground text-center pt-2 opacity-75 [body.ir-table-look_&]:!text-[color:var(--ir-ink)]">
                   Or describe your own action in the chat
                 </div>
