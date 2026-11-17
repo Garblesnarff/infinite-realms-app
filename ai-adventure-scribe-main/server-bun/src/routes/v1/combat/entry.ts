@@ -458,20 +458,16 @@ export const entryRoutes = createCombatEntryRoutes();
 /**
  * #1595: the message names a creature the ledger marks dead. Returns that creature's name, or null.
  * The dead roster is only consulted after the live roster found nothing, so a live match always wins.
+ * Only an explicit name counts: `antecedent: null` stops a pronoun ("I hit him") from resolving to
+ * the dead creature the last narration mentioned.
  */
-function deadFoeNamed(
-  playerInput: string,
-  roster: CombatIntentRoster,
-  recentNarration: string | undefined,
-): string | null {
+function deadFoeNamed(playerInput: string, roster: CombatIntentRoster): string | null {
   if (roster.deadNames.length === 0) return null;
   const deadActors: CombatIntentActor[] = roster.deadNames.map((name) => ({
     name,
     source: 'ledger',
   }));
-  const attack = detectDeclaredAttack(playerInput, deadActors, {
-    antecedent: attackAntecedent(deadActors, recentNarration),
-  });
+  const attack = detectDeclaredAttack(playerInput, deadActors, { antecedent: null });
   return attack?.actorName ?? null;
 }
 
@@ -529,7 +525,7 @@ export function createDeclaredAttackRoutes({
       if (!declaredAttack && !targetChoice) {
         // #1595: a named creature the ledger marks dead gets a refusal the player can read, not a
         // silent `pending: null`. The client shows it as an engine notice and calls no DM.
-        const deadName = deadFoeNamed(body.playerInput, roster, body.recentNarration);
+        const deadName = deadFoeNamed(body.playerInput, roster);
         if (deadName) return { pending: null, refusal: { reason: 'dead', name: deadName } };
         logger.info({
           msg: 'DECLARED_ATTACK_NO_ROSTER_MATCH',

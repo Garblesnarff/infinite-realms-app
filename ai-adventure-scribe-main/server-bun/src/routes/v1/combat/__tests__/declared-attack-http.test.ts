@@ -99,6 +99,17 @@ describe('POST /v1/combat/sessions/:sessionId/declared-attack', () => {
       expect(await response.json()).toEqual({ pending: null });
     });
 
+    it('does not refuse a pronoun whose last narration names the dead creature (#1595)', async () => {
+      roster = deadFoeRoster.actors;
+      deadNames = deadFoeRoster.deadNames;
+      const response = await post({
+        ...deadFoeCheckBody,
+        playerInput: 'I hit him with my sword',
+        recentNarration: 'Dutch Pellam grins at you across the sand.',
+      });
+      expect(await response.json()).toEqual({ pending: null });
+    });
+
     it('offers entry, not a refusal, when a live creature of that name is present', async () => {
       roster = [{ name: 'Dutch Pellam', source: 'map' }];
       deadNames = ['Dutch Pellam'];
