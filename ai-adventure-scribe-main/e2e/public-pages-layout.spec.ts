@@ -107,8 +107,19 @@ for (const width of [1280, 390]) {
         }
         await page.screenshot({ path: `${screenshotDir}/landing-${width}.png` });
       } else if (route === '/explore') {
-        await expect(page.getByText('Open the box').first()).toBeVisible();
-        await expectTarget44(page.getByRole('link', { name: /explore .* campaign/i }).first());
+        // #1610: each campaign is the PublicExplore board card (navy, gold, "Begin your journey").
+        await expect(page.getByText('Begin your journey').first()).toBeVisible();
+        const boardCard = page.getByRole('link', { name: /Begin your journey$/i }).first();
+        await expectTarget44(boardCard);
+        // Navy card (#0c1220), gold ring, and gold call to action (#d5b070), as on the board.
+        expect(await boardCard.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
+          'rgb(12, 18, 32)',
+        );
+        expect(await boardCard.evaluate((el) => getComputedStyle(el).boxShadow)).toContain(
+          'rgba(213, 176, 112, 0.28)',
+        );
+        const cta = boardCard.getByText('Begin your journey');
+        expect(await cta.evaluate((el) => getComputedStyle(el).color)).toBe('rgb(213, 176, 112)');
       } else if (route === '/explore/abyssal-descent') {
         await expect(page.getByRole('button', { name: 'Choose Bram', exact: true })).toBeVisible();
         await expectTarget44(
