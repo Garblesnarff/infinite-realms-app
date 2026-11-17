@@ -13,6 +13,7 @@ import {
   characters,
   classFeaturesLibrary,
   dialogueHistory,
+  featureUsageLog,
   gameSessions,
 } from '../../../../../db/schema/index';
 import {
@@ -41,7 +42,7 @@ describeWithDb('a typed Lay on Hands outside a fight (#1597)', () => {
   let campaignId: string;
   let sessionId: string;
   let characterId: string;
-  let _featureId: string;
+  let featureId: string;
 
   const freshPaladin = async (currentHitPoints: number, pool: number) => {
     const [{ id: cid }] = await db
@@ -87,7 +88,7 @@ describeWithDb('a typed Lay on Hands outside a fight (#1597)', () => {
         ),
       )
       .limit(1);
-    _featureId =
+    featureId =
       existing?.id ??
       (
         await db
@@ -138,6 +139,38 @@ describeWithDb('a typed Lay on Hands outside a fight (#1597)', () => {
     expect(lines[0]).toContain('restores 5 HP');
     const rows = await engineRows();
     expect(rows.map((row) => row.message)).toContain(lines[0]);
+  });
+
+  it('a retried turn returns the same line and draws nothing again (#1597)', async () => {
+    const RETRY_INPUT = 'I use Lay on Hands on myself for 2 hit points';
+    // The player message the turn answers. A Retry replays this same message.
+    await db
+      .insert(dialogueHistory)
+      .values({ sessionId, speakerType: 'player', message: RETRY_INPUT });
+    const cid = await freshPaladin(10, 5);
+    const retrySpend = () =>
+      spendStoryFeatureUses({
+        userId,
+        sessionId,
+        playerInput: RETRY_INPUT,
+        character: { id: cid } as never,
+        features: ['lay on hands'],
+      });
+
+    const first = await retrySpend();
+    expect(first).toHaveLength(1);
+    expect(first[0]).toContain('restores 2 HP');
+    expect((await layOnHandsPool(cid, userId))!.remaining).toBe(3);
+
+    const retry = await retrySpend();
+    expect(retry).toEqual(first);
+    // One draw in all: the pool is still 3, and one usage row exists for this character.
+    expect((await layOnHandsPool(cid, userId))!.remaining).toBe(3);
+    const usage = await db
+      .select({ id: featureUsageLog.id })
+      .from(featureUsageLog)
+      .where(and(eq(featureUsageLog.characterId, cid), eq(featureUsageLog.featureId, featureId)));
+    expect(usage).toHaveLength(1);
   });
 
   it('a refused heal (empty pool) returns no line and posts nothing', async () => {

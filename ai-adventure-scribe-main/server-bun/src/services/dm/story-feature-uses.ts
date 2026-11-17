@@ -14,7 +14,7 @@
 import { and, eq, ilike, or } from 'drizzle-orm';
 
 import { db } from '../../../../db/client';
-import { characters } from '../../../../db/schema/index';
+import { characters, dialogueHistory } from '../../../../db/schema/index';
 import { logger } from '../../lib/logger.js';
 import { detectDeclaredLayOnHands } from '../combat/combat-intent-gate.js';
 
@@ -53,6 +53,30 @@ async function ownedCharacterByName(userId: string, name: string): Promise<strin
   return partial.length === 1 ? partial[0].id : null;
 }
 
+/**
+ * #1597: the id of a story Lay on Hands line. A retried turn answers the same player message, so
+ * it gets the same seed and finds the row the first spend posted.
+ */
+function layOnHandsLineSeed(sessionId: string, since: Date | null, featureName: string): string {
+  return `lay-on-hands:${sessionId}:${since ? since.toISOString() : 'none'}:${featureName}`;
+}
+
+/** #1597: the stored line of a Lay on Hands this message already spent, or null. */
+async function storedLayOnHandsLine(
+  sessionId: string,
+  since: Date | null,
+  featureName: string,
+): Promise<string | null> {
+  const { engineLineUuid } = await import('../engine-chat-line.js');
+  const id = engineLineUuid(layOnHandsLineSeed(sessionId, since, featureName));
+  const [row] = await db
+    .select({ message: dialogueHistory.message })
+    .from(dialogueHistory)
+    .where(eq(dialogueHistory.id, id))
+    .limit(1);
+  return row?.message ?? null;
+}
+
 export async function spendStoryFeatureUses(input: {
   userId: string;
   sessionId: string;
@@ -86,7 +110,11 @@ export async function spendStoryFeatureUses(input: {
     const key = name.toLowerCase();
     try {
       const featureName =
-        key === DIVINE_SENSE ? DIVINE_SENSE_NAME : key === LAY_ON_HANDS ? LAY_ON_HANDS_NAME : null;
+        key === DIVINE_SENSE
+          ? DIVINE_SENSE_NAME
+          : key === LAY_ON_HANDS
+            ? LAY_ON_HANDS_NAME
+            : null;
       if (!featureName) {
         // The gate allowed the claim, but only the two pooled paladin features
         // spend here; anything else reaching this point is a wiring gap.
@@ -102,6 +130,12 @@ export async function spendStoryFeatureUses(input: {
         })
       ) {
         logger.info({ msg: 'DM_STORY_FEATURE_SPEND_ALREADY_SPENT', sessionId, feature: name });
+        // #1597: a retried turn spends nothing again, but its reply still needs the line the first
+        // spend posted. Without it the gate replaces the heal narration with the no-effect line.
+        if (featureName === LAY_ON_HANDS_NAME) {
+          const line = await storedLayOnHandsLine(sessionId, since, featureName);
+          if (line) engineLines.push(line);
+        }
         continue;
       }
       if (key === DIVINE_SENSE) {
@@ -147,7 +181,7 @@ export async function spendStoryFeatureUses(input: {
             await postEngineChatLine({
               sessionId,
               userId,
-              idSeed: `lay-on-hands:${sessionId}:${since ? since.toISOString() : 'none'}:${name}`,
+              idSeed: layOnHandsLineSeed(sessionId, since, featureName),
               text: laid.message,
               context: { intent: 'lay_on_hands', origin: 'story' },
             });
