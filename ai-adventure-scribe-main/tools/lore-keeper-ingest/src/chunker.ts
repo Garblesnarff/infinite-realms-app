@@ -592,6 +592,12 @@ function extractQuests(campaignId: string, content: string): CampaignChunk[] {
 
 /**
  * Extract Mechanics from campaign bible
+ *
+ * #1612: line-based scan. Headed mode (any line-start `### ` heading) splits only at
+ * line-start `###` headings whose text starts with a bold/italic marker; numbered
+ * items inside such a body stay with the parent. Numbered mode (no `### ` heading)
+ * splits at line-start numbered bold/italic items, allowing single-star italics
+ * inside the bold name (closing `**` is the last two stars).
  */
 function extractMechanics(campaignId: string, content: string): CampaignChunk[] {
   const chunks: CampaignChunk[] = [];
@@ -600,26 +606,91 @@ function extractMechanics(campaignId: string, content: string): CampaignChunk[] 
     extractSection(content, 'Mechanic') || extractSection(content, 'Unique Mechanic');
   if (!mechanicsSection) return chunks;
 
-  // Look for numbered or ### mechanics. The terminator lookahead is anchored
-  // to line starts (#1101): unanchored, a sentence ending in a number followed
-  // by a bullet line matches `\d+\.\s*\*` across the break ("round 5.\n*") and
-  // ends the chunk mid-body, dropping the rest of the mechanic. Line-start
-  // numbered mechanics still split, as the quest/item patterns already assume.
-  const mechanicPattern = /(?:###|\d+\.)\s*\*\*?(.+?)\*\*?\s*\n([\s\S]*?)(?=\n###|\n\d+\.\s*\*|\n##|$)/g;
-  const matches = mechanicsSection.matchAll(mechanicPattern);
+  const lines = mechanicsSection.split('\n');
 
-  for (const match of matches) {
-    const [, name, details] = match;
+  // Parse a bold/italic marker at the start of `text`, returning name + remainder.
+  const parseMarker = (text: string): { name: string; remainder: string } | null => {
+    const trimmed = text.trim();
+    if (trimmed.startsWith('**')) {
+      // The name ends at the first `**` that is not part of a `*italic*` span.
+      const m = trimmed.match(/^\*\*((?:[^*]|\*[^*]+\*)+)\*\*(.*)$/s);
+      if (!m) return null;
+      return { name: m[1].trim(), remainder: m[2].trim() };
+    }
+    if (trimmed.startsWith('*')) {
+      const m = trimmed.match(/^\*(.+?)\*(.*)$/s);
+      if (!m) return null;
+      return { name: m[1].trim(), remainder: m[2].trim() };
+    }
+    return null;
+  };
+
+  const hasH3 = lines.some((line) => /^###\s/.test(line));
+
+  const pushMechanic = (name: string, body: string): void => {
     chunks.push({
       campaignId,
       chunkType: 'mechanic',
       entityName: name.trim(),
-      content: cleanContent(`**${name.trim()}**\n\n${details}`),
+      content: cleanContent(`**${name.trim()}**\n\n${body}`),
       summary: `Game mechanic: ${name.trim()}`,
       metadata: {},
       sourceFile: 'campaign_bible.md',
       sourceSection: 'Mechanics',
     });
+  };
+
+  if (hasH3) {
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      if (/^###\s/.test(line)) {
+        const headingContent = line.replace(/^###\s+/, '');
+        const withoutNum = headingContent.replace(/^\d+\.\s*/, '');
+        const parsed = parseMarker(withoutNum);
+        if (parsed) {
+          let end = lines.length;
+          for (let j = i + 1; j < lines.length; j++) {
+            if (/^###/.test(lines[j]) || /^##\s/.test(lines[j])) {
+              end = j;
+              break;
+            }
+          }
+          const bodyLines = lines.slice(i + 1, end);
+          const body = (parsed.remainder ? parsed.remainder + '\n' : '') + bodyLines.join('\n');
+          pushMechanic(parsed.name, body);
+          i = end;
+          continue;
+        }
+      }
+      i++;
+    }
+  } else {
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const numMatch = line.match(/^\d+\.\s*\*/);
+      if (numMatch) {
+        const withoutNum = line.replace(/^\d+\.\s*/, '');
+        const parsed = parseMarker(withoutNum);
+        if (parsed) {
+          let end = lines.length;
+          for (let j = i + 1; j < lines.length; j++) {
+            const l = lines[j];
+            if (/^\d+\.\s*\*/.test(l) || /^##/.test(l) || /^###/.test(l)) {
+              end = j;
+              break;
+            }
+          }
+          const bodyLines = lines.slice(i + 1, end);
+          const body = (parsed.remainder ? parsed.remainder + '\n' : '') + bodyLines.join('\n');
+          pushMechanic(parsed.name, body);
+          i = end;
+          continue;
+        }
+      }
+      i++;
+    }
   }
 
   return chunks;
