@@ -39,7 +39,7 @@ interface Shot {
   outWidth: number;
   /** Rows kept from the top, so the picture has the aspect ratio the board draws. */
   keepHeight: number;
-  /** Chrome hidden for this picture only: the phone's timeline rail and its character strip. */
+  /** Decorative chrome hidden for this picture only (the phone's rail and strip, the table frame, the candle). */
   hide: string[];
 }
 
@@ -49,14 +49,14 @@ const shots: Shot[] = [
     viewport: { width: 1280, height: 800 },
     outWidth: 1280,
     keepHeight: 798,
-    hide: [],
+    hide: ['.ir-table-felt', '.ir-candle'],
   },
   {
     name: 'table-game-390',
     viewport: { width: 390, height: 844 },
     outWidth: 390,
     keepHeight: 843,
-    hide: ['.timeline-rail', '.order-1 > .min-h-0'],
+    hide: ['.timeline-rail', '.order-1 > .min-h-0', '.ir-table-felt', '.ir-candle'],
   },
 ];
 
@@ -104,7 +104,12 @@ async function capture(browser: Browser, shot: Shot): Promise<void> {
 
   await page.goto(`${baseUrl}/e2e/landing-hero-capture.html`, { waitUntil: 'load' });
   await page.getByTestId('story-box').waitFor({ timeout: 120_000 });
-  await page.waitForTimeout(2500);
+  // The option cards arrive after the DM message settles; wait for the first card, not a fixed time.
+  await page
+    .getByText('Climb hand over hand')
+    .first()
+    .waitFor({ state: 'visible', timeout: 60_000 });
+  await page.waitForTimeout(1000);
 
   // The header's build-and-session button shows a build id and a session id. Screenshots must not
   // carry ids (#1432), so it is hidden for the capture only.
@@ -123,6 +128,29 @@ async function capture(browser: Browser, shot: Shot): Promise<void> {
     },
     { ids: ['[data-testid="build-session-status"]'], selectors: shot.hide },
   );
+
+  // Start the story on a whole message: scroll the story so the first message that fits in the
+  // box, with every message below it, is at the top edge. A half-cut message never starts the picture.
+  await page.evaluate(() => {
+    const first = document.querySelector<HTMLElement>('[data-testid="story-box"] [id^="m-"]');
+    if (!first) return;
+    let scroller: HTMLElement | null = first.parentElement;
+    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
+      scroller = scroller.parentElement;
+    }
+    if (!scroller) return;
+    const messages = [...scroller.querySelectorAll<HTMLElement>(':scope [id^="m-"]')];
+    const last = messages[messages.length - 1];
+    const viewTop = scroller.getBoundingClientRect().top;
+    const fits = (el: HTMLElement): boolean =>
+      last.getBoundingClientRect().bottom - el.getBoundingClientRect().top <= scroller.clientHeight;
+    const start = messages.find(fits) ?? last;
+    // Align below the scroller's top padding, so the message's label and avatar are not in the fade.
+    const padTop = parseFloat(getComputedStyle(scroller).paddingTop) || 0;
+    scroller.style.scrollBehavior = 'auto';
+    scroller.scrollTop += start.getBoundingClientRect().top - viewTop - padTop;
+  });
+  await page.waitForTimeout(400);
 
   const png = await page.screenshot({ type: 'png' });
   const dataUrl = `data:image/png;base64,${png.toString('base64')}`;

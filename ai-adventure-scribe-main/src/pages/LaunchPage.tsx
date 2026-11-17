@@ -164,7 +164,7 @@ const LaunchPage: React.FC = () => {
                     loading="eager"
                     fetchPriority="high"
                     decoding="async"
-                    alt="The Table game screen: the Dungeon Master's narration on parchment with an engine line above it, a map sketch and the character sheet on the left, a roll tray and the scene picture on the right, and the message box at the bottom."
+                    alt="The Table game screen: the Dungeon Master's three-paragraph narration on parchment with Listen and Illustrate controls, two numbered option cards below it, the character sheet and a map sketch on the left, a roll tray and the scene picture on the right, and the message box at the bottom."
                     className="block h-auto w-full rounded-lg object-cover"
                   />
                 </div>
@@ -184,7 +184,7 @@ const LaunchPage: React.FC = () => {
                     height={549}
                     loading="lazy"
                     decoding="async"
-                    alt="The game on a phone: the Dungeon Master's narration on parchment, a scene chip, and the message box at the bottom."
+                    alt="The game on a phone: the Dungeon Master's narration on parchment with a Listen button, the start of the option cards cut off at the bottom, a scene chip, and the message box at the bottom."
                     className="block h-auto w-[254px] max-w-full rounded-[14px] object-cover"
                   />
                 </div>

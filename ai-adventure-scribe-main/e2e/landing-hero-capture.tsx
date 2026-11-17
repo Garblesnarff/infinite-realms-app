@@ -28,33 +28,25 @@ const SCENE_ART_URL =
   'https://example.supabase.co/storage/v1/object/public/campaign-art/basalt-ruins.jpg';
 
 /**
- * Three short DM paragraphs in two bubbles, with an engine line between them. The last bubble
- * carries the location, which fills the scene header. No timestamps, so no date line; no combat
- * summary message, so no legacy card.
+ * An engine line, then one DM message: three short paragraphs and two numbered options, which the
+ * game shows as option cards under the message. The message carries the location, which fills the
+ * scene header. No timestamps, so no date line; no combat summary message, so no legacy card.
  */
 const story = [
-  {
-    id: 'dm-0',
-    speaker_type: 'dm',
-    message:
-      'On the far ledge, Mara Quill is already climbing. She looks back once and waves you on.',
-    sequence_number: 1,
-    context: {},
-  },
   {
     id: 'engine-athletics',
     speaker_type: 'system',
     message: 'Athletics 17 SUCCESS',
-    sequence_number: 2,
-    context: {},
+    sequence_number: 1,
+    context: { location: 'Basalt Stair' },
   },
   {
-    id: 'dm-1',
+    id: 'dm-0',
     speaker_type: 'dm',
     message:
-      'The rope holds, but the stone is slick.\n\nSomething scrapes against the rock below, then goes still.',
-    sequence_number: 3,
-    context: { location: 'Basalt Stair' },
+      'On the far ledge, Mara Quill is already climbing. She looks back once and waves you on.\n\nThe rope holds, but the stone is slick.\n\nSomewhere below, something scrapes against the rock, then goes still.\n\n1. **Climb hand over hand**, keeping your weight low.\n2. **Call down to Mara**, asking what she sees.',
+    sequence_number: 2,
+    context: {},
   },
 ];
 
