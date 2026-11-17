@@ -232,6 +232,11 @@ export class CharacterSpellService {
     }
 
     await db.transaction(async (tx) => {
+      // Same per-character lock as the always-prepared grant, so a save and a grant (or two
+      // saves) for one character queue instead of racing on (character_id, spell_id).
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${characterId}::text, 0))`,
+      );
       // Clear existing spells with ownership check in WHERE clause for defense-in-depth
       const deleted = await tx
         .delete(characterSpells)
@@ -320,7 +325,14 @@ export class CharacterSpellService {
         for (const spellId of racialSpellIds)
           if (!grantable.some((row) => row.spellId === spellId)) grantable.push({ spellId });
 
-        if (grantable.length > 0) {
+        // Dedupe by spellId so a class_spells table with duplicate rows never
+        // produces duplicate (character_id, spell_id) inserts.
+        // Sorted so concurrent saves take row locks in the same order.
+        const dedupedGrantable = Array.from(
+          new Map(grantable.map((row) => [row.spellId, row])).values(),
+        ).sort((x, y) => x.spellId.localeCompare(y.spellId));
+
+        if (dedupedGrantable.length > 0) {
           // #2710: when the caller sends an explicit prepared set, write
           // isPrepared per spell. When omitted, keep the old behaviour
           // (all true) so existing callers don't break.
@@ -328,7 +340,7 @@ export class CharacterSpellService {
           const inserted = await tx
             .insert(characterSpells)
             .values(
-              grantable.map((row) => ({
+              dedupedGrantable.map((row) => ({
                 characterId,
                 spellId: row.spellId,
                 sourceClassId: classData.id,
@@ -336,6 +348,13 @@ export class CharacterSpellService {
                 sourceFeature: racialSpellIds.has(row.spellId) ? 'racial' : 'base',
               })),
             )
+            .onConflictDoUpdate({
+              target: [characterSpells.characterId, characterSpells.spellId],
+              set: {
+                isPrepared: sql`excluded.is_prepared OR ${characterSpells.isAlwaysPrepared}`,
+                updatedAt: new Date(),
+              },
+            })
             .returning({ id: characterSpells.id });
 
           insertedCount = inserted.length;

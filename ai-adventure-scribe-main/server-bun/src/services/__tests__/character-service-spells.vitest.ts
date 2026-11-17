@@ -15,6 +15,7 @@ vi.mock('../../../../db/client', () => ({
     },
     select: vi.fn(),
     transaction: vi.fn(),
+    execute: vi.fn().mockResolvedValue([]),
     insert: vi.fn(() => ({
       values: vi.fn().mockReturnThis(),
       select: vi.fn().mockReturnThis(),
@@ -190,6 +191,7 @@ describe('CharacterSpellService.saveCharacterSpells', () => {
     // 5. Insert mock
     (db.insert as any).mockReturnValue({
       values: vi.fn().mockReturnThis(),
+      onConflictDoUpdate: vi.fn().mockReturnThis(),
       select: vi.fn().mockReturnThis(),
       returning: vi.fn().mockResolvedValue([{ id: 'log-123' }]),
     });

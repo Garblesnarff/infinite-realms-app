@@ -371,6 +371,112 @@ describeWithDb('character spell prepared flags (#211 QA-041)', () => {
     expect(sheet.spells.find((s) => s.name === 'Test Mage Armor 211')?.is_prepared).toBe(false);
     expect(sheet.cantrips).toHaveLength(1);
   });
+  it('repeated and concurrent saves do not throw and keep one row per pair (#1567)', async () => {
+    const allSpellIds = [fireBoltId, magicMissileId, shieldId, mageArmorId];
+
+    // Sequential repeat.
+    const r1 = await CharacterSpellService.saveCharacterSpells(
+      characterId,
+      userId,
+      allSpellIds,
+      'TestWizard211',
+      [magicMissileId, shieldId],
+    );
+    expect(r1.success).toBe(true);
+    const r2 = await CharacterSpellService.saveCharacterSpells(
+      characterId,
+      userId,
+      allSpellIds,
+      'TestWizard211',
+      [magicMissileId, shieldId],
+    );
+    expect(r2.success).toBe(true);
+
+    // Concurrent repeat.
+    await Promise.all([
+      CharacterSpellService.saveCharacterSpells(characterId, userId, allSpellIds, 'TestWizard211', [
+        magicMissileId,
+        shieldId,
+      ]),
+      CharacterSpellService.saveCharacterSpells(characterId, userId, allSpellIds, 'TestWizard211', [
+        magicMissileId,
+        shieldId,
+      ]),
+    ]);
+
+    const rows = await db
+      .select({ spellId: characterSpells.spellId })
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, characterId));
+    expect(new Set(rows.map((r) => r.spellId)).size).toBe(rows.length);
+    expect(rows).toHaveLength(4);
+  });
+
+  it('rejects a raw duplicate (character_id, spell_id) insert with code 23505 (#1567)', async () => {
+    // Ensure a row exists for this pair.
+    await db
+      .insert(characterSpells)
+      .values({ characterId, spellId: fireBoltId, sourceClassId: wizardClassId })
+      .onConflictDoNothing();
+
+    let caught: unknown = null;
+    try {
+      await db.insert(characterSpells).values({
+        characterId,
+        spellId: fireBoltId,
+        sourceClassId: wizardClassId,
+      });
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).not.toBeNull();
+    const err = caught as { code?: string; cause?: { code?: string } };
+    const code = err.code ?? err.cause?.code;
+    expect(code).toBe('23505');
+  });
+
+  it('a save for a pair another class already holds upserts without a unique violation and keeps always-prepared (#1567)', async () => {
+    const [{ id: otherClassId }] = await db
+      .insert(classes)
+      .values({ name: 'TestOther1567', hitDie: 8 })
+      .returning({ id: classes.id });
+    try {
+      await db.delete(characterSpells).where(eq(characterSpells.characterId, characterId));
+      await db.insert(characterSpells).values({
+        characterId,
+        spellId: shieldId,
+        sourceClassId: otherClassId,
+        isPrepared: true,
+        isAlwaysPrepared: true,
+        sourceFeature: 'always-prepared',
+      });
+
+      const result = await CharacterSpellService.saveCharacterSpells(
+        characterId,
+        userId,
+        [shieldId, magicMissileId],
+        'TestWizard211',
+        [magicMissileId],
+      );
+      expect(result.success).toBe(true);
+
+      const rows = await db
+        .select({
+          spellId: characterSpells.spellId,
+          isPrepared: characterSpells.isPrepared,
+          isAlwaysPrepared: characterSpells.isAlwaysPrepared,
+        })
+        .from(characterSpells)
+        .where(eq(characterSpells.characterId, characterId));
+      expect(rows).toHaveLength(2);
+      const shield = rows.find((row) => row.spellId === shieldId);
+      expect(shield?.isAlwaysPrepared).toBe(true);
+      expect(shield?.isPrepared).toBe(true);
+    } finally {
+      await db.delete(characterSpells).where(eq(characterSpells.characterId, characterId));
+      await db.delete(classes).where(eq(classes.id, otherClassId));
+    }
+  });
 });
 
 describeWithDb('#1011 deleting a character cascades to character_spells (migration 0029)', () => {

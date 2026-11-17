@@ -5,7 +5,17 @@
  * Includes classes, races, spells, and their relationships.
  */
 
-import { pgTable, uuid, text, timestamp, jsonb, index, integer, boolean } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  text,
+  timestamp,
+  jsonb,
+  index,
+  integer,
+  boolean,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 import { characters } from './game';
 
@@ -32,7 +42,7 @@ export const classes = pgTable(
   (table) => ({
     nameIdx: index('idx_classes_name').on(table.name),
     casterTypeIdx: index('idx_classes_caster_type').on(table.casterType),
-  })
+  }),
 );
 
 /**
@@ -55,7 +65,7 @@ export const races = pgTable(
   },
   (table) => ({
     nameIdx: index('idx_races_name').on(table.name),
-  })
+  }),
 );
 
 /**
@@ -95,7 +105,7 @@ export const spells = pgTable(
     levelIdx: index('idx_spells_level').on(table.level),
     schoolIdx: index('idx_spells_school').on(table.school),
     levelSchoolIdx: index('idx_spells_level_school').on(table.level, table.school),
-  })
+  }),
 );
 
 /**
@@ -106,8 +116,12 @@ export const classSpells = pgTable(
   'class_spells',
   {
     id: uuid('id').primaryKey().defaultRandom(),
-    classId: uuid('class_id').notNull().references(() => classes.id, { onDelete: 'cascade' }),
-    spellId: uuid('spell_id').notNull().references(() => spells.id, { onDelete: 'cascade' }),
+    classId: uuid('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    spellId: uuid('spell_id')
+      .notNull()
+      .references(() => spells.id, { onDelete: 'cascade' }),
     spellLevel: integer('spell_level').notNull(),
     sourceFeature: text('source_feature').default('base'), // 'base', 'domain', 'oath', etc.
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
@@ -115,7 +129,7 @@ export const classSpells = pgTable(
   (table) => ({
     classIdIdx: index('idx_class_spells_class_id').on(table.classId),
     spellIdIdx: index('idx_class_spells_spell_id').on(table.spellId),
-  })
+  }),
 );
 
 /**
@@ -132,8 +146,12 @@ export const characterSpells = pgTable(
     characterId: uuid('character_id')
       .notNull()
       .references(() => characters.id, { onDelete: 'cascade' }),
-    spellId: uuid('spell_id').notNull().references(() => spells.id, { onDelete: 'cascade' }),
-    sourceClassId: uuid('source_class_id').notNull().references(() => classes.id, { onDelete: 'cascade' }),
+    spellId: uuid('spell_id')
+      .notNull()
+      .references(() => spells.id, { onDelete: 'cascade' }),
+    sourceClassId: uuid('source_class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
     isPrepared: boolean('is_prepared').default(true),
     isAlwaysPrepared: boolean('is_always_prepared').default(false),
     sourceFeature: text('source_feature').default('base'),
@@ -144,7 +162,11 @@ export const characterSpells = pgTable(
   (table) => ({
     characterIdIdx: index('idx_character_spells_character_id').on(table.characterId),
     spellIdIdx: index('idx_character_spells_spell_id').on(table.spellId),
-  })
+    characterSpellUniqueIdx: uniqueIndex('idx_character_spells_character_spell_unique').on(
+      table.characterId,
+      table.spellId,
+    ),
+  }),
 );
 
 // Type exports for TypeScript inference

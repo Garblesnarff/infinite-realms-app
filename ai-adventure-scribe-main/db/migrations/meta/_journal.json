@@ -239,6 +239,13 @@
       "when": 1794240000000,
       "tag": "0035_character_origin",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1794326400000,
+      "tag": "0036_character_spells_character_spell_unique",
+      "breakpoints": true
     }
   ]
 }
