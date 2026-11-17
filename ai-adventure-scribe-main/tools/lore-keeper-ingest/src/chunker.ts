@@ -593,11 +593,14 @@ function extractQuests(campaignId: string, content: string): CampaignChunk[] {
 /**
  * Extract Mechanics from campaign bible
  *
- * #1612: line-based scan. Headed mode (any line-start `### ` heading) splits only at
- * line-start `###` headings whose text starts with a bold/italic marker; numbered
- * items inside such a body stay with the parent. Numbered mode (no `### ` heading)
- * splits at line-start numbered bold/italic items, allowing single-star italics
- * inside the bold name (closing `**` is the last two stars).
+ * #1612: line-based scan. Headed mode (any line-start `### ` heading) splits at
+ * line-start headings of three or more `#` whose text starts with a bold/italic
+ * marker (including `####`), and at line-start numbered bold/italic items that
+ * appear before the first `### ` heading; numbered items inside a `###` body stay
+ * with the parent. A body ends at any line starting with `###` (which includes
+ * `####`) or `## `. Numbered mode (no `### ` heading) splits at line-start
+ * numbered bold/italic items, allowing single-star italics inside the bold name
+ * (closing `**` is the last two stars).
  */
 function extractMechanics(campaignId: string, content: string): CampaignChunk[] {
   const chunks: CampaignChunk[] = [];
@@ -642,10 +645,15 @@ function extractMechanics(campaignId: string, content: string): CampaignChunk[] 
 
   if (hasH3) {
     let i = 0;
+    let seenH3 = false;
     while (i < lines.length) {
       const line = lines[i];
-      if (/^###\s/.test(line)) {
-        const headingContent = line.replace(/^###\s+/, '');
+      if (/^###\s/.test(line)) seenH3 = true;
+
+      // A line-start heading of three or more `#` followed by a bold/italic
+      // marker starts its own mechanic; body ends at any `###` (incl. `####`) or `## ` line.
+      if (/^#{3,}\s/.test(line)) {
+        const headingContent = line.replace(/^#{3,}\s+/, '');
         const withoutNum = headingContent.replace(/^\d+\.\s*/, '');
         const parsed = parseMarker(withoutNum);
         if (parsed) {
@@ -662,7 +670,34 @@ function extractMechanics(campaignId: string, content: string): CampaignChunk[] 
           i = end;
           continue;
         }
+        i++;
+        continue;
       }
+
+      // Numbered bold/italic items before the first `### ` heading start their own mechanic.
+      if (!seenH3) {
+        const numMatch = line.match(/^\d+\.\s*\*/);
+        if (numMatch) {
+          const withoutNum = line.replace(/^\d+\.\s*/, '');
+          const parsed = parseMarker(withoutNum);
+          if (parsed) {
+            let end = lines.length;
+            for (let j = i + 1; j < lines.length; j++) {
+              const l = lines[j];
+              if (/^\d+\.\s*\*/.test(l) || /^##/.test(l) || /^###/.test(l)) {
+                end = j;
+                break;
+              }
+            }
+            const bodyLines = lines.slice(i + 1, end);
+            const body = (parsed.remainder ? parsed.remainder + '\n' : '') + bodyLines.join('\n');
+            pushMechanic(parsed.name, body);
+            i = end;
+            continue;
+          }
+        }
+      }
+
       i++;
     }
   } else {

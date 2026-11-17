@@ -592,3 +592,35 @@ test('a mechanic name ends at its own closing bold, not at a later bold word (#1
   );
   assert.ok(mechanics[0].content.includes('Rise with **every** moon.'));
 });
+
+test('a numbered mechanic before the first ### heading still gets its own chunk (#1612)', () => {
+  const { chunks } = chunkCampaignFiles('test-campaign', {
+    campaignBible:
+      '## Mechanics\n\n1. **Top**\nTop body.\n\n### **Alpha**\n1. **Inner**\nInner body.',
+  });
+  const mechanics = chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    mechanics.map((chunk) => chunk.entityName),
+    ['Top', 'Alpha'],
+  );
+  const top = mechanics.find((chunk) => chunk.entityName === 'Top');
+  assert.ok(top);
+  assert.ok(top.content.includes('Top body.'));
+  const alpha = mechanics.find((chunk) => chunk.entityName === 'Alpha');
+  assert.ok(alpha);
+  assert.ok(alpha.content.includes('Inner body.'));
+});
+
+test('a #### bold heading inside a mechanic still gets its own chunk (#1612)', () => {
+  const { chunks } = chunkCampaignFiles('test-campaign', {
+    campaignBible: '## Mechanics\n\n### **Alpha**\nAlpha body.\n#### **Sub**\nSub body.',
+  });
+  const mechanics = chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    mechanics.map((chunk) => chunk.entityName),
+    ['Alpha', 'Sub'],
+  );
+  const sub = mechanics.find((chunk) => chunk.entityName === 'Sub');
+  assert.ok(sub);
+  assert.ok(sub.content.includes('Sub body.'));
+});
