@@ -172,6 +172,45 @@ describe('ActionOptions', () => {
     expect(body).toHaveClass('break-words');
   });
 
+  describe('#1594: the chosen card is the only selected card, even when option ids repeat', () => {
+    // The model's numbering can repeat, so every card can carry the same id.
+    const repeatedIdOptions: ActionOption[] = [
+      { id: 'opt-1', number: 1, text: 'Attack the goblin', fullText: '1. **Attack**' },
+      { id: 'opt-1', number: 1, text: 'Talk to the merchant', fullText: '2. **Talk**' },
+      { id: 'opt-1', number: 1, text: 'Look around', fullText: '3. **Look**' },
+    ];
+
+    it('after a choice, only the chosen card is aria-pressed and labelled Selected', () => {
+      const onSelect = vi.fn();
+      render(<ActionOptions options={repeatedIdOptions} onOptionSelect={onSelect} delay={0} />);
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      const talk = screen.getByText(/Talk to the merchant/i).closest('button');
+      expect(talk).not.toBeNull();
+      fireEvent.click(talk as HTMLElement);
+
+      expect(onSelect).toHaveBeenCalledTimes(1);
+      expect(onSelect).toHaveBeenCalledWith(repeatedIdOptions[1]);
+
+      const pressed = screen
+        .getAllByRole('button')
+        .filter((button) => button.hasAttribute('aria-pressed'))
+        .map((button) => button.getAttribute('aria-pressed'));
+      expect(pressed).toEqual(['false', 'true', 'false']);
+
+      expect(
+        screen.getByRole('button', { name: 'Selected: Option 2 - Talk to the merchant' }),
+      ).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /^Selected:/ })).toHaveLength(1);
+      expect(
+        screen.getByRole('button', { name: 'Option 1 - Attack the goblin' }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Option 3 - Look around' })).toBeInTheDocument();
+    });
+  });
+
   describe('option numbering (#2256)', () => {
     const showOptions = (options: typeof mockOptions) => {
       render(<ActionOptions options={options} onOptionSelect={onOptionSelect} delay={0} />);
