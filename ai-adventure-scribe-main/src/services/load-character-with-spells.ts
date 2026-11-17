@@ -300,6 +300,9 @@ export async function loadCharacterWithSpells(
       ideals: [],
       bonds: [],
       flaws: [],
+      // #1593: the server's engine-owned flag (characters.ts). Absent means not held, so
+      // the session coin is grey rather than hidden.
+      inspiration: characterData.inspiration === true,
       equipment: [],
       ...(equipmentRows ? { inventory: equipmentRowsToInventory(equipmentRows) } : {}),
       // Character images
