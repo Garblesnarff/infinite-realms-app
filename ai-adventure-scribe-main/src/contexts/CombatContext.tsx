@@ -106,10 +106,7 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
   const { equipMainHandWeapon, equipOffHandWeapon, unequipMainHandWeapon, unequipOffHandWeapon } =
     useMemo(() => createWeaponHandlers(dispatch), []);
 
-  const { dealDamage, healDamage, applyCondition, removeCondition, rollDeathSave } = useMemo(
-    () => createHealthHandlers(dispatch, () => stateRef.current),
-    [],
-  );
+  const { dealDamage } = useMemo(() => createHealthHandlers(dispatch, () => stateRef.current), []);
 
   // ===========================
   // Extracted Callback Hooks
@@ -154,10 +151,6 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
       rollInitiative,
       takeAction,
       dealDamage,
-      healDamage,
-      applyCondition,
-      removeCondition,
-      rollDeathSave,
       addParticipant,
       removeParticipant,
       updateParticipant,
@@ -188,10 +181,6 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
       rollInitiative,
       takeAction,
       dealDamage,
-      healDamage,
-      applyCondition,
-      removeCondition,
-      rollDeathSave,
       addParticipant,
       removeParticipant,
       updateParticipant,

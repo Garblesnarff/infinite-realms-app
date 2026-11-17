@@ -519,9 +519,8 @@ describe('useCombatMechanics', () => {
 
       vi.mocked(deathSaves.needsDeathSaves).mockReturnValue(true);
 
-      const { executeAuthoritativeCombatIntent } = await import(
-        '@/services/combat/combat-action-executor'
-      );
+      const { executeAuthoritativeCombatIntent } =
+        await import('@/services/combat/combat-action-executor');
 
       await act(async () => {
         await result.current.handleDeathSave('p1');
@@ -536,8 +535,7 @@ describe('useCombatMechanics', () => {
         undefined,
         'action_bar',
       );
-      // The old local-only path is gone: no local roll, no local state update.
-      expect(deathSaves.rollDeathSave).not.toHaveBeenCalled();
+      // The old local-only path is gone: no local state update.
       expect(mockUpdateParticipant).not.toHaveBeenCalled();
       expect(mockTakeAction).not.toHaveBeenCalled();
     });
@@ -547,7 +545,7 @@ describe('useCombatMechanics', () => {
       await act(async () => {
         await result.current.handleDeathSave('non-existent');
       });
-      expect(deathSaves.rollDeathSave).not.toHaveBeenCalled();
+      expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
     });
   });
 

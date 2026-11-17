@@ -223,14 +223,6 @@ export interface CombatContextValue {
   // Actions
   takeAction: (action: Partial<CombatAction>) => Promise<void>;
   dealDamage: (participantId: string, damage: number, damageType?: DamageType) => Promise<void>;
-  healDamage: (participantId: string, healing: number) => Promise<void>;
-
-  // Conditions
-  applyCondition: (participantId: string, condition: Condition) => Promise<void>;
-  removeCondition: (participantId: string, conditionName: ConditionName) => Promise<void>;
-
-  // Death saves
-  rollDeathSave: (participantId: string) => Promise<'success' | 'failure' | 'critical'>;
 
   // Participants
   addParticipant: (participant: Partial<CombatParticipant>) => Promise<void>;
