@@ -336,4 +336,30 @@ describe('CharacterCard #209 touch-reachable Play and campaign label', () => {
     expect(screen.queryByTestId('character-card-play')).not.toBeInTheDocument();
     expect(screen.getByTestId('character-card-campaign')).toHaveTextContent('Abyssal Descent');
   });
+
+  it('exposes one Play and one Delete per card at rest, and Tab reaches one Play', async () => {
+    const user = userEvent.setup();
+    renderCard(scholarCopy());
+
+    // The hover popup carries duplicate Play/Delete; at rest it must be hidden
+    // from assistive tech so only the caption's controls are announced.
+    expect(screen.getAllByRole('button', { name: /^Play/ })).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: /^Delete/ })).toHaveLength(1);
+
+    const focusedPlay = new Set<Element>();
+    const focusedDelete = new Set<Element>();
+    for (let step = 0; step < 12; step += 1) {
+      await user.tab();
+      const active = document.activeElement;
+      if (active?.getAttribute('data-testid') === 'character-card-play') focusedPlay.add(active);
+      if (active?.getAttribute('data-testid') === 'character-card-delete')
+        focusedDelete.add(active);
+      if (active && /^(Play|Delete)/.test(active.getAttribute('aria-label') ?? '')) {
+        // Any Play or Delete that receives focus must be the caption's own.
+        expect(active.getAttribute('data-testid')).toMatch(/^character-card-(play|delete)$/);
+      }
+    }
+    expect(focusedPlay.size).toBe(1);
+    expect(focusedDelete.size).toBe(1);
+  });
 });
