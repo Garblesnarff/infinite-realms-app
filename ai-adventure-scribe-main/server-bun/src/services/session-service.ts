@@ -582,7 +582,10 @@ export class SessionService {
         rows.map((row) => row.session.campaignId).filter((id): id is string => Boolean(id)),
       ),
     ];
-    const displayNumbers = await getOwnedCampaignSessionNumbers(campaignIds, userId);
+    const rankMaps = await Promise.all(
+      campaignIds.map((campaignId) => getOwnedCampaignSessionNumbers(db, campaignId, userId)),
+    );
+    const displayNumbers = new Map(rankMaps.flatMap((ranks) => [...ranks]));
 
     return rows.map((row) => ({
       ...mapSessionListApiRow(

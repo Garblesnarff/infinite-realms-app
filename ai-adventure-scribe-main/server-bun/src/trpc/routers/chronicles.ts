@@ -148,10 +148,9 @@ export const chroniclesRouter = router({
 
       // #1592: the eyebrow shows the same owner-scoped rank the sessions list shows.
       // The stored session_number is never shown.
-      const numbers = await getOwnedCampaignSessionNumbers(
-        row.campaignId ? [row.campaignId] : [],
-        ctx.user.userId,
-      );
+      const numbers = row.campaignId
+        ? await getOwnedCampaignSessionNumbers(ctx.db, row.campaignId, ctx.user.userId)
+        : new Map<string, number>();
       const sessionNumber = numbers.get(input.sessionId) ?? null;
 
       const { campaignId: _campaignId, ...chronicle } = row;

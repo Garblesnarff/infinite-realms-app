@@ -1,30 +1,29 @@
-import { and, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, eq, isNull, or } from 'drizzle-orm';
 
-import { db } from '../../../../db/client';
 import { campaigns, characters, gameSessions } from '../../../../db/schema/index';
 import { getCampaignSessionNumbers } from '../../../../shared/campaign-session-numbers.js';
+
+import type { db } from '../../../../db/client';
 
 /**
  * The campaign-local session number, one rule for the list card and the chronicle eyebrow (#1592).
  *
- * It ranks only the user's own sessions in each campaign, by created_at. A session belongs to the
+ * It ranks only the user's own sessions in the campaign, by created_at. A session belongs to the
  * owner of its character; a session with no character belongs to the campaign's owner. RLS is off,
  * so this filter is the owner check.
  *
+ * The database handle is passed in (ctx.db in the chronicles router, db in the session service).
  * Kept out of session-service.ts on purpose: importing that module from the chronicles router pulls
  * its whole dependency graph into the CLI typecheck program (AGENTS.md section 11).
  */
 export async function getOwnedCampaignSessionNumbers(
-  campaignIds: readonly string[],
+  database: typeof db,
+  campaignId: string,
   userId: string,
 ): Promise<Map<string, number>> {
-  const numbers = new Map<string, number>();
-  if (campaignIds.length === 0) return numbers;
-
-  const rows = await db
+  const rows = await database
     .select({
       id: gameSessions.id,
-      campaignId: gameSessions.campaignId,
       createdAt: gameSessions.createdAt,
     })
     .from(gameSessions)
@@ -32,7 +31,7 @@ export async function getOwnedCampaignSessionNumbers(
     .leftJoin(campaigns, eq(campaigns.id, gameSessions.campaignId))
     .where(
       and(
-        inArray(gameSessions.campaignId, [...campaignIds]),
+        eq(gameSessions.campaignId, campaignId),
         or(
           eq(characters.userId, userId),
           eq(characters.ownerId, userId),
@@ -41,23 +40,15 @@ export async function getOwnedCampaignSessionNumbers(
       ),
     );
 
-  const byCampaign = new Map<string, Array<{ id: string; created_at: string | null }>>();
-  for (const row of rows) {
-    if (!row.campaignId) continue;
-    const created =
-      row.createdAt instanceof Date
-        ? row.createdAt.toISOString()
-        : row.createdAt
-          ? String(row.createdAt)
-          : null;
-    const group = byCampaign.get(row.campaignId) ?? [];
-    group.push({ id: row.id, created_at: created });
-    byCampaign.set(row.campaignId, group);
-  }
-  for (const group of byCampaign.values()) {
-    for (const [sessionId, number] of getCampaignSessionNumbers(group)) {
-      numbers.set(sessionId, number);
-    }
-  }
-  return numbers;
+  return getCampaignSessionNumbers(
+    rows.map((row) => ({
+      id: row.id,
+      created_at:
+        row.createdAt instanceof Date
+          ? row.createdAt.toISOString()
+          : row.createdAt
+            ? String(row.createdAt)
+            : null,
+    })),
+  );
 }

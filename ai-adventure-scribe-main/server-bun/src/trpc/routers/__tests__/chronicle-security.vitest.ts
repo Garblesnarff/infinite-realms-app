@@ -15,6 +15,12 @@ vi.hoisted(() => {
 
 import { verifySessionOwnership, chroniclesRouter } from '../chronicles.js';
 import { chronicleGenerator } from '../../../services/chronicle-generator.js';
+import { getOwnedCampaignSessionNumbers } from '../../../services/session/owned-campaign-session-numbers.js';
+
+// #1592: the rank is computed by the shared helper (its own real-DB test covers the owner filter).
+vi.mock('../../../services/session/owned-campaign-session-numbers.js', () => ({
+  getOwnedCampaignSessionNumbers: vi.fn(async () => new Map<string, number>()),
+}));
 
 // Mock the db client
 vi.mock('../../../../../db/client', () => {
@@ -224,21 +230,21 @@ describe('Chronicles Security', () => {
           campaignId: '323e4567-e89b-12d3-a456-426614174000',
         },
       ]);
-      const siblings = Array.from({ length: 9 }, (_, index) => ({
-        id: index === 8 ? mockSessionId : `sibling-${index}`,
-        createdAt: new Date(Date.UTC(2026, 7, index + 1)),
-      }));
-      const siblingQb = makeQb(siblings);
-      const selects = [chronicleQb, siblingQb];
-      let n = 0;
-      mockCtx.db.select.mockImplementation(() => selects[n++] ?? siblingQb);
+      mockCtx.db.select.mockImplementation(() => chronicleQb);
+      // #1592: the rank comes from the shared helper, called with the route's own db handle.
+      // The owner filter inside that helper is asserted by session-number-owner.real-db.test.ts.
+      vi.mocked(getOwnedCampaignSessionNumbers).mockResolvedValueOnce(
+        new Map([[mockSessionId, 9]]),
+      );
 
       const result = await caller.getBySessionId({ sessionId: mockSessionId });
 
       expect(result?.sessionNumber).toBe(9);
       expect(result).not.toHaveProperty('campaignId');
-      expect(siblingQb.where).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'eq', b: '323e4567-e89b-12d3-a456-426614174000' }),
+      expect(getOwnedCampaignSessionNumbers).toHaveBeenCalledWith(
+        mockCtx.db,
+        '323e4567-e89b-12d3-a456-426614174000',
+        mockCtx.user.userId,
       );
     });
 
