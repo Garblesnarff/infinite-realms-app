@@ -51,6 +51,9 @@ mock.module('../../lib/auth.js', () => ({
 }));
 
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
+const { resolveCombatLayOnHands } = await importWithRealDb(
+  () => import('../../services/dm/combat-lay-on-hands.js'),
+);
 const { intentRoutes } = await importWithRealDb(() => import('../../routes/v1/combat/intents.js'));
 
 const app = hasRealDb
@@ -203,10 +206,37 @@ describeWithDb('Lay on Hands combat intent through the real route (#1554)', () =
       maxHp: 12,
       isConscious: true,
     });
+    // #1554 set-up: a lone player ends the encounter on its first intent (the engine calls
+    // it over with no opposition), so every later test would hit COMBAT_INTENT_AFTER_CONCLUSION.
+    // A living foe keeps the fight open for the whole suite.
+    const [{ id: foeId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId,
+        name: 'Practice Dummy',
+        participantType: 'monster',
+        turnOrder: 1,
+        initiative: 1,
+        armorClass: 10,
+        maxHp: 400,
+        speed: 0,
+      })
+      .returning({ id: combatParticipants.id });
+    await db.insert(combatParticipantStatus).values({
+      participantId: foeId,
+      currentHp: 400,
+      maxHp: 400,
+      isConscious: true,
+    });
   });
 
   beforeEach(async () => {
     if (!hasRealDb) return;
+    // Each test starts from an open fight with the hero's turn and its Action free.
+    await db
+      .update(combatEncounters)
+      .set({ status: 'active', currentTurnOrder: 0 })
+      .where(eq(combatEncounters.id, encounterId));
     await db.delete(featureUsageLog).where(eq(featureUsageLog.featureId, featureId));
     await db
       .delete(characterFeatures)
@@ -246,6 +276,22 @@ describeWithDb('Lay on Hands combat intent through the real route (#1554)', () =
     expect(after.pool).toBe(5);
     expect(after.usage).toBe(0);
     expect(after.actionUsed).toBe(false);
+  });
+
+  it('a typed Lay on Hands in combat returns the engine line the reply carries (#1554)', async () => {
+    await setHp(7);
+    const laid = await resolveCombatLayOnHands({
+      playerInput: 'I use Lay on Hands on myself for 5 hit points',
+      sessionId,
+      userId,
+    });
+    expect(laid).not.toBeNull();
+    expect(laid!.engineLine).toContain('restores 5 HP');
+    expect(laid!.directive).toContain('<lay_on_hands>');
+    const after = await readState();
+    expect(after.hp).toBe(12);
+    expect(after.pool).toBe(0);
+    expect(after.usage).toBe(1);
   });
 
   it('a fully healed target is refused and nothing is spent', async () => {

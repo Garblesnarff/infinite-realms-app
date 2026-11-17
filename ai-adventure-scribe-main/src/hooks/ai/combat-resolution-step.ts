@@ -134,6 +134,8 @@ export interface CombatResolutionParams {
     tally: { successes: number; failures: number },
   ) => void;
   combatActions: unknown[];
+  /** #1554: engine lines the server attached to this turn (a typed Lay on Hands it resolved). */
+  serverEngineLines?: string[];
   /** The declaration the resolution narration is written against. */
   declarationText: string;
   aiContext: any;
@@ -556,6 +558,15 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     engineBlocks.push(block);
     return block;
   };
+  // #1554: the server's engine line for a typed Lay on Hands is an engine event of this turn. It
+  // goes in first, so the narration gate sees engine lines and does not replace the reply.
+  if (params.serverEngineLines?.length) {
+    appendEngineBlock({
+      source: 'player',
+      lines: params.serverEngineLines,
+      round: playerRound ?? 1,
+    });
+  }
   const recordRefusal = (
     declared: DeclaredCombatAction,
     refusal: CombatIntentRefusedError,

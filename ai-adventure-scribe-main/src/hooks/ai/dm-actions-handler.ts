@@ -987,6 +987,12 @@ export async function handleDmActionsAndTransitions(
       sessionId,
       recordDeathSaveTally,
       combatActions: result.combat_actions || [],
+      // #1554: the engine line for a typed Lay on Hands the server resolved this turn.
+      serverEngineLines: Array.isArray((result as { engine_lines?: unknown }).engine_lines)
+        ? (result as { engine_lines: unknown[] }).engine_lines.filter(
+            (line): line is string => typeof line === 'string',
+          )
+        : undefined,
       declarationText: entryWasSeated
         ? 'Combat entry was confirmed. Narrate only authoritative engine results; the player declaration itself is not an outcome.'
         : result.text,

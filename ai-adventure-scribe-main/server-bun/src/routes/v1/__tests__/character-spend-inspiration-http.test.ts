@@ -45,6 +45,8 @@ mock.module('../../../../../db/schema/index', () => ({
   characterSpellSlots: {},
   spellSlotUsageLog: {},
   characterSubclasses: {},
+  combatEncounters: {},
+  combatParticipants: {},
 }));
 mock.module('../../../services/campaign-service.js', () => ({ CampaignService: {} }));
 mock.module('../../../services/character/character-spell-service.js', () => ({
