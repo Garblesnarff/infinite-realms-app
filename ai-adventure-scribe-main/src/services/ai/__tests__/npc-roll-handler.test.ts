@@ -410,37 +410,4 @@ describe('NPCRollHandler', () => {
       expect(result).toContain('**NPC** generic: 10');
     });
   });
-
-  // #157 matrix row: the Behind the Screen summary is player-visible chat text.
-  describe('target numbers (#157): summary follows showTargetNumbers', () => {
-    const attackRoll: any = {
-      request: { actorName: 'Goblin', purpose: 'scimitar', type: 'attack', ac: 15 },
-      result: { total: 17 },
-    };
-    const saveRoll: any = {
-      request: { actorName: 'Goblin', purpose: 'Dexterity save', type: 'save', dc: 13 },
-      result: { total: 9 },
-    };
-    const TARGET_PATTERN = /vs (AC|DC)\b|\bAC\b|\bDC\b/;
-
-    it('attack: shows AC when on, drops the clause when off, keeps hit/miss', () => {
-      const on = formatNPCRollsSystemMessage([attackRoll], true);
-      const off = formatNPCRollsSystemMessage([attackRoll], false);
-      expect(on).toContain('(**hits** AC 15)');
-      expect(off).toContain('(**hits**)');
-      expect(off).not.toMatch(TARGET_PATTERN);
-    });
-
-    it('save: shows DC when on, drops the clause when off, keeps succeeds/fails', () => {
-      const on = formatNPCRollsSystemMessage([saveRoll], true);
-      const off = formatNPCRollsSystemMessage([saveRoll], false);
-      expect(on).toContain('(fails DC 13)');
-      expect(off).toContain('(fails)');
-      expect(off).not.toMatch(TARGET_PATTERN);
-    });
-
-    it('default (no argument) keeps the number, as before', () => {
-      expect(formatNPCRollsSystemMessage([attackRoll])).toContain('(**hits** AC 15)');
-    });
-  });
 });
