@@ -520,3 +520,107 @@ test('mechanic splits still fire at line-start ### and numbered headers, and the
   );
   assert.ok(numbered[1].content.includes('Beta body.'));
 });
+
+test('a ### mechanic keeps its numbered bold items in its own chunk (#1612)', () => {
+  const bible =
+    '## Mechanics\n\n### **Subsystems**\n1.  **Sync Gauge (0-100%):**\n    *   Starts at 0%.\n    *   Rises on a combo.\n2.  **Stamina (The Lungs):**\n    *   Equal to CON score.\n3.  **Pressure:**\n    *   Starts at 10.\n\n### **Weather**\nWeather body.';
+  const { chunks } = chunkCampaignFiles('test-campaign', { campaignBible: bible });
+  const mechanics = chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    mechanics.map((chunk) => chunk.entityName),
+    ['Subsystems', 'Weather'],
+  );
+  const subsystems = mechanics.find((chunk) => chunk.entityName === 'Subsystems');
+  assert.ok(subsystems);
+  for (const marker of [
+    'Sync Gauge',
+    'Rises on a combo.',
+    'Stamina (The Lungs):',
+    'Equal to CON score.',
+    'Pressure:',
+    'Starts at 10.',
+  ]) {
+    assert.ok(subsystems.content.includes(marker), `subsystems chunk keeps ${marker}`);
+  }
+});
+
+test('mechanic items named with nested italics inside bold stay in a chunk (#1612)', () => {
+  const bible =
+    '## Mechanics\n\n### **New Feats/Spells**\n1.  **Spell: *Zone of Hush*** (Level 2). Makes a quiet bubble.\n2.  **Spell: *Arc Guide*** (Level 1). Shows the arc.\n3.  **Feat: *Quick Swap.*** Swap places with an ally.\n4.  **Feat: *Iron Grip.*** Unarmed strikes deal 1d6.\n';
+  const { chunks } = chunkCampaignFiles('test-campaign', { campaignBible: bible });
+  const mechanics = chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.equal(mechanics.length, 1);
+  assert.equal(mechanics[0].entityName, 'New Feats/Spells');
+  for (const marker of [
+    'Makes a quiet bubble.',
+    'Shows the arc.',
+    'Swap places with an ally.',
+    'Unarmed strikes deal 1d6.',
+  ]) {
+    assert.ok(mechanics[0].content.includes(marker), `chunk keeps ${marker}`);
+  }
+});
+
+test('top-level numbered mechanics named with nested italics or inline text each get a chunk (#1612)', () => {
+  const bible =
+    '## Mechanics\n\n1. **Spell: *Zone of Hush*** (Level 2). Makes a quiet bubble.\n2. **Feat: *Iron Grip.*** Unarmed strikes deal 1d6.\n3. **Tides**\nTides body.';
+  const { chunks } = chunkCampaignFiles('test-campaign', { campaignBible: bible });
+  const mechanics = chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    mechanics.map((chunk) => chunk.entityName),
+    ['Spell: *Zone of Hush*', 'Feat: *Iron Grip.*', 'Tides'],
+  );
+  const spell = mechanics.find((chunk) => chunk.entityName === 'Spell: *Zone of Hush*');
+  assert.ok(spell);
+  assert.ok(spell.content.includes('Makes a quiet bubble.'));
+  const feat = mechanics.find((chunk) => chunk.entityName === 'Feat: *Iron Grip.*');
+  assert.ok(feat);
+  assert.ok(feat.content.includes('Unarmed strikes deal 1d6.'));
+  const tides = mechanics.find((chunk) => chunk.entityName === 'Tides');
+  assert.ok(tides);
+  assert.ok(tides.content.includes('Tides body.'));
+});
+
+test('a mechanic name ends at its own closing bold, not at a later bold word (#1612)', () => {
+  const mechanics = chunkCampaignFiles('test-campaign', {
+    campaignBible:
+      '## Mechanics\n\n1. **Tides.** Rise with **every** moon.\n2. **Ebb** Falls back.',
+  }).chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    mechanics.map((chunk) => chunk.entityName),
+    ['Tides.', 'Ebb'],
+  );
+  assert.ok(mechanics[0].content.includes('Rise with **every** moon.'));
+});
+
+test('a numbered mechanic before the first ### heading still gets its own chunk (#1612)', () => {
+  const { chunks } = chunkCampaignFiles('test-campaign', {
+    campaignBible:
+      '## Mechanics\n\n1. **Top**\nTop body.\n\n### **Alpha**\n1. **Inner**\nInner body.',
+  });
+  const mechanics = chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    mechanics.map((chunk) => chunk.entityName),
+    ['Top', 'Alpha'],
+  );
+  const top = mechanics.find((chunk) => chunk.entityName === 'Top');
+  assert.ok(top);
+  assert.ok(top.content.includes('Top body.'));
+  const alpha = mechanics.find((chunk) => chunk.entityName === 'Alpha');
+  assert.ok(alpha);
+  assert.ok(alpha.content.includes('Inner body.'));
+});
+
+test('a #### bold heading inside a mechanic still gets its own chunk (#1612)', () => {
+  const { chunks } = chunkCampaignFiles('test-campaign', {
+    campaignBible: '## Mechanics\n\n### **Alpha**\nAlpha body.\n#### **Sub**\nSub body.',
+  });
+  const mechanics = chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    mechanics.map((chunk) => chunk.entityName),
+    ['Alpha', 'Sub'],
+  );
+  const sub = mechanics.find((chunk) => chunk.entityName === 'Sub');
+  assert.ok(sub);
+  assert.ok(sub.content.includes('Sub body.'));
+});

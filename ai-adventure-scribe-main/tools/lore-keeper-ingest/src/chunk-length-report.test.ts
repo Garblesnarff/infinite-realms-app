@@ -35,6 +35,7 @@ Substantial text after the sub-rule that the chunker drops because it stops at t
   const flagged = findShortMechanicChunks(bible, 'test-campaign');
   assert.equal(flagged.length, 1);
   assert.ok(flagged[0].chunkLength < flagged[0].sourceLength);
+  assert.ok(flagged[0].lostLength > 0);
 });
 
 test('threshold boundary: exactly 70% is not flagged, below is', () => {
@@ -58,7 +59,7 @@ ${'B'.repeat(10)}
   assert.equal(findShortMechanicChunks(below, 'test-campaign', 0.3).length, 1);
 });
 
-test('split Subsystems chunk has lostLength 0', () => {
+test('headed Subsystems mechanic keeps numbered items in its chunk (#1612)', () => {
   const bible = `## Mechanics
 
 ### **Subsystems**
@@ -71,16 +72,17 @@ Alpha body line.
 Beta body line.
 `;
   const { chunks } = chunkCampaignFiles('test-campaign', { campaignBible: bible });
-  assert.ok(chunks.some((c) => c.chunkType === 'mechanic' && c.entityName === 'Alpha:'));
-  assert.ok(chunks.some((c) => c.chunkType === 'mechanic' && c.entityName === 'Beta:'));
+  const mechanics = chunks.filter((c) => c.chunkType === 'mechanic');
+  assert.equal(mechanics.length, 1);
+  assert.equal(mechanics[0].entityName, 'Subsystems');
+  assert.ok(mechanics[0].content.includes('Alpha body line.'));
+  assert.ok(mechanics[0].content.includes('Beta body line.'));
 
   const flagged = findShortMechanicChunks(bible, 'test-campaign');
-  const subsystems = flagged.find((c) => c.entityName === 'Subsystems');
-  assert.ok(subsystems);
-  assert.equal(subsystems.lostLength, 0);
+  assert.equal(flagged.length, 0);
 });
 
-test('nested italics numbered item leaves text in no chunk', () => {
+test('headed New Feats/Spells keeps nested-italics numbered items (#1612)', () => {
   const bible = `## Mechanics
 
 ### **New Feats/Spells**
@@ -91,13 +93,13 @@ Intro.
 2.  **Spell: *Trajectory Guide*** (Level 1). Shows the arc.
 `;
   const { chunks } = chunkCampaignFiles('test-campaign', { campaignBible: bible });
-  assert.ok(chunks.some((c) => c.chunkType === 'mechanic' && c.entityName === 'New Feats/Spells'));
-  assert.ok(!chunks.some((c) => c.entityName?.includes('Trajectory')));
+  const mechanics = chunks.filter((c) => c.chunkType === 'mechanic');
+  assert.equal(mechanics.length, 1);
+  assert.equal(mechanics[0].entityName, 'New Feats/Spells');
+  assert.ok(mechanics[0].content.includes('Shows the arc.'));
 
   const flagged = findShortMechanicChunks(bible, 'test-campaign');
-  const item = flagged.find((c) => c.entityName === 'New Feats/Spells');
-  assert.ok(item);
-  assert.ok(item.lostLength > 0);
+  assert.equal(flagged.length, 0);
 });
 
 test('a `### 1. **Name**` heading is matched to its chunk, not counted unmatched', () => {
