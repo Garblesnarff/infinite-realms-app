@@ -8,8 +8,8 @@ import { useCombatActionHandlers } from '../use-combat-action-handlers';
 import type { MonsterAttack } from '@/types/combat';
 
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { processReactionResponse } from '@/utils/reactionSystem';
-import { checkConcentration } from '@/utils/spell-management';
 
 vi.mock('@/lib/logger', () => ({
   default: {
@@ -24,8 +24,11 @@ vi.mock('@/utils/reactionSystem', () => ({
   processReactionResponse: vi.fn(),
 }));
 
-vi.mock('@/utils/spell-management', () => ({
-  checkConcentration: vi.fn(),
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    applyCharacterDamage: vi.fn().mockResolvedValue({}),
+    applyCharacterHealing: vi.fn().mockResolvedValue({}),
+  },
 }));
 
 describe('useCombatActionHandlers', () => {
@@ -290,207 +293,146 @@ describe('useCombatActionHandlers', () => {
     });
   });
 
-  describe('handleApplyDamage', () => {
-    it('should do nothing if no active encounter', async () => {
-      const { result } = setupHook({ ...defaultProps, activeEncounter: null });
+  describe('handleApplyDamage (#621 Part B2a: the server applies damage)', () => {
+    const encounterWith = (participant: Record<string, unknown>) =>
+      ({
+        id: 'enc-1',
+        participants: [participant, mockEnemy],
+        currentTurnParticipantId: 'p1',
+      }) as any;
+    const playerWithCharacter = { ...mockParticipant, characterId: 'character-1' };
+
+    it('does nothing when there is no active encounter', async () => {
+      const { result } = setupHook({ ...defaultProps, activeEncounter: null as any });
       await act(async () => {
         await result.current.handleApplyDamage('p1', 5, 'fire');
       });
+      expect(userDataApi.applyCharacterDamage).not.toHaveBeenCalled();
       expect(mockUpdateParticipant).not.toHaveBeenCalled();
     });
 
-    it('should do nothing if participant not found', async () => {
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleApplyDamage('non-existent', 5, 'fire');
+    it('does nothing for a participant with no character: no server route, no local write', async () => {
+      const { result } = setupHook({
+        ...defaultProps,
+        activeEncounter: encounterWith(mockParticipant),
       });
+      await act(async () => {
+        await result.current.handleApplyDamage('p1', 5, 'fire');
+      });
+      expect(userDataApi.applyCharacterDamage).not.toHaveBeenCalled();
       expect(mockUpdateParticipant).not.toHaveBeenCalled();
+      expect(mockTakeAction).not.toHaveBeenCalled();
     });
 
-    it('should apply damage and update HP when HP is undefined', async () => {
-      const participantWithoutHP = { ...mockParticipant, currentHitPoints: undefined };
-      const encounter = { ...mockEncounter, participants: [participantWithoutHP, mockEnemy] };
-      const { result } = setupHook({ ...defaultProps, activeEncounter: encounter as any });
+    it('sends the damage and its type to the character damage route, with no local HP write', async () => {
+      const { result } = setupHook({
+        ...defaultProps,
+        activeEncounter: encounterWith(playerWithCharacter),
+      });
       await act(async () => {
-        await result.current.handleApplyDamage('p1', 5, 'fire');
+        await result.current.handleApplyDamage('p1', 4, 'slashing');
       });
-
-      // (participant.currentHitPoints || 0) is 0, so 0 - 5 = -5 -> Math.max(0, -5) = 0.
-      // isUnconscious is true.
-      // (participant.currentHitPoints || 0) > 0 is FALSE, so deathSaves NOT reset.
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', {
-        currentHitPoints: 0,
-        isUnconscious: true,
-      });
+      expect(userDataApi.applyCharacterDamage).toHaveBeenCalledWith('character-1', 4, 'slashing');
+      expect(mockUpdateParticipant).not.toHaveBeenCalled();
+      expect(mockTakeAction).not.toHaveBeenCalled();
     });
 
-    it('should handle damage when participant already has 0 HP', async () => {
-      const participantWithZeroHP = { ...mockParticipant, currentHitPoints: 0 };
-      const encounter = { ...mockEncounter, participants: [participantWithZeroHP, mockEnemy] };
-      const { result } = setupHook({ ...defaultProps, activeEncounter: encounter as any });
+    it('refreshes the encounter after the server accepts the damage', async () => {
+      const refreshCombatState = vi.fn().mockResolvedValue(null);
+      const { result } = setupHook({
+        ...defaultProps,
+        activeEncounter: encounterWith(playerWithCharacter),
+        refreshCombatState,
+      } as any);
       await act(async () => {
-        await result.current.handleApplyDamage('p1', 5, 'fire');
+        await result.current.handleApplyDamage('p1', 4, 'slashing');
       });
+      expect(refreshCombatState).toHaveBeenCalledTimes(1);
+    });
 
-      // Should NOT trigger death save reset if already at 0
-      expect(mockUpdateParticipant).not.toHaveBeenCalledWith(
-        'p1',
-        expect.objectContaining({
-          deathSaves: expect.anything(),
-        }),
+    it('logs and does not refresh when the server refuses the damage', async () => {
+      vi.mocked(userDataApi.applyCharacterDamage).mockRejectedValueOnce(new Error('network down'));
+      const refreshCombatState = vi.fn().mockResolvedValue(null);
+      const { result } = setupHook({
+        ...defaultProps,
+        activeEncounter: encounterWith(playerWithCharacter),
+        refreshCombatState,
+      } as any);
+      await act(async () => {
+        await result.current.handleApplyDamage('p1', 4, 'slashing');
+      });
+      expect(logger.error).toHaveBeenCalledWith(
+        'Failed to apply damage through the server:',
+        expect.any(Error),
       );
-    });
-
-    it('should apply damage and update HP normally', async () => {
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleApplyDamage('p1', 5, 'fire');
-      });
-
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', {
-        currentHitPoints: 5,
-        isUnconscious: false,
-      });
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actionType: 'damage_dealt',
-          damageDealt: 5,
-        }),
-      );
-    });
-
-    it('should handle unconsciousness when HP reaches 0', async () => {
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleApplyDamage('p1', 15, 'necrotic');
-      });
-
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', {
-        currentHitPoints: 0,
-        isUnconscious: true,
-        isStable: false,
-        deathSaves: { successes: 0, failures: 0 },
-      });
-    });
-
-    it('should check concentration and handle loss', async () => {
-      const participantWithConc = {
-        ...mockParticipant,
-        activeConcentration: { spellId: 'bless' },
-      };
-      const encounterWithConc = {
-        ...mockEncounter,
-        participants: [participantWithConc],
-      };
-      (checkConcentration as any).mockReturnValue(false); // Failed check
-
-      const { result } = setupHook({ ...defaultProps, activeEncounter: encounterWithConc as any });
-      await act(async () => {
-        await result.current.handleApplyDamage('p1', 5, 'bludgeoning');
-      });
-
-      expect(checkConcentration).toHaveBeenCalled();
-      expect(mockUpdateParticipant).toHaveBeenCalledWith(
-        'p1',
-        expect.objectContaining({
-          activeConcentration: null,
-        }),
-      );
-    });
-
-    it('should maintain concentration if check succeeds', async () => {
-      const participantWithConc = {
-        ...mockParticipant,
-        activeConcentration: { spellId: 'bless' },
-      };
-      const encounterWithConc = {
-        ...mockEncounter,
-        participants: [participantWithConc],
-      };
-      (checkConcentration as any).mockReturnValue(true); // Success
-
-      const { result } = setupHook({ ...defaultProps, activeEncounter: encounterWithConc as any });
-      await act(async () => {
-        await result.current.handleApplyDamage('p1', 5, 'bludgeoning');
-      });
-
-      expect(mockUpdateParticipant).not.toHaveBeenCalledWith(
-        'p1',
-        expect.objectContaining({
-          activeConcentration: null,
-        }),
-      );
+      expect(refreshCombatState).not.toHaveBeenCalled();
     });
   });
 
-  describe('handleHealing', () => {
-    it('should do nothing if no active encounter', async () => {
-      const { result } = setupHook({ ...defaultProps, activeEncounter: null });
-      await act(async () => {
-        await result.current.handleHealing('p1', 10);
+  describe('handleHealing (#621 Part B2a: the server applies healing)', () => {
+    const encounterWith = (participant: Record<string, unknown>) =>
+      ({
+        id: 'enc-1',
+        participants: [participant, mockEnemy],
+        currentTurnParticipantId: 'p1',
+      }) as any;
+    const playerWithCharacter = { ...mockParticipant, characterId: 'character-1' };
+
+    it('does nothing for a participant with no character: no server route, no local write', async () => {
+      const { result } = setupHook({
+        ...defaultProps,
+        activeEncounter: encounterWith(mockParticipant),
       });
-      expect(mockUpdateParticipant).not.toHaveBeenCalled();
-    });
-
-    it('should do nothing if participant not found', async () => {
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleHealing('non-existent', 10);
-      });
-      expect(mockUpdateParticipant).not.toHaveBeenCalled();
-    });
-
-    it('should restore HP and cap at max', async () => {
-      const participantWithoutMaxHP = { ...mockParticipant, maxHitPoints: undefined };
-      const encounter = { ...mockEncounter, participants: [participantWithoutMaxHP, mockEnemy] };
-      const { result } = setupHook({ ...defaultProps, activeEncounter: encounter as any });
-      await act(async () => {
-        await result.current.handleHealing('p1', 50);
-      });
-
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', {
-        currentHitPoints: 1, // Fallback max HP
-        isUnconscious: false,
-      });
-    });
-
-    it('should restore HP and cap at max normally', async () => {
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleHealing('p1', 50);
-      });
-
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', {
-        currentHitPoints: 20, // Max HP
-        isUnconscious: false,
-      });
-    });
-
-    it('should revive unconscious participants', async () => {
-      const unconsciousParticipant = {
-        ...mockParticipant,
-        currentHitPoints: 0,
-        isUnconscious: true,
-      };
-      const encounter = {
-        ...mockEncounter,
-        participants: [unconsciousParticipant],
-      };
-
-      const { result } = setupHook({ ...defaultProps, activeEncounter: encounter as any });
       await act(async () => {
         await result.current.handleHealing('p1', 5);
       });
+      expect(userDataApi.applyCharacterHealing).not.toHaveBeenCalled();
+      expect(mockUpdateParticipant).not.toHaveBeenCalled();
+      expect(mockTakeAction).not.toHaveBeenCalled();
+    });
 
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', {
-        currentHitPoints: 5,
-        isUnconscious: false,
+    it('sends the heal to the character heal route, with no local HP write', async () => {
+      const { result } = setupHook({
+        ...defaultProps,
+        activeEncounter: encounterWith(playerWithCharacter),
       });
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          description: expect.stringContaining('regains consciousness'),
-        }),
+      await act(async () => {
+        await result.current.handleHealing('p1', 5);
+      });
+      expect(userDataApi.applyCharacterHealing).toHaveBeenCalledWith('character-1', 5);
+      expect(mockUpdateParticipant).not.toHaveBeenCalled();
+      expect(mockTakeAction).not.toHaveBeenCalled();
+    });
+
+    it('refreshes the encounter after the server accepts the heal', async () => {
+      const refreshCombatState = vi.fn().mockResolvedValue(null);
+      const { result } = setupHook({
+        ...defaultProps,
+        activeEncounter: encounterWith(playerWithCharacter),
+        refreshCombatState,
+      } as any);
+      await act(async () => {
+        await result.current.handleHealing('p1', 5);
+      });
+      expect(refreshCombatState).toHaveBeenCalledTimes(1);
+    });
+
+    it('logs and does not refresh when the server refuses the heal', async () => {
+      vi.mocked(userDataApi.applyCharacterHealing).mockRejectedValueOnce(new Error('network down'));
+      const refreshCombatState = vi.fn().mockResolvedValue(null);
+      const { result } = setupHook({
+        ...defaultProps,
+        activeEncounter: encounterWith(playerWithCharacter),
+        refreshCombatState,
+      } as any);
+      await act(async () => {
+        await result.current.handleHealing('p1', 5);
+      });
+      expect(logger.error).toHaveBeenCalledWith(
+        'Failed to heal through the server:',
+        expect.any(Error),
       );
+      expect(refreshCombatState).not.toHaveBeenCalled();
     });
   });
 });

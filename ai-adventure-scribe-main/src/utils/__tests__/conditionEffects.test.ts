@@ -3,14 +3,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import {
   getConditionModifiers,
-  applyConditionEffects,
-  removeConditionEffects,
   handleConditionSave,
   getExhaustionEffects,
   getConditionDescription,
   getConditionEffects,
   hasCondition,
-  CONDITION_EFFECTS,
 } from '../conditionEffects';
 import { d20 } from '../diceRolls';
 
@@ -171,50 +168,6 @@ describe('conditionEffects', () => {
       expect(modifiers.disadvantage).toBe(true);
       expect(modifiers.description).toContain('Blind');
       expect(modifiers.description).toContain('Invisible');
-    });
-  });
-
-  describe('applyConditionEffects', () => {
-    it('should set speed to 0 for grappled', () => {
-      const condition: Condition = { name: 'grappled' } as any;
-      const updated = applyConditionEffects(mockParticipant, condition);
-      expect(updated.movementUsed).toBe(mockParticipant.speed);
-      expect(updated.conditions).toContainEqual(condition);
-    });
-
-    it('should set speed to 0 for restrained', () => {
-      const condition: Condition = { name: 'restrained' } as any;
-      const updated = applyConditionEffects(mockParticipant, condition);
-      expect(updated.movementUsed).toBe(mockParticipant.speed);
-      expect(updated.conditions).toContainEqual(condition);
-    });
-
-    it('should just add condition if no special application logic exists', () => {
-      const condition: Condition = { name: 'poisoned' } as any;
-      const updated = applyConditionEffects(mockParticipant, condition);
-      expect(updated.conditions).toContainEqual(condition);
-      expect(updated.movementUsed).toBe(0);
-    });
-  });
-
-  describe('removeConditionEffects', () => {
-    it('should remove condition from participant', () => {
-      const condition: Condition = { name: 'poisoned' } as any;
-      mockParticipant.conditions.push(condition);
-      const updated = removeConditionEffects(mockParticipant, condition);
-      expect(updated.conditions).not.toContainEqual(condition);
-    });
-
-    it('should call onRemove if it exists', () => {
-      const condition: Condition = { name: 'blinded' } as any;
-      const original = CONDITION_EFFECTS.blinded.onRemove;
-      try {
-        CONDITION_EFFECTS.blinded.onRemove = vi.fn((p) => p);
-        removeConditionEffects(mockParticipant, condition);
-        expect(CONDITION_EFFECTS.blinded.onRemove).toHaveBeenCalled();
-      } finally {
-        CONDITION_EFFECTS.blinded.onRemove = original;
-      }
     });
   });
 

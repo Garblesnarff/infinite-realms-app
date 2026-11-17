@@ -26,6 +26,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
     takeAction,
     addParticipant,
     updateParticipant,
+    refreshCombatState,
   } = useCombat();
 
   const { sessionId } = useGameSession();
@@ -150,6 +151,7 @@ export const useCombatActions = (_isDM: boolean = false) => {
     nextTurn,
     validateCombatAction,
     selectedEnemy,
+    refreshCombatState,
   });
 
   // Add a new enemy

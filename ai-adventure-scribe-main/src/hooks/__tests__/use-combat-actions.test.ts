@@ -47,6 +47,13 @@ vi.mock('@/utils/reactionSystem', () => ({
   processReactionResponse: vi.fn(),
 }));
 
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: {
+    applyCharacterDamage: vi.fn().mockResolvedValue({}),
+    applyCharacterHealing: vi.fn().mockResolvedValue({}),
+  },
+}));
+
 vi.mock('@/utils/spell-management', () => ({
   checkConcentration: vi.fn(),
 }));
@@ -57,6 +64,7 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useCombatAIIntegration } from '@/hooks/use-combat-ai-integration';
 import { useGameSession } from '@/hooks/use-game-session';
+import { userDataApi } from '@/services/user-data-api';
 import { processReactionResponse } from '@/utils/reactionSystem';
 import { checkConcentration } from '@/utils/spell-management';
 
@@ -198,213 +206,76 @@ describe('useCombatActions', () => {
     });
   });
 
-  describe('handleApplyDamage', () => {
-    const activeEncounter = {
-      id: 'enc-1',
-      participants: [
-        {
-          id: 'p1',
-          name: 'Hero',
-          currentHitPoints: 20,
-          maxHitPoints: 20,
-          activeConcentration: 'Bless',
-        },
-      ],
-    };
+  const playerEncounter = {
+    id: 'enc-1',
+    participants: [
+      {
+        id: 'p1',
+        name: 'Hero',
+        characterId: 'character-1',
+        currentHitPoints: 20,
+        maxHitPoints: 20,
+      },
+    ],
+  };
 
-    beforeEach(() => {
+  describe('handleApplyDamage (#621 Part B2a: the server applies damage)', () => {
+    it('sends the damage to the character damage route, with no local HP write', async () => {
       vi.mocked(useCombat).mockReturnValue({
-        state: { activeEncounter, isInCombat: true },
+        state: { activeEncounter: playerEncounter, isInCombat: true },
         updateParticipant: mockUpdateParticipant,
         takeAction: mockTakeAction,
       } as any);
-    });
-
-    it('should apply damage and update participant', async () => {
       const { result } = renderHook(() => useCombatActions());
 
       await act(async () => {
         await result.current.handleApplyDamage('p1', 5, 'slashing');
       });
 
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', {
-        currentHitPoints: 15,
-        isUnconscious: false,
-      });
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          damageDealt: 5,
-          actionType: 'damage_dealt',
-        }),
-      );
-    });
-
-    it('should set isUnconscious to true when HP reaches 0', async () => {
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleApplyDamage('p1', 25, 'fire');
-      });
-
-      expect(mockUpdateParticipant).toHaveBeenCalledWith(
-        'p1',
-        expect.objectContaining({
-          currentHitPoints: 0,
-          isUnconscious: true,
-        }),
-      );
-    });
-
-    it('should break concentration if check fails', async () => {
-      vi.mocked(checkConcentration).mockReturnValue(false);
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleApplyDamage('p1', 10, 'necrotic');
-      });
-
-      expect(mockUpdateParticipant).toHaveBeenCalledWith(
-        'p1',
-        expect.objectContaining({
-          activeConcentration: null,
-        }),
-      );
-    });
-
-    it('should reset death saves when dropping to 0 HP from > 0', async () => {
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleApplyDamage('p1', 20, 'bludgeoning');
-      });
-
-      expect(mockUpdateParticipant).toHaveBeenCalledWith(
-        'p1',
-        expect.objectContaining({
-          isStable: false,
-          deathSaves: { successes: 0, failures: 0 },
-        }),
-      );
-    });
-
-    it('should not update if participant not found', async () => {
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleApplyDamage('non-existent', 5, 'fire');
-      });
-
+      expect(userDataApi.applyCharacterDamage).toHaveBeenCalledWith('character-1', 5, 'slashing');
       expect(mockUpdateParticipant).not.toHaveBeenCalled();
+      expect(mockTakeAction).not.toHaveBeenCalled();
     });
 
-    it('should not update if no active encounter', async () => {
-      vi.mocked(useCombat).mockReturnValue({
-        state: { activeEncounter: null, isInCombat: false },
-        updateParticipant: mockUpdateParticipant,
-      } as any);
-
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleApplyDamage('p1', 5, 'fire');
-      });
-
-      expect(mockUpdateParticipant).not.toHaveBeenCalled();
-    });
-
-    it('should handle damage when NOT concentrating', async () => {
+    it('does nothing for a participant with no character: no server route, no local write', async () => {
       vi.mocked(useCombat).mockReturnValue({
         state: {
           activeEncounter: {
-            participants: [{ id: 'p1', currentHitPoints: 20, activeConcentration: null }],
+            id: 'enc-1',
+            participants: [{ id: 'p1', name: 'Hero', currentHitPoints: 20, maxHitPoints: 20 }],
           },
           isInCombat: true,
         },
         updateParticipant: mockUpdateParticipant,
         takeAction: mockTakeAction,
       } as any);
-
       const { result } = renderHook(() => useCombatActions());
 
       await act(async () => {
-        await result.current.handleApplyDamage('p1', 5, 'fire');
+        await result.current.handleApplyDamage('p1', 5, 'slashing');
       });
 
-      expect(mockUpdateParticipant).toHaveBeenCalledWith(
-        'p1',
-        expect.objectContaining({
-          currentHitPoints: 15,
-        }),
-      );
-      expect(mockUpdateParticipant).not.toHaveBeenCalledWith(
-        'p1',
-        expect.objectContaining({
-          activeConcentration: null,
-        }),
-      );
+      expect(userDataApi.applyCharacterDamage).not.toHaveBeenCalled();
+      expect(mockUpdateParticipant).not.toHaveBeenCalled();
     });
   });
 
-  describe('handleHealing', () => {
-    const activeEncounter = {
-      id: 'enc-1',
-      participants: [{ id: 'p1', name: 'Hero', currentHitPoints: 0, maxHitPoints: 20 }],
-    };
-
-    beforeEach(() => {
+  describe('handleHealing (#621 Part B2a: the server applies healing)', () => {
+    it('sends the heal to the character heal route, with no local HP write', async () => {
       vi.mocked(useCombat).mockReturnValue({
-        state: { activeEncounter, isInCombat: true },
+        state: { activeEncounter: playerEncounter, isInCombat: true },
         updateParticipant: mockUpdateParticipant,
         takeAction: mockTakeAction,
       } as any);
-    });
-
-    it('should heal and potentially revive participant', async () => {
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleHealing('p1', 10);
-      });
-
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', {
-        currentHitPoints: 10,
-        isUnconscious: false,
-      });
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actionType: 'heal',
-          effects: expect.objectContaining({ revivedFromUnconscious: true }),
-        }),
-      );
-    });
-
-    it('should heal without reviving if already conscious', async () => {
-      vi.mocked(useCombat).mockReturnValue({
-        state: {
-          activeEncounter: {
-            participants: [{ id: 'p1', currentHitPoints: 10, maxHitPoints: 20 }],
-          },
-          isInCombat: true,
-        },
-        updateParticipant: mockUpdateParticipant,
-        takeAction: mockTakeAction,
-      } as any);
-
       const { result } = renderHook(() => useCombatActions());
 
       await act(async () => {
         await result.current.handleHealing('p1', 5);
       });
 
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', {
-        currentHitPoints: 15,
-        isUnconscious: false,
-      });
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          effects: expect.objectContaining({ revivedFromUnconscious: false }),
-        }),
-      );
+      expect(userDataApi.applyCharacterHealing).toHaveBeenCalledWith('character-1', 5);
+      expect(mockUpdateParticipant).not.toHaveBeenCalled();
+      expect(mockTakeAction).not.toHaveBeenCalled();
     });
   });
 

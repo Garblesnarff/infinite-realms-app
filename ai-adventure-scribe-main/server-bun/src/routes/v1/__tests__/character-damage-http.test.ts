@@ -1,7 +1,10 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { Elysia } from 'elysia';
 
-import { DAMAGE_WIRE_BODY } from '../../../../../shared/test-fixtures/character-vitals-wire';
+import {
+  DAMAGE_WIRE_BODY,
+  DM_DAMAGE_WIRE_BODY,
+} from '../../../../../shared/test-fixtures/character-vitals-wire';
 
 /**
  * #621 Part A: the client now sends POST /v1/characters/:id/damage with
@@ -126,6 +129,30 @@ describe('character damage route wire body (#621)', () => {
       critical: false,
       damageType: 'fire',
     });
+  });
+
+  it('accepts the exact DM damage-control body (#621 Part B2a) and forwards its damageType', async () => {
+    applyNonAttackDamage.mockClear();
+
+    const response = await app.handle(
+      new Request('http://localhost/v1/characters/character-1/damage', {
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-token',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(DM_DAMAGE_WIRE_BODY),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(applyNonAttackDamage).toHaveBeenCalledWith(
+      'character-1',
+      'user-1',
+      DM_DAMAGE_WIRE_BODY.amount,
+      'damage_taken',
+      { critical: false, damageType: DM_DAMAGE_WIRE_BODY.damageType },
+    );
   });
 
   it('rejects a negative amount at the schema boundary', async () => {
