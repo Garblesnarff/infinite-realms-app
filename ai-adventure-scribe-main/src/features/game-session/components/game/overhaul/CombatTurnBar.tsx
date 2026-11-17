@@ -224,7 +224,7 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
                 {actorIsDying(actor, actor.id === summary.active.id ? playerDown : false) ? (
                   <span
                     data-testid="combat-turn-dying"
-                    className="inline-flex items-center gap-1 rounded-full bg-[#475569] px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-[#f1f5f9]"
+                    className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-1 rounded bg-[#475569] px-1 py-0.5 text-[11px] font-bold leading-tight text-[#f1f5f9]"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
                       <path
@@ -237,7 +237,7 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
                       />
                     </svg>
                     {/* #1507: a hero at 0 HP is Unconscious, the tracker's word (DyingStates state 9). */}
-                    Unconscious
+                    <span className="min-w-0 [overflow-wrap:anywhere]">Unconscious</span>
                   </span>
                 ) : (
                   actor.state === 'now' && <span>{actor.isPlayer ? 'Your turn' : 'Now'}</span>
