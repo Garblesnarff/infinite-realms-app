@@ -11,6 +11,16 @@ import { computeLevel1MaxHitPoints, hasToughFeat } from '../../../../shared/leve
 
 import type { AbilityScoreName } from '@/utils/racialAbilityBonuses';
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -30,6 +40,8 @@ import { getTotalRacialBonus } from '@/utils/racialAbilityBonuses';
  * Implements point-buy system, standard array, and 4d6 drop lowest rolling
  */
 const AbilityScoresSelection: React.FC = () => {
+  const [resetDialogOpen, setResetDialogOpen] = React.useState(false);
+
   const {
     state,
     method,
@@ -110,7 +122,7 @@ const AbilityScoresSelection: React.FC = () => {
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
-                      onClick={handleReset}
+                      onClick={() => setResetDialogOpen(true)}
                       variant="ghost"
                       size="sm"
                       aria-label="Reset ability scores"
@@ -191,7 +203,7 @@ const AbilityScoresSelection: React.FC = () => {
                   <TooltipTrigger asChild>
                     <Button
                       type="button"
-                      onClick={handleReset}
+                      onClick={() => setResetDialogOpen(true)}
                       variant="ghost"
                       size="sm"
                       aria-label="Reset ability scores"
@@ -277,6 +289,29 @@ const AbilityScoresSelection: React.FC = () => {
           getFinalScore={getFinalScore}
           hitPoints={hitPoints}
         />
+
+        <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reset ability scores?</AlertDialogTitle>
+              <AlertDialogDescription>
+                All six ability scores will go back to 8. Your rolled or assigned scores will be
+                lost.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep scores</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => {
+                  handleReset();
+                  setResetDialogOpen(false);
+                }}
+              >
+                Reset scores
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </TooltipProvider>
   );
