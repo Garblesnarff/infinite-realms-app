@@ -21,7 +21,6 @@ import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { NotFoundError } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
-import { concludeEncounter } from '../../services/combat/combat-ending.js';
 import { loadStoredStoryTrackers } from '../../services/dm/story-tracker.js';
 import { SessionService } from '../../services/session-service.js';
 import { getOwnershipCondition } from '../../services/session/session-authorization.js';
@@ -36,14 +35,17 @@ import type { GameSession } from '../../../../db/schema/index';
 /**
  * #1619: End session closes the session's open fight. Without this the encounter stays `active`
  * until the 24-hour idle sweeper, and the sheet refuses Lay on Hands as "in combat" in that window.
- * `concludeEncounter` with 'abandoned' is the same path the sweeper uses (idle-encounter-sweeper.ts):
- * it claims the ending once, tears down the tactical map and tells the DM the party broke off. It
+ * `concludeEncounter` with reason 'abandoned' is the same function the idle sweeper calls (with
+ * 'ended_idle'): it claims the ending once, tears down the tactical map and tells the DM the party broke off. It
  * writes no XP (XP is only for last_hostile_defeated) and no chronicle (the chronicle is written by
  * the route below, unchanged). Owner-filtered through the session's campaign or character.
  * Never fails End session: each failure is logged and the session is still completed.
  */
 async function closeOpenEncountersOnEnd(sessionId: string, userId: string): Promise<void> {
   try {
+    // Loaded here, not at the top of the file, as story-xp.js is: the route-contract tests mock the
+    // logger without `combatLogger`, and combat-ending.js needs it at import time.
+    const { concludeEncounter } = await import('../../services/combat/combat-ending.js');
     const openEncounters = await db
       .select({ id: combatEncounters.id })
       .from(combatEncounters)
@@ -340,8 +342,12 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
         // must never fail the manual end itself — the route-contract tests
         // exercise this handler without a real database.
         try {
-          const { payPendingEndingXp } = await import('../../services/dm/story-xp.js');
-          const { playerMessage } = await import('../../services/dm/story-spell-slots.js');
+          const { payPendingEndingXp } = await import(
+            '../../services/dm/story-xp.js'
+          );
+          const { playerMessage } = await import(
+            '../../services/dm/story-spell-slots.js'
+          );
           const lastPlayerMessage = await playerMessage(id);
           if (lastPlayerMessage?.createdAt) {
             await payPendingEndingXp({
@@ -354,7 +360,10 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
           logger.warn({
             msg: '[Sessions] Deferred ending XP payment skipped on manual end',
             sessionId: id,
-            error: pendingError instanceof Error ? pendingError.message : String(pendingError),
+            error:
+              pendingError instanceof Error
+                ? pendingError.message
+                : String(pendingError),
           });
         }
         const session = await SessionService.completeSession(
