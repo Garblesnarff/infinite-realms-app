@@ -521,17 +521,70 @@ describeWithDb('fighting styles on the live attack route (#824)', () => {
     expect(response.status, await response.text()).toBe(200);
   });
 
-  // #1536 todo: on main the losing commit of a same-version race is refused with
-  // "Combat state changed; refresh and retry" (expectedVersion 21), not "Action already used
-  // this turn". The throw is at server-bun/src/services/combat/attack-budget-service.ts:78
-  // (claimAttackSwing's version check); the same wording also comes from combat-turn-resources.ts:40
-  // and :262. The one-landed/one-refused and single-HP-write checks were not reached.
-  test.todo(
-    '#1536 two attack commits racing for the last swing: one lands, one is refused, HP moves once',
-    () => {
-      // Intentionally empty until the engine message matches the issue's wording.
-    },
-  );
+  test('#1536 one commit wins the last Extra Attack swing: the other is refused, HP moves once', async () => {
+    await db
+      .update(characters)
+      .set({ class: 'Fighter', level: 5, classLevels: null })
+      .where(eq(characters.id, characterId));
+    await equip([], ['Longsword']);
+    // A level-5 Fighter has two swings. Spend one first so exactly one swing is left to race for.
+    const sendAttack = (phase: 'propose' | 'commit', expectedVersion: number, actionId?: string) =>
+      app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${userId}` },
+          body: JSON.stringify({
+            ...(phase === 'propose' ? { phase } : {}),
+            intent: {
+              type: 'attack',
+              actorId: heroId,
+              targetId,
+              expectedVersion,
+              ...(phase === 'commit' ? { d20: 20, actionId } : {}),
+            },
+            origin: 'action_bar',
+          }),
+        }),
+      );
+    const opening = await sendAttack('propose', await version());
+    expect(opening.status, await opening.text()).toBe(200);
+    const openingCommit = await sendAttack('commit', await version(), testId('race-open'));
+    expect(openingCommit.status, await openingCommit.text()).toBe(200);
+    const hpAfterOpening = (
+      await db
+        .select({ currentHp: combatParticipantStatus.currentHp })
+        .from(combatParticipantStatus)
+        .where(eq(combatParticipantStatus.participantId, targetId))
+    )[0].currentHp;
+
+    // Two proposals and two commits for the last swing, all against one shared version.
+    const raceVersion = await version();
+    const proposals = await Promise.all([
+      sendAttack('propose', raceVersion),
+      sendAttack('propose', raceVersion),
+    ]);
+    for (const proposal of proposals) expect(proposal.status, await proposal.text()).toBe(200);
+
+    const settled = await Promise.all(
+      [testId('race-a'), testId('race-b')].map(async (actionId) => {
+        const response = await sendAttack('commit', raceVersion, actionId);
+        return { status: response.status, json: (await response.json()) as Record<string, any> };
+      }),
+    );
+    const landed = settled.filter((row) => row.status === 200);
+    const refused = settled.filter((row) => row.status === 422);
+    expect(landed).toHaveLength(1);
+    expect(refused).toHaveLength(1);
+    expect(['Action already used this turn', 'Combat state changed; refresh and retry']).toContain(
+      refused[0].json.error,
+    );
+
+    const [target] = await db
+      .select({ currentHp: combatParticipantStatus.currentHp })
+      .from(combatParticipantStatus)
+      .where(eq(combatParticipantStatus.participantId, targetId));
+    expect(target.currentHp).toBe(hpAfterOpening - landed[0].json.result.finalDamage);
+  });
 
   test('#1536 Fighter 5: one swing, Action Surge on a spell, the leftover swing is allowed, then refused', async () => {
     await db
