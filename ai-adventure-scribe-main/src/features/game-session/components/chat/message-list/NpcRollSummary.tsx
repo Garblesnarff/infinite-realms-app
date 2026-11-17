@@ -4,7 +4,6 @@ import { formatNarrative } from './formatNarrative';
 
 import type { AutoRollResult } from '@/services/combat/npc-auto-roller';
 
-import { useShowTargetNumbers } from '@/features/game-session/hooks/use-show-target-numbers';
 import { formatNPCRollsSystemMessage } from '@/services/ai/npc-roll-handler';
 
 /**
@@ -16,7 +15,6 @@ import { formatNPCRollsSystemMessage } from '@/services/ai/npc-roll-handler';
  * half line or throwing inside the formatter.
  */
 export const NpcRollSummary: React.FC<{ rolls: unknown }> = ({ rolls }) => {
-  const { showTargetNumbers } = useShowTargetNumbers();
   const summary = useMemo(() => {
     if (!Array.isArray(rolls)) return '';
     const valid = rolls.filter((entry): entry is AutoRollResult => {
@@ -30,8 +28,8 @@ export const NpcRollSummary: React.FC<{ rolls: unknown }> = ({ rolls }) => {
       return Number.isFinite((result as { total?: unknown }).total);
     });
     if (valid.length === 0) return '';
-    return formatNPCRollsSystemMessage(valid, showTargetNumbers);
-  }, [rolls, showTargetNumbers]);
+    return formatNPCRollsSystemMessage(valid);
+  }, [rolls]);
 
   const { content } = formatNarrative(summary);
   if (!content) return null;
