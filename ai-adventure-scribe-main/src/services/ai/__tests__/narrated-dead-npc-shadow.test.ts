@@ -47,7 +47,7 @@ describe('narratedDeadNpcActingPatterns', () => {
 
   it('reports the M16 shape: the dead NPC narrated stepping into the ring and attacking', () => {
     const reply =
-      'The gate groans open. Dutch Pellam steps into the ring. Dutch Pellam swings at you.';
+      'The gate groans open. Dutch Pellam steps into the ring, blade raised, and swings at you.';
     expect(narratedDeadNpcActingPatterns(reply, dead)).toEqual(['attack', 'return_or_entry']);
   });
 
@@ -65,6 +65,11 @@ describe('narratedDeadNpcActingPatterns', () => {
     expect(narratedDeadNpcActingPatterns('Dutch Pellam came back up the sand.', dead)).toEqual([
       'return_or_entry',
     ]);
+  });
+
+  it('does not count "hits the sand" as an attack, and counts a hit on "you"', () => {
+    expect(narratedDeadNpcActingPatterns('Dutch Pellam hits the sand.', dead)).toEqual([]);
+    expect(narratedDeadNpcActingPatterns('Dutch Pellam hits you.', dead)).toEqual(['attack']);
   });
 
   it('does not count a body or ghost as the dead NPC acting', () => {
@@ -123,7 +128,7 @@ describe('shadowNarratedDeadNpcActing', () => {
   });
 
   it('reports the M16 shape with pattern names only and logs the shadow line', () => {
-    const reply = 'Dutch Pellam steps into the ring. Dutch Pellam swings at you.';
+    const reply = 'Dutch Pellam steps into the ring, blade raised, and swings at you.';
     shadowNarratedDeadNpcActing({
       narration: reply,
       sessionId: 'sess-1595-fixture',

@@ -11,8 +11,9 @@ export const NARRATED_DEAD_NPC_SHADOW_REASON = 'narrated_dead_npc_acting';
 const ACTING_PATTERNS: ReadonlyArray<{ name: string; verbs: string }> = [
   {
     name: 'attack',
+    // `hit`/`hits` count only when "you", a pronoun, or a non-ground object follows.
     verbs:
-      '(?:attacks?|attacked|attacking|strikes?|struck|swings?|swung|slash(?:es|ed)?|lunges?|lunged|stabs?|stabbed|shoots?|shot|hurls?|hurled|hits?|hit|fights?|fought|fighting|engages?|engaged|parr(?:y|ies|ied))',
+      '(?:attacks?|attacked|attacking|strikes?|struck|swings?|swung|slash(?:es|ed)?|lunges?|lunged|stabs?|stabbed|shoots?|shot|hurls?|hurled|fights?|fought|fighting|engages?|engaged|parr(?:y|ies|ied)|(?:hits?|hit)\\s+(?:you|your|him|her|them|(?:the|a|an)\\s+(?!(?:sand|ground|floor|stone|rock|dirt|wall|water|earth|ice|dust|mud|cobbles?)\\b)[a-z]+))',
   },
   {
     name: 'speech',
@@ -51,13 +52,13 @@ export function deadNpcNamesFromSceneState(block: string | null | undefined): st
 }
 
 /**
- * The acting-pattern names for a dead NPC who is the subject of the verb: the name, then at most
- * two plain words, then the verb. "X's body hits", "X is dead, and ... shouts" and a bare mention
- * ("the late X") do not match.
+ * The acting-pattern for a dead NPC who is the subject of the sentence: the name, not followed by
+ * a copula, then a verb later in the same sentence (a comma clause or "and" may sit between).
+ * "X's body hits", "X is dead, and ... shouts" and a bare mention ("the late X") do not match.
  */
 function subjectActRe(name: string, verbs: string): RegExp {
   return new RegExp(
-    `\\b${escapeRegExp(name)}\\s+(?:(?!(?:is|was|were|are|lies|lay|be)\\b)[a-z]+\\s+){0,2}${verbs}\\b`,
+    `\\b${escapeRegExp(name)}\\s+(?!(?:is|was|were|are|lies|lay|be)\\b)[^]*?\\b${verbs}\\b`,
     'i',
   );
 }
