@@ -21,11 +21,11 @@ import {
   campaigns,
   characters,
 } from '../../../../db/schema/index';
-import { getCampaignSessionNumbers } from '../../../../shared/campaign-session-numbers.js';
 import { planHasPaidFeatures } from '../../../../shared/plan-features.js';
 import { logger } from '../../lib/logger.js';
 import { resolveUserPlanStrict } from '../../lib/user-plan.js';
 import { chronicleGenerator } from '../../services/chronicle-generator.js';
+import { getOwnedCampaignSessionNumbers } from '../../services/session/owned-campaign-session-numbers.js';
 import { protectedProcedure, publicProcedure, router } from '../trpc.js';
 
 import type { Context } from '../context.js';
@@ -146,31 +146,13 @@ export const chroniclesRouter = router({
       // We check for the presence of the chronicle ID to determine existence.
       if (!row.id) return null;
 
-      // The sessions list numbers by creation order. The stored session_number
-      // is a continuation value and is often 1, so the chronicle eyebrow uses
-      // the same rank as the list.
-      let sessionNumber = row.sessionNumber ?? null;
-      if (row.campaignId) {
-        const siblings = await ctx.db
-          .select({
-            id: gameSessions.id,
-            createdAt: gameSessions.createdAt,
-          })
-          .from(gameSessions)
-          .where(eq(gameSessions.campaignId, row.campaignId));
-        const numbers = getCampaignSessionNumbers(
-          siblings.map((session) => ({
-            id: session.id,
-            created_at:
-              session.createdAt instanceof Date
-                ? session.createdAt.toISOString()
-                : session.createdAt
-                  ? String(session.createdAt)
-                  : null,
-          })),
-        );
-        sessionNumber = numbers.get(input.sessionId) ?? sessionNumber;
-      }
+      // #1592: the eyebrow shows the same owner-scoped rank the sessions list shows.
+      // The stored session_number is never shown.
+      const numbers = await getOwnedCampaignSessionNumbers(
+        row.campaignId ? [row.campaignId] : [],
+        ctx.user.userId,
+      );
+      const sessionNumber = numbers.get(input.sessionId) ?? null;
 
       const { campaignId: _campaignId, ...chronicle } = row;
       return { ...chronicle, sessionNumber };

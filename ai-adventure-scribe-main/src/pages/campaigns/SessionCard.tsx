@@ -14,6 +14,8 @@ export type SessionStatusType = 'active' | 'completed' | 'expired' | 'ending' | 
 export interface SessionListItem {
   id: string;
   session_number: number | null;
+  /** #1592: the campaign-local number, ranked on the server over the user's own sessions. */
+  display_session_number?: number | null;
   status: SessionStatusType;
   start_time: string | null;
   end_time: string | null;
@@ -113,7 +115,7 @@ const SessionCard: React.FC<SessionCardProps> = ({
           <div className="flex flex-wrap items-center gap-3">
             <Badge className={cn('border', badgeClass)}>{badgeLabel}</Badge>
             <span className="text-sm font-semibold text-foreground">
-              Session {displaySessionNumber ?? session.session_number ?? '—'}
+              Session {displaySessionNumber ?? session.display_session_number ?? '—'}
             </span>
             {startedAt && (
               <span className="text-sm text-muted-foreground">Started {startedAgo}</span>
