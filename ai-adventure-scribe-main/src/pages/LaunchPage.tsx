@@ -157,18 +157,16 @@ const LaunchPage: React.FC = () => {
                 data-testid="landing-hero-picture"
               >
                 <div className="rounded-2xl bg-gradient-to-br from-[#f6e3b8] via-[#d5b070] to-[#6e5226] p-2.5 shadow-[0_34px_70px_rgba(0,0,0,0.65)]">
-                  <picture>
-                    <source srcSet="/landing/table-game-1280.webp" type="image/webp" />
-                    <img
-                      src="/landing/table-game-1280.png"
-                      width={900}
-                      height={561}
-                      loading="lazy"
-                      decoding="async"
-                      alt="The game screen: story on the left, action bar and roll tray at the bottom, turn order, map and character sheet at the sides."
-                      className="block h-auto w-full rounded-lg object-cover"
-                    />
-                  </picture>
+                  <img
+                    src="/landing/table-game-1280.webp"
+                    width={900}
+                    height={561}
+                    loading="eager"
+                    fetchPriority="high"
+                    decoding="async"
+                    alt="The Table game screen: the Dungeon Master's narration on parchment with an engine line above it, a map sketch and the character sheet on the left, a roll tray and the scene picture on the right, and the message box at the bottom."
+                    className="block h-auto w-full rounded-lg object-cover"
+                  />
                 </div>
                 <figcaption className="mt-4 text-center text-base text-[#aab3cc]">
                   Story, roll tray, sheet and map in one view.
@@ -180,18 +178,15 @@ const LaunchPage: React.FC = () => {
                 data-testid="landing-hero-picture-phone"
               >
                 <div className="rounded-[22px] bg-gradient-to-br from-[#f6e3b8] via-[#d5b070] to-[#6e5226] p-2 shadow-[0_26px_50px_rgba(0,0,0,0.65)]">
-                  <picture>
-                    <source srcSet="/landing/table-game-390.webp" type="image/webp" />
-                    <img
-                      src="/landing/table-game-390.png"
-                      width={254}
-                      height={549}
-                      loading="lazy"
-                      decoding="async"
-                      alt="The game on a phone: the story, a roll, and the action bar."
-                      className="block h-auto w-[254px] max-w-full rounded-[14px] object-cover"
-                    />
-                  </picture>
+                  <img
+                    src="/landing/table-game-390.webp"
+                    width={254}
+                    height={549}
+                    loading="lazy"
+                    decoding="async"
+                    alt="The game on a phone: the Dungeon Master's narration on parchment, a scene chip, and the message box at the bottom."
+                    className="block h-auto w-[254px] max-w-full rounded-[14px] object-cover"
+                  />
                 </div>
               </figure>
             </div>
