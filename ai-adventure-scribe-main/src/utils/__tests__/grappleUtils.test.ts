@@ -4,12 +4,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   canAttemptGrapple,
   calculateGrappleDC,
-  rollGrappleCheck,
-  createGrappledCondition,
   canBeGrappled,
   canMaintainGrapple,
   escapeGrapple,
-  rollShoveCheck,
   getGrappleActionDescription,
 } from '../grappleUtils';
 
@@ -94,71 +91,6 @@ describe('grappleUtils', () => {
     it('should use level 1 if level is missing', () => {
       delete mockParticipant.level;
       expect(calculateGrappleDC(mockParticipant)).toBe(14);
-    });
-  });
-
-  describe('rollGrappleCheck', () => {
-    it('should return success when roll is high enough', () => {
-      const mockRoll = { total: 15, naturalRoll: 12 };
-      const opposingRoll = { total: 10, naturalRoll: 11 };
-      (diceUtils.rollDice as any).mockReturnValueOnce(mockRoll).mockReturnValueOnce(opposingRoll);
-
-      const result = rollGrappleCheck(mockParticipant, mockTarget);
-
-      expect(result.success).toBe(true);
-      expect(result.dc).toBe(10);
-      expect(result.roll).toBe(mockRoll);
-      expect(result.opposingRoll).toBe(opposingRoll);
-      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 4);
-    });
-
-    it('should return failure when roll is too low', () => {
-      const mockRoll = { total: 10, naturalRoll: 4 };
-      (diceUtils.rollDice as any).mockReturnValue(mockRoll);
-
-      const result = rollGrappleCheck(mockParticipant, mockTarget);
-
-      expect(result.success).toBe(false);
-    });
-
-    it('should use level 1 for participant if level is missing', () => {
-      delete mockParticipant.level;
-      const mockRoll = { total: 10, naturalRoll: 4 };
-      (diceUtils.rollDice as any).mockReturnValue(mockRoll);
-
-      rollGrappleCheck(mockParticipant, mockTarget);
-      expect(diceUtils.rollDice).toHaveBeenCalledWith(20, 1, 4);
-    });
-
-    it('uses the target better Athletics or Acrobatics modifier', () => {
-      mockTarget.abilityScores.dexterity = { modifier: 3 };
-      mockTarget.skillProficiencies = ['Acrobatics'];
-      (diceUtils.rollDice as any)
-        .mockReturnValueOnce({ total: 12 })
-        .mockReturnValueOnce({ total: 13 });
-
-      const result = rollGrappleCheck(mockParticipant, mockTarget);
-
-      expect(diceUtils.rollDice).toHaveBeenNthCalledWith(2, 20, 1, 6);
-      expect(result.success).toBe(false);
-    });
-
-    it('resolves shove through the same opposed-check rules', () => {
-      (diceUtils.rollDice as any)
-        .mockReturnValueOnce({ total: 18 })
-        .mockReturnValueOnce({ total: 11 });
-
-      expect(rollShoveCheck(mockParticipant, mockTarget).success).toBe(true);
-    });
-  });
-
-  describe('createGrappledCondition', () => {
-    it('should create a grappled condition with correct DC', () => {
-      const condition = createGrappledCondition('p1', 14);
-      expect(condition.name).toBe('grappled');
-      expect(condition.saveDC).toBe(14);
-      expect(condition.duration).toBe(-1);
-      expect(condition.saveAbility).toBe('str');
     });
   });
 

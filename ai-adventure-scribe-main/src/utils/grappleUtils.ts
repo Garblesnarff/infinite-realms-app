@@ -4,9 +4,8 @@
  * Handles grapple mechanics, strength checks, and condition application
  */
 
-import type { CombatParticipant, Condition, DiceRoll } from '@/types/combat';
+import type { CombatParticipant, DiceRoll } from '@/types/combat';
 
-import { hasProficiency } from '@/utils/character/parse-proficiency-list';
 import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { rollDice } from '@/utils/diceUtils';
 
@@ -40,75 +39,6 @@ export function calculateGrappleDC(participant: CombatParticipant): number {
   const strengthModifier = participant.abilityScores?.strength?.modifier ?? 0;
 
   return baseDC + proficiencyBonus + strengthModifier;
-}
-
-/**
- * Roll a grapple check
- */
-export function rollGrappleCheck(
-  participant: CombatParticipant,
-  target: CombatParticipant,
-): {
-  roll: DiceRoll;
-  opposingRoll: DiceRoll;
-  description: string;
-  success: boolean;
-  dc: number;
-} {
-  const modifier = getSkillModifier(participant, 'Athletics');
-  const athleticsModifier = getSkillModifier(target, 'Athletics');
-  const acrobaticsModifier = getSkillModifier(target, 'Acrobatics');
-  const defenderSkill = acrobaticsModifier > athleticsModifier ? 'Acrobatics' : 'Athletics';
-  const defenderModifier = Math.max(athleticsModifier, acrobaticsModifier);
-
-  const roll = rollDice(20, 1, modifier);
-  const opposingRoll = rollDice(20, 1, defenderModifier);
-  const success = roll.total > opposingRoll.total;
-  const dc = opposingRoll.total;
-
-  const description = `${participant.name} contests ${target.name}'s ${defenderSkill} (${roll.total} vs ${opposingRoll.total})`;
-
-  return {
-    roll,
-    opposingRoll,
-    description,
-    success,
-    dc,
-  };
-}
-
-function getSkillModifier(
-  participant: CombatParticipant,
-  skill: 'Athletics' | 'Acrobatics',
-): number {
-  const ability = skill === 'Athletics' ? 'strength' : 'dexterity';
-  const abilityModifier = participant.abilityScores?.[ability]?.modifier ?? 0;
-  const proficient = hasProficiency(participant.skillProficiencies, skill);
-  return abilityModifier + (proficient ? calculateProficiencyBonus(participant.level || 1) : 0);
-}
-
-export function rollShoveCheck(
-  participant: CombatParticipant,
-  target: CombatParticipant,
-): ReturnType<typeof rollGrappleCheck> {
-  return rollGrappleCheck(participant, target);
-}
-
-/**
- * Create grappled condition
- */
-export function createGrappledCondition(_grapplerId: string, escapeDC: number): Condition {
-  return {
-    name: 'grappled',
-    description:
-      "The creature is grappled. While grappled, the creature's speed becomes 0, and it can't benefit from any bonus to its speed. The condition ends if the grappler is incapacitated or if an effect removes the grappled creature from the reach of the grappler.",
-    duration: -1, // Permanent until escaped or grappler is incapacitated
-    saveEndsType: 'end',
-    saveDC: escapeDC,
-    saveAbility: 'str', // Strength check to escape
-    sourceSpell: undefined,
-    concentrationRequired: false,
-  };
 }
 
 /**
