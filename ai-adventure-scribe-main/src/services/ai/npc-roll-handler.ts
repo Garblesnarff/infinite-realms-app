@@ -110,7 +110,7 @@ Narrate the scene:`.trim();
         systemInstruction: 'NPC_ROLL_CONTINUATION',
         npcRollResults: rollSummary,
       },
-       relevantMemories: [], // #545: an empty list stops chatWithDM from fetching memories for a roll continuation
+      relevantMemories: [], // #545: an empty list stops chatWithDM from fetching memories for a roll continuation
       ...(signal ? { signal } : {}),
     });
 
@@ -160,7 +160,10 @@ Narrate the scene:`.trim();
  * @param rolls - Array of auto-executed NPC roll results
  * @returns Formatted message string for display
  */
-export function formatNPCRollsSystemMessage(rolls: AutoRollResult[]): string {
+export function formatNPCRollsSystemMessage(
+  rolls: AutoRollResult[],
+  showTargetNumbers = true,
+): string {
   if (rolls.length === 0) return '';
 
   const header = `🎲 **Behind the Screen** (${rolls.length} NPC ${rolls.length === 1 ? 'roll' : 'rolls'})`;
@@ -177,12 +180,13 @@ export function formatNPCRollsSystemMessage(rolls: AutoRollResult[]): string {
       line += ' **Fumble!**';
     }
 
+    // #157: with target numbers hidden the "AC N" / "DC N" clause is dropped, not replaced.
     if (request.type === 'attack' && request.ac) {
       const hitOrMiss = result.total >= request.ac ? '**hits**' : 'misses';
-      line += ` (${hitOrMiss} AC ${request.ac})`;
+      line += ` (${hitOrMiss}${showTargetNumbers ? ` AC ${request.ac}` : ''})`;
     } else if (request.dc) {
       const successFail = result.total >= request.dc ? '**succeeds**' : 'fails';
-      line += ` (${successFail} DC ${request.dc})`;
+      line += ` (${successFail}${showTargetNumbers ? ` DC ${request.dc}` : ''})`;
     }
 
     return line;

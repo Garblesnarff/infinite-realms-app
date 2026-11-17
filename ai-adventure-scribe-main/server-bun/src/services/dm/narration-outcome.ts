@@ -24,6 +24,7 @@ import {
   type OutcomeClaim,
 } from '../../../../shared/narration-harm.js';
 import { logger } from '../../lib/logger.js';
+import { showTargetNumbersForSession } from '../combat/session-target-numbers.js';
 
 export interface RollOutcome {
   success: boolean;
@@ -65,9 +66,7 @@ export async function latestRollOutcome(sessionId: string): Promise<RollOutcome 
   const [latestDm] = await db
     .select({ createdAt: dialogueHistory.createdAt })
     .from(dialogueHistory)
-    .where(
-      and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'dm')),
-    )
+    .where(and(eq(dialogueHistory.sessionId, sessionId), eq(dialogueHistory.speakerType, 'dm')))
     .orderBy(desc(dialogueHistory.createdAt))
     .limit(1);
   const exchangeStart = latestDm?.createdAt?.getTime() ?? 0;
@@ -113,10 +112,12 @@ export async function latestRollOutcome(sessionId: string): Promise<RollOutcome 
  * The engine's truth, plainly stated, for a narration that claimed the opposite. The repair
  * replaces the false claim — it does not embroider it, and it never invents a consequence.
  */
-export function repairNarration(outcome: RollOutcome): string {
+export function repairNarration(outcome: RollOutcome, showTargetNumbers = true): string {
   const what = outcome.description ? `The ${outcome.description}` : 'The attempt';
-  const target =
-    typeof outcome.dc === 'number'
+  // #157: with target numbers hidden the DC or AC clause is dropped, never a placeholder.
+  const target = !showTargetNumbers
+    ? ''
+    : typeof outcome.dc === 'number'
       ? ` vs DC ${outcome.dc}`
       : typeof outcome.ac === 'number'
         ? ` vs AC ${outcome.ac}`
@@ -226,8 +227,7 @@ function branchHasAlternatingPair(branch: string): boolean {
   const success = /succeed|successful/i.exec(branch);
   const failure = /\bfail/i.exec(branch);
   if (!success || !failure) return false;
-  const [first, second] =
-    success.index < failure.index ? [success, failure] : [failure, success];
+  const [first, second] = success.index < failure.index ? [success, failure] : [failure, success];
   const between = branch.slice(first.index + first[0].length, second.index);
   return /\bor\s*(?:you\s*)?$/i.test(between);
 }
@@ -277,7 +277,11 @@ function isClaimOnPendingRoll(
   if (/^\s*should\b/i.test(sentence)) return false;
   const tailWords = beforeClaim.trim().split(/\s+/).slice(-3).join(' ');
   if (/\b(?:would|could|might|can|may)\b/i.test(tailWords)) return false;
-  if (VERDICT_CLAIM.test(claim.match) && /succeed|successful/i.test(sentence) && /\bfail/i.test(sentence)) {
+  if (
+    VERDICT_CLAIM.test(claim.match) &&
+    /succeed|successful/i.test(sentence) &&
+    /\bfail/i.test(sentence)
+  ) {
     // Paired stakes only in a BRANCH structure: a branch marker scoping the claim,
     // or a ';'-separated pair carrying a verdict on each side. A mere contrast in
     // one clause ("You succeed in slipping past the guard, but you fail to notice
@@ -338,10 +342,7 @@ function isClaimOnPendingRoll(
     if (!anchoredOnPlayer) return false;
     return true;
   }
-  if (
-    keywords.length > 0 &&
-    !keywords.some((keyword) => sentenceNamesKeyword(sentence, keyword))
-  ) {
+  if (keywords.length > 0 && !keywords.some((keyword) => sentenceNamesKeyword(sentence, keyword))) {
     return false;
   }
   return true;
@@ -379,8 +380,7 @@ export function repairPrematureRollClaims(
         : undefined;
     if (!requestType) continue;
     const purpose = (request as PendingRollRequest | null)?.purpose;
-    const description =
-      typeof purpose === 'string' && purpose.trim() ? purpose.trim() : undefined;
+    const description = typeof purpose === 'string' && purpose.trim() ? purpose.trim() : undefined;
     // Anchor vocabulary comes from the purpose alone, minus generic type/ability
     // words (GENERIC_KEYWORDS): the requestType's own words match everything.
     const keywords = actionKeywords({ success: false, description }).filter(
@@ -439,7 +439,8 @@ export async function repairNarrationContradiction(input: {
       claims,
       engineSuccess: outcome.success,
     });
-    return spliceContradictingSentences(text, claims, repairNarration(outcome));
+    const showTargetNumbers = await showTargetNumbersForSession(sessionId);
+    return spliceContradictingSentences(text, claims, repairNarration(outcome, showTargetNumbers));
   } catch (error) {
     logger.warn({
       msg: 'DM_NARRATION_OUTCOME_CHECK_FAILED',
