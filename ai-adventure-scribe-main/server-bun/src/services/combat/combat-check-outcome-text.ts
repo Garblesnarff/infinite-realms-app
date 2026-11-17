@@ -30,10 +30,10 @@ export function describeOutcome(params: {
       : resolution.line
     : `${resolution.line}, nothing changes`;
   const isParley = resolution.kind === 'persuade' || resolution.kind === 'intimidate';
-  // With target numbers hidden, a parley line drops its DC on both surfaces: the player's Engine
-  // line (#157, a hidden DC never reaches the player) and the DM's copy, which was already
-  // worded this way. One value serves both, so the two can never disagree.
-  const shownLine =
+  // The engine line the DM restates carries the parley DC too, so it is worded without it when
+  // target numbers are hidden. The player's own Engine line keeps it. The client hides the DC on
+  // display (#157); this server line is the DM's input and stays as on main.
+  const dmEngineLine =
     isParley && !showTargetNumbers ? engineLine.replace(` vs DC ${parleyDc}`, '') : engineLine;
   // A parley fact may only assert the stand-down on a SUCCESS. Emitting the PARLEY clause for a
   // failed roll would tell the DM the creature held its action while the engine line beside it
@@ -49,5 +49,5 @@ export function describeOutcome(params: {
       `Restate the engine line; never invent a surrender or a recruitment.`
     : `${actorLabel} ${resolution.definition.label}: ${engineLine}. ` +
       `Restate the engine numbers exactly; never contradict the outcome.`;
-  return { engineLine: shownLine, dmEngineLine: shownLine, dmFact };
+  return { engineLine, dmEngineLine, dmFact };
 }
