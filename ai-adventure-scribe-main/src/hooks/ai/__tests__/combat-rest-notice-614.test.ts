@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseEngineLine } from '@/features/game-session/components/chat/message-list/engine-line-model';
-
 import { REST_IN_COMBAT_NOTICE, isRestRequest } from '../combat-notice';
+
+import { parseEngineLine } from '@/features/game-session/components/chat/message-list/engine-line-model';
 
 // #614: a rest request typed in a fight is named as a rest, and only as the player's own act.
 describe('isRestRequest (#614)', () => {
