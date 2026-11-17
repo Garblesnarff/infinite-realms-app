@@ -14,7 +14,7 @@
 import { and, eq, ilike, or } from 'drizzle-orm';
 
 import { db } from '../../../../db/client';
-import { characters } from '../../../../db/schema/index';
+import { characters, dialogueHistory } from '../../../../db/schema/index';
 import { logger } from '../../lib/logger.js';
 import { detectDeclaredLayOnHands } from '../combat/combat-intent-gate.js';
 
@@ -53,13 +53,37 @@ async function ownedCharacterByName(userId: string, name: string): Promise<strin
   return partial.length === 1 ? partial[0].id : null;
 }
 
+/**
+ * #1597: the id of a story Lay on Hands line. A retried turn answers the same player message, so
+ * it gets the same seed and finds the row the first spend posted.
+ */
+function layOnHandsLineSeed(sessionId: string, since: Date | null, featureName: string): string {
+  return `lay-on-hands:${sessionId}:${since ? since.toISOString() : 'none'}:${featureName}`;
+}
+
+/** #1597: the stored line of a Lay on Hands this message already spent, or null. */
+async function storedLayOnHandsLine(
+  sessionId: string,
+  since: Date | null,
+  featureName: string,
+): Promise<string | null> {
+  const { engineLineUuid } = await import('../engine-chat-line.js');
+  const id = engineLineUuid(layOnHandsLineSeed(sessionId, since, featureName));
+  const [row] = await db
+    .select({ message: dialogueHistory.message })
+    .from(dialogueHistory)
+    .where(eq(dialogueHistory.id, id))
+    .limit(1);
+  return row?.message ?? null;
+}
+
 export async function spendStoryFeatureUses(input: {
   userId: string;
   sessionId: string;
   playerInput: string;
   character: CharacterRow;
   features: string[];
-}): Promise<void> {
+}): Promise<string[]> {
   const { userId, sessionId, playerInput, character, features } = input;
   // Dynamic import: the paladin service pulls in db/client at load time, and this
   // module is itself dynamically imported by the generate route (same pattern as
@@ -80,6 +104,8 @@ export async function spendStoryFeatureUses(input: {
   const since = message?.createdAt ?? null;
 
   let anyFeatureSpent = false;
+  /** #1597: the engine lines of Lay on Hands the engine resolved (a refusal is not one). */
+  const engineLines: string[] = [];
   for (const name of features) {
     const key = name.toLowerCase();
     try {
@@ -104,6 +130,12 @@ export async function spendStoryFeatureUses(input: {
         })
       ) {
         logger.info({ msg: 'DM_STORY_FEATURE_SPEND_ALREADY_SPENT', sessionId, feature: name });
+        // #1597: a retried turn spends nothing again, but its reply still needs the line the first
+        // spend posted. Without it the gate replaces the heal narration with the no-effect line.
+        if (featureName === LAY_ON_HANDS_NAME) {
+          const line = await storedLayOnHandsLine(sessionId, since, featureName);
+          if (line) engineLines.push(line);
+        }
         continue;
       }
       if (key === DIVINE_SENSE) {
@@ -139,7 +171,24 @@ export async function spendStoryFeatureUses(input: {
           sessionId,
           context: 'story-turn',
         });
-        if (laid.ok) anyFeatureSpent = true;
+        if (laid.ok) {
+          anyFeatureSpent = true;
+          engineLines.push(laid.message);
+          // The engine's line is a system row in the chat, as story damage and XP lines are.
+          // A failed write must not fail the spend: the pool and HP already moved.
+          try {
+            const { postEngineChatLine } = await import('../engine-chat-line.js');
+            await postEngineChatLine({
+              sessionId,
+              userId,
+              idSeed: layOnHandsLineSeed(sessionId, since, featureName),
+              text: laid.message,
+              context: { intent: 'lay_on_hands', origin: 'story' },
+            });
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_LAY_ON_HANDS_LINE_FAILED', sessionId, error });
+          }
+        }
       }
     } catch (error) {
       logger.warn({ msg: 'DM_STORY_FEATURE_SPEND_FAILED', sessionId, feature: name, error });
@@ -162,4 +211,5 @@ export async function spendStoryFeatureUses(input: {
       });
     }
   }
+  return engineLines;
 }

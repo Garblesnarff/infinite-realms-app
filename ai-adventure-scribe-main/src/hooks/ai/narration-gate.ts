@@ -342,6 +342,15 @@ export interface NarrativeTurn {
 }
 
 /**
+ * #1597: the engine lines the server resolved this turn (a typed Lay on Hands outside a fight).
+ * The server sets them on the envelope; the model never does. A line is an engine event.
+ */
+function hasServerEngineLines(result: NarrativeTurn['result']): boolean {
+  const lines = (result as { engine_lines?: unknown }).engine_lines;
+  return Array.isArray(lines) && lines.some((line) => typeof line === 'string' && line.length > 0);
+}
+
+/**
  * A turn outside combat that the engine has nothing to resolve: a player message, no dice result,
  * no roll request, no combat declaration or entry. The DM's prose is the only account of it.
  * Each clause is a turn where the engine does have something to say, or where nobody spoke.
@@ -373,6 +382,7 @@ export function narrativeTurnHasNoEngineEvent({
 }: NarrativeTurn): boolean {
   return (
     !isInCombat &&
+    !hasServerEngineLines(result) &&
     !isDiceRollMessage &&
     playerInputOrigin !== null &&
     !result.combat_actions?.length &&

@@ -69,6 +69,11 @@ import {
   type DmResponsePhase,
 } from '../../services/dm/dm-response-schema.js';
 import { recordDmTurnActions } from '../../services/dm/dm-turn-action-registry.js';
+import {
+  carryServerEngineLines,
+  setServerEngineLines,
+  stripModelEngineLines,
+} from '../../services/dm/server-engine-lines.js';
 import { isRetryableUpstreamStatus } from '../../services/llm-errors.js';
 import { isProviderKeyLimitError } from '../../services/llm-key-limit.js';
 import {
@@ -1455,6 +1460,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
 
         // One parse, shared by the log line and the narration rewrite. (#2050 G)
         const envelope = parseLlmEnvelope(result.text);
+        // #1597: `engine_lines` is server-owned. A model-supplied value is dropped here; the server
+        // sets it below only when the engine resolved something this turn.
+        if (envelope) stripModelEngineLines(envelope);
         preserveDeclaredToolCheck(envelope, playerInput ?? '');
         // #266: the engine's verdict for the turn is authoritative. If the narration
         // contradicts the latest roll outcome (a failed check narrated as a success, or an
@@ -1631,6 +1639,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             logger.warn({ msg: 'DM_STORY_EFFECTS_GUARD_FAILED', sessionId: castSessionId, error });
           }
         }
+        // #1597: the engine lines of a story Lay on Hands the engine resolved this turn.
+        let storyEngineLines: string[] = [];
         if (
           featuresToSpend &&
           castSessionId &&
@@ -1641,7 +1651,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           try {
             const { spendStoryFeatureUses } =
               await import('../../services/dm/story-feature-uses.js');
-            await spendStoryFeatureUses({
+            storyEngineLines = await spendStoryFeatureUses({
               userId,
               sessionId: castSessionId,
               playerInput: playerInput ?? '',
@@ -1809,8 +1819,11 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // #1554: a typed Lay on Hands the engine resolved this turn rides the reply as its engine
         // line. The client's combat resolution counts it as an engine event, so the narration gate
         // does not replace the DM's reply with the no-effect line.
-        if (envelope && layOnHandsEngineLine) {
-          envelope.engine_lines = [layOnHandsEngineLine];
+        if (envelope) {
+          setServerEngineLines(envelope, [
+            ...(layOnHandsEngineLine ? [layOnHandsEngineLine] : []),
+            ...storyEngineLines,
+          ]);
         }
         // #1020: an ending the story declares reaches the session, server-side: the
         // applier claims the ending engine row, then completes the session through
@@ -2297,6 +2310,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
                     if (envelope?.campaign_ending)
                       seated.campaign_ending = envelope.campaign_ending;
                     else delete seated.campaign_ending;
+                    // #1597: the server's engine lines survive the re-parse, as the ending does.
+                    carryServerEngineLines(envelope, seated);
                   }
                   return seated;
                 })(),
