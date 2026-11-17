@@ -109,11 +109,36 @@ export function unresolvedTargetNotice(
  * The player's message declared no combat action at all — talk, a look, a wait — so the engine
  * had nothing to resolve for it and the turn stays open (#2342). When NPC turns were resolved in
  * the same reply, "nothing was rolled" would be untrue, so the line speaks only for the player.
+ * Plain text: an engine chip renders it as-is, so no markdown wrapper (#614 FIX).
  */
 export function noMechanicalActionNotice(hadEngineLines = false): string {
   return hadEngineLines
-    ? '*(You took no combat action this turn. It is still your turn.)*'
-    : '*(That was not a combat action — nothing was rolled. It is still your turn.)*';
+    ? 'You took no combat action this turn. It is still your turn.'
+    : 'That was not a combat action — nothing was rolled. It is still your turn.';
+}
+
+/**
+ * A rest is not an action the engine resolves in a fight (2014 SRD: a short or long rest needs
+ * time out of combat). The player is told so in an engine line, not in the DM's prose (#614).
+ */
+export const REST_IN_COMBAT_NOTICE = 'A rest is not possible during combat. It is still your turn.';
+
+/**
+ * The player's typed message asks to rest: "a short rest", "take a long rest", "I rest", "make
+ * camp". A rest is named as the player's own act, so "rest my hand on the wall" is not one (#614).
+ */
+export function isRestRequest(message: string | null | undefined): boolean {
+  const text = message ?? '';
+  if (
+    /\b(?:short|long)\s+rest\b|\btake\s+a\s+rest\b|\b(?:make|set\s+up)\s+camp\b|\bgo\s+to\s+sleep\b/i.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+  return /\bi\s+(?:want\s+to\s+|try\s+to\s+|would\s+like\s+to\s+|will\s+|'ll\s+|can\s+)?rest\b(?!\s+(?:against|on|upon|my|your|his|her|their|a|an|the|one)\b)/i.test(
+    text,
+  );
 }
 
 /**

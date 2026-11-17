@@ -522,10 +522,15 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
     const payload = JSON.parse(narrationCall.message);
     expect(payload.silentPlayerTurnNote).toBe(SILENT_PLAYER_TURN_NOTE);
     expect(payload.authoritativeCombatResults ?? []).toEqual([]);
-    // Nothing was rolled this turn, and the trailer says exactly that.
-    expect(response.text).toContain(
-      '*(That was not a combat action — nothing was rolled. It is still your turn.)*',
-    );
+    // Nothing was rolled this turn, and the line says exactly that. It is an engine line, not
+    // story prose (#614): it travels in the engine blocks, and the prose does not carry it.
+    expect(response.text).not.toContain('nothing was rolled');
+    const engineLines = (
+      (response.context?.combatEngineBlocks ?? []) as Array<{ lines: string[] }>
+    ).flatMap((block) => block.lines);
+    expect(engineLines).toEqual([
+      'That was not a combat action — nothing was rolled. It is still your turn.',
+    ]);
   });
 
   it('A2: while combat goes on, the DM’s roll requests stay dropped under the fresh flag', async () => {

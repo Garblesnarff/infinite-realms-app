@@ -2,7 +2,9 @@
 import {
   COMBAT_INTENT_OUT_OF_TURN,
   COMBAT_INTENT_UNRESOLVED_TARGET,
+  REST_IN_COMBAT_NOTICE,
   combatRefusalReason,
+  isRestRequest,
   noMechanicalActionNotice,
   playerFacingRefusal,
   redactedCombatIntent,
@@ -1630,13 +1632,21 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
       ? ensurePlayerTurnHandoff(narratedText, playerName)
       : narratedText;
   if (silentTurn) {
+    // #614: the notice is an engine line, not story prose. A rest request gets its own line.
+    const notice = isRestRequest(silentPlayerTurn?.playerMessage)
+      ? REST_IN_COMBAT_NOTICE
+      : noMechanicalActionNotice(hadEngineLines);
+    const noticeBlock: CombatEngineBlock = {
+      sequence: (orderedEngineBlocks.at(-1)?.sequence ?? -1) + 1,
+      round: combatRound ?? 1,
+      source: 'player',
+      actor: playerName,
+      lines: [notice],
+    };
     return {
       ...narration,
-      combatEngineBlocks: orderedEngineBlocks,
-      text: ensurePlayerTurnHandoff(
-        `${withoutPlayerTurnHandoff(narratedText, playerName)}\n\n${noMechanicalActionNotice(hadEngineLines)}`,
-        playerName,
-      ),
+      combatEngineBlocks: [...orderedEngineBlocks, noticeBlock],
+      text: ensurePlayerTurnHandoff(withoutPlayerTurnHandoff(narratedText, playerName), playerName),
     };
   }
   if (!refusedPlayerActions.length) {
