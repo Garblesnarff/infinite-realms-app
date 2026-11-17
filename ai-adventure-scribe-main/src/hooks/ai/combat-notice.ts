@@ -117,6 +117,31 @@ export function noMechanicalActionNotice(hadEngineLines = false): string {
 }
 
 /**
+ * A rest is not an action the engine resolves in a fight (2014 SRD: a short or long rest needs
+ * time out of combat). The player is told so in an engine line, not in the DM's prose (#614).
+ */
+export const REST_IN_COMBAT_NOTICE =
+  '*(A rest is not possible during combat. It is still your turn.)*';
+
+/**
+ * The player's typed message asks to rest: "a short rest", "take a long rest", "I rest", "make
+ * camp". A rest is named as the player's own act, so "rest my hand on the wall" is not one (#614).
+ */
+export function isRestRequest(message: string | null | undefined): boolean {
+  const text = message ?? '';
+  if (
+    /\b(?:short|long)\s+rest\b|\btake\s+a\s+rest\b|\b(?:make|set\s+up)\s+camp\b|\bgo\s+to\s+sleep\b/i.test(
+      text,
+    )
+  ) {
+    return true;
+  }
+  return /\bi\s+(?:want\s+to\s+|try\s+to\s+|would\s+like\s+to\s+|will\s+|'ll\s+|can\s+)?rest\b(?!\s+(?:against|on|upon|my|your|his|her|their|a|an|the|one)\b)/i.test(
+    text,
+  );
+}
+
+/**
  * The player's refused declaration was repaired into the turn holder's own action, and the turn
  * is still not the player's. Nothing was "declared out of turn" from the player's point of view
  * any more — they only need to know who acts before them.

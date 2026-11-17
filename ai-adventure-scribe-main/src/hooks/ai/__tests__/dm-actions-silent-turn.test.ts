@@ -65,6 +65,17 @@ const HANDOFF = 'The Apprentice, what do you do?';
 const NOTICE = '*(That was not a combat action — nothing was rolled. It is still your turn.)*';
 const NOTICE_WITH_ENGINE_LINES = '*(You took no combat action this turn. It is still your turn.)*';
 
+/** The engine-line notices a turn carried, as the UI's engine blocks hold them (#614). */
+const noticeLines = (outcome: { result?: any; combatEngineBlocks?: any }): string[] =>
+  (
+    (outcome.combatEngineBlocks ?? outcome.result?.combatEngineBlocks ?? []) as Array<{
+      lines: string[];
+    }>
+  ).flatMap((block) => block.lines);
+/** The engine block a silent turn's notice travels in. */
+const noticeBlock = (line: string) =>
+  expect.objectContaining({ source: 'player', actor: 'The Apprentice', lines: [line] });
+
 const TALK = 'I try to talk the elemental down.';
 /** Round 3's first-pass prose: a spell nobody cast and a wound nobody took. */
 const FABRICATED =
@@ -230,8 +241,9 @@ describe('a combat turn the engine had no line for (#2342)', () => {
     const outcome = await invoke();
 
     expect(outcome.responseText).not.toMatch(/spell|wound/i);
-    expect(outcome.responseText).toBe(`${HONEST}\n\n${NOTICE}\n\n${HANDOFF}`);
-    expect(outcome.result.combatEngineBlocks).toEqual([]);
+    expect(outcome.responseText).toBe(`${HONEST}\n\n${HANDOFF}`);
+    expect(outcome.responseText).not.toContain(NOTICE);
+    expect(outcome.result.combatEngineBlocks).toEqual([noticeBlock(NOTICE)]);
   });
 
   it('runs on the envelope production sends: combat_transition is "none", not absent (#2373)', async () => {
@@ -242,7 +254,7 @@ describe('a combat turn the engine had no line for (#2342)', () => {
     });
 
     expect(noteCalls()).toHaveLength(1);
-    expect(outcome.responseText).toBe(`${HONEST}\n\n${NOTICE}\n\n${HANDOFF}`);
+    expect(outcome.responseText).toBe(`${HONEST}\n\n${HANDOFF}`);
   });
 
   it('does not double the handoff when the DM already ended with it', async () => {
@@ -250,7 +262,7 @@ describe('a combat turn the engine had no line for (#2342)', () => {
 
     const outcome = await invoke();
 
-    expect(outcome.responseText).toBe(`${HONEST}\n\n${NOTICE}\n\n${HANDOFF}`);
+    expect(outcome.responseText).toBe(`${HONEST}\n\n${HANDOFF}`);
     expect(outcome.responseText.split(HANDOFF)).toHaveLength(2);
   });
 
@@ -265,7 +277,7 @@ describe('a combat turn the engine had no line for (#2342)', () => {
     const outcome = await invoke();
 
     expect(AIService.chatWithDM).toHaveBeenCalledTimes(2);
-    expect(outcome.responseText).toBe(`${NEUTRAL_NO_EFFECT_LINE}\n\n${NOTICE}\n\n${HANDOFF}`);
+    expect(outcome.responseText).toBe(`${NEUTRAL_NO_EFFECT_LINE}\n\n${HANDOFF}`);
     expect(outcome.responseText).not.toContain(FABRICATED);
     // The voice segments carried the same words; they go with them.
     expect(outcome.narrationSegments).toBeUndefined();
@@ -310,7 +322,7 @@ describe('a combat turn the engine had no line for (#2342)', () => {
     expect(calls[1][0].message).not.toContain('strike from the entity');
     expect(calls[1][0].message).not.toContain('feeling rattled and wounded');
     expect(calls[1][0].message).not.toContain(calls[1][0].narrationViolation);
-    expect(outcome.responseText).toBe(`${HONEST}\n\n${NOTICE}\n\n${HANDOFF}`);
+    expect(outcome.responseText).toBe(`${HONEST}\n\n${HANDOFF}`);
     expect(logger.warn).toHaveBeenCalledTimes(1);
     expect(logger.warn).toHaveBeenCalledWith(
       'DM_NARRATION_REJECTED',
@@ -325,7 +337,7 @@ describe('a combat turn the engine had no line for (#2342)', () => {
 
     const outcome = await invoke();
 
-    expect(outcome.responseText).toBe(`${NEUTRAL_NO_EFFECT_LINE}\n\n${NOTICE}\n\n${HANDOFF}`);
+    expect(outcome.responseText).toBe(`${NEUTRAL_NO_EFFECT_LINE}\n\n${HANDOFF}`);
     expect(logger.warn).toHaveBeenCalledWith(
       'DM_NARRATION_REJECTED',
       expect.objectContaining({ attempt: 2, reason: 'regeneration_failed' }),
@@ -402,7 +414,8 @@ describe('a combat turn the engine had no line for (#2342)', () => {
       expect(payload.silentPlayerTurnNote).not.toMatch(/no damage was dealt or taken/i);
       expect(payload.authoritativeCombatResults).toHaveLength(1);
       expect(outcome.text).not.toContain(NPC_LINE);
-      expect(outcome.text).toContain(NOTICE_WITH_ENGINE_LINES);
+      expect(outcome.text).not.toContain(NOTICE_WITH_ENGINE_LINES);
+      expect(noticeLines(outcome)).toEqual([NOTICE_WITH_ENGINE_LINES]);
       expect(outcome.text).not.toContain('nothing was rolled');
       expect(outcome.text.trimEnd().endsWith(HANDOFF)).toBe(true);
     });
@@ -492,7 +505,8 @@ describe('a combat turn the engine had no line for (#2342)', () => {
         purpose: 'Persuasion',
       });
       expect(AIService.chatWithDM).toHaveBeenCalledTimes(1);
-      expect(outcome.responseText).toContain(NOTICE);
+      expect(outcome.responseText).not.toContain(NOTICE);
+      expect(noticeLines(outcome)).toEqual([NOTICE]);
       expect(outcome.result.roll_requests ?? []).toEqual([]);
       expect(outcome.localNotices).toEqual([
         {
@@ -557,5 +571,46 @@ describe('a combat turn the engine had no line for (#2342)', () => {
       expect(noteCalls()).toEqual([]);
       expect(outcome.responseText).not.toContain('That was not a combat action');
     });
+  });
+});
+
+describe('#614: a rest request and the no-action notice are engine lines, not story prose', () => {
+  const REST_NOTICE = '*(A rest is not possible during combat. It is still your turn.)*';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(AIService.lastRequestId).mockReturnValue('req-614');
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: HONEST } as never);
+    vi.mocked(executeStructuredCombatActionWithBoundary).mockResolvedValue({
+      boundary: 'none',
+      outcomes: [],
+      result: undefined,
+    } as never);
+    vi.mocked(executeAuthoritativeCombatIntent).mockResolvedValue({
+      currentParticipant: { id: ELEMENTAL_ID, name: 'Spore Elemental' },
+    } as never);
+    vi.mocked(userDataApi.endTacticalMap).mockResolvedValue({ ok: true } as never);
+  });
+
+  it.each([
+    'I take a short rest.',
+    'I want to take a long rest right here.',
+    'Let me make camp and rest.',
+  ])(
+    'gives a rest request "%s" its own engine line and keeps it out of the prose',
+    async (message) => {
+      const outcome = await invoke({ playerMessage: message });
+
+      expect(outcome.responseText).toBe(`${HONEST}\n\n${HANDOFF}`);
+      expect(outcome.responseText).not.toContain('rest is not possible');
+      expect(outcome.result.combatEngineBlocks).toEqual([noticeBlock(REST_NOTICE)]);
+    },
+  );
+
+  it('keeps the generic notice for a non-rest message that mentions resting a hand', async () => {
+    const outcome = await invoke({ playerMessage: 'I rest my hand on the wall.' });
+
+    expect(outcome.responseText).toBe(`${HONEST}\n\n${HANDOFF}`);
+    expect(outcome.result.combatEngineBlocks).toEqual([noticeBlock(NOTICE)]);
   });
 });
