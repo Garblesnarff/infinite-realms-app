@@ -59,7 +59,7 @@ export async function spendStoryFeatureUses(input: {
   playerInput: string;
   character: CharacterRow;
   features: string[];
-}): Promise<void> {
+}): Promise<string[]> {
   const { userId, sessionId, playerInput, character, features } = input;
   // Dynamic import: the paladin service pulls in db/client at load time, and this
   // module is itself dynamically imported by the generate route (same pattern as
@@ -80,15 +80,13 @@ export async function spendStoryFeatureUses(input: {
   const since = message?.createdAt ?? null;
 
   let anyFeatureSpent = false;
+  /** #1597: the engine lines of Lay on Hands the engine resolved (a refusal is not one). */
+  const engineLines: string[] = [];
   for (const name of features) {
     const key = name.toLowerCase();
     try {
       const featureName =
-        key === DIVINE_SENSE
-          ? DIVINE_SENSE_NAME
-          : key === LAY_ON_HANDS
-            ? LAY_ON_HANDS_NAME
-            : null;
+        key === DIVINE_SENSE ? DIVINE_SENSE_NAME : key === LAY_ON_HANDS ? LAY_ON_HANDS_NAME : null;
       if (!featureName) {
         // The gate allowed the claim, but only the two pooled paladin features
         // spend here; anything else reaching this point is a wiring gap.
@@ -139,7 +137,24 @@ export async function spendStoryFeatureUses(input: {
           sessionId,
           context: 'story-turn',
         });
-        if (laid.ok) anyFeatureSpent = true;
+        if (laid.ok) {
+          anyFeatureSpent = true;
+          engineLines.push(laid.message);
+          // The engine's line is a system row in the chat, as story damage and XP lines are.
+          // A failed write must not fail the spend: the pool and HP already moved.
+          try {
+            const { postEngineChatLine } = await import('../engine-chat-line.js');
+            await postEngineChatLine({
+              sessionId,
+              userId,
+              idSeed: `lay-on-hands:${sessionId}:${since ? since.toISOString() : 'none'}:${name}`,
+              text: laid.message,
+              context: { intent: 'lay_on_hands', origin: 'story' },
+            });
+          } catch (error) {
+            logger.warn({ msg: 'DM_STORY_LAY_ON_HANDS_LINE_FAILED', sessionId, error });
+          }
+        }
       }
     } catch (error) {
       logger.warn({ msg: 'DM_STORY_FEATURE_SPEND_FAILED', sessionId, feature: name, error });
@@ -162,4 +177,5 @@ export async function spendStoryFeatureUses(input: {
       });
     }
   }
+  return engineLines;
 }

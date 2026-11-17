@@ -365,6 +365,15 @@ export interface NarrativeTurn {
  * spares only the replacement, inside `enforceNarrationGate`; this predicate holds
  * on a picked turn exactly as on a typed one, so the checks run.
  */
+/**
+ * #1597: the engine lines the server resolved this turn (a typed Lay on Hands outside a fight).
+ * The server sets them on the envelope; the model never does. A line is an engine event.
+ */
+function hasServerEngineLines(result: NarrativeTurn['result']): boolean {
+  const lines = (result as { engine_lines?: unknown }).engine_lines;
+  return Array.isArray(lines) && lines.some((line) => typeof line === 'string' && line.length > 0);
+}
+
 export function narrativeTurnHasNoEngineEvent({
   isInCombat,
   isDiceRollMessage,
@@ -373,6 +382,7 @@ export function narrativeTurnHasNoEngineEvent({
 }: NarrativeTurn): boolean {
   return (
     !isInCombat &&
+    !hasServerEngineLines(result) &&
     !isDiceRollMessage &&
     playerInputOrigin !== null &&
     !result.combat_actions?.length &&
