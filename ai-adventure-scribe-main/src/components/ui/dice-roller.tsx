@@ -160,7 +160,7 @@ const DiceRoller: React.FC<DiceRollerProps> = ({
                 size="sm"
                 onClick={performRoll}
                 disabled={disabled || isRolling}
-                className="flex items-center gap-1 hover:bg-primary/10"
+                className="ir-hit-slop flex items-center gap-1 hover:bg-primary/10"
                 aria-label={label ? `Roll ${label}` : `Roll ${dice}`}
               >
                 <Dice6

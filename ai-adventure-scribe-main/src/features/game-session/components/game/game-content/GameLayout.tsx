@@ -311,12 +311,12 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
             </div>
           </TacticalMapProvider>
           {!isFallen && (
-            // Out of flow: the build line takes no height and keeps its 10 px text. The copy button
+            // Out of flow: the build line takes no height and keeps the 12 px text floor. The copy button
             // gets a 44x44 hit box on every pointer (#1421 target rule): a transparent ::before
             // anchored to its bottom-right corner, so the box stays inside the table.
             <div
               data-testid="table-build-line"
-              className="pointer-events-none absolute bottom-0 right-1 z-10 text-[10px] leading-none [&>button]:pointer-events-auto [&>button]:relative [&>button]:!text-[10px] [&>button]:!min-h-0 [&>button]:!min-w-0 [&>button]:before:absolute [&>button]:before:bottom-0 [&>button]:before:right-0 [&>button]:before:h-11 [&>button]:before:w-11 [&>button]:before:content-['']"
+              className="pointer-events-none absolute bottom-0 right-1 z-10 ir-text-min leading-none [&>button]:pointer-events-auto [&>button]:relative [&>button]:!min-h-0 [&>button]:!min-w-0 [&>button]:before:absolute [&>button]:before:bottom-0 [&>button]:before:right-0 [&>button]:before:h-11 [&>button]:before:w-11 [&>button]:before:content-['']"
             >
               <BuildSessionStatus sessionId={sessionId} />
             </div>

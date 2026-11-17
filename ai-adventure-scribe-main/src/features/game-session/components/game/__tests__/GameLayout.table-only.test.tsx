@@ -87,11 +87,13 @@ describe('GameLayout: Table look only (#1486)', () => {
     expect(screen.getByTestId('table-controls-slot')).toBeInTheDocument();
   });
 
-  it('keeps the build line at 10 px but gives its copy button a 44x44 hit box', () => {
+  it('keeps the build line at the 12 px text floor but gives its copy button a 44x44 hit box', () => {
     render(<GameLayout {...layoutProps} />);
 
     const line = screen.getByTestId('table-build-line');
-    expect(line.className).toContain('text-[10px]');
+    // #228: was text-[10px] with a !text-[10px] child override; now the ir-text-min token.
+    expect(line.className).toContain('ir-text-min');
+    expect(line.className).not.toContain('text-[10px]');
     expect(line.className).toContain('[&>button]:before:h-11');
     expect(line.className).toContain('[&>button]:before:w-11');
     expect(line.className).toContain('[&>button]:pointer-events-auto');
