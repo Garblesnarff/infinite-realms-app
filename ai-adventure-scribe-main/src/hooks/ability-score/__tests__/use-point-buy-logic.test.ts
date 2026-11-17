@@ -235,6 +235,49 @@ describe('usePointBuyLogic', () => {
     );
   });
 
+  it('lowers a stored score above 15 to 15 and charges for it as a bought score (#1596)', () => {
+    const rolledCharacter = {
+      ...mockCharacter,
+      abilityScores: {
+        ...mockCharacter.abilityScores,
+        strength: { score: 16, modifier: 3, savingThrow: false },
+      },
+    };
+    const { result, rerender } = renderHook(
+      ({ character }) =>
+        usePointBuyLogic({ character, dispatch: mockDispatch, method: 'pointBuy' }),
+      { initialProps: { character: rolledCharacter } },
+    );
+
+    act(() => {
+      result.current.handleDecreaseScore('strength');
+    });
+
+    // 16 was never paid for, so Decrease refunds nothing. Its new value 15
+    // is a bought score: 9 points, taken from the 27-point budget.
+    expect(mockDispatch).toHaveBeenCalledWith({
+      type: 'UPDATE_CHARACTER',
+      payload: expect.objectContaining({
+        abilityScores: expect.objectContaining({
+          strength: { score: 15, modifier: 2, savingThrow: false },
+        }),
+      }),
+    });
+
+    // The context hands the new scores back; remaining points follow them.
+    rerender({
+      character: {
+        ...rolledCharacter,
+        abilityScores: {
+          ...rolledCharacter.abilityScores,
+          strength: { score: 15, modifier: 2, savingThrow: false },
+        },
+      },
+    });
+    expect(result.current.remainingPoints).toBe(18);
+    expect(result.current.remainingPoints).not.toBeNaN();
+  });
+
   it('does not produce NaN when a rolled score is outside point-buy bounds', () => {
     const rolledCharacter = {
       ...mockCharacter,
@@ -258,9 +301,16 @@ describe('usePointBuyLogic', () => {
 
     expect(result.current.remainingPoints).not.toBeNaN();
     expect(result.current.pointBuyValid).toBe(false);
-    expect(mockDispatch).not.toHaveBeenCalledWith(
+    // #1596: Decrease on a score above 15 now lowers it to 15 (no refund).
+    // This assertion used to expect no dispatch; that expectation no longer
+    // matches the decided behavior.
+    expect(mockDispatch).toHaveBeenCalledWith(
       expect.objectContaining({
-        payload: expect.objectContaining({ abilityScores: expect.anything() }),
+        payload: expect.objectContaining({
+          abilityScores: expect.objectContaining({
+            strength: expect.objectContaining({ score: 15 }),
+          }),
+        }),
       }),
     );
   });

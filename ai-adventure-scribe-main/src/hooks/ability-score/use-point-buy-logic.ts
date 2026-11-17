@@ -120,7 +120,11 @@ export const usePointBuyLogic = ({ character, dispatch, method }: UsePointBuyLog
   const handleDecreaseScore = useCallback(
     (ability: keyof AbilityScores) => {
       const currentScore = character?.abilityScores?.[ability]?.score ?? POINT_BUY_MIN;
-      if (method === 'pointBuy' && currentScore > POINT_BUY_MIN && currentScore <= POINT_BUY_MAX) {
+      if (method === 'pointBuy' && currentScore > POINT_BUY_MIN) {
+        // A rolled score above the point-buy max steps down to the max. Its
+        // cost was never paid, so nothing is refunded; the effect above
+        // re-derives remaining points from the new scores (#1596).
+        const nextScore = currentScore > POINT_BUY_MAX ? POINT_BUY_MAX : currentScore - 1;
         const newScores: AbilityScores = {
           strength: { score: 8, modifier: -1, savingThrow: false },
           dexterity: { score: 8, modifier: -1, savingThrow: false },
@@ -130,8 +134,8 @@ export const usePointBuyLogic = ({ character, dispatch, method }: UsePointBuyLog
           charisma: { score: 8, modifier: -1, savingThrow: false },
           ...character?.abilityScores,
           [ability]: {
-            score: currentScore - 1,
-            modifier: abilityModifier(currentScore - 1),
+            score: nextScore,
+            modifier: abilityModifier(nextScore),
             savingThrow: character?.abilityScores?.[ability]?.savingThrow || false,
           },
         };
@@ -141,12 +145,14 @@ export const usePointBuyLogic = ({ character, dispatch, method }: UsePointBuyLog
           payload: { abilityScores: newScores },
         });
 
-        setRemainingPoints((prev) =>
-          Math.min(
-            POINT_BUY_TOTAL,
-            prev + (POINT_COST[currentScore] - POINT_COST[currentScore - 1]),
-          ),
-        );
+        if (currentScore <= POINT_BUY_MAX) {
+          setRemainingPoints((prev) =>
+            Math.min(
+              POINT_BUY_TOTAL,
+              prev + (POINT_COST[currentScore] - POINT_COST[currentScore - 1]),
+            ),
+          );
+        }
       }
     },
     [character?.abilityScores, method, dispatch],
