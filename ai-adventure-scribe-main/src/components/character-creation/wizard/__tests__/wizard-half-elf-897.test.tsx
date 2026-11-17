@@ -252,6 +252,7 @@ describe('#897 Half-Elf bonuses through the real wizard', () => {
     await screen.findByText('Assign Ability Scores');
     // Wizard starts from all-10s; a point-buy user resets to 8s first.
     fireEvent.click(screen.getByRole('button', { name: 'Reset ability scores' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset scores' }));
     const clickPlus = (ability: string, times: number): void => {
       for (let i = 0; i < times; i++) {
         fireEvent.click(screen.getByRole('button', { name: `Increase ${ability}` }));
