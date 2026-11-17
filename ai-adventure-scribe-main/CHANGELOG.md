@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.50.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.49.1...v0.50.0) (2026-11-17)
+
+
+### Features
+
+* **paladin:** a Lay on Hands control in combat and on the sheet ([#1554](https://github.com/Garblesnarff/infinite-realms-app/issues/1554)) ([7f4a2ec](https://github.com/Garblesnarff/infinite-realms-app/commit/7f4a2ec3852830ba2e661b52c4698b5886240ff6))
+
+
+### Bug Fixes
+
+* **creation:** ability-score step — confirm Reset, no NaN, correct total ([#213](https://github.com/Garblesnarff/infinite-realms-app/issues/213)) ([3108712](https://github.com/Garblesnarff/infinite-realms-app/commit/310871265f1f4de74475c0c3499068964deaf849))
+* **dm:** a failed check that narrates harm applies it or does not claim it ([#610](https://github.com/Garblesnarff/infinite-realms-app/issues/610)) ([443166f](https://github.com/Garblesnarff/infinite-realms-app/commit/443166fd343cc5aadb284048f9f95b9fd76099bc))
+* **spells:** unique index on character_spells (character_id, spell_id) ([#1567](https://github.com/Garblesnarff/infinite-realms-app/issues/1567)) ([428dbd6](https://github.com/Garblesnarff/infinite-realms-app/commit/428dbd64ffc2d32b6aea7f70bb3831db9a56216a))
+* **table:** 12 px floor and 44 px targets for the last game-screen controls ([#228](https://github.com/Garblesnarff/infinite-realms-app/issues/228)) ([f4f6168](https://github.com/Garblesnarff/infinite-realms-app/commit/f4f616870a2640c13910b33b0c196f85c30754af))
+
+
+### Tests
+
+* **combat:** one commit wins the last Extra Attack swing ([#1536](https://github.com/Garblesnarff/infinite-realms-app/issues/1536)) ([98963a4](https://github.com/Garblesnarff/infinite-realms-app/commit/98963a417c4659473a973173dd1b67c58e2252b0))
+
 ## [0.49.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.49.0...v0.49.1) (2026-11-16)
 
 
