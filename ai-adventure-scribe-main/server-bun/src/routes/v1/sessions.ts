@@ -13,7 +13,7 @@
  */
 
 import { Elysia, t } from 'elysia';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { planHasPaidFeatures } from '../../../../shared/plan-features.js';
 import { logger } from '../../lib/logger.js';
@@ -23,13 +23,60 @@ import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { loadStoredStoryTrackers } from '../../services/dm/story-tracker.js';
 import { SessionService } from '../../services/session-service.js';
+import { getOwnershipCondition } from '../../services/session/session-authorization.js';
 import { db } from '../../../../db/client';
-import { sessionChronicles } from '../../../../db/schema/index';
+import { combatEncounters, gameSessions, sessionChronicles } from '../../../../db/schema/index';
 import { chronicleGenerator, persistChronicleFailure } from '../../services/chronicle-generator.js';
 import { getSessionContextRouteResult } from './session-context-handler.js';
 import { getSessionListRouteResult } from './session-list-handler.js';
 
 import type { GameSession } from '../../../../db/schema/index';
+
+/**
+ * #1619: End session closes the session's open fight. Without this the encounter stays `active`
+ * until the 24-hour idle sweeper, and the sheet refuses Lay on Hands as "in combat" in that window.
+ * `concludeEncounter` with reason 'abandoned' is the same function the idle sweeper calls (with
+ * 'ended_idle'): it claims the ending once, tears down the tactical map and tells the DM the party broke off. It
+ * writes no XP (XP is only for last_hostile_defeated) and no chronicle (the chronicle is written by
+ * the route below, unchanged). Owner-filtered through the session's campaign or character.
+ * Never fails End session: each failure is logged and the session is still completed.
+ */
+async function closeOpenEncountersOnEnd(sessionId: string, userId: string): Promise<void> {
+  try {
+    // Loaded here, not at the top of the file, as story-xp.js is: the route-contract tests mock the
+    // logger without `combatLogger`, and combat-ending.js needs it at import time.
+    const { concludeEncounter } = await import('../../services/combat/combat-ending.js');
+    const openEncounters = await db
+      .select({ id: combatEncounters.id })
+      .from(combatEncounters)
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .where(
+        and(
+          eq(combatEncounters.sessionId, sessionId),
+          eq(combatEncounters.status, 'active'),
+          getOwnershipCondition(userId),
+        ),
+      );
+    for (const encounter of openEncounters) {
+      try {
+        await concludeEncounter(encounter.id, sessionId, userId, 'abandoned');
+      } catch (error) {
+        logger.warn({
+          msg: 'SESSION_END_ENCOUNTER_CLOSE_FAILED',
+          sessionId,
+          encounterId: encounter.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  } catch (error) {
+    logger.warn({
+      msg: 'SESSION_END_ENCOUNTER_LOOKUP_FAILED',
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 /**
  * Helper to map camelCase Session to snake_case for API compatibility
@@ -324,6 +371,8 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
           (user as { userId: string }).userId,
           summary,
         );
+        // #1619: the ended session's open fight closes with it (never fails this response).
+        await closeOpenEncountersOnEnd(id, (user as { userId: string }).userId);
 
         // Auto-generate chronicle for Pro/Enterprise users (fire-and-forget, never blocks response)
         // #1344: the plan on the request is lenient (authenticateRequest fails open to
