@@ -117,6 +117,13 @@ const AbilityScoresSelection: React.FC = () => {
               <div className="flex items-center justify-between">
                 <div className="text-lg">
                   Points Remaining: <Badge variant="outline">{remainingPoints}</Badge>
+                  {remainingPoints < 0 && (
+                    <p role="status" className="text-sm text-destructive mt-1">
+                      Over budget by {Math.abs(remainingPoints)}{' '}
+                      {Math.abs(remainingPoints) === 1 ? 'point' : 'points'}. Lower a score to
+                      continue.
+                    </p>
+                  )}
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
