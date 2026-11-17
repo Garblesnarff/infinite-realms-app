@@ -24,7 +24,10 @@ import {
   type CombatIntentActor,
   type DeclaredAttack,
 } from '../../../services/combat/combat-intent-gate.js';
-import { loadCombatIntentActorRoster as defaultLoadCombatIntentActorRoster } from '../../../services/combat/combat-intent-roster.js';
+import {
+  loadCombatIntentRoster as defaultLoadCombatIntentRoster,
+  type CombatIntentRoster,
+} from '../../../services/combat/combat-intent-roster.js';
 import { buildInitiativeOrder as defaultBuildInitiativeOrder } from '../../../services/combat/initiative-order.js';
 import { runNpcTurnsIfNpcHolds as defaultRunNpcTurns } from '../../../services/combat/npc-turn-drain.js';
 import {
@@ -452,9 +455,25 @@ function enterResponse(
 
 export const entryRoutes = createCombatEntryRoutes();
 
+/**
+ * #1595: the message names a creature the ledger marks dead. Returns that creature's name, or null.
+ * The dead roster is only consulted after the live roster found nothing, so a live match always wins.
+ * Only an explicit name counts: `antecedent: null` stops a pronoun ("I hit him") from resolving to
+ * the dead creature the last narration mentioned.
+ */
+function deadFoeNamed(playerInput: string, roster: CombatIntentRoster): string | null {
+  if (roster.deadNames.length === 0) return null;
+  const deadActors: CombatIntentActor[] = roster.deadNames.map((name) => ({
+    name,
+    source: 'ledger',
+  }));
+  const attack = detectDeclaredAttack(playerInput, deadActors, { antecedent: null });
+  return attack?.actorName ?? null;
+}
+
 export interface DeclaredAttackRouteOptions {
   authenticateRequest?: typeof defaultAuthenticateRequest;
-  loadCombatIntentActorRoster?: typeof defaultLoadCombatIntentActorRoster;
+  loadCombatIntentRoster?: typeof defaultLoadCombatIntentRoster;
   /** When this returns an encounter, the message is a turn inside a fight, not a new entry. */
   getActiveEncounter?: (sessionId: string, userId: string) => Promise<unknown>;
 }
@@ -468,7 +487,7 @@ export interface DeclaredAttackRouteOptions {
  */
 export function createDeclaredAttackRoutes({
   authenticateRequest = defaultAuthenticateRequest,
-  loadCombatIntentActorRoster = defaultLoadCombatIntentActorRoster,
+  loadCombatIntentRoster = defaultLoadCombatIntentRoster,
   getActiveEncounter,
 }: DeclaredAttackRouteOptions = {}) {
   return new Elysia().post(
@@ -486,7 +505,8 @@ export function createDeclaredAttackRoutes({
       }
 
       if (!looksLikeCombatIntent(body.playerInput)) return { pending: null };
-      const actors = await loadCombatIntentActorRoster(params.sessionId, user.userId);
+      const roster = await loadCombatIntentRoster(params.sessionId, user.userId);
+      const actors = roster.actors;
       let declaredAttack = detectDeclaredAttack(body.playerInput, actors, {
         antecedent: attackAntecedent(actors, body.recentNarration),
       });
@@ -494,12 +514,26 @@ export function createDeclaredAttackRoutes({
       if (!declaredAttack) {
         const spell = detectUntargetedAttackSpell(body.playerInput);
         const target = spell ? resolveSpellTarget(spell, actors, body, params.sessionId) : null;
-        if (!spell || !target) return { pending: null };
-        if ('choices' in target) {
-          targetChoice = { spellName: spell.name, candidates: target.choices };
-        } else {
-          declaredAttack = target.attack;
+        if (spell && target) {
+          if ('choices' in target) {
+            targetChoice = { spellName: spell.name, candidates: target.choices };
+          } else {
+            declaredAttack = target.attack;
+          }
         }
+      }
+      if (!declaredAttack && !targetChoice) {
+        // #1595: a named creature the ledger marks dead gets a refusal the player can read, not a
+        // silent `pending: null`. The client shows it as an engine notice and calls no DM.
+        const deadName = deadFoeNamed(body.playerInput, roster);
+        if (deadName) return { pending: null, refusal: { reason: 'dead', name: deadName } };
+        logger.info({
+          msg: 'DECLARED_ATTACK_NO_ROSTER_MATCH',
+          sessionId: params.sessionId,
+          rosterSize: actors.length,
+          deadExcludedCount: roster.deadExcludedCount,
+        });
+        return { pending: null };
       }
       if (!declaredAttack) return { pending: null, targetChoice };
 

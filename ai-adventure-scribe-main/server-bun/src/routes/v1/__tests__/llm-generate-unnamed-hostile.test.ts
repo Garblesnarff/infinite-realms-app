@@ -81,6 +81,7 @@ mock.module('../../../services/llm-provider-service.js', () => ({
 // The roster is empty: nobody is in the scene (the run 20 condition).
 mock.module('../../../services/combat/combat-intent-roster.js', () => ({
   loadCombatIntentActorRoster: async () => [],
+  loadCombatIntentRoster: async () => ({ actors: [], deadNames: [], deadExcludedCount: 0 }),
 }));
 mock.module('../../../services/combat/combat-entry-campaign-index.js', () => ({
   loadSessionCampaignMonsterIndex: async () => campaignIndex,

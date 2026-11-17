@@ -464,7 +464,22 @@ export async function applyCombatEntryGate(params: {
     }
   }
 
-  if (!pending) return sanitizedResult;
+  if (!pending) {
+    // #1595: the silent exit. Logged only when the player declared an attack or the DM wrote
+    // combat actions, the two cases where "no pending" is a surprise rather than a plain narrative turn.
+    const hasCombatActions =
+      Array.isArray((envelope as { combat_actions?: unknown } | null)?.combat_actions) &&
+      ((envelope as { combat_actions: unknown[] }).combat_actions?.length ?? 0) > 0;
+    if (declaredAttack || hasCombatActions) {
+      logger.info({
+        msg: 'COMBAT_ENTRY_NO_PENDING',
+        sessionId: combatEntry.sessionId,
+        hadDeclaredAttack: !!declaredAttack,
+        hasCombatActions,
+      });
+    }
+    return sanitizedResult;
+  }
 
   // A fight that is already seated is not a new entry. The menu, a reload, or a turn whose
   // client refresh lagged must not be handed the confirmation popup again (#2623).
