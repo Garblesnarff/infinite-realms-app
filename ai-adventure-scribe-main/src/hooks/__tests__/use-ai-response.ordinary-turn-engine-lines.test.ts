@@ -529,7 +529,7 @@ describe('useAIResponse: ordinary in-combat turns show their engine lines (#2386
       (response.context?.combatEngineBlocks ?? []) as Array<{ lines: string[] }>
     ).flatMap((block) => block.lines);
     expect(engineLines).toEqual([
-      '*(That was not a combat action — nothing was rolled. It is still your turn.)*',
+      'That was not a combat action — nothing was rolled. It is still your turn.',
     ]);
   });
 

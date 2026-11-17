@@ -62,8 +62,8 @@ const ENCOUNTER = {
 };
 const PLAYER_TURN = { id: APPRENTICE_ID, name: 'The Apprentice', participantType: 'player' };
 const HANDOFF = 'The Apprentice, what do you do?';
-const NOTICE = '*(That was not a combat action — nothing was rolled. It is still your turn.)*';
-const NOTICE_WITH_ENGINE_LINES = '*(You took no combat action this turn. It is still your turn.)*';
+const NOTICE = 'That was not a combat action — nothing was rolled. It is still your turn.';
+const NOTICE_WITH_ENGINE_LINES = 'You took no combat action this turn. It is still your turn.';
 
 /** The engine-line notices a turn carried, as the UI's engine blocks hold them (#614). */
 const noticeLines = (outcome: { result?: any; combatEngineBlocks?: any }): string[] =>
@@ -575,7 +575,7 @@ describe('a combat turn the engine had no line for (#2342)', () => {
 });
 
 describe('#614: a rest request and the no-action notice are engine lines, not story prose', () => {
-  const REST_NOTICE = '*(A rest is not possible during combat. It is still your turn.)*';
+  const REST_NOTICE = 'A rest is not possible during combat. It is still your turn.';
 
   beforeEach(() => {
     vi.clearAllMocks();

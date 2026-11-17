@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { parseEngineLine } from '@/features/game-session/components/chat/message-list/engine-line-model';
+
 import { REST_IN_COMBAT_NOTICE, isRestRequest } from '../combat-notice';
 
 // #614: a rest request typed in a fight is named as a rest, and only as the player's own act.
@@ -22,15 +24,28 @@ describe('isRestRequest (#614)', () => {
     'I try to talk the elemental down.',
     'The rest of the party charges.',
     'I dodge behind the rest of the crates.',
+    'I arrest the goblin.',
+    'The guards arrest me.',
+    'I arrest him before he flees.',
     '',
     undefined,
   ])('does not read "%s" as a rest request', (message) => {
     expect(isRestRequest(message)).toBe(false);
   });
+});
 
-  it('gives the rest its own engine line: not possible during combat, still the turn', () => {
+// #614 FIX: an engine chip renders its text as plain text, so the notice carries no markdown.
+describe('the rest notice as an engine line (#614)', () => {
+  it('is plain text: not possible during combat, still the turn', () => {
     expect(REST_IN_COMBAT_NOTICE).toBe(
-      '*(A rest is not possible during combat. It is still your turn.)*',
+      'A rest is not possible during combat. It is still your turn.',
     );
+  });
+
+  it('parses to the same plain sentence the chip shows, with no markdown wrapper', () => {
+    const chip = parseEngineLine(REST_IN_COMBAT_NOTICE);
+
+    expect(chip.sentence).toBe('A rest is not possible during combat. It is still your turn.');
+    expect(chip.sentence).not.toMatch(/\*/);
   });
 });
