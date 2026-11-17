@@ -274,6 +274,7 @@ for (const width of [1280, 390]) {
     const badgeChip = await page.evaluate(() => {
       const badge = document.querySelector('[data-testid="combat-turn-dying"]') as HTMLElement;
       const chip = badge.closest('[data-testid="combat-turn-pip"]') as HTMLElement;
+      const word = (badge.querySelector('span') as HTMLElement | null) ?? badge;
       const b = badge.getBoundingClientRect();
       const c = chip.getBoundingClientRect();
       return {
@@ -287,6 +288,9 @@ for (const width of [1280, 390]) {
         chipBottom: c.bottom,
         badgeText: badge.innerText,
         chipWidth: Math.round(c.width),
+        wordHeight: word.getBoundingClientRect().height,
+        wordLineHeight: parseFloat(getComputedStyle(word).lineHeight),
+        wordFontSize: parseFloat(getComputedStyle(word).fontSize),
       };
     });
     expect(badgeChip.badgeLeft).toBeGreaterThanOrEqual(badgeChip.chipLeft - 0.5);
@@ -295,6 +299,9 @@ for (const width of [1280, 390]) {
     expect(badgeChip.badgeBottom).toBeLessThanOrEqual(badgeChip.chipBottom + 0.5);
     expect(badgeChip.badgeText).toBe('Unconscious');
     expect(badgeChip.chipWidth).toBe(92);
+    // The word stays whole on one line, at the 12px minimum (#228).
+    expect(badgeChip.wordHeight).toBeLessThanOrEqual(badgeChip.wordLineHeight * 1.5);
+    expect(badgeChip.wordFontSize).toBeGreaterThanOrEqual(12);
     await page.screenshot({ path: `test-results/dying-turnbar-${width}.png` });
   });
 
