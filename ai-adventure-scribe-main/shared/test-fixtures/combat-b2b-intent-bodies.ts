@@ -71,3 +71,5 @@ export const featureWireBody = (intent: Record<string, unknown>) => ({
   source: 'dm' as const,
   origin: 'typed' as const,
 });
+
+export const divineSenseClientIntent = { type: 'divine_sense' as const, actorId: B2B_PLAYER_ID };

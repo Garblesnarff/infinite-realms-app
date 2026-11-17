@@ -122,9 +122,13 @@ export const useCombatMechanics = ({
       const feature = participant.classFeatures.find((f) => f.name === featureName);
       if (!feature || !canUseClassFeature(feature, participant.resources)) return;
 
-      // #621 B2b: Second Wind and Action Surge go to the server, which spends the use and rolls the
+      // #621 B2b: Second Wind, Action Surge and Divine Sense go to the server, which spends the use and rolls the
       // heal. The browser rolls no dice for them. The body matches the option the DM panel posts.
-      if (feature.name === 'second_wind' || feature.name === 'action_surge') {
+      if (
+        feature.name === 'second_wind' ||
+        feature.name === 'action_surge' ||
+        feature.name === 'divine_sense'
+      ) {
         await executeAuthoritativeCombatIntent(
           activeEncounter.id,
           { type: feature.name, actorId: participantId },
