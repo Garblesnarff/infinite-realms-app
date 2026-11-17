@@ -19,7 +19,6 @@ const LOCAL_ENGINE_ALLOWLIST = [
   'contexts/combat/use-take-action.ts',
   'contexts/combat/health-handlers.ts',
   'contexts/CombatContext.tsx',
-  'utils/combat/deathSaves.ts',
 ];
 
 const LOCAL_ENGINE_REFERENCE = /\b(dealDamage|healDamage|rollDeathSave)\b/;
