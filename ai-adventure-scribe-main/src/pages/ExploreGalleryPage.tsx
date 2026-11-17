@@ -10,9 +10,9 @@ import React from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link } from 'react-router-dom';
 
+import { PublicExploreCard } from '@/components/campaigns/PublicExploreCard';
 import { Button } from '@/components/ui/button';
 import { Z_INDEX } from '@/constants/z-index';
-import { BoxedCampaign } from '@/features/campaigns/table/BoxedCampaign';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 
 export const ExploreGalleryPage: React.FC = () => {
@@ -147,7 +147,7 @@ export const ExploreGalleryPage: React.FC = () => {
           {!isLoading && !error && campaigns.length > 0 && (
             <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-3 lg:gap-10">
               {campaigns.map((campaign, index) => (
-                <BoxedCampaign key={campaign.id} campaign={campaign} isFirst={index === 0} />
+                <PublicExploreCard key={campaign.id} campaign={campaign} isFirst={index === 0} />
               ))}
             </div>
           )}

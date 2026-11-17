@@ -14,9 +14,9 @@ const state = vi.hoisted(() => ({
 vi.mock('@/hooks/use-starter-campaigns', () => ({
   useStarterCampaigns: () => state,
 }));
-// The Table look is the only campaign card now (the boxed card); StarterCampaignCard is unreachable here.
-vi.mock('@/features/campaigns/table/BoxedCampaign', () => ({
-  BoxedCampaign: () => <div data-testid="campaign-card" />,
+// The public Explore page renders the PublicExplore board card (#1610).
+vi.mock('@/components/campaigns/PublicExploreCard', () => ({
+  PublicExploreCard: () => <div data-testid="campaign-card" />,
 }));
 
 describe('ExploreGalleryPage (#2343 item 16)', () => {
