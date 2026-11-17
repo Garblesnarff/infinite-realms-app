@@ -526,6 +526,33 @@ export function formatCombatActionParts(
     ];
   }
 
+  // #1618: Lay on Hands, Divine Sense and Flexible Casting resolve in the engine, which
+  // returns its own message with the numbers (the HP healed, the pool left, the uses left).
+  // The line quotes that message, so the timeline shows what the engine did.
+  const featureName =
+    action.action_type === 'lay_on_hands'
+      ? 'Lay on Hands'
+      : action.action_type === 'divine_sense'
+        ? 'Divine Sense'
+        : action.action_type === 'flexible_casting'
+          ? 'Flexible Casting'
+          : null;
+  if (featureName && typeof value.message === 'string' && value.message.length > 0) {
+    const actor = facingName(undefined, action.actor_id, roster);
+    const line = `⚙️ Engine: ${actor} used ${featureName} — ${value.message}`;
+    return [
+      {
+        line,
+        card: {
+          kind: 'move',
+          side: engineCardSide(action.actor_id, roster, false),
+          line,
+          title: `${actor} uses ${featureName}`,
+        },
+      },
+    ];
+  }
+
   if (action.action_type === 'dash' && isFiniteNumber(value.movementGainedFeet)) {
     const actor = facingName(undefined, action.actor_id, roster);
     const line = `⚙️ Engine: ${actor} dashed and gained ${value.movementGainedFeet} ft of movement.`;

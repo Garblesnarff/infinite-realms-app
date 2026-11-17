@@ -66,16 +66,15 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({
                 />
               </div>
             )}
-            {feature.currentUses !== undefined && feature.currentUses > 0 && (
-              <Button
-                size="sm"
-                className="mt-2"
-                onClick={() => onUseResource(feature)}
-              >
-                <Zap className="w-4 h-4 mr-2" />
-                Use Feature
-              </Button>
-            )}
+            {/* #1618: Lay on Hands spends through its own control (LayOnHandsControl), not the generic button. */}
+            {feature.name !== 'lay_on_hands' &&
+              feature.currentUses !== undefined &&
+              feature.currentUses > 0 && (
+                <Button size="sm" className="mt-2" onClick={() => onUseResource(feature)}>
+                  <Zap className="w-4 h-4 mr-2" />
+                  Use Feature
+                </Button>
+              )}
           </div>
         ))}
       </CardContent>
