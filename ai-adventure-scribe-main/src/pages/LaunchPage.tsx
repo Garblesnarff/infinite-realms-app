@@ -151,6 +151,49 @@ const LaunchPage: React.FC = () => {
                   See the adventures
                 </Link>
               </div>
+              {/* #1432: a real capture of the Table game screen (desktop, Landing board). */}
+              <figure
+                className="mt-12 hidden w-full max-w-[920px] sm:block"
+                data-testid="landing-hero-picture"
+              >
+                <div className="rounded-2xl bg-gradient-to-br from-[#f6e3b8] via-[#d5b070] to-[#6e5226] p-2.5 shadow-[0_34px_70px_rgba(0,0,0,0.65)]">
+                  <picture>
+                    <source srcSet="/landing/table-game-1280.webp" type="image/webp" />
+                    <img
+                      src="/landing/table-game-1280.png"
+                      width={900}
+                      height={561}
+                      loading="lazy"
+                      decoding="async"
+                      alt="The game screen: story on the left, action bar and roll tray at the bottom, turn order, map and character sheet at the sides."
+                      className="block h-auto w-full rounded-lg object-cover"
+                    />
+                  </picture>
+                </div>
+                <figcaption className="mt-4 text-center text-base text-[#aab3cc]">
+                  Story, roll tray, sheet and map in one view.
+                </figcaption>
+              </figure>
+              {/* #1432: the phone picture (LandingPhone board). */}
+              <figure
+                className="mt-10 w-[270px] sm:hidden"
+                data-testid="landing-hero-picture-phone"
+              >
+                <div className="rounded-[22px] bg-gradient-to-br from-[#f6e3b8] via-[#d5b070] to-[#6e5226] p-2 shadow-[0_26px_50px_rgba(0,0,0,0.65)]">
+                  <picture>
+                    <source srcSet="/landing/table-game-390.webp" type="image/webp" />
+                    <img
+                      src="/landing/table-game-390.png"
+                      width={254}
+                      height={549}
+                      loading="lazy"
+                      decoding="async"
+                      alt="The game on a phone: the story, a roll, and the action bar."
+                      className="block h-auto w-[254px] max-w-full rounded-[14px] object-cover"
+                    />
+                  </picture>
+                </div>
+              </figure>
             </div>
           </section>
 
