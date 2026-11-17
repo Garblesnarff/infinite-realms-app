@@ -18,53 +18,55 @@ type ExpectedRow = {
   className: string;
   race: string;
   subrace: string | null;
+  subclass: string | null;
   con: number;
   maxHp: number;
 };
 
+// Subrace and subclass are pinned so a seed that gains Hill Dwarf or Draconic Bloodline fails here until its expected HP is updated.
 // prettier-ignore
 const EXPECTED: ExpectedRow[] = [
-  { campaign: 'abyssal-descent', templateKey: 'the-veteran', className: 'Fighter', race: 'Human', subrace: null, con: 14, maxHp: 12 },
-  { campaign: 'abyssal-descent', templateKey: 'the-scholar', className: 'Wizard', race: 'Human', subrace: null, con: 12, maxHp: 7 },
-  { campaign: 'abyssal-descent', templateKey: 'the-hunter', className: 'Ranger', race: 'Human', subrace: null, con: 14, maxHp: 12 },
-  { campaign: 'abyssal-descent', templateKey: 'the-pact-bound', className: 'Warlock', race: 'Tiefling', subrace: null, con: 14, maxHp: 10 },
-  { campaign: 'abyssal-descent', templateKey: 'the-exile', className: 'Ranger', race: 'Elf', subrace: 'Drow', con: 12, maxHp: 11 },
-  { campaign: 'the-eternal-feast', templateKey: 'the-storyteller', className: 'Bard', race: 'Half-Elf', subrace: null, con: 12, maxHp: 9 },
-  { campaign: 'the-eternal-feast', templateKey: 'the-faithful', className: 'Cleric', race: 'Human', subrace: null, con: 14, maxHp: 10 },
-  { campaign: 'the-eternal-feast', templateKey: 'the-lucky-one', className: 'Rogue', race: 'Halfling', subrace: null, con: 12, maxHp: 9 },
-  { campaign: 'the-eternal-feast', templateKey: 'the-reveler', className: 'Barbarian', race: 'Satyr', subrace: null, con: 14, maxHp: 14 },
-  { campaign: 'the-eternal-feast', templateKey: 'the-seeker', className: 'Ranger', race: 'Catfolk', subrace: null, con: 12, maxHp: 11 },
-  { campaign: 'curse-of-the-jersey-devil', templateKey: 'the-tracker', className: 'Ranger', race: 'Human', subrace: null, con: 14, maxHp: 12 },
-  { campaign: 'curse-of-the-jersey-devil', templateKey: 'the-circuit-preacher', className: 'Cleric', race: 'Human', subrace: null, con: 15, maxHp: 10 },
-  { campaign: 'curse-of-the-jersey-devil', templateKey: 'the-almanac-keeper', className: 'Wizard', race: 'Human', subrace: null, con: 14, maxHp: 8 },
-  { campaign: 'curse-of-the-jersey-devil', templateKey: 'the-moonshiner', className: 'Rogue', race: 'Halfling', subrace: 'Lightfoot Halfling', con: 15, maxHp: 10 },
-  { campaign: 'curse-of-the-jersey-devil', templateKey: 'the-furnace-born', className: 'Fighter', race: 'Half-Orc', subrace: null, con: 16, maxHp: 13 },
-  { campaign: 'the-impossible-vault', templateKey: 'the-cardsharp', className: 'Bard', race: 'Half-Elf', subrace: null, con: 12, maxHp: 9 },
-  { campaign: 'the-impossible-vault', templateKey: 'the-cracksman', className: 'Rogue', race: 'Halfling', subrace: 'Lightfoot Halfling', con: 13, maxHp: 9 },
-  { campaign: 'the-impossible-vault', templateKey: 'the-bouncer', className: 'Fighter', race: 'Half-Orc', subrace: null, con: 15, maxHp: 12 },
-  { campaign: 'the-impossible-vault', templateKey: 'the-chaplain', className: 'Cleric', race: 'Human', subrace: null, con: 14, maxHp: 10 },
-  { campaign: 'the-impossible-vault', templateKey: 'the-luck-scholar', className: 'Wizard', race: 'Gnome', subrace: 'Rock Gnome', con: 13, maxHp: 7 },
-  { campaign: 'wings-of-the-void', templateKey: 'the-rimrunner', className: 'Rogue', race: 'Human', subrace: null, con: 14, maxHp: 10 },
-  { campaign: 'wings-of-the-void', templateKey: 'the-rigger', className: 'Fighter', race: 'Dwarf', subrace: 'Hill Dwarf', con: 16, maxHp: 14 },
-  { campaign: 'wings-of-the-void', templateKey: 'the-cartographer', className: 'Wizard', race: 'Gnome', subrace: 'Rock Gnome', con: 14, maxHp: 8 },
-  { campaign: 'wings-of-the-void', templateKey: 'the-windspeaker', className: 'Cleric', race: 'Half-Elf', subrace: null, con: 14, maxHp: 10 },
-  { campaign: 'wings-of-the-void', templateKey: 'the-deserter', className: 'Ranger', race: 'Half-Orc', subrace: null, con: 14, maxHp: 12 },
-  { campaign: 'journey-to-the-inner-world', templateKey: 'the-driller', className: 'Fighter', race: 'Dwarf', subrace: 'Hill Dwarf', con: 16, maxHp: 14 },
-  { campaign: 'journey-to-the-inner-world', templateKey: 'the-surveyor', className: 'Wizard', race: 'Human', subrace: null, con: 14, maxHp: 8 },
-  { campaign: 'journey-to-the-inner-world', templateKey: 'the-lamplighter', className: 'Rogue', race: 'Halfling', subrace: 'Lightfoot Halfling', con: 14, maxHp: 10 },
-  { campaign: 'journey-to-the-inner-world', templateKey: 'the-chaplain', className: 'Cleric', race: 'Human', subrace: null, con: 15, maxHp: 10 },
-  { campaign: 'journey-to-the-inner-world', templateKey: 'the-echo', className: 'Bard', race: 'Ravenfolk', subrace: null, con: 13, maxHp: 9 },
-  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-thespian', className: 'Bard', race: 'Human', subrace: null, con: 12, maxHp: 9 },
-  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-lovesick', className: 'Sorcerer', race: 'Half-Elf', subrace: null, con: 14, maxHp: 8 },
-  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-woodsman', className: 'Ranger', race: 'Elf', subrace: 'Wood Elf', con: 12, maxHp: 11 },
-  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-runaway', className: 'Rogue', race: 'Halfling', subrace: 'Lightfoot', con: 12, maxHp: 9 },
-  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-hedgewitch', className: 'Druid', race: 'Gnome', subrace: 'Forest Gnome', con: 14, maxHp: 10 },
-  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-oathbound', className: 'Paladin', race: 'Human', subrace: null, con: 14, maxHp: 12 },
-  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-apprentice', className: 'Wizard', race: 'Human', subrace: null, con: 12, maxHp: 7 },
-  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-kitchen-hand', className: 'Rogue', race: 'Halfling', subrace: null, con: 12, maxHp: 9 },
-  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-gourmand', className: 'Fighter', race: 'Dwarf', subrace: null, con: 16, maxHp: 13 },
-  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-herbalist', className: 'Druid', race: 'Half-Elf', subrace: null, con: 12, maxHp: 9 },
-  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-sous-chef', className: 'Sorcerer', race: 'Tiefling', subrace: null, con: 14, maxHp: 8 },
+  { campaign: 'abyssal-descent', templateKey: 'the-veteran', className: 'Fighter', race: 'Human', subrace: null, subclass: null, con: 14, maxHp: 12 },
+  { campaign: 'abyssal-descent', templateKey: 'the-scholar', className: 'Wizard', race: 'Human', subrace: null, subclass: null, con: 12, maxHp: 7 },
+  { campaign: 'abyssal-descent', templateKey: 'the-hunter', className: 'Ranger', race: 'Human', subrace: null, subclass: null, con: 14, maxHp: 12 },
+  { campaign: 'abyssal-descent', templateKey: 'the-pact-bound', className: 'Warlock', race: 'Tiefling', subrace: null, subclass: null, con: 14, maxHp: 10 },
+  { campaign: 'abyssal-descent', templateKey: 'the-exile', className: 'Ranger', race: 'Elf', subrace: 'Drow', subclass: null, con: 12, maxHp: 11 },
+  { campaign: 'the-eternal-feast', templateKey: 'the-storyteller', className: 'Bard', race: 'Half-Elf', subrace: null, subclass: null, con: 12, maxHp: 9 },
+  { campaign: 'the-eternal-feast', templateKey: 'the-faithful', className: 'Cleric', race: 'Human', subrace: null, subclass: null, con: 14, maxHp: 10 },
+  { campaign: 'the-eternal-feast', templateKey: 'the-lucky-one', className: 'Rogue', race: 'Halfling', subrace: null, subclass: null, con: 12, maxHp: 9 },
+  { campaign: 'the-eternal-feast', templateKey: 'the-reveler', className: 'Barbarian', race: 'Satyr', subrace: null, subclass: null, con: 14, maxHp: 14 },
+  { campaign: 'the-eternal-feast', templateKey: 'the-seeker', className: 'Ranger', race: 'Catfolk', subrace: null, subclass: null, con: 12, maxHp: 11 },
+  { campaign: 'curse-of-the-jersey-devil', templateKey: 'the-tracker', className: 'Ranger', race: 'Human', subrace: null, subclass: null, con: 14, maxHp: 12 },
+  { campaign: 'curse-of-the-jersey-devil', templateKey: 'the-circuit-preacher', className: 'Cleric', race: 'Human', subrace: null, subclass: null, con: 15, maxHp: 10 },
+  { campaign: 'curse-of-the-jersey-devil', templateKey: 'the-almanac-keeper', className: 'Wizard', race: 'Human', subrace: null, subclass: null, con: 14, maxHp: 8 },
+  { campaign: 'curse-of-the-jersey-devil', templateKey: 'the-moonshiner', className: 'Rogue', race: 'Halfling', subrace: 'Lightfoot Halfling', subclass: null, con: 15, maxHp: 10 },
+  { campaign: 'curse-of-the-jersey-devil', templateKey: 'the-furnace-born', className: 'Fighter', race: 'Half-Orc', subrace: null, subclass: null, con: 16, maxHp: 13 },
+  { campaign: 'the-impossible-vault', templateKey: 'the-cardsharp', className: 'Bard', race: 'Half-Elf', subrace: null, subclass: null, con: 12, maxHp: 9 },
+  { campaign: 'the-impossible-vault', templateKey: 'the-cracksman', className: 'Rogue', race: 'Halfling', subrace: 'Lightfoot Halfling', subclass: null, con: 13, maxHp: 9 },
+  { campaign: 'the-impossible-vault', templateKey: 'the-bouncer', className: 'Fighter', race: 'Half-Orc', subrace: null, subclass: null, con: 15, maxHp: 12 },
+  { campaign: 'the-impossible-vault', templateKey: 'the-chaplain', className: 'Cleric', race: 'Human', subrace: null, subclass: null, con: 14, maxHp: 10 },
+  { campaign: 'the-impossible-vault', templateKey: 'the-luck-scholar', className: 'Wizard', race: 'Gnome', subrace: 'Rock Gnome', subclass: null, con: 13, maxHp: 7 },
+  { campaign: 'wings-of-the-void', templateKey: 'the-rimrunner', className: 'Rogue', race: 'Human', subrace: null, subclass: null, con: 14, maxHp: 10 },
+  { campaign: 'wings-of-the-void', templateKey: 'the-rigger', className: 'Fighter', race: 'Dwarf', subrace: 'Hill Dwarf', subclass: null, con: 16, maxHp: 14 },
+  { campaign: 'wings-of-the-void', templateKey: 'the-cartographer', className: 'Wizard', race: 'Gnome', subrace: 'Rock Gnome', subclass: null, con: 14, maxHp: 8 },
+  { campaign: 'wings-of-the-void', templateKey: 'the-windspeaker', className: 'Cleric', race: 'Half-Elf', subrace: null, subclass: null, con: 14, maxHp: 10 },
+  { campaign: 'wings-of-the-void', templateKey: 'the-deserter', className: 'Ranger', race: 'Half-Orc', subrace: null, subclass: null, con: 14, maxHp: 12 },
+  { campaign: 'journey-to-the-inner-world', templateKey: 'the-driller', className: 'Fighter', race: 'Dwarf', subrace: 'Hill Dwarf', subclass: null, con: 16, maxHp: 14 },
+  { campaign: 'journey-to-the-inner-world', templateKey: 'the-surveyor', className: 'Wizard', race: 'Human', subrace: null, subclass: null, con: 14, maxHp: 8 },
+  { campaign: 'journey-to-the-inner-world', templateKey: 'the-lamplighter', className: 'Rogue', race: 'Halfling', subrace: 'Lightfoot Halfling', subclass: null, con: 14, maxHp: 10 },
+  { campaign: 'journey-to-the-inner-world', templateKey: 'the-chaplain', className: 'Cleric', race: 'Human', subrace: null, subclass: null, con: 15, maxHp: 10 },
+  { campaign: 'journey-to-the-inner-world', templateKey: 'the-echo', className: 'Bard', race: 'Ravenfolk', subrace: null, subclass: null, con: 13, maxHp: 9 },
+  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-thespian', className: 'Bard', race: 'Human', subrace: null, subclass: null, con: 12, maxHp: 9 },
+  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-lovesick', className: 'Sorcerer', race: 'Half-Elf', subrace: null, subclass: null, con: 14, maxHp: 8 },
+  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-woodsman', className: 'Ranger', race: 'Elf', subrace: 'Wood Elf', subclass: null, con: 12, maxHp: 11 },
+  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-runaway', className: 'Rogue', race: 'Halfling', subrace: 'Lightfoot', subclass: null, con: 12, maxHp: 9 },
+  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-hedgewitch', className: 'Druid', race: 'Gnome', subrace: 'Forest Gnome', subclass: null, con: 14, maxHp: 10 },
+  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-oathbound', className: 'Paladin', race: 'Human', subrace: null, subclass: null, con: 14, maxHp: 12 },
+  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-apprentice', className: 'Wizard', race: 'Human', subrace: null, subclass: null, con: 12, maxHp: 7 },
+  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-kitchen-hand', className: 'Rogue', race: 'Halfling', subrace: null, subclass: null, con: 12, maxHp: 9 },
+  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-gourmand', className: 'Fighter', race: 'Dwarf', subrace: null, subclass: null, con: 16, maxHp: 13 },
+  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-herbalist', className: 'Druid', race: 'Half-Elf', subrace: null, subclass: null, con: 12, maxHp: 9 },
+  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-sous-chef', className: 'Sorcerer', race: 'Tiefling', subrace: null, subclass: null, con: 14, maxHp: 8 },
 ];
 
 describe('premade level-1 hit points (#52)', () => {
@@ -93,6 +95,7 @@ describe('premade level-1 hit points (#52)', () => {
     expect(payload.class).toBe(row.className);
     expect(payload.race).toBe(row.race);
     expect(payload.subrace ?? null).toBe(row.subrace);
+    expect(payload.subclass ?? null).toBe(row.subclass);
     expect(payload.level).toBe(1);
     expect(stats.constitution).toBe(row.con);
 
@@ -130,7 +133,8 @@ describe('premade level-1 hit points (#52)', () => {
       const independent =
         HIT_DIE[row.className] +
         Math.floor((row.con - 10) / 2) +
-        (row.subrace === 'Hill Dwarf' ? 1 : 0);
+        (row.subrace === 'Hill Dwarf' ? 1 : 0) +
+        (row.className === 'Sorcerer' && row.subclass === 'Draconic Bloodline' ? 1 : 0);
       expect(row.maxHp).toBe(independent);
     }
   });
