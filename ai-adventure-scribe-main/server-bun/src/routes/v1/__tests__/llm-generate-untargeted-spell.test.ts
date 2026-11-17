@@ -69,6 +69,7 @@ mock.module('../../../services/llm-provider-service.js', () => ({
 }));
 mock.module('../../../services/combat/combat-intent-roster.js', () => ({
   loadCombatIntentActorRoster: async () => intentActors,
+  loadCombatIntentRoster: async () => ({ actors: [], deadNames: [], deadExcludedCount: 0 }),
 }));
 mock.module('../../../services/combat/combat-entry-campaign-index.js', () => ({
   loadSessionCampaignMonsterIndex: async () => ({

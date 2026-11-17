@@ -135,6 +135,30 @@ export const silkAttackCheckBody = {
   player: declaredAttackCheckBody.player,
 };
 
+/**
+ * #1595: Run M16 (The Last Bout). Dutch Pellam died in the first fight; the DM then brought him
+ * back, and the player attacked him again. The ledger's dead filter removes him from the live
+ * roster and returns his name in `deadNames`.
+ */
+export const DEAD_FOE_PLAYER_INPUT = 'I strike Dutch Pellam with my sword.';
+
+/** `POST /v1/combat/sessions/:id/declared-attack` for the dead-foe attack, as the client sends it. */
+export const deadFoeCheckBody = {
+  playerInput: DEAD_FOE_PLAYER_INPUT,
+  player: declaredAttackCheckBody.player,
+};
+
+/** The roster the loader returns for that session: no live actors, one dead name. */
+export const deadFoeRoster = {
+  actors: [] as Array<{ name: string; source: 'ledger' }>,
+  deadNames: ['Dutch Pellam'],
+  deadExcludedCount: 1,
+};
+
+/** The refusal the route answers with, and the engine notice the client shows for it. */
+export const deadFoeRefusal = { reason: 'dead' as const, name: 'Dutch Pellam' };
+export const DEAD_FOE_NOTICE = 'Dutch Pellam is dead.';
+
 /** The declaredAttack `detectDeclaredAttack` returns for that sentence on that roster. */
 export const silkDeclaredAttack = {
   verb: 'shoot',

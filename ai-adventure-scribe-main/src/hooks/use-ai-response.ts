@@ -870,6 +870,18 @@ export const useAIResponse = (): {
           stage: 'combat-entry-detection-and-player-wait',
           ms: Math.round(performance.now() - timingCheckpoint),
         });
+        // #1595: a named creature the ledger marks dead is refused in words. No DM call, no roll.
+        if (heldEntry?.decision === 'refused') {
+          logger.info('DEAD_FOE_ATTACK_REFUSED', { sessionId });
+          return {
+            text: '',
+            sender: 'dm',
+            timestamp: new Date().toISOString(),
+            context: { emotion: 'neutral', intent: 'response' },
+            localNotice: heldEntry.notice,
+            localNotices: [{ text: heldEntry.notice, persist: true }],
+          };
+        }
         const entryDeclined = heldEntry?.decision === 'declined';
         if (heldEntry?.decision === 'declined') {
           aiContext.gameState.combatEntryDeclined = heldEntry.label;

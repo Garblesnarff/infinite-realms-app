@@ -8,8 +8,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DECLARED_ATTACK_SESSION_ID,
+  DEAD_FOE_NOTICE,
   declaredAttackCharacter,
   declaredAttackCheckBody,
+  deadFoeCheckBody,
+  deadFoeRefusal,
   pickedTargetCheckBody,
   SILK_ATTACK_PLAYER_INPUT,
   silkAttackCheckBody,
@@ -440,5 +443,32 @@ describe('the card for a fight the DM asked for without naming anyone (#2532)', 
 
     const spec = vi.mocked(requestCombatEntryConfirmation).mock.calls[0][0];
     expect(spec).not.toHaveProperty('playerMessage');
+  });
+});
+
+/**
+ * #1595: Run M16. The server refuses a declared attack on a creature the ledger marks dead. The
+ * client shows that refusal as an engine notice and does not hold the turn for a popup.
+ */
+describe('a declared attack on a dead creature (#1595)', () => {
+  const fetchMock = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockResolvedValue(jsonResponse({ pending: null, refusal: deadFoeRefusal }));
+  });
+
+  it('sends the shared dead-foe body and returns the engine notice, with no popup', async () => {
+    const result = await holdCombatEntryBeforeDm({
+      sessionId: DECLARED_ATTACK_SESSION_ID,
+      message: deadFoeCheckBody.playerInput,
+      characterRecord: declaredAttackCharacter,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual(deadFoeCheckBody);
+    expect(result).toEqual({ decision: 'refused', notice: DEAD_FOE_NOTICE });
+    expect(requestCombatEntryConfirmation).not.toHaveBeenCalled();
   });
 });
