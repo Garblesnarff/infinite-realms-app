@@ -57,16 +57,16 @@ const EXPECTED: ExpectedRow[] = [
   { campaign: 'journey-to-the-inner-world', templateKey: 'the-chaplain', className: 'Cleric', race: 'Human', subrace: null, subclass: null, con: 15, maxHp: 10 },
   { campaign: 'journey-to-the-inner-world', templateKey: 'the-echo', className: 'Bard', race: 'Ravenfolk', subrace: null, subclass: null, con: 13, maxHp: 9 },
   { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-thespian', className: 'Bard', race: 'Human', subrace: null, subclass: null, con: 12, maxHp: 9 },
-  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-lovesick', className: 'Sorcerer', race: 'Half-Elf', subrace: null, subclass: null, con: 14, maxHp: 8 },
+  { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-lovesick', className: 'Sorcerer', race: 'Half-Elf', subrace: null, subclass: 'Draconic Bloodline', con: 14, maxHp: 9 },
   { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-woodsman', className: 'Ranger', race: 'Elf', subrace: 'Wood Elf', subclass: null, con: 12, maxHp: 11 },
   { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-runaway', className: 'Rogue', race: 'Halfling', subrace: 'Lightfoot', subclass: null, con: 12, maxHp: 9 },
   { campaign: 'a-midsummer-nights-chaos', templateKey: 'the-hedgewitch', className: 'Druid', race: 'Gnome', subrace: 'Forest Gnome', subclass: null, con: 14, maxHp: 10 },
   { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-oathbound', className: 'Paladin', race: 'Human', subrace: null, subclass: null, con: 14, maxHp: 12 },
   { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-apprentice', className: 'Wizard', race: 'Human', subrace: null, subclass: null, con: 12, maxHp: 7 },
   { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-kitchen-hand', className: 'Rogue', race: 'Halfling', subrace: null, subclass: null, con: 12, maxHp: 9 },
-  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-gourmand', className: 'Fighter', race: 'Dwarf', subrace: null, subclass: null, con: 16, maxHp: 13 },
+  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-gourmand', className: 'Fighter', race: 'Dwarf', subrace: 'Hill Dwarf', subclass: null, con: 16, maxHp: 14 },
   { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-herbalist', className: 'Druid', race: 'Half-Elf', subrace: null, subclass: null, con: 12, maxHp: 9 },
-  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-sous-chef', className: 'Sorcerer', race: 'Tiefling', subrace: null, subclass: null, con: 14, maxHp: 8 },
+  { campaign: 'academy-of-arcane-gastronomy', templateKey: 'the-sous-chef', className: 'Sorcerer', race: 'Tiefling', subrace: null, subclass: 'Draconic Bloodline', con: 14, maxHp: 9 },
 ];
 
 describe('premade level-1 hit points (#52)', () => {
@@ -137,5 +137,17 @@ describe('premade level-1 hit points (#52)', () => {
         (row.className === 'Sorcerer' && row.subclass === 'Draconic Bloodline' ? 1 : 0);
       expect(row.maxHp).toBe(independent);
     }
+  });
+
+  it('the-gourmand replayed template has wisdom 11', () => {
+    const template = readSeededPremadeTemplates().find(
+      (candidate) =>
+        candidate.starter_campaign_id === 'academy-of-arcane-gastronomy' &&
+        candidate.template_key === 'the-gourmand',
+    );
+    if (!template) throw new Error('no gourmand template');
+    const scores = (template.ability_scores ?? template.abilityScores) as Record<string, number>;
+    const wisdom = scores.WIS ?? scores.wisdom;
+    expect(wisdom).toBe(11);
   });
 });
