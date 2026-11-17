@@ -1,4 +1,4 @@
-import { AlertTriangle, Trash2 } from 'lucide-react';
+import { AlertTriangle, Play, Trash2 } from 'lucide-react';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -37,6 +37,8 @@ interface CharacterCardProps {
   character: Partial<Character> & Required<Pick<Character, 'id' | 'name'>>;
   onDelete?: () => void;
   copyLabel?: string;
+  /** #209: the campaign this character belongs to, when the list could resolve it. */
+  campaignName?: string;
 }
 
 /**
@@ -48,6 +50,7 @@ const CharacterCardComponent = ({
   character,
   onDelete,
   copyLabel,
+  campaignName,
 }: CharacterCardProps): JSX.Element => {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -279,11 +282,11 @@ const CharacterCardComponent = ({
             handleDeleteClick();
           }}
         />
-        {/* #209: at-rest caption — name plus distinguishing labels, always visible
-            so duplicate premade copies can be told apart without hovering, and an
-            always-visible Delete that works on touch (the hover popup is
-            unreachable without a pointer). Fallen characters are unplayable but
-            can still be deleted here. */}
+        {/* #209: at-rest caption — name plus distinguishing labels (campaign,
+            copy number, level, HP, created time), and Play and Delete as 44px
+            touch targets. These are visible without hovering, so touch and narrow
+            screens reach them; the hover popup is pointer-only. Fallen characters
+            are unplayable, so Play is omitted there; Delete stays. */}
         <div
           data-testid="character-card-caption"
           className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3"
@@ -292,36 +295,73 @@ const CharacterCardComponent = ({
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-white">{character.name}</div>
             {copyLabel && <span className="text-xs font-semibold text-white">{copyLabel}</span>}
+            {campaignName && (
+              <div
+                data-testid="character-card-campaign"
+                className="truncate text-xs font-medium text-infinite-gold"
+              >
+                Campaign: {campaignName}
+              </div>
+            )}
             {captionMeta.length > 0 && (
               <div className="truncate text-xs text-white/70">{captionMeta.join(' · ')}</div>
             )}
           </div>
-          <button
-            type="button"
-            data-testid="character-card-delete"
-            // #311: the accessible name carries the creation time so two
-            // copies of the same premade ("Delete The Faithful" x2) are
-            // distinguishable to assistive tech.
-            aria-label={
-              createdLabel
-                ? `Delete ${displayName} (created ${createdLabel})`
-                : `Delete ${displayName}`
-            }
-            title="Delete character"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDeleteClick();
-            }}
-            onKeyDown={(e) => {
-              // #209: the hero div handles Enter/Space as "open details"; stop the
-              // keydown here or keyboard activation would navigate instead of
-              // opening the delete dialog.
-              e.stopPropagation();
-            }}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/50 text-white/80 backdrop-blur-sm transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {!fallen && (
+              <button
+                type="button"
+                data-testid="character-card-play"
+                // #311/#209: the accessible name carries the copy's creation time so
+                // two copies of the same premade are distinguishable.
+                aria-label={
+                  createdLabel
+                    ? `Play ${displayName} (created ${createdLabel})`
+                    : `Play ${displayName}`
+                }
+                title="Play as this character"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCampaignModal(true);
+                }}
+                onKeyDown={(e) => {
+                  // The hero div handles Enter/Space as "open details"; stop the
+                  // keydown so Play opens the campaign picker instead.
+                  e.stopPropagation();
+                }}
+                className="flex h-11 items-center gap-2 rounded-full bg-infinite-gold px-4 text-sm font-semibold text-infinite-dark transition hover:bg-infinite-purple hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              >
+                <Play className="h-4 w-4" aria-hidden="true" />
+                Play
+              </button>
+            )}
+            <button
+              type="button"
+              data-testid="character-card-delete"
+              // #311: the accessible name carries the creation time so two
+              // copies of the same premade ("Delete The Faithful" x2) are
+              // distinguishable to assistive tech.
+              aria-label={
+                createdLabel
+                  ? `Delete ${displayName} (created ${createdLabel})`
+                  : `Delete ${displayName}`
+              }
+              title="Delete character"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleDeleteClick();
+              }}
+              onKeyDown={(e) => {
+                // #209: the hero div handles Enter/Space as "open details"; stop the
+                // keydown here or keyboard activation would navigate instead of
+                // opening the delete dialog.
+                e.stopPropagation();
+              }}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/50 text-white/80 backdrop-blur-sm transition hover:bg-destructive hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </div>
 

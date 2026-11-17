@@ -234,3 +234,106 @@ describe('CharacterCard #209 always-visible Delete', () => {
     expect(screen.getByText('Permanently Delete')).toBeInTheDocument();
   });
 });
+
+describe('CharacterCard #209 touch-reachable Play and campaign label', () => {
+  it('shows Play on every card without hovering and opens the campaign picker', async () => {
+    const user = userEvent.setup();
+    renderCard(scholarCopy());
+
+    const play = screen.getByTestId('character-card-play');
+    expect(play).toBeVisible();
+    expect(play).toHaveAccessibleName(/^Play The Scholar/);
+
+    await user.click(play);
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('gives Play and Delete 44px touch targets', () => {
+    renderCard(scholarCopy());
+
+    expect(screen.getByTestId('character-card-play')).toHaveClass('h-11');
+    expect(screen.getByTestId('character-card-delete')).toHaveClass('h-11', 'w-11');
+  });
+
+  it('keeps Play and Delete reachable by keyboard Tab', async () => {
+    const user = userEvent.setup();
+    renderCard(scholarCopy());
+
+    const reached = new Set<string>();
+    for (let step = 0; step < 12; step += 1) {
+      await user.tab();
+      const id = document.activeElement?.getAttribute('data-testid');
+      if (id) reached.add(id);
+    }
+
+    expect(reached).toContain('character-card-play');
+    expect(reached).toContain('character-card-delete');
+  });
+
+  it('opens the campaign picker on keyboard Enter on Play without navigating to details', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/roster']}>
+        <Routes>
+          <Route
+            path="/roster"
+            element={
+              <>
+                <LocationProbe />
+                <CharacterCardComponent character={scholarCopy() as never} />
+              </>
+            }
+          />
+          <Route path="/app/character/:id" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    screen.getByTestId('character-card-play').focus();
+    await user.keyboard('{Enter}');
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/roster');
+  });
+
+  it('names the campaign on the card when the character belongs to one', () => {
+    render(
+      <MemoryRouter>
+        <CharacterCardComponent
+          character={scholarCopy({ campaign_id: 'camp-abyssal' }) as never}
+          campaignName="Abyssal Descent"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByTestId('character-card-campaign')).toHaveTextContent(
+      'Campaign: Abyssal Descent',
+    );
+    expect(screen.getByTestId('character-card-caption')).toHaveTextContent('Abyssal Descent');
+  });
+
+  it('shows no campaign line for a character outside any campaign', () => {
+    renderCard(scholarCopy({ campaign_id: null }));
+
+    expect(screen.queryByTestId('character-card-campaign')).not.toBeInTheDocument();
+  });
+
+  it('keeps Play hidden on a fallen character while the caption still names the campaign', () => {
+    render(
+      <MemoryRouter>
+        <CharacterCardComponent
+          character={
+            scholarCopy({
+              campaign_id: 'camp-abyssal',
+              character_stats: [{ max_hit_points: 24, current_hit_points: 0, vital_state: 'dead' }],
+            }) as never
+          }
+          campaignName="Abyssal Descent"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.queryByTestId('character-card-play')).not.toBeInTheDocument();
+    expect(screen.getByTestId('character-card-campaign')).toHaveTextContent('Abyssal Descent');
+  });
+});
