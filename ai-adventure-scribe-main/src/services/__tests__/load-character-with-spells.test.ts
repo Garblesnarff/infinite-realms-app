@@ -189,3 +189,60 @@ describe('loadCharacterWithSpells hit dice (#751 follow-up)', () => {
     });
   });
 });
+
+describe('loadCharacterWithSpells inspiration (#1593)', () => {
+  const heroRecord = {
+    id: 'hero',
+    name: 'The Hero',
+    race: 'Human',
+    class: 'Paladin',
+    level: 3,
+    cantrips: '',
+    known_spells: '',
+    prepared_spells: '',
+    ritual_spells: '',
+    character_stats: [
+      {
+        strength: 16,
+        dexterity: 10,
+        constitution: 14,
+        intelligence: 8,
+        wisdom: 12,
+        charisma: 14,
+        armor_class: 18,
+        max_hit_points: 26,
+        current_hit_points: 26,
+      },
+    ],
+  };
+
+  beforeEach(() => {
+    getCharacter.mockReset();
+    getCharacterEquipment.mockReset().mockResolvedValue([]);
+    getCharacterSpells.mockReset().mockResolvedValue({ cantrips: [], spells: [] });
+  });
+
+  it('carries inspiration true when the server says true', async () => {
+    getCharacter.mockResolvedValue({ ...heroRecord, inspiration: true });
+
+    const result = await loadCharacterWithSpells('hero');
+
+    expect(result?.inspiration).toBe(true);
+  });
+
+  it('carries inspiration false when the server says false', async () => {
+    getCharacter.mockResolvedValue({ ...heroRecord, inspiration: false });
+
+    const result = await loadCharacterWithSpells('hero');
+
+    expect(result?.inspiration).toBe(false);
+  });
+
+  it('treats an absent server value as not held, so the coin is grey and not hidden', async () => {
+    getCharacter.mockResolvedValue({ ...heroRecord });
+
+    const result = await loadCharacterWithSpells('hero');
+
+    expect(result?.inspiration).toBe(false);
+  });
+});

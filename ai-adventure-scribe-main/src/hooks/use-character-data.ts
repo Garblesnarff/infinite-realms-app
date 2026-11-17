@@ -32,6 +32,7 @@ import type { Character } from '@/types/character';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast'; // Assuming kebab-case from previous steps
 import { issue1784Api } from '@/services/issue-1784-api';
+import { loadGrantedClassIdentity } from '@/services/load-granted-class-identity';
 import { userDataApi } from '@/services/user-data-api';
 import {
   findUnresolvedCharacterData,
@@ -244,11 +245,20 @@ export const useCharacterData = (characterId: string | undefined) => {
           : (equipmentResult.data as unknown as CharacterEquipmentRow[]);
 
         // Transform and set character data
-        const transformedCharacter = transformCharacterData(
+        const transformed = transformCharacterData(
           characterRecord as CharacterRow,
           statsData as CharacterStatsRow | null,
           equipmentData as CharacterEquipmentRow[] | null,
         );
+        // #1593: the subclass lives in its own table. Without it the sheet cannot
+        // derive the oath's always-prepared spells (same read as the in-session loader).
+        const classIdentity = await loadGrantedClassIdentity(
+          characterId!,
+          typeof characterRecord.class === 'string' ? characterRecord.class : null,
+        );
+        const transformedCharacter = classIdentity.subclassName
+          ? { ...transformed, subclassName: classIdentity.subclassName }
+          : transformed;
 
         const unresolved = findUnresolvedCharacterData(characterRecord as CharacterRow);
         if (unresolved.length > 0) {
