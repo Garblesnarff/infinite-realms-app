@@ -14,6 +14,11 @@ const state = vi.hoisted(() => ({
 vi.mock('@/hooks/use-starter-campaigns', () => ({
   useStarterCampaigns: () => state,
 }));
+// Logged out by default: the page reads auth through useAuth (#1610, sign-in branch).
+const auth = vi.hoisted(() => ({ user: null as null | { id: string }, loading: false }));
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => auth,
+}));
 // The public Explore page uses the board card (#1610); the boxed card is not rendered here.
 vi.mock('@/features/explore/PublicExploreCard', () => ({
   PublicExploreCard: () => <div data-testid="campaign-card" />,
