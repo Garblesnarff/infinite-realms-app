@@ -80,3 +80,29 @@ export function attackModifierForRoll(
 ): number {
   return spec.attackBonus;
 }
+
+/** The fields describeCheckRoll reads. Mirrors PlayerCheckRollSpec (player-roll-bridge). */
+export interface CheckRollDescriptionSpec {
+  checkLabel: string;
+  checkModifier: number;
+  targetLabel?: string;
+  /** What the die is measured against: "DC 15" or "passive Perception 13". A target number. */
+  opposedByLabel?: string;
+}
+
+/**
+ * "Shove vs Goblin — 1d20+3" / "Hide — 1d20+5 vs passive Perception 13"
+ *
+ * When target numbers are hidden, the opposed clause (the DC or the passive score) is dropped
+ * entirely, the same rule as the attack popup (#157). The target's name stays: it is not a number.
+ */
+export function describeCheckRoll(
+  spec: CheckRollDescriptionSpec,
+  showTargetNumbers = true,
+): string {
+  const sign = spec.checkModifier >= 0 ? '+' : '';
+  const die = `1d20${sign}${spec.checkModifier}`;
+  const target = spec.targetLabel ? ` vs ${spec.targetLabel}` : '';
+  const opposed = showTargetNumbers && spec.opposedByLabel ? ` vs ${spec.opposedByLabel}` : '';
+  return `${spec.checkLabel}${target} — ${die}${opposed}`;
+}

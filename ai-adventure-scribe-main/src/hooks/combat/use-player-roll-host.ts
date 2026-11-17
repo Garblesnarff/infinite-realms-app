@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import {
   attackModifierForRoll,
   describeAttackRoll,
+  describeCheckRoll,
   type AttackRollDescriptionSpec,
 } from '../../../shared/describe-attack-roll';
 
@@ -17,7 +18,12 @@ import type {
 import type { DiceRollRequest } from '@/types/combat';
 
 /** Re-exported from shared/ so the popup and the server's narration repair read the same words (#467). */
-export { attackModifierForRoll, describeAttackRoll, type AttackRollDescriptionSpec };
+export {
+  attackModifierForRoll,
+  describeAttackRoll,
+  describeCheckRoll,
+  type AttackRollDescriptionSpec,
+};
 
 import { useGame } from '@/contexts/GameContext';
 import { useShowTargetNumbers } from '@/features/game-session/hooks/use-show-target-numbers';
@@ -56,7 +62,7 @@ export function usePlayerRollHost(): string | null {
           : isCheckSpec(spec)
             ? {
                 requestType: 'skill_check' as const,
-                description: describeCheckRoll(spec),
+                description: describeCheckRoll(spec, showTargetNumbers),
                 rollConfig: { dieType: 20, count: 1, modifier: spec.checkModifier },
                 combatCheckRoll: true,
               }
@@ -123,15 +129,6 @@ export function usePlayerRollHost(): string | null {
 export function describeInitiativeRoll(spec: PlayerInitiativeRollSpec): string {
   const sign = spec.initiativeModifier >= 0 ? '+' : '';
   return `Initiative for ${spec.actorLabel} — 1d20${sign}${spec.initiativeModifier}`;
-}
-
-/** "Shove vs Goblin — 1d20+3" / "Hide — 1d20+5 vs passive Perception 13" */
-export function describeCheckRoll(spec: PlayerCheckRollSpec): string {
-  const sign = spec.checkModifier >= 0 ? '+' : '';
-  const die = `1d20${sign}${spec.checkModifier}`;
-  const target = spec.targetLabel ? ` vs ${spec.targetLabel}` : '';
-  const opposed = spec.opposedByLabel ? ` vs ${spec.opposedByLabel}` : '';
-  return `${spec.checkLabel}${target} — ${die}${opposed}`;
 }
 
 function isCheckSpec(spec: PlayerRollSpec): spec is PlayerCheckRollSpec {
