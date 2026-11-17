@@ -11,13 +11,15 @@ import type {
 } from '@/types/combat';
 
 import logger from '@/lib/logger';
+import { userDataApi } from '@/services/user-data-api';
 import { createGrappledCondition, rollGrappleCheck, rollShoveCheck } from '@/utils/grappleUtils';
 import { processReactionResponse } from '@/utils/reactionSystem';
-import { checkConcentration } from '@/utils/spell-management';
 
 interface UseCombatActionHandlersProps {
   activeEncounter: CombatEncounter | null;
   takeAction: (action: Partial<CombatAction>) => Promise<void>;
+  /** Re-reads the encounter after a server HP write, so the tracker shows the new HP (#621). */
+  refreshCombatState?: (signal?: AbortSignal) => Promise<unknown>;
   updateParticipant: (participantId: string, updates: Partial<CombatParticipant>) => Promise<void>;
   nextTurn: () => Promise<void>;
   validateCombatAction: (
@@ -38,6 +40,7 @@ export const useCombatActionHandlers = ({
   nextTurn,
   validateCombatAction,
   selectedEnemy,
+  refreshCombatState,
 }: UseCombatActionHandlersProps) => {
   const [actionValidation, setActionValidation] = useState<{
     isValid: boolean;
@@ -204,97 +207,43 @@ export const useCombatActionHandlers = ({
     [activeEncounter, takeAction, updateParticipant],
   );
 
-  // Handle applying direct damage
+  // Handle applying direct damage. The server applies it (#621 Part B2a). Only player characters
+  // have a route; a participant without a characterId gets no write and no HP control.
   const handleApplyDamage = useCallback(
     async (participantId: string, damageAmount: number, damageType: string) => {
-      if (!activeEncounter) {
+      const characterId = activeEncounter?.participants.find(
+        (p) => p.id === participantId,
+      )?.characterId;
+      if (!characterId) {
         return;
       }
-      const participant = activeEncounter.participants.find((p) => p.id === participantId);
-      if (!participant) {
-        return;
+      try {
+        await userDataApi.applyCharacterDamage(characterId, damageAmount, damageType as DamageType);
+        await refreshCombatState?.();
+      } catch (error) {
+        logger.error('Failed to apply damage through the server:', error);
       }
-
-      const newHP = Math.max(0, (participant.currentHitPoints || 0) - damageAmount);
-      const isUnconscious = newHP <= 0;
-
-      let concentrationLost = false;
-      if (participant.activeConcentration && damageAmount > 0) {
-        concentrationLost = !checkConcentration(participant, damageAmount);
-      }
-
-      const updatedProps: Partial<CombatParticipant> = {
-        currentHitPoints: newHP,
-        isUnconscious,
-      };
-
-      if (concentrationLost) {
-        updatedProps.activeConcentration = null;
-      }
-
-      if (isUnconscious && (participant.currentHitPoints || 0) > 0) {
-        updatedProps.isStable = false;
-        updatedProps.deathSaves = { successes: 0, failures: 0 };
-      }
-
-      updateParticipant(participantId, updatedProps);
-
-      const action: Partial<CombatAction> = {
-        participantId,
-        actionType: 'damage_dealt' as ActionType,
-        description: `${participant.name} takes ${damageAmount} ${damageType} damage.`,
-        damageDealt: damageAmount,
-        damageType: damageType as DamageType,
-        effects: {
-          newHitPoints: newHP,
-          unconscious: isUnconscious,
-          concentrationLost,
-        },
-      };
-      await takeAction(action);
     },
-    [activeEncounter, updateParticipant, takeAction],
+    [activeEncounter, refreshCombatState],
   );
 
-  // Handle healing
+  // Handle healing. The server adds the amount and clamps to max HP (#214, #621 Part B2a).
   const handleHealing = useCallback(
     async (participantId: string, healingAmount: number) => {
-      if (!activeEncounter) {
+      const characterId = activeEncounter?.participants.find(
+        (p) => p.id === participantId,
+      )?.characterId;
+      if (!characterId) {
         return;
       }
-
-      const participant = activeEncounter.participants.find((p) => p.id === participantId);
-      if (!participant) {
-        return;
+      try {
+        await userDataApi.applyCharacterHealing(characterId, healingAmount);
+        await refreshCombatState?.();
+      } catch (error) {
+        logger.error('Failed to heal through the server:', error);
       }
-
-      // Simple healing logic
-      const maxHP = participant.maxHitPoints || 1;
-      const newHP = Math.min(maxHP, (participant.currentHitPoints || 0) + healingAmount);
-      const wasUnconscious = (participant.currentHitPoints || 0) <= 0;
-      const revived = wasUnconscious && newHP > 0;
-
-      // Update participant
-      updateParticipant(participantId, {
-        currentHitPoints: newHP,
-        isUnconscious: newHP <= 0,
-      });
-
-      const description = `${participant.name} heals ${healingAmount} hit points${revived ? ' and regains consciousness' : ''}`;
-
-      const action: Partial<CombatAction> = {
-        participantId,
-        actionType: 'heal' as ActionType,
-        description,
-        effects: {
-          revivedFromUnconscious: revived,
-          newHitPoints: newHP,
-        },
-      };
-
-      await takeAction(action);
     },
-    [activeEncounter, updateParticipant, takeAction],
+    [activeEncounter, refreshCombatState],
   );
 
   return {

@@ -269,7 +269,8 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
                       participant={participant}
                       onDamage={handleApplyDamage}
                       onHeal={handleHealing}
-                      isInteractive={isDM}
+                      // #621 Part B2a: only a player character has a server HP route.
+                      isInteractive={isDM && !!participant.characterId}
                     />
                   ))}
                 </CardContent>

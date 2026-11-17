@@ -70,52 +70,6 @@ export function getConditionModifiers(
 // Condition Application/Removal Functions
 // ===========================
 
-/**
- * Applies condition effects to a participant (called when condition is added)
- *
- * @param participant - Target participant
- * @param condition - Condition being applied
- * @returns Updated participant with effects applied
- */
-export function applyConditionEffects(
-  participant: CombatParticipant,
-  condition: Condition,
-): CombatParticipant {
-  const conditionDef = CONDITION_EFFECTS[condition.name as ConditionName];
-  if (!conditionDef?.onApply) {
-    // If no specific apply logic, just return updated participant
-    return {
-      ...participant,
-      conditions: [...participant.conditions, condition],
-    };
-  }
-
-  return conditionDef.onApply(participant, condition);
-}
-
-/**
- * Removes condition effects from a participant (called when condition is removed)
- *
- * @param participant - Target participant
- * @param condition - Condition being removed
- * @returns Updated participant with effects removed
- */
-export function removeConditionEffects(
-  participant: CombatParticipant,
-  condition: Condition,
-): CombatParticipant {
-  const conditionDef = CONDITION_EFFECTS[condition.name as ConditionName];
-  if (!conditionDef?.onRemove) {
-    // Remove condition from array
-    return {
-      ...participant,
-      conditions: participant.conditions.filter((c) => c.name !== condition.name),
-    };
-  }
-
-  return conditionDef.onRemove(participant, condition);
-}
-
 // ===========================
 // Saving Throw Handling
 // ===========================

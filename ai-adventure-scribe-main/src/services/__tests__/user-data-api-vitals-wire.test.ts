@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DAMAGE_WIRE_BODY,
+  DM_DAMAGE_WIRE_BODY,
   HEAL_WIRE_BODY,
 } from '../../../shared/test-fixtures/character-vitals-wire';
 import { userDataApi } from '../user-data-api';
@@ -39,6 +40,19 @@ describe('userDataApi vitals wire bodies (#621 Part A)', () => {
     expect(url).toContain('/v1/characters/character-1/damage');
     expect(init.method).toBe('POST');
     expect(JSON.parse(String(init.body))).toEqual(DAMAGE_WIRE_BODY);
+  });
+
+  it('applyCharacterDamage posts exactly DM_DAMAGE_WIRE_BODY, with its damageType, from the DM control', async () => {
+    const fetchMock = stubFetch();
+
+    await userDataApi.applyCharacterDamage(
+      'character-1',
+      DM_DAMAGE_WIRE_BODY.amount,
+      DM_DAMAGE_WIRE_BODY.damageType,
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual(DM_DAMAGE_WIRE_BODY);
   });
 
   it('applyCharacterHealing posts exactly HEAL_WIRE_BODY to /heal', async () => {

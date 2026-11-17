@@ -12,3 +12,9 @@ export const DAMAGE_WIRE_BODY = { amount: 8 } as const;
 
 /** `POST /v1/characters/:id/heal` — the client sends this for every heal. */
 export const HEAL_WIRE_BODY = { amount: 5 } as const;
+
+/**
+ * `POST /v1/characters/:id/damage` — the body the DM damage control sends (#621 Part B2a). The
+ * control defaults to `slashing` (HPTracker.tsx), so the type is part of the wire body.
+ */
+export const DM_DAMAGE_WIRE_BODY = { amount: 4, damageType: 'slashing' } as const;
