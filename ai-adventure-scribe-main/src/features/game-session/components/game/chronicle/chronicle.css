@@ -394,8 +394,9 @@ body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-body {
   position: relative;
   box-sizing: border-box;
 }
-/* #1607: only overlap the cover's fade when there is a cover; without one the title would sit above the card top and be clipped. */
 body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-image + .ir-chronicle-aside-body {
+  /* #1607: overlap the cover's fade only when there is a cover; without one
+     the title would sit above the card top and be clipped. */
   margin-top: -30px;
   padding-top: 0;
 }
