@@ -759,6 +759,25 @@ export const userDataApi = {
       body: JSON.stringify({}),
     }),
   /**
+   * #1576: Second Wind from the sheet. The engine rolls 1d10 plus the fighter level, heals and
+   * spends the use in one transaction; the numbers returned are the ones the sheet shows. The
+   * body is the shared fixture (shared/test-fixtures/second-wind-sheet.ts).
+   */
+  secondWind: (
+    characterId: string,
+  ): Promise<{
+    roll: number;
+    fighterLevel: number;
+    healed: number;
+    newHp: number;
+    maxHp: number;
+    usesRemaining: number;
+  }> =>
+    request(`/v1/characters/${encodeURIComponent(characterId)}/second-wind`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  /**
    * #1554: Lay on Hands out of combat. The body is the shared sheet body (see
    * shared/test-fixtures/lay-on-hands-intent.ts); the engine draws the pool and heals.
    */

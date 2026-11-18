@@ -25,18 +25,25 @@ import { armActionSurge, readActionSurgeMark } from './combat-turn-resources.js'
 import { db } from '../../../../db/client';
 import {
   characterFeatures,
+  characterStats,
   characters,
   classFeaturesLibrary,
   combatParticipants,
   combatParticipantStatus,
 } from '../../../../db/schema/index';
-import { BusinessLogicError } from '../../lib/errors.js';
+import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
 import { rollDie } from '../../lib/rng.js';
+import { CharacterVitalsService, type VitalsTx } from '../character-vitals-service.js';
 import { CombatHPService } from '../combat-hp-service.js';
 import { ClassFeatureUsageService } from '../progression/class-feature-usage-service.js';
 
+/** The database, or the transaction a sheet resolution runs inside (#1576). */
+type FighterExecutor = typeof db | VitalsTx;
+
 export const FIGHTER_CLASS = 'Fighter';
 export const SECOND_WIND_NAME = 'Second Wind';
+/** The sheet's class-features JSON key for Second Wind (the tracker reads `classFeatures.second_wind`). */
+const SECOND_WIND_NAME_KEY = 'second_wind';
 export const ACTION_SURGE_NAME = 'Action Surge';
 
 /**
@@ -160,8 +167,12 @@ export function fighterLevelOf(character: {
   return (character.class ?? '').toLowerCase() === 'fighter' ? (character.level ?? 0) : 0;
 }
 
-async function ownedCharacter(characterId: string, userId: string): Promise<CharacterRow | null> {
-  const [character] = await db
+async function ownedCharacter(
+  characterId: string,
+  userId: string,
+  executor: FighterExecutor = db,
+): Promise<CharacterRow | null> {
+  const [character] = await executor
     .select()
     .from(characters)
     .where(
@@ -234,13 +245,16 @@ async function spendFighterFeatureUse(input: {
   featureName: string;
   sessionId?: string;
   context: string;
+  /** A sheet resolution passes its transaction; the combat path leaves it to the database. */
+  executor?: FighterExecutor;
 }): Promise<{ usesRemaining: number; featureId: string; usesCount: number | null }> {
   const { characterId, userId, featureName, sessionId, context } = input;
+  const run: FighterExecutor = input.executor ?? db;
   // The character's fighter level decides which row the spend hits (#1181):
   // the L17 "Action Surge (two uses)" row, not the L2 row, at L17+. The
   // ownership check doubles as the missing/unowned refusal, keeping the
   // same error this path threw before the row choice existed.
-  const character = await ownedCharacter(characterId, userId);
+  const character = await ownedCharacter(characterId, userId, run);
   if (!character) {
     throw new BusinessLogicError(`${featureName} is not on this character's sheet`, {
       reason: 'feature_not_on_sheet',
@@ -248,7 +262,7 @@ async function spendFighterFeatureUse(input: {
     });
   }
   const fighterLevel = fighterLevelOf(character);
-  const candidates = await db
+  const candidates = await run
     .select({
       characterFeatureId: characterFeatures.id,
       featureId: characterFeatures.featureId,
@@ -287,6 +301,7 @@ async function spendFighterFeatureUse(input: {
       userId,
       context,
       sessionId,
+      run,
     );
     return { usesRemaining: -1, featureId: row.featureId, usesCount: null };
   }
@@ -294,7 +309,7 @@ async function spendFighterFeatureUse(input: {
   // The claim: decrement lands only while a use remains. COALESCE treats a
   // row granted before uses were tracked (NULL remaining) as its full count,
   // the same reading the legal-action list gives it.
-  const [updated] = await db
+  const [updated] = await run
     .update(characterFeatures)
     .set({
       usesRemaining: sql`COALESCE(${characterFeatures.usesRemaining}, ${fullUses}) - 1`,
@@ -324,9 +339,12 @@ async function spendFighterFeatureUse(input: {
       userId,
       context,
       sessionId,
+      run,
     );
   } catch (error) {
-    await releaseFighterFeatureUse(characterId, row.featureId, fullUses);
+    // Inside a sheet transaction the throw rolls the claim back with everything else; a
+    // separate release on the database would wait on this transaction's row lock.
+    if (!input.executor) await releaseFighterFeatureUse(characterId, row.featureId, fullUses);
     throw error;
   }
   return {
@@ -447,6 +465,101 @@ export async function resolveSecondWind(input: {
     await releaseFighterFeatureUse(characterId, spend.featureId, spend.usesCount);
     throw error;
   }
+}
+
+export interface SheetSecondWindResult {
+  /** The d10 the engine rolled, before the fighter-level bonus. */
+  roll: number;
+  fighterLevel: number;
+  healed: number;
+  newHp: number;
+  maxHp: number;
+  usesRemaining: number;
+}
+
+/**
+ * Second Wind from the sheet, outside combat (#1576). One transaction: the use is claimed, the
+ * engine rolls 1d10 and adds the fighter level, the heal lands through the vitals service (which
+ * caps at max HP), and the sheet's mirror of the use is written. A refusal or a failure after the
+ * claim rolls every write back, so HP and uses stay as they were. The full-health refusal comes
+ * before the claim, so no use is burned on zero healing.
+ */
+export async function resolveSheetSecondWind(input: {
+  characterId: string;
+  userId: string;
+  sessionId?: string;
+}): Promise<SheetSecondWindResult> {
+  const { characterId, userId, sessionId } = input;
+  return db.transaction(async (tx) => {
+    const character = await ownedCharacter(characterId, userId, tx);
+    const level = character ? fighterLevelOf(character) : 0;
+    if (!character || level <= 0) {
+      throw new BusinessLogicError(`${SECOND_WIND_NAME} is not on this character's sheet`, {
+        reason: 'feature_not_on_sheet',
+        featureName: SECOND_WIND_NAME,
+      });
+    }
+
+    const [before] = await tx
+      .select({ currentHp: characterStats.currentHitPoints, maxHp: characterStats.maxHitPoints })
+      .from(characterStats)
+      .where(eq(characterStats.characterId, characterId))
+      .for('update')
+      .limit(1);
+    if (!before) throw new NotFoundError('Character', characterId);
+    if (before.currentHp >= before.maxHp) {
+      throw new BusinessLogicError(`${character.name || 'The fighter'} is already at full health`, {
+        reason: 'already_full_health',
+        featureName: SECOND_WIND_NAME,
+      });
+    }
+
+    const spend = await spendFighterFeatureUse({
+      characterId,
+      userId,
+      featureName: SECOND_WIND_NAME,
+      sessionId,
+      context: 'sheet-second-wind',
+      executor: tx,
+    });
+
+    const roll = rollDie(10);
+    const vitals = await CharacterVitalsService.heal(characterId, userId, roll + level, tx);
+
+    // The sheet displays its mirror of the use from the character's class-features JSON. Read it
+    // under a row lock so the merge below keeps any other key another write has set.
+    const [sheet] = await tx
+      .select({ classFeatures: characters.classFeatures })
+      .from(characters)
+      .where(eq(characters.id, characterId))
+      .for('update')
+      .limit(1);
+    const features =
+      sheet?.classFeatures &&
+      typeof sheet.classFeatures === 'object' &&
+      !Array.isArray(sheet.classFeatures)
+        ? { ...(sheet.classFeatures as Record<string, unknown>) }
+        : {};
+    const existing = features[SECOND_WIND_NAME_KEY];
+    features[SECOND_WIND_NAME_KEY] = {
+      ...(existing && typeof existing === 'object' && !Array.isArray(existing) ? existing : {}),
+      currentUses: spend.usesRemaining,
+      maxUses: spend.usesCount ?? 1,
+    };
+    await tx
+      .update(characters)
+      .set({ classFeatures: features })
+      .where(eq(characters.id, characterId));
+
+    return {
+      roll,
+      fighterLevel: level,
+      healed: vitals.currentHitPoints - before.currentHp,
+      newHp: vitals.currentHitPoints,
+      maxHp: vitals.maxHitPoints,
+      usesRemaining: spend.usesRemaining,
+    };
+  });
 }
 
 export interface ActionSurgeResult {

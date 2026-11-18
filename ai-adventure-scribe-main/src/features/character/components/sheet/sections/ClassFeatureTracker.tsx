@@ -43,9 +43,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
   // #712: the Lay on Hands bar reads static level x 5 values. When the
   // server has mirrored the real pool into the sheet JSON (a spend or a
   // rest), show the real pool so the bar and the feature row agree.
-  const layOnHandsTracked = trackedClassFeatures.find(
-    (feature) => feature.name === 'lay_on_hands',
-  );
+  const layOnHandsTracked = trackedClassFeatures.find((feature) => feature.name === 'lay_on_hands');
   const layOnHandsResources =
     characterResources && layOnHandsTracked?.currentUses !== undefined
       ? {
@@ -87,22 +85,24 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
     const updatedCharacter = { ...character, classFeatures: classFeaturesState };
 
     if (feature.name === 'second_wind') {
-      const roll = Math.floor(Math.random() * 10) + 1;
-      const level = character.level ?? 1;
-      // #214: server-side heal delta — the server adds the amount and clamps
-      // to max HP. Never send an absolute HP computed from client state.
+      // #1576: the server rolls 1d10 plus the fighter level, heals and spends the use in one
+      // transaction. The sheet shows the server's numbers; it neither rolls nor saves the character.
       try {
-        await userDataApi.applyCharacterHealing(character.id, roll + level);
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        logger.error('Failed to save Second Wind healing', error);
+        const result = await userDataApi.secondWind(character.id);
         toast({
-          title: 'Save failed',
-          description: reason,
+          title: 'Second Wind',
+          description: `Rolled ${result.roll} + level ${result.fighterLevel}: healed ${result.healed} HP (now ${result.newHp} of ${result.maxHp}). ${result.usesRemaining} use(s) left.`,
+        });
+        window.dispatchEvent(new CustomEvent('character-state-updated'));
+      } catch (error) {
+        logger.error('Second Wind failed', error);
+        toast({
+          title: 'Second Wind',
+          description: error instanceof Error ? error.message : 'Nothing was spent.',
           variant: 'destructive',
         });
-        return;
       }
+      return;
     }
 
     const saved = await onUpdate(updatedCharacter);
