@@ -269,7 +269,12 @@ export function formatCombatEngineParts(
           kind: 'move',
           side,
           line: noMovementLine,
-          title: `${actor} has no movement left this turn. No attack this turn.`,
+          // A move that spent its movement keeps its "moves N ft" title; only a refusal with 0 ft
+          // moved takes the new words.
+          title:
+            result.movedFeet === 0
+              ? `${actor} has no movement left this turn. No attack this turn.`
+              : `${actor} ${movement.replace(/^moved /, 'moves ')}. No attack this turn.`,
         },
       });
       return parts;
