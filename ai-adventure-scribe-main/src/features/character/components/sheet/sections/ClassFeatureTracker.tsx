@@ -15,13 +15,19 @@ import { getClassFeatures, getCharacterResources } from '@/utils/classFeatures';
 interface ClassFeatureTrackerProps {
   character: Character;
   onUpdate: CharacterSheetUpdateFn;
+  /** Reloads the saved character after a server-side feature use (#1576). Makes no write. */
+  onServerStateChanged?: () => Promise<void> | void;
 }
 
 /**
  * ClassFeatureTracker component displays and manages character class feature usage
  * including resources like spell slots, ki points, rages, etc.
  */
-const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, onUpdate }) => {
+const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({
+  character,
+  onUpdate,
+  onServerStateChanged,
+}) => {
   const { toast } = useToast();
   // Get class features for the character
   const classFeatures = character.class
@@ -90,10 +96,11 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
       try {
         const result = await userDataApi.secondWind(character.id);
         toast({
-          title: 'Second Wind',
-          description: `Rolled ${result.roll} + level ${result.fighterLevel}: healed ${result.healed} HP (now ${result.newHp} of ${result.maxHp}). ${result.usesRemaining} use(s) left.`,
+          title: 'Feature used',
+          description: `second wind: ${result.usesRemaining} / ${feature.maxUses}. Healed ${result.healed} HP (now ${result.newHp} of ${result.maxHp}).`,
         });
-        window.dispatchEvent(new CustomEvent('character-state-updated'));
+        // The sheet reloads the server's saved state (HP and the use) without a save of its own.
+        await onServerStateChanged?.();
       } catch (error) {
         logger.error('Second Wind failed', error);
         toast({
