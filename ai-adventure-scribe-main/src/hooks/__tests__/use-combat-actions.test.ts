@@ -51,10 +51,6 @@ vi.mock('@/services/user-data-api', () => ({
   },
 }));
 
-vi.mock('@/utils/spell-management', () => ({
-  checkConcentration: vi.fn(),
-}));
-
 import { useCombatActions } from '../use-combat-actions';
 
 import { useCharacter } from '@/contexts/CharacterContext';
@@ -63,7 +59,6 @@ import { useCombatAIIntegration } from '@/hooks/use-combat-ai-integration';
 import { useGameSession } from '@/hooks/use-game-session';
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import { userDataApi } from '@/services/user-data-api';
-import { checkConcentration } from '@/utils/spell-management';
 
 describe('useCombatActions', () => {
   const mockStartCombat = vi.fn();
@@ -86,7 +81,6 @@ describe('useCombatActions', () => {
       startCombat: mockStartCombat,
       endCombat: mockEndCombat,
       nextTurn: mockNextTurn,
-      rollInitiative: vi.fn(),
       takeAction: mockTakeAction,
       addParticipant: mockAddParticipant,
       updateParticipant: mockUpdateParticipant,
@@ -107,7 +101,6 @@ describe('useCombatActions', () => {
     } as any);
 
     mockValidateCombatAction.mockResolvedValue({ isValid: true, suggestions: [], errors: [] });
-    vi.mocked(checkConcentration).mockReturnValue(true);
   });
 
   it('should initialize with default state', () => {

@@ -266,6 +266,36 @@ describe('useCombatMechanics', () => {
     });
   });
 
+  describe('handleClassFeature with no server intent (#621 B2b step 2)', () => {
+    it('sends nothing for a feature that has no server intent', async () => {
+      vi.mocked(executeAuthoritativeCombatIntent).mockClear();
+      vi.mocked(classFeatures.canUseClassFeature).mockReturnValue(true);
+      const { result } = renderHook(() =>
+        useCombatMechanics({
+          activeEncounter: {
+            id: 'enc-1',
+            participants: [
+              {
+                id: 'p1',
+                name: 'Barbarian',
+                classFeatures: [{ name: 'rage' }],
+                resources: {},
+                isRaging: false,
+              },
+            ],
+            currentTurnParticipantId: 'p1',
+          } as any,
+        }),
+      );
+
+      await act(async () => {
+        await result.current.handleClassFeature('p1', 'rage');
+      });
+
+      expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+    });
+  });
+
   describe('handleDeathSave', () => {
     it('should call the authoritative death_save intent (#261)', async () => {
       const dyingProps = {

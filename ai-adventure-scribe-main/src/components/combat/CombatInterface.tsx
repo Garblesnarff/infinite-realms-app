@@ -81,7 +81,6 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
     handleApplyDamage,
     handleHealing,
     nextTurn,
-    rollInitiative,
     showAdvantageModal: _showAdvantageModal,
     setShowAdvantageModal: _setShowAdvantageModal,
     pendingAttack: _pendingAttack,
@@ -222,12 +221,10 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
                   onCombatAction={handleCombatAction}
                   onNextTurn={nextTurn}
                   onOpenSpellPicker={() => setSpellPickerOpen(true)}
-                  onRollInitiative={rollInitiative}
                   onEnhancedAttack={handleEnhancedAttack}
                   onClassFeatureUse={handleClassFeature}
                   onDeathSave={handleDeathSave}
                   showNextTurnButton={isDM}
-                  showInitiativeRoll={isDM}
                   showControls={isDM}
                   isPlayersTurn={isPlayersTurn}
                 />

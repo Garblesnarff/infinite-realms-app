@@ -30,7 +30,6 @@ interface ActionPanelProps {
   ) => void;
   onNextTurn: () => void;
   onOpenSpellPicker: () => void;
-  onRollInitiative: (participantId: string) => void;
   onEnhancedAttack: (
     participantId: string,
     targetId?: string,
@@ -42,7 +41,6 @@ interface ActionPanelProps {
   onClassFeatureUse: (participantId: string, featureName: string) => void;
   onDeathSave: (participantId: string) => void;
   showNextTurnButton?: boolean;
-  showInitiativeRoll?: boolean;
   /**
    * Shows the action buttons, Next Turn and validation notes. Off unless a game-master surface
    * asks for it: the player view only names whose turn the engine says it is (#2257).
@@ -66,12 +64,10 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
     onCombatAction,
     onNextTurn,
     onOpenSpellPicker,
-    onRollInitiative,
     onEnhancedAttack,
     onClassFeatureUse,
     onDeathSave,
     showNextTurnButton = false,
-    showInitiativeRoll = false,
     showControls = false,
     isPlayersTurn = false,
   }) => {
@@ -166,8 +162,6 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
                 currentParticipant={currentParticipant}
                 selectedEnemyId={selectedEnemyId}
                 onCombatAction={onCombatAction}
-                onRollInitiative={onRollInitiative}
-                showInitiativeRoll={showInitiativeRoll}
                 onEnhancedAttack={onEnhancedAttack}
               />
 

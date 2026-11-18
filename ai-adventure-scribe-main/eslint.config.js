@@ -400,7 +400,6 @@ export default tseslint.config(
       // Top violators requiring refactoring (1000+ lines)
       'src/contexts/GameContext.tsx',
       'src/contexts/CombatContext.tsx',
-      'src/contexts/combat/health-handlers.ts',
       'src/contexts/combat/combat-reducer.ts',
       'src/services/ai-service.ts', // 1142 lines
       'src/services/ai/dm-response-processor.ts',
@@ -550,8 +549,6 @@ export default tseslint.config(
       'src/features/character/hooks/__tests__/use-personality-manager.test.ts',
       'src/services/blog/blog-service.ts',
       'src/hooks/blog/useBlogTaxonomy.ts',
-      'src/utils/stealthUtils.ts',
-      'src/utils/__tests__/stealthUtils.test.ts',
       'src/features/safety/SafetyCommandProcessor.ts',
       'src/components/character-sharing/ShareCharacterDialog.tsx',
       'src/components/character-sharing/SharedCharactersList.tsx',

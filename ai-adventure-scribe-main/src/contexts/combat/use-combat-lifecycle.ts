@@ -10,14 +10,11 @@ import { createCombatParticipant, sortByInitiative } from './participant-factory
 
 import type { ReducerAction } from './combat-reducer';
 import type { Character } from '@/types/character';
-import type { CombatEncounter, CombatParticipant, CombatState } from '@/types/combat';
-
-import { rollDie } from '@/utils/diceRolls';
+import type { CombatEncounter, CombatParticipant } from '@/types/combat';
 
 type Dispatch = (action: ReducerAction) => void;
 
 interface UseCombatLifecycleArgs {
-  state: CombatState;
   dispatch: Dispatch;
   character: Character | null;
 }
@@ -29,11 +26,9 @@ interface UseCombatLifecycleReturn {
   ) => Promise<void>;
   endCombat: () => Promise<void>;
   nextTurn: () => Promise<void>;
-  rollInitiative: (participantId: string) => Promise<number>;
 }
 
 export function useCombatLifecycle({
-  state,
   dispatch,
   character,
 }: UseCombatLifecycleArgs): UseCombatLifecycleReturn {
@@ -82,23 +77,5 @@ export function useCombatLifecycle({
     dispatch({ type: 'NEXT_TURN' });
   }, [dispatch]);
 
-  const rollInitiative = useCallback(
-    async (participantId: string): Promise<number> => {
-      const participant = state.activeEncounter?.participants.find((p) => p.id === participantId);
-      if (!participant) return 0;
-
-      const initiative = rollDie(20) + (participant.initiativeBonus || 0);
-
-      dispatch({
-        type: 'UPDATE_PARTICIPANT',
-        participantId,
-        updates: { initiative },
-      });
-
-      return initiative;
-    },
-    [state.activeEncounter, dispatch],
-  );
-
-  return { startCombat, endCombat, nextTurn, rollInitiative };
+  return { startCombat, endCombat, nextTurn };
 }
