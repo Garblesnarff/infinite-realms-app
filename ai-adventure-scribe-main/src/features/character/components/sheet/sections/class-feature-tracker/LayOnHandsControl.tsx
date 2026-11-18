@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useIsInCombatOptional } from '@/contexts/in-combat-flag';
+import { useSheetHitPointsOptional } from '@/contexts/sheet-hit-points';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
@@ -11,6 +12,19 @@ interface LayOnHandsControlProps {
   characterId: string;
   /** The pool's remaining points, as the sheet shows them. */
   pool: number;
+}
+
+/**
+ * #1643: a refusal the server explained (a 4xx with its reason) shows that reason alone, with no
+ * HTTP status number. Anything else keeps the error's message.
+ */
+function refusalToastText(error: unknown): string {
+  const status = (error as { status?: unknown } | null)?.status;
+  const reason = (error as { payload?: { error?: unknown } } | null)?.payload?.error;
+  if (typeof status === 'number' && status >= 400 && status < 500 && reason) {
+    return String(reason);
+  }
+  return error instanceof Error ? error.message : 'Nothing was spent.';
 }
 
 /**
@@ -23,6 +37,9 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
   const [busy, setBusy] = useState(false);
   // In combat the Lay on Hands is an Action: the sheet control steps aside for the combat chips.
   const inCombat = useIsInCombatOptional();
+  // #1643: at full HP a heal is refused, so Heal self is disabled with the reason beside it.
+  const hitPoints = useSheetHitPointsOptional();
+  const atFullHealth = hitPoints !== null && hitPoints.current >= hitPoints.maximum;
   const parsed = Math.trunc(Number(amount));
   const validAmount = Number.isInteger(parsed) && parsed >= 1 && parsed <= pool;
 
@@ -36,7 +53,7 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
       logger.error('Lay on Hands failed', error);
       toast({
         title: 'Lay on Hands',
-        description: error instanceof Error ? error.message : 'Nothing was spent.',
+        description: refusalToastText(error),
         variant: 'destructive',
       });
     } finally {
@@ -64,10 +81,17 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
           aria-label="Lay on Hands points to spend"
           className="h-8 w-24"
         />
-        <Button size="sm" disabled={busy || !validAmount} onClick={() => run({ amount: parsed })}>
+        <Button
+          size="sm"
+          disabled={busy || !validAmount || atFullHealth}
+          onClick={() => run({ amount: parsed })}
+        >
           Heal self
         </Button>
       </div>
+      {atFullHealth && (
+        <p className="text-xs text-muted-foreground">You are already at full health.</p>
+      )}
       <div className="flex gap-2">
         <Button
           size="sm"
