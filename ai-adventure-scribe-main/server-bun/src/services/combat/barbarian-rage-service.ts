@@ -11,16 +11,11 @@
  */
 import { and, eq } from 'drizzle-orm';
 
-import {
-  claimRage,
-  clearRage,
-  classLevelOfCharacter,
-  isRaging,
-  RAGE_DURATION_ROUNDS,
-} from './combat-turn-flags.js';
+import { claimRage, clearRage, classLevelOfCharacter, isRaging } from './combat-turn-flags.js';
 import { characters } from '../../../../db/schema/index';
 import { familyCountRule } from '../../../../shared/limited-feature-counts';
 import { BusinessLogicError } from '../../lib/errors.js';
+import { logger } from '../../lib/logger.js';
 
 import type { db as DatabaseClient } from '../../../../db/client';
 
@@ -66,9 +61,8 @@ export async function resolveRage(input: {
   userId: string;
   participantId: string;
   encounterId: string;
-  round: number;
 }): Promise<RageResult> {
-  const { characterId, userId, participantId, encounterId, round } = input;
+  const { characterId, userId, participantId, encounterId } = input;
   const db = await database();
   const [owned] = await db
     .select({ id: characters.id })
@@ -83,8 +77,9 @@ export async function resolveRage(input: {
     });
   }
 
-  const claimed = await claimRage(encounterId, participantId);
-  if (!claimed) {
+  // The mark's expiry is computed from the encounter's round in the same statement that writes it.
+  const expiresRound = await claimRage(encounterId, participantId);
+  if (expiresRound === null) {
     throw new BusinessLogicError('Already raging in this fight', {
       reason: 'already_raging',
       featureName: RAGE_NAME,
@@ -108,9 +103,20 @@ export async function resolveRage(input: {
         featureName: RAGE_NAME,
       });
     }
-    return { usesRemaining: spend.usesRemaining, expiresRound: round + RAGE_DURATION_ROUNDS };
+    return { usesRemaining: spend.usesRemaining, expiresRound };
   } catch (error) {
-    await clearRage(encounterId, participantId);
+    // The original refusal or failure is the one the caller sees. A failed cleanup is logged,
+    // because the mark it could not clear is then a stranded Rage until the fight ends.
+    try {
+      await clearRage(encounterId, participantId);
+    } catch (clearError) {
+      logger.error({
+        msg: 'RAGE_CLEAR_FAILED',
+        encounterId,
+        participantId,
+        error: clearError,
+      });
+    }
     throw error;
   }
 }

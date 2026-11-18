@@ -549,7 +549,7 @@ describe('combat-action-executor', () => {
     // shared wire fixture the route-schema test parses (the #2286 pattern): the
     // chip calls with source 'dm' and origin 'typed', and the executor posts the
     // intent versionless — the server fills the version for the DM dialect.
-    it.each(['second_wind', 'action_surge'] as const)(
+    it.each(['second_wind', 'action_surge', 'rage'] as const)(
       'posts exactly the shared fixture body for a clicked %s option',
       async (type) => {
         (globalThis.fetch as any).mockResolvedValue({

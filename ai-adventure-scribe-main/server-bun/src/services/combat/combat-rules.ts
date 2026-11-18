@@ -85,6 +85,8 @@ type AttackResolutionAbility = 'strength' | 'dexterity';
 
 export type AttackRuleResolution = {
   legal: boolean;
+  /** Rage's flat damage in this attack's damage bonus (0 when none). Shown as its own part (#1638). */
+  ragingDamage: number;
   refusal?: 'no_line_of_sight' | 'out_of_range' | 'total_cover';
   ability: AttackResolutionAbility;
   abilityModifier: number;
@@ -164,9 +166,15 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
   const advantage = hasAdvantage && !hasDisadvantage;
   const disadvantage = hasDisadvantage && !hasAdvantage;
   const coverBonus = geometry?.cover === 1 ? 2 : geometry?.cover === 2 ? 5 : 0;
-  const { attackBonus, damageBonus } = styleBonuses(input, modifier, proficiency, ability);
+  const { attackBonus, damageBonus, ragingDamage } = styleBonuses(
+    input,
+    modifier,
+    proficiency,
+    ability,
+  );
 
   return {
+    ragingDamage,
     legal: true,
     ability,
     abilityModifier: modifier,
@@ -190,7 +198,7 @@ function styleBonuses(
   modifier: number,
   proficiency: number,
   ability: AttackResolutionAbility,
-): { attackBonus: number; damageBonus: number } {
+): { attackBonus: number; damageBonus: number; ragingDamage: number } {
   const weapon = input.weapon;
   // Rage: +2 to a melee weapon attack that uses Strength (#1638). Unarmed strikes and monster
   // attacks leave `meleeWeapon` unset, so they get none.
@@ -218,6 +226,7 @@ function styleBonuses(
           otherWeaponWielded: weapon.otherWeaponWielded === true,
         }) +
         ragingBonus,
+    ragingDamage: ragingBonus,
   };
 }
 
@@ -228,8 +237,14 @@ function illegal(
   proficiency: number,
   input: AttackRuleInput,
 ): AttackRuleResolution {
-  const { attackBonus, damageBonus } = styleBonuses(input, modifier, proficiency, ability);
+  const { attackBonus, damageBonus, ragingDamage } = styleBonuses(
+    input,
+    modifier,
+    proficiency,
+    ability,
+  );
   return {
+    ragingDamage,
     legal: false,
     refusal,
     ability,

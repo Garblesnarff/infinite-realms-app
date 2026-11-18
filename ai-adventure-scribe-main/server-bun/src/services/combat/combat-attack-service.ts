@@ -680,7 +680,7 @@ export class CombatAttackService {
       getActiveConditionNames(targetId),
       loadActiveTacticalMap(attackerData.participant.encounter.sessionId),
       isHiddenAttacker(encounterId, attackerId),
-      // Rage belongs to a character only, so a monster or NPC skips the two reads.
+      // Rage belongs to a character, so a participant with no character skips the two reads.
       attackerCharacterId ? isRaging(encounterId, attackerId) : false,
       targetData.participant.characterId ? isRaging(encounterId, targetId) : false,
     ]);
@@ -1027,6 +1027,21 @@ export class CombatAttackService {
           : {}),
       });
 
+      // #1638: Rage's flat +2 is listed as its own part. It takes the weapon's resistances, so the
+      // weapon part and the Rage part are one resisted total split in two; the parts sum to finalDamage.
+      const ragePart =
+        rules.ragingDamage > 0
+          ? calculateDamage({
+              damageDice: '0',
+              damageBonus: 0,
+              damageType: weapon.damageType as DamageType,
+              damageRoll: rules.ragingDamage,
+              resistances: defenses.resistances,
+              vulnerabilities: defenses.vulnerabilities,
+              immunities: defenses.immunities,
+            }).finalDamage
+          : 0;
+
       // #754: Hex adds 1d6 necrotic to a hit on its cursed target, resisted separately.
       const hexDamage = await this.hexRiderDamage(
         attackerData.participant.characterId,
@@ -1156,10 +1171,13 @@ export class CombatAttackService {
           ...(sneak ? { sneakAttackDamage: sneak.damage, sneakAttackDice: sneak.dice } : {}),
           // #1522: the weapon part and the radiant part, each resisted on its own type. The
           // rolled parts are reported as rolled; the per-hit cap can lower finalDamage below them.
-          ...(smiteApplied || sneak
+          ...(smiteApplied || sneak || ragePart > 0
             ? {
                 damageParts: [
-                  { damageType: weapon.damageType, amount: damageCalc.finalDamage },
+                  { damageType: weapon.damageType, amount: damageCalc.finalDamage - ragePart },
+                  ...(ragePart > 0
+                    ? [{ damageType: weapon.damageType, amount: ragePart, source: 'Rage' }]
+                    : []),
                   ...(hexDamage > 0
                     ? [{ damageType: 'necrotic', amount: hexDamage, source: 'Hex' }]
                     : []),

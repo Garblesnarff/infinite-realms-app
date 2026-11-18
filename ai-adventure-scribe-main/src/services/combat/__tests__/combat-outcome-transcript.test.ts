@@ -483,7 +483,7 @@ describe('fighter feature engine lines (#975)', () => {
       { usesRemaining: 1, expiresRound: 11 },
       [],
     );
-    expect(parts[0].line).toContain('rages (1 use(s) left). Rage lasts until round 11.');
+    expect(parts[0].line).toContain('rages (1 use(s) left). Rage lasts through round 10.');
   });
 
   it('Second Wind names the healed amount and the new HP', () => {

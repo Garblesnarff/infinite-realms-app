@@ -36,6 +36,9 @@ const {
   combatTurnFlagsPreservingState,
   RAGE_DURATION_ROUNDS,
 } = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
+const { refillCountedFeatures } = await importWithRealDb(
+  () => import('../progression/limited-feature-uses.js'),
+);
 const { resolveRage, rageIsOffered } = await importWithRealDb(
   () => import('../combat/barbarian-rage-service.js'),
 );
@@ -171,7 +174,7 @@ describeWithDb('Rage in a fight (#1638)', () => {
   };
 
   it('a claim makes the Barbarian raging for ten rounds, from the round it starts in', async () => {
-    expect(await claimRage(encounterId, barbarianId)).toBe(true);
+    expect(await claimRage(encounterId, barbarianId)).toBe(1 + RAGE_DURATION_ROUNDS);
     expect(await isRaging(encounterId, barbarianId)).toBe(true);
     expect(RAGE_DURATION_ROUNDS).toBe(10);
     expect(await storedRage()).toMatchObject({
@@ -182,7 +185,7 @@ describeWithDb('Rage in a fight (#1638)', () => {
   it('a second claim while raging writes nothing, and the first mark stays', async () => {
     await claimRage(encounterId, barbarianId);
     await setRound(4);
-    expect(await claimRage(encounterId, barbarianId)).toBe(false);
+    expect(await claimRage(encounterId, barbarianId)).toBeNull();
     expect(await storedRage()).toMatchObject({
       [barbarianId]: { encounterId, expiresRound: 1 + RAGE_DURATION_ROUNDS },
     });
@@ -195,7 +198,7 @@ describeWithDb('Rage in a fight (#1638)', () => {
     await setRound(11);
     expect(await isRaging(encounterId, barbarianId)).toBe(false);
     // An expired mark can be claimed again.
-    expect(await claimRage(encounterId, barbarianId)).toBe(true);
+    expect(await claimRage(encounterId, barbarianId)).toBe(11 + RAGE_DURATION_ROUNDS);
   });
 
   it('the end of the fight clears the raging mark of that fight', async () => {
@@ -265,14 +268,13 @@ describeWithDb('Rage in a fight (#1638)', () => {
       userId,
       participantId: barbarianId,
       encounterId,
-      round: 1,
     });
     expect(first).toEqual({ usesRemaining: 1, expiresRound: 1 + RAGE_DURATION_ROUNDS });
     expect(await isRaging(encounterId, barbarianId)).toBe(true);
 
     // Still raging: a second activation is refused and spends nothing.
     await expect(
-      resolveRage({ characterId, userId, participantId: barbarianId, encounterId, round: 1 }),
+      resolveRage({ characterId, userId, participantId: barbarianId, encounterId }),
     ).rejects.toThrow(/Already raging/);
     const [row] = await db
       .select({ uses: characterFeatures.usesRemaining })
@@ -284,5 +286,30 @@ describeWithDb('Rage in a fight (#1638)', () => {
         ),
       );
     expect(row.uses).toBe(1);
+  });
+  it('a long rest refills the Rage uses, and a short rest does not (#1638)', async () => {
+    const ragesLeft = async (): Promise<number> => {
+      const [row] = await db
+        .select({ uses: characterFeatures.usesRemaining })
+        .from(characterFeatures)
+        .where(
+          and(
+            eq(characterFeatures.characterId, characterId),
+            eq(characterFeatures.featureId, featureId),
+          ),
+        );
+      return row.uses ?? -1;
+    };
+    await db
+      .update(characterFeatures)
+      .set({ usesRemaining: 0 })
+      .where(eq(characterFeatures.characterId, characterId));
+
+    await refillCountedFeatures(characterId, userId, 'short');
+    expect(await ragesLeft()).toBe(0);
+
+    // Level 3 Barbarian: three Rage uses (PHB table, rageUsesAt).
+    await refillCountedFeatures(characterId, userId, 'long');
+    expect(await ragesLeft()).toBe(3);
   });
 });

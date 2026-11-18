@@ -180,9 +180,13 @@ export async function clearSneakAttackSpent(
 /**
  * Claim Rage for this participant in this encounter, in one guarded UPDATE. The statement writes
  * only when there is no live Rage: the stored entry belongs to another encounter, or its round has
- * passed. It reports whether it wrote, so a second activation while raging writes nothing.
+ * passed. It returns the round the new mark expires at, or null when nothing was written, so a
+ * second activation while raging writes nothing.
  */
-export async function claimRage(encounterId: string, participantId: string): Promise<boolean> {
+export async function claimRage(
+  encounterId: string,
+  participantId: string,
+): Promise<number | null> {
   const db = await database();
   const round = roundOfEncounter(encounterId);
   const storedEntry = sql`(${gameSessions.sessionState} -> ${RAGE_KEY} -> ${participantId})`;
@@ -205,8 +209,12 @@ export async function claimRage(encounterId: string, participantId: string): Pro
           OR (${storedEntry} ->> 'expiresRound')::int <= ${round}`,
       ),
     )
-    .returning({ id: gameSessions.id });
-  return claimed.length > 0;
+    .returning({ state: gameSessions.sessionState });
+  // The expiry round the stored mark carries, read back from the row this claim wrote.
+  const entry = flagEntry(claimed[0]?.state ?? null, RAGE_KEY, participantId);
+  return entry?.encounterId === encounterId && typeof entry.expiresRound === 'number'
+    ? entry.expiresRound
+    : null;
 }
 
 /** Whether this participant is raging in this encounter at the current round. */

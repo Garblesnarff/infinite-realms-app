@@ -474,7 +474,8 @@ export function formatCombatActionParts(
     const usesLeft = isFiniteNumber(value.usesRemaining)
       ? ` (${value.usesRemaining} use(s) left)`
       : '';
-    const line = `⚙️ Engine: ${actor} rages${usesLeft}. Rage lasts until round ${value.expiresRound}.`;
+    // The mark expires at the start of its round, so the last raging round is one before it.
+    const line = `⚙️ Engine: ${actor} rages${usesLeft}. Rage lasts through round ${value.expiresRound - 1}.`;
     return [
       {
         line,
