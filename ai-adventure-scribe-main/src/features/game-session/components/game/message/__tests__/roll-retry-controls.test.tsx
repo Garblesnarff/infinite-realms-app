@@ -55,7 +55,6 @@ vi.mock('@/contexts/CombatContext', () => ({
   useCombat: () => ({
     state: { isInCombat: false, activeEncounter: null },
     refreshCombatState: vi.fn(),
-    dealDamage: vi.fn(),
   }),
 }));
 vi.mock('@/contexts/CharacterContext', () => ({

@@ -37,23 +37,9 @@ export const StandardActionsSection: React.FC<StandardActionsSectionProps> = Rea
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onCombatAction('help', currentParticipant.id)}
-        >
-          Help
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
           onClick={() => onCombatAction('hide', currentParticipant.id)}
         >
           Hide
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onCombatAction('ready', currentParticipant.id)}
-        >
-          Ready Action
         </Button>
       </div>
     );

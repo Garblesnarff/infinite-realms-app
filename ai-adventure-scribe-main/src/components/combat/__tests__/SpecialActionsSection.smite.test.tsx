@@ -33,7 +33,6 @@ const renderSection = (participant: Participant, onEnhancedAttack = vi.fn()) => 
       selectedEnemyId="orc-1"
       onCombatAction={vi.fn()}
       onRollInitiative={vi.fn()}
-      onTwoWeaponAttack={vi.fn()}
       onEnhancedAttack={onEnhancedAttack}
     />,
   );

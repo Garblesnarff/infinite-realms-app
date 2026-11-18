@@ -70,12 +70,7 @@ const renderActions = () =>
   renderHook(() =>
     useCombatActionHandlers({
       activeEncounter: b2bEncounter as any,
-      takeAction: vi.fn().mockResolvedValue(undefined),
-      updateParticipant: vi.fn().mockResolvedValue(undefined),
       nextTurn: vi.fn().mockResolvedValue(undefined),
-      validateCombatAction: vi
-        .fn()
-        .mockResolvedValue({ isValid: true, suggestions: [], errors: [] }),
       selectedEnemy: B2B_ENEMY_ID,
     }),
   );
@@ -101,9 +96,6 @@ const renderMechanics = (classFeatures: Array<{ name: string }>) =>
         ],
         currentTurnParticipantId: B2B_PLAYER_ID,
       } as any,
-      handleCombatAction: vi.fn().mockResolvedValue(undefined),
-      takeAction: vi.fn().mockResolvedValue(undefined),
-      selectedEnemy: B2B_ENEMY_ID,
     }),
   );
 

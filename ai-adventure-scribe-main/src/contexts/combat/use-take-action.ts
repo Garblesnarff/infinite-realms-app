@@ -12,7 +12,6 @@ import type { ReducerAction } from './combat-reducer';
 import type {
   CombatAction as CombatActionType,
   CombatState,
-  DamageType,
   ReactionOpportunity,
 } from '@/types/combat';
 
@@ -23,7 +22,6 @@ type Dispatch = (action: ReducerAction) => void;
 interface UseTakeActionArgs {
   state: CombatState;
   dispatch: Dispatch;
-  dealDamage: (participantId: string, damage: number, damageType?: DamageType) => Promise<void>;
   addReactionOpportunity: (opportunity: ReactionOpportunity) => void;
   addParticipantReactionOpportunity: (
     participantId: string,
@@ -34,7 +32,6 @@ interface UseTakeActionArgs {
 export function useTakeAction({
   state,
   dispatch,
-  dealDamage,
   addReactionOpportunity,
   addParticipantReactionOpportunity,
 }: UseTakeActionArgs): (action: Partial<CombatActionType>) => Promise<void> {
@@ -110,13 +107,8 @@ export function useTakeAction({
           addParticipantReactionOpportunity(opportunity.participantId, opportunity);
         });
       }
-
-      // Apply damage if any
-      if (action.damageDealt && action.targetParticipantId) {
-        await dealDamage(action.targetParticipantId, action.damageDealt, action.damageType);
-      }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- pre-existing dep list preserved verbatim (dealDamage/dispatch intentionally omitted; dispatch is stable, dealDamage is a stable extracted handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dispatch is stable and intentionally omitted
     [state.activeEncounter, addReactionOpportunity, addParticipantReactionOpportunity],
   );
 }

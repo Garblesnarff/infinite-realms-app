@@ -222,7 +222,6 @@ export interface CombatContextValue {
 
   // Actions
   takeAction: (action: Partial<CombatAction>) => Promise<void>;
-  dealDamage: (participantId: string, damage: number, damageType?: DamageType) => Promise<void>;
 
   // Participants
   addParticipant: (participant: Partial<CombatParticipant>) => Promise<void>;

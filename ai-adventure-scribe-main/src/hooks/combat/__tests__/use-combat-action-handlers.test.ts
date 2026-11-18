@@ -16,13 +16,11 @@ import {
 } from '../../../../shared/test-fixtures/combat-b2b-intent-bodies';
 import { useCombatActionHandlers } from '../use-combat-action-handlers';
 
-
 import type { MonsterAttack } from '@/types/combat';
 
 import logger from '@/lib/logger';
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import { userDataApi } from '@/services/user-data-api';
-import { processReactionResponse } from '@/utils/reactionSystem';
 
 vi.mock('@/lib/logger', () => ({
   default: {
@@ -35,10 +33,6 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/services/combat/combat-action-executor', () => ({
   executeAuthoritativeCombatIntent: vi.fn().mockResolvedValue(undefined),
-}));
-
-vi.mock('@/utils/reactionSystem', () => ({
-  processReactionResponse: vi.fn(),
 }));
 
 vi.mock('@/services/user-data-api', () => ({
@@ -123,53 +117,6 @@ describe('useCombatActionHandlers', () => {
         await result.current.handleCombatAction('attack', 'non-existent');
       });
       expect(mockValidateCombatAction).not.toHaveBeenCalled();
-    });
-
-    it('should execute action if validation passes', async () => {
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'e1');
-      });
-
-      expect(mockValidateCombatAction).toHaveBeenCalled();
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          participantId: 'p1',
-          targetParticipantId: 'e1',
-          actionType: 'attack',
-        }),
-      );
-      expect(result.current.actionValidation).toBeNull(); // Reset after success
-    });
-
-    it('should not execute action if validation fails', async () => {
-      mockValidateCombatAction.mockResolvedValueOnce({
-        isValid: false,
-        suggestions: ['Try something else'],
-        errors: ['Too far away'],
-      });
-
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'e1');
-      });
-
-      expect(mockValidateCombatAction).toHaveBeenCalled();
-      expect(mockTakeAction).not.toHaveBeenCalled();
-      expect(result.current.actionValidation?.isValid).toBe(false);
-      expect(logger.warn).toHaveBeenCalled();
-    });
-
-    it('should proceed with action if validation throws', async () => {
-      mockValidateCombatAction.mockRejectedValueOnce(new Error('Validation failed'));
-
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'e1');
-      });
-
-      expect(logger.error).toHaveBeenCalled();
-      expect(mockTakeAction).toHaveBeenCalled();
     });
   });
 
@@ -382,58 +329,13 @@ describe('useCombatActionHandlers', () => {
         expect(mockUpdateParticipant).not.toHaveBeenCalled();
       });
 
-      it('keeps grapple with no target on the local path, which sends nothing to the server', async () => {
+      it('sends nothing to the server for grapple with no target', async () => {
         const { result } = setupHook(b2bProps);
         await act(async () => {
           await result.current.handleCombatAction('grapple', B2B_PLAYER_ID);
         });
         expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
       });
-    });
-  });
-
-  describe('handleReactionOpportunity', () => {
-    it('should do nothing if no active encounter', async () => {
-      const { result } = setupHook({ ...defaultProps, activeEncounter: null });
-      await act(async () => {
-        await result.current.handleReactionOpportunity({ id: 'opp-1' } as any, 'attack');
-      });
-      expect(mockTakeAction).not.toHaveBeenCalled();
-    });
-
-    it('should process reaction and update participant', async () => {
-      const opportunity = { id: 'opp-1', participantId: 'p1', trigger: 'Opportunity Attack' };
-      const reactionAction = { actionType: 'attack', participantId: 'p1' };
-      (processReactionResponse as any).mockReturnValue(reactionAction);
-
-      const { result } = setupHook();
-
-      // Manually add opportunity to state for testing removal
-      act(() => {
-        result.current.setReactionOpportunities([opportunity as any]);
-      });
-
-      await act(async () => {
-        await result.current.handleReactionOpportunity(opportunity as any, 'attack');
-      });
-
-      expect(processReactionResponse).toHaveBeenCalled();
-      expect(mockTakeAction).toHaveBeenCalledWith(reactionAction);
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', { reactionTaken: true });
-      expect(result.current.reactionOpportunities).toEqual([]);
-    });
-
-    it('should handle errors in reaction processing', async () => {
-      (processReactionResponse as any).mockImplementation(() => {
-        throw new Error('Processing failed');
-      });
-
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleReactionOpportunity({ id: 'opp-1' } as any, 'attack');
-      });
-
-      expect(logger.error).toHaveBeenCalled();
     });
   });
 
