@@ -517,7 +517,7 @@ describe('combat-action-executor', () => {
     // (previously the catch-all refused them as "not supported yet"). DM-sourced
     // intents post without a version, like dash — the DM dialect leaves it optional
     // and the server fills it from the encounter.
-    it.each(['second_wind', 'action_surge'] as const)(
+    it.each(['second_wind', 'action_surge', 'rage'] as const)(
       'dispatches a declared %s to its intent',
       async (type) => {
         const action = {

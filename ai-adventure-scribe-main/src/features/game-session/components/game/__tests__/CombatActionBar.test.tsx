@@ -473,6 +473,8 @@ describe('CombatActionBar', () => {
         yield: yieldAction,
         use_item: useItemAction,
         death_save: { type: 'death_save', label: 'Death saving throw' },
+        // #1638: Rage, a Barbarian's bonus action, rides the More menu.
+        rage: { type: 'rage', label: 'Rage' },
       };
       expect(Object.keys(oneOfEach).sort()).toEqual(Object.keys(LEGAL_ACTION_PLACEMENT).sort());
       const user = userEvent.setup();

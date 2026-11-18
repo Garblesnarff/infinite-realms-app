@@ -468,6 +468,26 @@ export function formatCombatActionParts(
     }
   }
 
+  // #1638: Rage names the uses left and the round it ends at, both engine numbers.
+  if (action.action_type === 'rage' && isFiniteNumber(value.expiresRound)) {
+    const actor = facingName(undefined, action.actor_id, roster);
+    const usesLeft = isFiniteNumber(value.usesRemaining)
+      ? ` (${value.usesRemaining} use(s) left)`
+      : '';
+    const line = `⚙️ Engine: ${actor} rages${usesLeft}. Rage lasts until round ${value.expiresRound}.`;
+    return [
+      {
+        line,
+        card: {
+          kind: 'move',
+          side: engineCardSide(action.actor_id, roster, false),
+          line,
+          title: `${actor} rages`,
+        },
+      },
+    ];
+  }
+
   // #975: the Fighter features carry their numbers in the result, so their engine
   // lines name them (the heal and the new HP; the extra action) instead of the bare
   // verb the map below gives the resource-free actions.

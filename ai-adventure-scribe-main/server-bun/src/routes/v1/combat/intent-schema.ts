@@ -134,7 +134,13 @@ const checkFields = {
  * they are versioned like the other mutating intents.
  */
 const fighterFeatureFields = {
-  type: t.Union([t.Literal('second_wind'), t.Literal('action_surge'), t.Literal('divine_sense')]),
+  type: t.Union([
+    t.Literal('second_wind'),
+    t.Literal('action_surge'),
+    t.Literal('divine_sense'),
+    /** #1638: Rage, a Barbarian's bonus action. */
+    t.Literal('rage'),
+  ]),
   actorId: participantId,
   actionId,
 };

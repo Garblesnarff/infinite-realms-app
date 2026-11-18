@@ -50,7 +50,8 @@ export interface StructuredCombatAction {
      */
     | 'second_wind'
     | 'action_surge'
-    | 'divine_sense';
+    | 'divine_sense'
+    | 'rage';
   target_ids: string[];
   weapon_id: string | null;
   spell_id: string | null;
@@ -119,7 +120,7 @@ export type ClientCombatIntent =
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion?: number }
   /** #975: the Fighter's short-rest features; the server spends the tracked use. */
   | {
-      type: 'second_wind' | 'action_surge' | 'divine_sense';
+      type: 'second_wind' | 'action_surge' | 'divine_sense' | 'rage';
       actorId: string;
       expectedVersion?: number;
     }
@@ -189,6 +190,7 @@ const INTENT_TYPES_REQUIRING_VERSION = new Set([
   'second_wind',
   'action_surge',
   'divine_sense',
+  'rage',
   'use_item',
   'flexible_casting',
   'lay_on_hands',
@@ -459,7 +461,7 @@ export async function executeStructuredCombatActionWithBoundary(
       playerInput,
     );
   } else if (
-    ['dash', 'dodge', 'disengage', 'second_wind', 'action_surge', 'divine_sense'].includes(
+    ['dash', 'dodge', 'disengage', 'second_wind', 'action_surge', 'divine_sense', 'rage'].includes(
       action.action_type,
     )
   ) {
@@ -474,7 +476,8 @@ export async function executeStructuredCombatActionWithBoundary(
           | 'disengage'
           | 'second_wind'
           | 'action_surge'
-          | 'divine_sense',
+          | 'divine_sense'
+          | 'rage',
         actorId: action.actor_id,
       },
       'dm',

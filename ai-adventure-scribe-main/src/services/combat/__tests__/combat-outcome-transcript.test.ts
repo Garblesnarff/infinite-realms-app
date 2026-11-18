@@ -477,6 +477,15 @@ describe('why a hit is critical (#2640)', () => {
 });
 
 describe('fighter feature engine lines (#975)', () => {
+  it('Rage names the uses left and the round it lasts until (#1638)', () => {
+    const parts = formatCombatActionParts(
+      { actor_id: 'ghorza', action_type: 'rage', target_ids: [] },
+      { usesRemaining: 1, expiresRound: 11 },
+      [],
+    );
+    expect(parts[0].line).toContain('rages (1 use(s) left). Rage lasts until round 11.');
+  });
+
   it('Second Wind names the healed amount and the new HP', () => {
     const parts = formatCombatActionParts(
       { actor_id: 'ghorza', action_type: 'second_wind', target_ids: [] },

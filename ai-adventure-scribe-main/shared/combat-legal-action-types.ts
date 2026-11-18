@@ -13,6 +13,8 @@ export const LEGAL_ACTION_TYPES = [
   'second_wind',
   'action_surge',
   'divine_sense',
+  /** #1638: Rage, a Barbarian's bonus action: 10 rounds of +2 melee damage and b/p/s resistance. */
+  'rage',
   /** #1554: Lay on Hands, an Action: heal self or an adjacent ally from the pool, or cure 5 points. */
   'lay_on_hands',
   'divine_smite',

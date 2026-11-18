@@ -77,12 +77,16 @@ export type AttackRuleInput = {
   targetConditions?: string[];
   /** The attacker's stored fighting styles. Absent for a monster, whose bonus is already fixed. */
   fightingStyles?: unknown;
+  /** Rage's damage bonus while the attacker rages (#1638), from its Barbarian level. 0 or absent when not raging. */
+  ragingDamageBonus?: number;
 };
+
+type AttackResolutionAbility = 'strength' | 'dexterity';
 
 export type AttackRuleResolution = {
   legal: boolean;
   refusal?: 'no_line_of_sight' | 'out_of_range' | 'total_cover';
-  ability: 'strength' | 'dexterity';
+  ability: AttackResolutionAbility;
   abilityModifier: number;
   proficiencyBonus: number;
   attackBonus: number;
@@ -160,7 +164,7 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
   const advantage = hasAdvantage && !hasDisadvantage;
   const disadvantage = hasDisadvantage && !hasAdvantage;
   const coverBonus = geometry?.cover === 1 ? 2 : geometry?.cover === 2 ? 5 : 0;
-  const { attackBonus, damageBonus } = styleBonuses(input, modifier, proficiency);
+  const { attackBonus, damageBonus } = styleBonuses(input, modifier, proficiency, ability);
 
   return {
     legal: true,
@@ -185,8 +189,18 @@ function styleBonuses(
   input: AttackRuleInput,
   modifier: number,
   proficiency: number,
+  ability: AttackResolutionAbility,
 ): { attackBonus: number; damageBonus: number } {
   const weapon = input.weapon;
+  // Rage: +2 to a melee weapon attack that uses Strength (#1638). Unarmed strikes and monster
+  // attacks leave `meleeWeapon` unset, so they get none.
+  const ragingBonus =
+    (input.ragingDamageBonus ?? 0) > 0 &&
+    weapon.meleeWeapon === true &&
+    !weapon.ranged &&
+    ability === 'strength'
+      ? (input.ragingDamageBonus ?? 0)
+      : 0;
   return {
     attackBonus:
       weapon.fixedAttackBonus ??
@@ -202,7 +216,8 @@ function styleBonuses(
           meleeWeapon: weapon.meleeWeapon === true,
           twoHanded: weapon.twoHanded === true,
           otherWeaponWielded: weapon.otherWeaponWielded === true,
-        }),
+        }) +
+        ragingBonus,
   };
 }
 
@@ -213,7 +228,7 @@ function illegal(
   proficiency: number,
   input: AttackRuleInput,
 ): AttackRuleResolution {
-  const { attackBonus, damageBonus } = styleBonuses(input, modifier, proficiency);
+  const { attackBonus, damageBonus } = styleBonuses(input, modifier, proficiency, ability);
   return {
     legal: false,
     refusal,
