@@ -6,7 +6,6 @@ import { continueNarrativeWithNPCRolls, formatNPCRollsSystemMessage } from '../n
 
 import { AIService } from '@/services/ai-service';
 
-
 vi.mock('@/services/ai-service', () => ({
   AIService: {
     chatWithDM: vi.fn(),
@@ -48,103 +47,109 @@ describe('NPCRollHandler', () => {
             purpose: 'attacks the Fighter',
             type: 'attack',
             formula: '1d20+4',
-            ac: 15
+            ac: 15,
           },
           result: {
             total: 18,
             naturalRoll: 14,
             rolls: [{ dice: 20, value: 14 }],
-            critical: false
-          }
-        }
+            critical: false,
+          },
+        },
       ];
 
-      (AIService.chatWithDM as any).mockResolvedValue({ text: 'The goblin swings and hits the fighter.' });
+      (AIService.chatWithDM as any).mockResolvedValue({
+        text: 'The goblin swings and hits the fighter.',
+      });
 
       const result = await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
 
       expect(result.success).toBe(true);
       expect(result.narrative).toBe('The goblin swings and hits the fighter.');
-      expect(AIService.chatWithDM).toHaveBeenCalledWith(expect.objectContaining({
-        message: expect.stringContaining('**Goblin** attacks the Fighter:'),
-        context: expect.objectContaining({
-          ...mockAiContext,
-          systemInstruction: 'NPC_ROLL_CONTINUATION',
-          npcRollResults: expect.arrayContaining([
-            expect.objectContaining({
-              actor: 'Goblin',
-              hitOrMiss: 'HIT'
-            })
-           ])
-         })
-       }));
+      expect(AIService.chatWithDM).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('**Goblin** attacks the Fighter:'),
+          context: expect.objectContaining({
+            ...mockAiContext,
+            systemInstruction: 'NPC_ROLL_CONTINUATION',
+            npcRollResults: expect.arrayContaining([
+              expect.objectContaining({
+                actor: 'Goblin',
+                hitOrMiss: 'HIT',
+              }),
+            ]),
+          }),
+        }),
+      );
     });
 
-     it('keeps memory off for a roll continuation and sends no ignored fields (#545)', async () => {
-       const rolls: any[] = [
-         {
-           request: {
-             actorName: 'Goblin',
-             purpose: 'attacks the Fighter',
-             type: 'attack',
-             formula: '1d20+4',
-             ac: 15
-           },
-           result: {
-             total: 18,
-             naturalRoll: 14,
-             rolls: [{ dice: 20, value: 14 }],
-             critical: false
-           }
-         }
-       ];
+    it('keeps memory off for a roll continuation and sends no ignored fields (#545)', async () => {
+      const rolls: any[] = [
+        {
+          request: {
+            actorName: 'Goblin',
+            purpose: 'attacks the Fighter',
+            type: 'attack',
+            formula: '1d20+4',
+            ac: 15,
+          },
+          result: {
+            total: 18,
+            naturalRoll: 14,
+            rolls: [{ dice: 20, value: 14 }],
+            critical: false,
+          },
+        },
+      ];
 
-       (AIService.chatWithDM as any).mockResolvedValue({ text: 'ok' });
+      (AIService.chatWithDM as any).mockResolvedValue({ text: 'ok' });
 
-       await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
+      await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
 
-       const call = (AIService.chatWithDM as any).mock.calls[0][0];
-       expect(call.relevantMemories).toEqual([]);
-       expect(call).not.toHaveProperty('sessionId');
-       expect(call).not.toHaveProperty('options');
-     });
+      const call = (AIService.chatWithDM as any).mock.calls[0][0];
+      expect(call.relevantMemories).toEqual([]);
+      expect(call).not.toHaveProperty('sessionId');
+      expect(call).not.toHaveProperty('options');
+    });
 
-     it('ignores a legacy result.response field (AIResponse has no such field)', async () => {
-       const rolls: any[] = [
-         {
-           request: { purpose: 'test', type: 'check' },
-           result: { total: 10, rolls: [] }
-         }
-       ];
+    it('ignores a legacy result.response field (AIResponse has no such field)', async () => {
+      const rolls: any[] = [
+        {
+          request: { purpose: 'test', type: 'check' },
+          result: { total: 10, rolls: [] },
+        },
+      ];
 
-       (AIService.chatWithDM as any).mockResolvedValue({ response: 'Response text' });
+      (AIService.chatWithDM as any).mockResolvedValue({ response: 'Response text' });
 
-       const result = await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
-       expect(result.narrative).toBe('');
-     });
+      const result = await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
+      expect(result.narrative).toBe('');
+    });
 
     it('should handle missing actor name and natural roll in prompt generation', async () => {
       const rolls: any[] = [
         {
           request: {
             purpose: 'mysterious action',
-            type: 'check'
+            type: 'check',
           },
           result: {
             total: 15,
             rolls: [{ dice: 20, value: 15 }],
-            critical: false
-          }
-        }
+            critical: false,
+          },
+        },
       ];
 
       (AIService.chatWithDM as any).mockResolvedValue({ text: 'Something happens.' });
 
       await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
 
-      expect(AIService.chatWithDM).toHaveBeenCalledWith(expect.objectContaining({
-        message: expect.stringContaining('**NPC** mysterious action:')
-      }));
+      expect(AIService.chatWithDM).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('**NPC** mysterious action:'),
+        }),
+      );
     });
 
     it('should handle critical hits in prompt generation', async () => {
@@ -155,24 +160,26 @@ describe('NPCRollHandler', () => {
             purpose: 'greataxe attack',
             type: 'attack',
             formula: '1d20+5',
-            ac: 10
+            ac: 10,
           },
           result: {
             total: 25,
             naturalRoll: 20,
             rolls: [{ dice: 20, value: 20 }],
-            critical: true
-          }
-        }
+            critical: true,
+          },
+        },
       ];
 
       (AIService.chatWithDM as any).mockResolvedValue({ text: 'Critical hit!' });
 
       await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
 
-      expect(AIService.chatWithDM).toHaveBeenCalledWith(expect.objectContaining({
-        message: expect.stringContaining('**CRITICAL!**')
-      }));
+      expect(AIService.chatWithDM).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('**CRITICAL!**'),
+        }),
+      );
     });
 
     it('should handle saves and checks with DC', async () => {
@@ -183,24 +190,26 @@ describe('NPCRollHandler', () => {
             purpose: 'Fireball Save',
             type: 'save',
             formula: '1d20+2',
-            dc: 15
+            dc: 15,
           },
           result: {
             total: 12,
             naturalRoll: 10,
             rolls: [{ dice: 20, value: 10 }],
-            critical: false
-          }
-        }
+            critical: false,
+          },
+        },
       ];
 
       (AIService.chatWithDM as any).mockResolvedValue({ text: 'The mage fails to dodge.' });
 
       await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
 
-      expect(AIService.chatWithDM).toHaveBeenCalledWith(expect.objectContaining({
-        message: expect.stringContaining('vs DC 15: **FAIL**')
-      }));
+      expect(AIService.chatWithDM).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('vs DC 15: **FAIL**'),
+        }),
+      );
     });
 
     it('should return fallback narrative when AIService fails', async () => {
@@ -210,46 +219,46 @@ describe('NPCRollHandler', () => {
             actorName: 'Goblin',
             purpose: 'attack',
             type: 'attack',
-            ac: 15
+            ac: 15,
           },
           result: {
             total: 18,
-            rolls: []
-          }
+            rolls: [],
+          },
         },
         {
           request: {
             actorName: 'Skeleton',
             purpose: 'attack',
             type: 'attack',
-            ac: 15
+            ac: 15,
           },
           result: {
             total: 10,
-            rolls: []
-          }
+            rolls: [],
+          },
         },
         {
           request: {
             actorName: 'Boss',
             purpose: 'smash',
-            type: 'damage'
+            type: 'damage',
           },
           result: {
             total: 10,
-            rolls: []
-          }
+            rolls: [],
+          },
         },
         {
           request: {
             purpose: 'generic action',
-            type: 'check'
+            type: 'check',
           },
           result: {
             total: 12,
-            rolls: []
-          }
-        }
+            rolls: [],
+          },
+        },
       ];
 
       (AIService.chatWithDM as any).mockRejectedValue(new Error('AI error'));
@@ -268,8 +277,8 @@ describe('NPCRollHandler', () => {
       const rolls: any[] = [
         {
           request: { purpose: 'test', type: 'check' },
-          result: { total: 10, rolls: [] }
-        }
+          result: { total: 10, rolls: [] },
+        },
       ];
       (AIService.chatWithDM as any).mockRejectedValue('String error');
       const result = await continueNarrativeWithNPCRolls(rolls, mockAiContext, sessionId);
@@ -291,14 +300,14 @@ describe('NPCRollHandler', () => {
             actorName: 'Goblin',
             purpose: 'attack',
             type: 'attack',
-            ac: 15
+            ac: 15,
           },
           result: {
             total: 18,
             naturalRoll: 14,
-            critical: false
-          }
-        }
+            critical: false,
+          },
+        },
       ];
 
       const result = formatNPCRollsSystemMessage(rolls);
@@ -313,14 +322,14 @@ describe('NPCRollHandler', () => {
             actorName: 'Goblin',
             purpose: 'attack',
             type: 'attack',
-            ac: 15
+            ac: 15,
           },
           result: {
             total: 12,
             naturalRoll: 8,
-            critical: false
-          }
-        }
+            critical: false,
+          },
+        },
       ];
 
       const result = formatNPCRollsSystemMessage(rolls);
@@ -334,26 +343,26 @@ describe('NPCRollHandler', () => {
           request: {
             actorName: 'Orc',
             purpose: 'attack',
-            type: 'attack'
+            type: 'attack',
           },
           result: {
             total: 25,
             naturalRoll: 20,
-            critical: true
-          }
+            critical: true,
+          },
         },
         {
           request: {
             actorName: 'Kobold',
             purpose: 'attack',
-            type: 'attack'
+            type: 'attack',
           },
           result: {
             total: 2,
             naturalRoll: 1,
-            critical: false
-          }
-        }
+            critical: false,
+          },
+        },
       ];
 
       const result = formatNPCRollsSystemMessage(rolls);
@@ -367,22 +376,22 @@ describe('NPCRollHandler', () => {
           request: {
             actorName: 'Trap',
             purpose: 'Poison',
-            dc: 14
+            dc: 14,
           },
           result: {
-            total: 15
-          }
+            total: 15,
+          },
         },
         {
           request: {
             actorName: 'Door',
             purpose: 'Lock',
-            dc: 20
+            dc: 20,
           },
           result: {
-            total: 5
-          }
-        }
+            total: 5,
+          },
+        },
       ];
 
       const result = formatNPCRollsSystemMessage(rolls);
@@ -394,8 +403,8 @@ describe('NPCRollHandler', () => {
       const rolls: any[] = [
         {
           request: { purpose: 'generic', type: 'check' },
-          result: { total: 10 }
-        }
+          result: { total: 10 },
+        },
       ];
       const result = formatNPCRollsSystemMessage(rolls);
       expect(result).toContain('**NPC** generic: 10');
