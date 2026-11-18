@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.52.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.51.0...v0.52.0) (2026-11-18)
+
+
+### Features
+
+* **dm:** report a dead NPC narrated as acting, shadow first ([#1595](https://github.com/Garblesnarff/infinite-realms-app/issues/1595)) ([3af7319](https://github.com/Garblesnarff/infinite-realms-app/commit/3af73198309e782c820db60f478b9d86710f2027))
+* **explore:** the public Explore page uses the board card ([#1610](https://github.com/Garblesnarff/infinite-realms-app/issues/1610)) ([08bd2fd](https://github.com/Garblesnarff/infinite-realms-app/commit/08bd2fd2cdfd562a269c5b841da880a613e345ce))
+* **rogue:** Sneak Attack, and advantage from a successful Hide ([#1637](https://github.com/Garblesnarff/infinite-realms-app/issues/1637)) ([48e5c85](https://github.com/Garblesnarff/infinite-realms-app/commit/48e5c85cc6171e1d7d3739b3f401a81b357cb9fe))
+
+
+### Bug Fixes
+
+* **campaign-page:** build the page title as one string ([#1605](https://github.com/Garblesnarff/infinite-realms-app/issues/1605)) ([914afa9](https://github.com/Garblesnarff/infinite-realms-app/commit/914afa9eb10307a58f985832b6ed693bb3360e0d)), closes [#1103](https://github.com/Garblesnarff/infinite-realms-app/issues/1103)
+* **chronicle:** keep the campaign card title inside the card without a cover ([#1607](https://github.com/Garblesnarff/infinite-realms-app/issues/1607)) ([529f37b](https://github.com/Garblesnarff/infinite-realms-app/commit/529f37b65cfbc4fe6af67f26e037299973d3a1f3))
+* **combat:** a rest request in a fight is refused before the model call ([#614](https://github.com/Garblesnarff/infinite-realms-app/issues/614)) ([ccf1981](https://github.com/Garblesnarff/infinite-realms-app/commit/ccf1981977f95c92786d6f478a231016d2174c2a))
+* **combat:** the unsupported-action notice is an engine line, not story text ([#1640](https://github.com/Garblesnarff/infinite-realms-app/issues/1640)) ([462d186](https://github.com/Garblesnarff/infinite-realms-app/commit/462d1866fc58ffb7ac12130edbdd7d6debb191a0))
+* **dice:** target-number setting on the remaining roll surfaces ([#157](https://github.com/Garblesnarff/infinite-realms-app/issues/157)) ([bde3846](https://github.com/Garblesnarff/infinite-realms-app/commit/bde38462fcb7e8cf96bfc91f2ba0f9cf7dddab96))
+* **landing:** download only the hero picture shown at the current width ([#1432](https://github.com/Garblesnarff/infinite-realms-app/issues/1432)) ([55f323c](https://github.com/Garblesnarff/infinite-realms-app/commit/55f323c374347c533079a283d731f74ba8ec8981))
+* **turn-bar:** keep the Unconscious badge inside its pip chip at 390 ([#1606](https://github.com/Garblesnarff/infinite-realms-app/issues/1606)) ([7077db1](https://github.com/Garblesnarff/infinite-realms-app/commit/7077db1439505ea7162bc360d7522d740b603048)), closes [#1103](https://github.com/Garblesnarff/infinite-realms-app/issues/1103)
+
+
+### Refactoring
+
+* **combat:** attack handlers use the server intents ([#621](https://github.com/Garblesnarff/infinite-realms-app/issues/621) part B2b) ([9b3843c](https://github.com/Garblesnarff/infinite-realms-app/commit/9b3843cbc65bcd675a055fda4c5c96a3533ded02))
+* **combat:** delete the dev-only DM combat tool and the client damage path ([#621](https://github.com/Garblesnarff/infinite-realms-app/issues/621) part B2b step 2) ([3558805](https://github.com/Garblesnarff/infinite-realms-app/commit/3558805ab1084f32da7554a828264cc2e9a37e0b))
+
+
+### Tests
+
+* **combat:** a round-1 melee attack 10 ft away closes the gap and rolls ([#1642](https://github.com/Garblesnarff/infinite-realms-app/issues/1642)) ([3c1fbd8](https://github.com/Garblesnarff/infinite-realms-app/commit/3c1fbd888f6f0c91c4259c5bb110a40cee404af2))
+* **combat:** the Attack control offers every living enemy ([#605](https://github.com/Garblesnarff/infinite-realms-app/issues/605)) ([0d98d5e](https://github.com/Garblesnarff/infinite-realms-app/commit/0d98d5ecffd227a37a0dd7225cffd6397d892a94))
+
 ## [0.51.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.50.0...v0.51.0) (2026-11-17)
 
 
