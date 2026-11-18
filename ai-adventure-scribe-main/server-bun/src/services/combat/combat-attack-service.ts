@@ -21,10 +21,10 @@ import { mookGroupAttackBonus } from './boss-moves.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
 import {
   activeAlliesOf,
+  claimSneakAttack,
   clearHiddenAttacker,
+  clearSneakAttackSpent,
   isHiddenAttacker,
-  isSneakAttackSpent,
-  markSneakAttackSpent,
   rogueLevelOf,
 } from './combat-turn-flags.js';
 import {
@@ -32,7 +32,7 @@ import {
   claimTurnBonusActionAndResolve,
   claimTurnReactionAndResolve,
 } from './combat-turn-resources.js';
-import { calculateDamage, resolveCriticalHit } from './damage-calculator.js';
+import { calculateDamage, resolveCriticalHit, rollDamageDice } from './damage-calculator.js';
 import {
   getParticipantWithStats,
   getParticipantsWithStatsBatch,
@@ -69,6 +69,7 @@ import {
   SNEAK_ATTACK_ALLY_REACH_FEET,
   sneakAttackDice,
   sneakAttackWeaponQualifies,
+  splitResistedSneakTotal,
 } from './sneak-attack-rider.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { abilityModifier } from '../../../../shared/ability-modifier';
@@ -460,10 +461,11 @@ export class CombatAttackService {
   }
 
   /**
-   * Sneak Attack on a hit (#1637, 2014 SRD 5.1): ⌈level/2⌉d6 of the weapon's damage type, once per
-   * round, for a Rogue's finesse or ranged weapon with advantage from an engine source or a
-   * non-incapacitated ally within 5 ft of the target (the ally clause needs a tactical map).
-   * Null when the rider does not apply. Dice double on a crit inside sneakAttackDice.
+   * Sneak Attack on a hit (#1637, 2014 SRD 5.1). Returns the rider's part of the hit, or null when it
+   * does not apply: a Rogue's finesse or ranged weapon, with advantage from an engine source or a
+   * non-incapacitated ally within 5 ft of the target (the ally clause needs a tactical map). It never
+   * applies with any disadvantage source, and it is once per turn. The turn is claimed in one guarded
+   * UPDATE before any damage; a claim error means no rider, and the attack goes on.
    */
   private async sneakAttackRiderDamage(input: {
     encounterId: string;
@@ -471,16 +473,19 @@ export class CombatAttackService {
     targetId: string;
     characterId: string | null | undefined;
     weapon: WeaponRuleProfile;
-    rules: { advantage: boolean; disadvantage: boolean; advantageSources: string[] };
+    rules: {
+      advantage: boolean;
+      advantageSources: string[];
+      disadvantageSources: string[];
+    };
     tacticalMap: Awaited<ReturnType<typeof loadActiveTacticalMap>>;
     defenses: ReturnType<typeof aggregateResistances>;
     isCritical: boolean;
-    round: number;
+    weaponCalc: { damageBeforeResistances: number };
   }): Promise<{ damage: number; dice: string } | null> {
     if (!input.characterId || !sneakAttackWeaponQualifies(input.weapon)) return null;
     const dice = sneakAttackDice(await rogueLevelOf(input.characterId), input.isCritical);
     if (!dice) return null;
-    if (await isSneakAttackSpent(input.encounterId, input.attackerId, input.round)) return null;
 
     let allyWithinReachOfTarget = false;
     const map = input.tacticalMap;
@@ -500,24 +505,37 @@ export class CombatAttackService {
     }
     const applies = appliesSneakAttackRider({
       advantage: input.rules.advantage,
-      disadvantage: input.rules.disadvantage,
+      disadvantage: input.rules.disadvantageSources.length > 0,
       advantageSources: input.rules.advantageSources,
       allyWithinReachOfTarget,
       alreadyUsedThisTurn: false,
     });
     if (!applies) return null;
 
-    const damage = calculateDamage({
-      damageDice: dice,
-      damageBonus: 0,
-      damageType: input.weapon.damageType as DamageType,
-      // The dice already carry the crit doubling, so the calculator must not double them again.
-      isCritical: false,
+    try {
+      const claimed = await claimSneakAttack(input.encounterId, input.attackerId);
+      if (!claimed) return null;
+    } catch (error) {
+      logger.warn({
+        msg: 'COMBAT_SNEAK_ATTACK_CLAIM_FAILED',
+        encounterId: input.encounterId,
+        participantId: input.attackerId,
+        error,
+      });
+      return null;
+    }
+
+    // Weapon and rider share the weapon's damage type, so resistance applies once to the total. The
+    // weapon's own part was resisted alone in damageCalc; the rider's part is what the total adds.
+    const split = splitResistedSneakTotal({
+      weaponRaw: input.weaponCalc.damageBeforeResistances,
+      riderRaw: rollDamageDice(dice, false),
+      damageType: input.weapon.damageType,
       resistances: input.defenses.resistances,
       vulnerabilities: input.defenses.vulnerabilities,
       immunities: input.defenses.immunities,
-    }).finalDamage;
-    return { damage, dice };
+    });
+    return { damage: split.rider, dice };
   }
 
   /**
@@ -1011,7 +1029,7 @@ export class CombatAttackService {
               defenses,
             });
       const smiteApplied = smite?.applied ? smite : null;
-      // #1637: Sneak Attack, once per round, resisted on the weapon's own damage type.
+      // #1637: Sneak Attack, once per turn. The turn is claimed here, before any damage is applied.
       const sneak = await this.sneakAttackRiderDamage({
         encounterId,
         attackerId,
@@ -1022,7 +1040,7 @@ export class CombatAttackService {
         tacticalMap,
         defenses,
         isCritical: isCrit,
-        round: attackRound,
+        weaponCalc: damageCalc,
       });
       const totalDamage =
         damageCalc.finalDamage + hexDamage + (smiteApplied?.damage ?? 0) + (sneak?.damage ?? 0);
@@ -1053,7 +1071,6 @@ export class CombatAttackService {
         // dice said: the per-hit cap can rewrite it. Reporting the rolled number here would
         // put a damage figure in the telemetry that the target's HP never reflects.
         const appliedDamage = hpResult.damageDealt ?? totalDamage;
-        if (sneak) await markSneakAttackSpent(encounterId, attackerId, attackRound);
 
         // Logged after the HP write, with the post-write HP included: damage that is
         // calculated but never persisted -- the exact failure mode this telemetry exists to
@@ -1177,6 +1194,13 @@ export class CombatAttackService {
         if (smiteApplied) {
           await SpellSlotsService.refundSpellSlot(smiteApplied.spent, userId).catch((refundError) =>
             logger.error({ msg: 'COMBAT_SMITE_SLOT_REFUND_FAILED', refundError }),
+          );
+        }
+        // #1637: a Sneak Attack claimed for a turn whose damage never landed is released, so the turn
+        // is not spent on damage that was never applied.
+        if (sneak) {
+          await clearSneakAttackSpent(encounterId, attackerId).catch((releaseError) =>
+            logger.error({ msg: 'COMBAT_SNEAK_CLAIM_RELEASE_FAILED', releaseError }),
           );
         }
         throw new InternalServerError('Attack succeeded but damage application failed', { error });

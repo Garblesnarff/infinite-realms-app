@@ -46,12 +46,14 @@ const { resetTurnResources } = await importWithRealDb(
   () => import('../combat/combat-turn-resources.js'),
 );
 const {
-  clearHiddenForEncounter,
+  clearFightFlags,
   combatTurnFlagsPreservingState,
   isHiddenAttacker,
-  isSneakAttackSpent,
+  claimSneakAttack,
+  clearHiddenAttacker,
   markHiddenAttacker,
 } = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
+const { SessionService } = await importWithRealDb(() => import('../session-service.js'));
 
 if (!hasRealDb) {
   console.warn('[sneak-attack] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.');
@@ -206,9 +208,89 @@ describeWithDb('Sneak Attack and the hidden attacker (#1637)', () => {
     return (row?.state ?? {}) as Record<string, any>;
   };
 
+  /** The Rogue's stored Sneak Attack claim: the encounter and the "round:turn order" it was made in. */
+  const sneakClaim = async (): Promise<{ encounterId: string; turn: string } | undefined> =>
+    (await sessionState()).sneakAttackSpent?.[rogueId];
+
+  const currentVersion = async (): Promise<number> => {
+    const [row] = await db
+      .select({ version: combatEncounters.version })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    return row.version;
+  };
+
+  /**
+   * The companion case: a second player-side participant at `companionX` on a real tactical map,
+   * the Rogue at x=2, the orc at x=3 (5 ft from the Rogue, so the Rapier reaches). Removed after.
+   */
+  const withCompanion = async (companionX: number, body: () => Promise<void>): Promise<void> => {
+    const [{ id: companionId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId,
+        name: 'Companion',
+        participantType: 'player',
+        turnOrder: 2,
+        initiative: 5,
+        armorClass: 12,
+        maxHp: 20,
+        speed: 30,
+      })
+      .returning({ id: combatParticipants.id });
+    await db.insert(combatParticipantStatus).values({
+      participantId: companionId,
+      currentHp: 20,
+      maxHp: 20,
+      isConscious: true,
+    });
+    const cells = Array.from({ length: 5 }, () =>
+      Array.from({ length: 12 }, () => ({
+        terrain: 'floor' as const,
+        blocksMovement: false,
+        blocksSight: false,
+        cover: 0 as 0 | 1 | 2 | 3,
+        elevation: 0,
+      })),
+    );
+    const entity = (id: string, slug: string, x: number, type: 'pc' | 'monster') => ({
+      id,
+      slug,
+      x,
+      y: 2,
+      size: 'medium' as const,
+      type,
+      speedFeet: 30,
+      movementRemaining: 30,
+    });
+    try {
+      await saveTacticalMap!({
+        id: crypto.randomUUID(),
+        sessionId,
+        width: 12,
+        height: 5,
+        cells,
+        entities: [
+          entity(rogueId, 'the-rogue', 2, 'pc'),
+          entity(orcId, 'the-orc', 3, 'monster'),
+          entity(companionId, 'the-companion', companionX, 'pc'),
+        ],
+      } as never);
+      await body();
+    } finally {
+      await db.delete(tacticalMaps).where(eq(tacticalMaps.sessionId, sessionId));
+      await db.delete(combatParticipants).where(eq(combatParticipants.id, companionId));
+    }
+  };
+
   const attack = (
     expectedVersion: number,
-    extra: { advantage?: boolean; disadvantage?: boolean; providedD20?: number } = {},
+    extra: {
+      advantage?: boolean;
+      disadvantage?: boolean;
+      providedD20?: number;
+      isReaction?: boolean;
+    } = {},
   ) =>
     combatAttackService!.resolveAttack(
       encounterId,
@@ -279,7 +361,7 @@ describeWithDb('Sneak Attack and the hidden attacker (#1637)', () => {
     );
 
     // The mark is spent for this round.
-    expect(await isSneakAttackSpent(encounterId, rogueId, 1)).toBe(true);
+    expect((await sneakClaim())?.turn).toBe('1:0');
   });
 
   it('does not add the rider a second time in the same turn', async () => {
@@ -306,11 +388,11 @@ describeWithDb('Sneak Attack and the hidden attacker (#1637)', () => {
 
   it('clears the once-per-turn mark at turn reset', async () => {
     await attackUntilHit({ hidden: true });
-    expect(await isSneakAttackSpent(encounterId, rogueId, 1)).toBe(true);
+    expect((await sneakClaim())?.turn).toBe('1:0');
 
     await resetTurnResources(rogueId, 2);
 
-    expect(await isSneakAttackSpent(encounterId, rogueId, 1)).toBe(false);
+    expect(await sneakClaim()).toBeUndefined();
     expect((await sessionState()).sneakAttackSpent?.[rogueId]).toBeUndefined();
   });
 
@@ -420,12 +502,14 @@ describeWithDb('Sneak Attack and the hidden attacker (#1637)', () => {
     expect(await isHiddenAttacker(encounterId, rogueId)).toBe(false);
   });
 
-  it('the end of the fight clears every Hide mark of that fight', async () => {
+  it('the end of the fight clears every Hide mark and Sneak Attack claim of that fight', async () => {
     await markHiddenAttacker(encounterId, rogueId);
+    expect(await claimSneakAttack(encounterId, rogueId)).toBe(true);
 
-    await clearHiddenForEncounter(db, encounterId);
+    await clearFightFlags(db, encounterId);
 
     expect(await isHiddenAttacker(encounterId, rogueId)).toBe(false);
+    expect(await sneakClaim()).toBeUndefined();
   });
 
   it('a client whole-blob session write keeps both engine flags', async () => {
@@ -554,5 +638,130 @@ describeWithDb('Sneak Attack and the hidden attacker (#1637)', () => {
       await db.delete(tacticalMaps).where(eq(tacticalMaps.sessionId, sessionId));
       await db.delete(combatParticipants).where(eq(combatParticipants.id, companionId));
     }
+  });
+  it("a reaction on another creature's turn is its own turn: it gets the rider, and a second reaction in that turn does not", async () => {
+    // The Rogue's own turn (round 1, turn 0) takes the rider.
+    await attackUntilHit({ hidden: true });
+
+    // The orc's turn in the same round (round 1, turn 1): the reaction is a different turn.
+    await db
+      .update(combatEncounters)
+      .set({ currentTurnOrder: 1 })
+      .where(eq(combatEncounters.id, encounterId));
+    await db
+      .update(combatParticipants)
+      .set({ reactionUsed: false })
+      .where(eq(combatParticipants.id, rogueId));
+    await markHiddenAttacker(encounterId, rogueId);
+    const reaction = await attack(await currentVersion(), { providedD20: 15, isReaction: true });
+    expect(reaction.hit).toBe(true);
+    expect(reaction.sneakAttackDice).toBe('1d6');
+    expect((await sneakClaim())?.turn).toBe('1:1');
+
+    // A second reaction in the same enemy turn: that turn is already spent, so no rider.
+    await db
+      .update(combatParticipants)
+      .set({ reactionUsed: false })
+      .where(eq(combatParticipants.id, rogueId));
+    await markHiddenAttacker(encounterId, rogueId);
+    const second = await attack(await currentVersion(), { providedD20: 15, isReaction: true });
+    expect(second.hit).toBe(true);
+    expect(second.sneakAttackDice).toBeUndefined();
+  });
+
+  it('advantage that cancels against a disadvantage source still blocks the rider beside an ally', async () => {
+    await withCompanion(4, async () => {
+      await markHiddenAttacker(encounterId, rogueId);
+      // Hidden advantage and a requested disadvantage cancel to neither. The net value is clean,
+      // but a disadvantage source is present, so the rider stays off.
+      const outcome = await attack(await giveTurnToRogue(), {
+        disadvantage: true,
+        providedD20: 15,
+      });
+
+      expect(outcome.advantage).toBe(false);
+      expect(outcome.disadvantage).toBe(false);
+      expect(outcome.sneakAttackDice).toBeUndefined();
+      expect(await sneakClaim()).toBeUndefined();
+    });
+  });
+
+  it('resistance applies once to the weapon and rider total, not to each part', async () => {
+    await db
+      .update(combatParticipants)
+      .set({ damageResistances: ['piercing'] })
+      .where(eq(combatParticipants.id, orcId));
+    try {
+      await markHiddenAttacker(encounterId, rogueId);
+      const outcome = await attack(await giveTurnToRogue(), { providedD20: 15 });
+      expect(outcome.hit).toBe(true);
+      expect(outcome.sneakAttackDice).toBe('1d6');
+
+      const weaponRaw = (outcome as unknown as { damageBeforeResistances: number })
+        .damageBeforeResistances;
+      const parts = (outcome as unknown as { damageParts: Array<{ amount: number }> }).damageParts;
+      const weaponPart = parts[0].amount;
+      const riderPart = parts[1].amount;
+      // The weapon's part is resisted alone; the total is the weapon raw plus one d6, resisted once.
+      expect(weaponPart).toBe(Math.floor(weaponRaw / 2));
+      expect(weaponPart + riderPart).toBe(outcome.finalDamage);
+      const oneOnce = [1, 2, 3, 4, 5, 6].some(
+        (die) => Math.floor((weaponRaw + die) / 2) === outcome.finalDamage,
+      );
+      expect(oneOnce).toBe(true);
+    } finally {
+      await db
+        .update(combatParticipants)
+        .set({ damageResistances: [] })
+        .where(eq(combatParticipants.id, orcId));
+    }
+  });
+
+  it('a miss leaves no Sneak Attack claim and still clears the Hide mark', async () => {
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: ORC_START_HP })
+      .where(eq(combatParticipantStatus.participantId, orcId));
+    await db
+      .update(combatParticipants)
+      .set({ armorClass: 40 })
+      .where(eq(combatParticipants.id, orcId));
+    try {
+      await markHiddenAttacker(encounterId, rogueId);
+      // 15 + 5 to hit against AC 40 misses.
+      const outcome = await attack(await giveTurnToRogue(), { providedD20: 15 });
+
+      expect(outcome.hit).toBe(false);
+      expect(outcome.sneakAttackDice).toBeUndefined();
+      expect(await sneakClaim()).toBeUndefined();
+      expect(await isHiddenAttacker(encounterId, rogueId)).toBe(false);
+    } finally {
+      await db
+        .update(combatParticipants)
+        .set({ armorClass: UNMISSABLE_AC })
+        .where(eq(combatParticipants.id, orcId));
+    }
+  });
+
+  it('client whole-blob writes through the real session update keep the marks they omit and cannot set or clear them', async () => {
+    await markHiddenAttacker(encounterId, rogueId);
+    expect(await claimSneakAttack(encounterId, rogueId)).toBe(true);
+    const update = (sessionState: Record<string, unknown>) =>
+      SessionService!.updateSession(sessionId, userId, { sessionState } as never);
+
+    // A write that omits both marks: the stored marks survive.
+    await update({ notes: 'client snapshot' });
+    expect(await isHiddenAttacker(encounterId, rogueId)).toBe(true);
+    expect(await sneakClaim()).toBeDefined();
+
+    // A write that clears the Sneak Attack claim and empties the hidden marks: stored marks survive.
+    await update({ sneakAttackSpent: {}, hiddenParticipants: {} });
+    expect(await isHiddenAttacker(encounterId, rogueId)).toBe(true);
+    expect(await sneakClaim()).toBeDefined();
+
+    // With no stored hidden mark, a client cannot set one.
+    await clearHiddenAttacker(encounterId, rogueId);
+    await update({ hiddenParticipants: { [rogueId]: { encounterId } } });
+    expect(await isHiddenAttacker(encounterId, rogueId)).toBe(false);
   });
 });

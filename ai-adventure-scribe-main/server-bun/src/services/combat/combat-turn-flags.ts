@@ -1,15 +1,17 @@
 /**
  * Engine-owned, per-participant flags kept in `game_sessions.session_state` (#1637).
  *
- * Two flags live here, both written as a single guarded UPDATE against the live row (the same
- * rule as the Action Surge mark in combat-turn-resources.ts), so a client whole-blob write can
- * never delete them mid-fight:
+ * Two flags live here. Each write is one guarded statement against the live row, the same rule as
+ * the Action Surge mark in combat-turn-resources.ts, so a client whole-blob write can never delete
+ * them mid-fight:
  *
- * - `hiddenParticipants`: a participant who won a Hide check. The next attack by that participant
- *   has advantage (source "hidden"); the attack, damage taken, or the end of the fight clears it.
- * - `sneakAttackSpent`: a Rogue who already took Sneak Attack this round. Cleared at turn reset.
+ * - `hiddenParticipants`: a participant who won a Hide check. Their next attack has advantage
+ *   (source "hidden"); the attack, damage taken, or the end of the fight clears it.
+ * - `sneakAttackSpent`: the turn in which a Rogue already took Sneak Attack, recorded as
+ *   "round:turn order". A reaction on another creature's turn is a different turn, so it can claim
+ *   its own Sneak Attack. The claim is one UPDATE made before damage is applied.
  *
- * Every write is keyed by encounter so a flag from an earlier fight can never grant anything.
+ * Every entry records its encounter, so a flag from an earlier fight never grants anything.
  */
 import { and, eq, sql, type SQL } from 'drizzle-orm';
 
@@ -38,10 +40,6 @@ const INCAPACITATING_CONDITIONS = [
 
 type FlagRecord = Record<string, unknown>;
 
-/** The session row that owns an encounter. Writes go through this so no caller needs a session id. */
-const sessionOfEncounter = (encounterId: string): SQL =>
-  sql`(SELECT ${combatEncounters.sessionId} FROM ${combatEncounters} WHERE ${combatEncounters.id} = ${encounterId})`;
-
 /**
  * The database client, loaded on first use. A static import would load the client whenever this
  * module loads, which breaks suites that import the attack path without a database.
@@ -49,6 +47,14 @@ const sessionOfEncounter = (encounterId: string): SQL =>
 async function database(): Promise<typeof DatabaseClient> {
   return (await import('../../../../db/client')).db;
 }
+
+/** The session row that owns an encounter. Writes go through this so no caller needs a session id. */
+const sessionOfEncounter = (encounterId: string): SQL =>
+  sql`(SELECT ${combatEncounters.sessionId} FROM ${combatEncounters} WHERE ${combatEncounters.id} = ${encounterId})`;
+
+/** The current turn of an encounter, as "round:turn order". */
+const turnOfEncounter = (encounterId: string): SQL =>
+  sql`(SELECT ${combatEncounters.currentRound}::text || ':' || ${combatEncounters.currentTurnOrder}::text FROM ${combatEncounters} WHERE ${combatEncounters.id} = ${encounterId})`;
 
 function flagEntry(state: unknown, key: string, participantId: string): FlagRecord | null {
   if (!state || typeof state !== 'object') return null;
@@ -112,60 +118,40 @@ export async function clearHiddenAttacker(
 }
 
 /**
- * Drop every hidden mark that belongs to an encounter, inside the caller's transaction when it
- * has one. Called when the fight ends.
+ * Claim this Rogue's Sneak Attack for the current turn, in one guarded UPDATE made before damage is
+ * applied. The statement writes only when the stored claim is absent or belongs to another turn or
+ * encounter, and reports whether it wrote. A second claim in the same turn writes nothing.
  */
-export async function clearHiddenForEncounter(
-  executor: Pick<VitalsTx, 'update'>,
-  encounterId: string,
-): Promise<void> {
-  await executor
-    .update(gameSessions)
-    .set({
-      sessionState: sql`jsonb_set(
-        COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${HIDDEN_KEY}}`}::text[],
-        COALESCE((
-          SELECT jsonb_object_agg(e.key, e.value)
-          FROM jsonb_each(COALESCE(${gameSessions.sessionState} -> ${HIDDEN_KEY}, '{}'::jsonb)) AS e(key, value)
-          WHERE e.value ->> 'encounterId' <> ${encounterId}::text
-        ), '{}'::jsonb), true)`,
-      updatedAt: new Date(),
-    })
-    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
-}
-
-/** Whether this Rogue already took Sneak Attack in this round. */
-export async function isSneakAttackSpent(
+export async function claimSneakAttack(
   encounterId: string,
   participantId: string,
-  round: number,
 ): Promise<boolean> {
-  const state = await readSessionState(encounterId);
-  const entry = flagEntry(state, SNEAK_KEY, participantId);
-  return entry?.encounterId === encounterId && entry?.round === round;
-}
-
-/** Record that this Rogue took Sneak Attack this round. */
-export async function markSneakAttackSpent(
-  encounterId: string,
-  participantId: string,
-  round: number,
-): Promise<void> {
   const db = await database();
-  await db
+  const turn = turnOfEncounter(encounterId);
+  const storedEntry = sql`(${gameSessions.sessionState} -> ${SNEAK_KEY} -> ${participantId})`;
+  const claimed = await db
     .update(gameSessions)
     .set({
       sessionState: sql`jsonb_set(
-        jsonb_set(COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${SNEAK_KEY}}`}::text[],
-          COALESCE(${gameSessions.sessionState} -> ${SNEAK_KEY}, '{}'::jsonb), true),
-        ARRAY[${SNEAK_KEY}, ${participantId}]::text[],
-        jsonb_build_object('encounterId', ${encounterId}::text, 'round', ${round}::int), true)`,
+        COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${SNEAK_KEY}}`}::text[],
+        COALESCE(${gameSessions.sessionState} -> ${SNEAK_KEY}, '{}'::jsonb) || jsonb_build_object(
+          ${participantId}::text,
+          jsonb_build_object('encounterId', ${encounterId}::text, 'turn', ${turn})),
+        true)`,
       updatedAt: new Date(),
     })
-    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
+    .where(
+      and(
+        eq(gameSessions.id, sessionOfEncounter(encounterId)),
+        sql`(${storedEntry} ->> 'encounterId') IS DISTINCT FROM ${encounterId}::text
+          OR (${storedEntry} ->> 'turn') IS DISTINCT FROM ${turn}`,
+      ),
+    )
+    .returning({ id: gameSessions.id });
+  return claimed.length > 0;
 }
 
-/** Clear the once-per-turn mark at turn reset. */
+/** Drop one participant's Sneak Attack claim: the turn reset, or an attack that did not land its damage. */
 export async function clearSneakAttackSpent(
   encounterId: string,
   participantId: string,
@@ -181,9 +167,34 @@ export async function clearSneakAttackSpent(
 }
 
 /**
- * Keeps both flags across a client whole-blob write (`SessionService.updateSession`), the same
- * way `actionSurgePreservingState` keeps the Action Surge mark: the live stored value wins over
- * the client's copy, and a stored value that is absent removes the client's copy.
+ * Drop every flag of one fight (hidden marks and Sneak Attack claims), inside the caller's
+ * transaction when it has one. Called when the fight ends.
+ */
+export async function clearFightFlags(
+  executor: Pick<VitalsTx, 'update'>,
+  encounterId: string,
+): Promise<void> {
+  const keep = (key: string): SQL =>
+    sql`COALESCE((
+      SELECT jsonb_object_agg(e.key, e.value)
+      FROM jsonb_each(COALESCE(${gameSessions.sessionState} -> ${key}, '{}'::jsonb)) AS e(key, value)
+      WHERE e.value ->> 'encounterId' <> ${encounterId}::text
+    ), '{}'::jsonb)`;
+  await executor
+    .update(gameSessions)
+    .set({
+      sessionState: sql`jsonb_set(
+        jsonb_set(COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${HIDDEN_KEY}}`}::text[], ${keep(HIDDEN_KEY)}, true),
+        ${`{${SNEAK_KEY}}`}::text[], ${keep(SNEAK_KEY)}, true)`,
+      updatedAt: new Date(),
+    })
+    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
+}
+
+/**
+ * Keeps both flags across a client whole-blob write (`SessionService.updateSession`), the same way
+ * `actionSurgePreservingState` keeps the Action Surge mark: the live stored value wins over the
+ * client's copy, and a stored value that is absent removes the client's copy.
  */
 export function combatTurnFlagsPreservingState(incoming: SQL): SQL {
   let merged = incoming;
@@ -213,9 +224,9 @@ export async function rogueLevelOf(characterId: string): Promise<number> {
 }
 
 /**
- * The other active participants on the attacker's side who are not incapacitated, with their
- * positions' owners, for the Sneak Attack flanking clause. "Same side" is the player/non-player
- * split the engine already uses for companions.
+ * The other active participants on the attacker's side who are not incapacitated, for the Sneak
+ * Attack flanking clause. "Same side" is the player/non-player split the engine already uses for
+ * companions.
  */
 export async function activeAlliesOf(
   encounterId: string,
