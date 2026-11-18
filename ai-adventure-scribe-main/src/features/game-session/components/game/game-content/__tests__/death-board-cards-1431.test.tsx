@@ -6,6 +6,7 @@ import { buildNpcEngineMessage } from '../../../../../../../shared/npc-engine-me
 import {
   DEATH_SAVE_FAILED,
   ENEMY_HITS_PLAYER,
+  ENEMY_INSTANT_KILLS_PLAYER,
   ENEMY_STRIKES_DOWNED_PLAYER,
   REEVES,
   SCHOLAR,
@@ -248,9 +249,24 @@ describe('death board cards (#1431)', () => {
     render(<FallenStoryLog />);
     const log = screen.getByTestId('death-screen-story-log');
     expect(log.textContent).not.toContain('Engine:');
-    expect(screen.getByTestId('death-story-status')).toHaveTextContent(
-      /^The Scholar is unconscious\.$/,
+    // The invented "<name> is unconscious." line is gone; the card's own status prints once.
+    expect(screen.queryByTestId('death-story-status')).not.toBeInTheDocument();
+    expect(log.textContent).not.toContain('The Scholar is unconscious.');
+  });
+
+  it('an instant kill prints the dead line once, Cinzel 18 px bold', () => {
+    const kill = buildNpcEngineMessage(
+      roster,
+      3,
+      { type: 'attack', actorId: REEVES.id, targetId: SCHOLAR.id },
+      ENEMY_INSTANT_KILLS_PLAYER,
     );
+    state.messages = [{ id: 'kill', sender: 'system', ...kill }];
+    render(<FallenStoryLog />);
+    const deadLines = screen.queryAllByTestId('death-story-status');
+    expect(deadLines).toHaveLength(1);
+    expect(deadLines[0]).toHaveTextContent(/^The Scholar is dead\.$/);
+    expect(deadLines[0]).toHaveClass('ir-display', 'text-[18px]', 'font-bold');
   });
 
   it('heading has !outline-none, not bare outline-none', () => {

@@ -466,21 +466,23 @@ const FallenStoryEntries: React.FC = () => {
                           className="flex items-center gap-3 py-2"
                         >
                           <span className="h-px flex-1 bg-infinite-gold/30" />
-                          <span className="text-xs font-bold uppercase tracking-[0.16em] text-infinite-gold">
+                          <span className="text-[13px] font-bold uppercase tracking-[0.12em] text-infinite-gold">
                             Round {entry.round}
                           </span>
                           <span className="h-px flex-1 bg-infinite-gold/30" />
                         </div>
                       )}
                       <EngineResultCardView card={card} showTargetNumbers={showTargetNumbers} />
-                      {card.status && card.hp && (
-                        <p
-                          data-testid="death-story-status"
-                          className="text-center text-sm font-semibold text-white/85"
-                        >
-                          {`${card.hp.name} is ${card.status.trim().replace(/\.+$/, '').toLowerCase()}.`}
-                        </p>
-                      )}
+                      {card.status &&
+                        card.hp &&
+                        card.status.trim().replace(/\.+$/, '').toLowerCase() === 'dead' && (
+                          <p
+                            data-testid="death-story-status"
+                            className="ir-display text-center text-[18px] font-bold text-[#eaeefa]"
+                          >
+                            {`${card.hp.name} is dead.`}
+                          </p>
+                        )}
                     </React.Fragment>
                   );
                 })}
