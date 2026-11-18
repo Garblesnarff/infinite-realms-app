@@ -538,6 +538,10 @@ const CampaignDetailPage: React.FC = () => {
   }
 
   const premise = campaign.premise?.trim();
+  const pageTitle =
+    typeof campaign.title === 'string' && campaign.title.trim()
+      ? `${campaign.title.trim()} | Infinite Realms`
+      : 'Infinite Realms';
   // Collapsed: capped preview cut at a sentence end. Expanded: uncapped plain-text
   // narrative, so Read more reveals the whole stored story.
   let overviewStory = '';
@@ -551,9 +555,9 @@ const CampaignDetailPage: React.FC = () => {
   return (
     <div className="ir-app min-h-screen bg-background">
       <Helmet>
-        <title>{campaign.title} | Infinite Realms</title>
+        <title>{pageTitle}</title>
         <meta name="description" content={campaign.premise} />
-        <meta property="og:title" content={`${campaign.title} | Infinite Realms`} />
+        <meta property="og:title" content={pageTitle} />
         <meta property="og:description" content={campaign.premise} />
         {/* #355: declare the full tag set — react-helmet-async deletes managed
             (data-rh) tags a page does not redeclare, so a partial set would wipe
@@ -565,7 +569,7 @@ const CampaignDetailPage: React.FC = () => {
           content={campaign.coverImageUrl ?? 'https://infiniterealms.app/og-image.png'}
         />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${campaign.title} | Infinite Realms`} />
+        <meta name="twitter:title" content={pageTitle} />
         <meta name="twitter:description" content={campaign.premise} />
         <meta
           name="twitter:image"

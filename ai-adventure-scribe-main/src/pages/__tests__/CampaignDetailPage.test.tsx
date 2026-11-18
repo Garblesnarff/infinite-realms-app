@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { HelmetProvider } from 'react-helmet-async';
 import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -909,5 +909,42 @@ describe('CampaignDetailPage heroes (#89)', () => {
 
     expect(screen.getByRole('heading', { name: 'Choose your hero' })).toBeInTheDocument();
     expect(screen.queryByText(/Play as/)).not.toBeInTheDocument();
+  });
+});
+
+describe('CampaignDetailPage document title (#1605)', () => {
+  it('renders without throwing when title is null', async () => {
+    state.campaign = campaign({ title: null as unknown as string });
+    renderPage();
+    expect(screen.getByText('A banquet that never ends.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.title).toBe('Infinite Realms');
+    });
+  });
+
+  it('renders without throwing when title is undefined', async () => {
+    state.campaign = campaign({ title: undefined as unknown as string });
+    renderPage();
+    expect(screen.getByText('A banquet that never ends.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.title).toBe('Infinite Realms');
+    });
+  });
+
+  it('renders without throwing when title is not a string', async () => {
+    state.campaign = campaign({ title: 42 as unknown as string });
+    renderPage();
+    expect(screen.getByText('A banquet that never ends.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.title).toBe('Infinite Realms');
+    });
+  });
+
+  it('sets document.title with the normal title', async () => {
+    state.campaign = campaign({ title: 'The Eternal Feast' });
+    renderPage();
+    await waitFor(() => {
+      expect(document.title).toBe('The Eternal Feast | Infinite Realms');
+    });
   });
 });
