@@ -8,6 +8,7 @@ import type { Character } from '@/types/character';
 import { CharacterSheetSkeleton } from '@/components/skeletons/CharacterSheetSkeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { IRPanel } from '@/components/ui/ir-primitives';
+import { SheetHitPointsContext } from '@/contexts/sheet-hit-points';
 import {
   buildChooseHeroHref,
   FallenEndState,
@@ -170,11 +171,19 @@ const CharacterSheet: React.FC = () => {
         </Alert>
       )}
       <IRPanel className="p-6">
-        <CharacterSheetTabs
-          character={character}
-          onCharacterUpdate={persistCharacterUpdate}
-          equipmentUnavailable={equipmentUnavailable}
-        />
+        <SheetHitPointsContext.Provider
+          value={
+            character.hitPoints
+              ? { current: character.hitPoints.current, maximum: character.hitPoints.maximum }
+              : null
+          }
+        >
+          <CharacterSheetTabs
+            character={character}
+            onCharacterUpdate={persistCharacterUpdate}
+            equipmentUnavailable={equipmentUnavailable}
+          />
+        </SheetHitPointsContext.Provider>
       </IRPanel>
     </div>
   );
