@@ -78,6 +78,33 @@ export function cleanEngineCard(card: EngineResultCard): EngineResultCard {
   };
 }
 
+const STRIP_ENGINE_PREFIX = /⚙\uFE0F?\s*Engine:\s*/g;
+
+function stripEnginePrefix(value: string): string {
+  return value.replace(STRIP_ENGINE_PREFIX, '').trim();
+}
+
+/**
+ * #1431: a live death carries `finalLines` from the killing round. When those
+ * lines all match the cards read back from the saved log, the cards (with their
+ * badges and HP) win; otherwise the raw lines render. Empty `lines` means a
+ * reload, where the restored cards are the only source.
+ */
+export function cardsMatchingLines(cards: EngineResultCard[], lines: string[]): EngineResultCard[] {
+  const cleanedLines = (lines ?? []).map(stripEnginePrefix).filter(Boolean);
+  if (cleanedLines.length === 0) return cards;
+  const cleanedCards = (cards ?? []).map((card) => ({
+    line: stripEnginePrefix(card.line),
+    covers: (card.covers ?? []).map(stripEnginePrefix),
+  }));
+  const allMatch = cleanedLines.every((live) =>
+    cleanedCards.some(
+      (card) => live === card.line || card.line.includes(live) || card.covers.includes(live),
+    ),
+  );
+  return allMatch ? cards : [];
+}
+
 /**
  * #1431: the engine's final result cards of the run's last round, read back from
  * the saved log. Same selection as `finalEngineLines` (newest round only, newest
@@ -198,6 +225,13 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
     () => (messages ? finalEngineCards(messages) : []),
     [messages],
   );
+  const finalCards = React.useMemo(
+    () =>
+      finalLines && finalLines.length
+        ? cardsMatchingLines(restoredCards, finalLines)
+        : restoredCards,
+    [finalLines, restoredCards],
+  );
   return (
     <CampaignEndState
       mode="fallen"
@@ -205,7 +239,7 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
       portraitUrl={portraitUrl}
       identity={identity}
       finalLines={finalLines?.length ? finalLines : restoredLines}
-      finalCards={restoredCards}
+      finalCards={finalCards}
       campaignName={campaignName}
       chooseHeroHref={chooseHeroHref}
       chooseHeroPending={chooseHeroPending}

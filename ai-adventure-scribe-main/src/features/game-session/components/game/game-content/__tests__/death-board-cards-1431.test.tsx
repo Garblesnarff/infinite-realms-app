@@ -11,7 +11,12 @@ import {
   SCHOLAR,
 } from '../../../../../../../shared/test-fixtures/engine-results';
 import { CampaignEndState } from '../CampaignEndState';
-import { FallenEndState, FallenStoryLog, finalEngineCards } from '../DeathScreen';
+import {
+  FallenEndState,
+  FallenStoryLog,
+  finalEngineCards,
+  cardsMatchingLines,
+} from '../DeathScreen';
 
 const state = vi.hoisted(() => ({
   messages: [] as unknown[],
@@ -146,7 +151,7 @@ describe('death board cards (#1431)', () => {
     state.hasMore = false;
   });
 
-  it('FallenEndState prefers restored cards over finalLines', () => {
+  it('a live death shows the cards for the same rows it carries', () => {
     const downed = buildNpcEngineMessage(
       roster,
       3,
@@ -169,13 +174,49 @@ describe('death board cards (#1431)', () => {
         <FallenEndState
           characterName="The Scholar"
           chooseHeroHref="/x"
-          finalLines={['⚙️ Engine: raw line']}
+          finalLines={[...downed.text.split('\n\n'), ...fatalSave.text.split('\n\n')]}
         />
       </MemoryRouter>,
     );
 
     expect(screen.getByTestId('death-screen-final-cards')).toBeInTheDocument();
     expect(screen.queryByTestId('death-screen-final-lines')).not.toBeInTheDocument();
+  });
+
+  it('a live death with mismatched final lines renders the lines, not cards', () => {
+    const downed = buildNpcEngineMessage(
+      roster,
+      3,
+      { type: 'attack', actorId: REEVES.id, targetId: SCHOLAR.id },
+      ENEMY_STRIKES_DOWNED_PLAYER,
+    );
+    const fatalSave = buildNpcEngineMessage(
+      roster,
+      3,
+      { type: 'death_save', actorId: SCHOLAR.id },
+      { deathSaves: [{ ...DEATH_SAVE_FAILED, roll: 2, successes: 1, failures: 3, isDead: true }] },
+    );
+    state.messages = [
+      { id: 'downed', sender: 'system', text: downed.text, context: downed.context },
+      { id: 'fatal', sender: 'system', text: fatalSave.text, context: fatalSave.context },
+    ];
+    const other = buildNpcEngineMessage(
+      roster,
+      9,
+      { type: 'attack', actorId: REEVES.id, targetId: SCHOLAR.id },
+      ENEMY_HITS_PLAYER,
+    );
+    const otherLines = other.text.split('\n\n');
+
+    render(
+      <MemoryRouter>
+        <FallenEndState characterName="The Scholar" chooseHeroHref="/x" finalLines={otherLines} />
+      </MemoryRouter>,
+    );
+
+    const lines = screen.getByTestId('death-screen-final-lines');
+    expect(lines).toHaveTextContent(otherLines[0].replace(/⚙\uFE0F?\s*Engine:\s*/g, '').trim());
+    expect(screen.queryByTestId('death-screen-final-cards')).not.toBeInTheDocument();
   });
 
   it('FallenEndState falls back to finalLines with no messages', () => {
@@ -230,5 +271,73 @@ describe('death board cards (#1431)', () => {
     const h2 = screen.getAllByRole('heading', { name: 'The Scholar has fallen' })[1];
     expect(h2).toHaveClass('!outline-none');
     expect(h2.className.split(/\s+/)).not.toContain('outline-none');
+  });
+});
+
+describe('cardsMatchingLines (#1431)', () => {
+  afterEach(() => {
+    state.messages = [];
+  });
+
+  it('returns the cards when all lines match', () => {
+    const downed = buildNpcEngineMessage(
+      roster,
+      3,
+      { type: 'attack', actorId: REEVES.id, targetId: SCHOLAR.id },
+      ENEMY_STRIKES_DOWNED_PLAYER,
+    );
+    const fatalSave = buildNpcEngineMessage(
+      roster,
+      3,
+      { type: 'death_save', actorId: SCHOLAR.id },
+      { deathSaves: [{ ...DEATH_SAVE_FAILED, roll: 2, successes: 1, failures: 3, isDead: true }] },
+    );
+    state.messages = [
+      { id: 'downed', sender: 'system', text: downed.text, context: downed.context },
+      { id: 'fatal', sender: 'system', text: fatalSave.text, context: fatalSave.context },
+    ];
+    const cards = finalEngineCards(state.messages as never);
+    const lines = [...downed.text.split('\n\n'), ...fatalSave.text.split('\n\n')];
+    expect(cardsMatchingLines(cards, lines)).toEqual(cards);
+  });
+
+  it('returns [] when one line is unmatched', () => {
+    const downed = buildNpcEngineMessage(
+      roster,
+      3,
+      { type: 'attack', actorId: REEVES.id, targetId: SCHOLAR.id },
+      ENEMY_STRIKES_DOWNED_PLAYER,
+    );
+    const fatalSave = buildNpcEngineMessage(
+      roster,
+      3,
+      { type: 'death_save', actorId: SCHOLAR.id },
+      { deathSaves: [{ ...DEATH_SAVE_FAILED, roll: 2, successes: 1, failures: 3, isDead: true }] },
+    );
+    state.messages = [
+      { id: 'downed', sender: 'system', text: downed.text, context: downed.context },
+      { id: 'fatal', sender: 'system', text: fatalSave.text, context: fatalSave.context },
+    ];
+    const cards = finalEngineCards(state.messages as never);
+    const lines = [
+      ...downed.text.split('\n\n'),
+      ...fatalSave.text.split('\n\n'),
+      '⚙️ Engine: nope',
+    ];
+    expect(cardsMatchingLines(cards, lines)).toEqual([]);
+  });
+
+  it('returns the cards when lines are empty', () => {
+    const downed = buildNpcEngineMessage(
+      roster,
+      3,
+      { type: 'attack', actorId: REEVES.id, targetId: SCHOLAR.id },
+      ENEMY_STRIKES_DOWNED_PLAYER,
+    );
+    state.messages = [
+      { id: 'downed', sender: 'system', text: downed.text, context: downed.context },
+    ];
+    const cards = finalEngineCards(state.messages as never);
+    expect(cardsMatchingLines(cards, [])).toEqual(cards);
   });
 });
