@@ -221,8 +221,15 @@ describe('a declared action the engine cannot execute as-is', () => {
     });
     expect(payload.authoritativeCombatResults).toHaveLength(0);
 
-    expect(result.text).toContain('That action is not supported yet');
-    expect(result.text).toContain('still your turn');
+    // #1640: the unsupported-action line is an engine block, not DM prose. An unknown kind
+    // keeps the generic line; the turn is not used.
+    expect(result.text).not.toContain('not supported');
+    expect(
+      (result.combatEngineBlocks ?? []).flatMap((block: { lines: string[] }) => block.lines),
+    ).toEqual([
+      'That action is not supported yet. Your turn is not used: choose Attack, Dodge, Dash, Disengage or Hide.',
+    ]);
+    expect(result.text.trim().endsWith('what do you do?')).toBe(true);
   });
 
   // After an NPC pre-flight the turn already sits with the player, so the refusal used
