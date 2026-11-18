@@ -6,6 +6,7 @@ import {
   runDeferredDMResponseWork,
 } from './ai/dm-response-processor';
 import { trackDmWait } from './ai/dm-wait';
+import { shadowNarratedDeadNpcActing } from './ai/narrated-dead-npc-shadow';
 import { enforceNarrationContract } from './ai/narration-contract-check';
 import {
   assembleUserPrompt,
@@ -852,6 +853,12 @@ export class AIService {
               sessionId: params.context?.sessionId,
               error: error instanceof Error ? error.message : String(error),
             }),
+        });
+        // #1595 shadow: report a dead NPC narrated as acting. Changes nothing the player or DM sees.
+        shadowNarratedDeadNpcActing({
+          narration: rawResponse,
+          sessionId: params.context?.sessionId,
+          sceneStateBlock,
         });
       } catch (providerError) {
         logger.error('LLM API failed:', providerError);
