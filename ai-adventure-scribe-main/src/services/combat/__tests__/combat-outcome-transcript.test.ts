@@ -138,6 +138,7 @@ describe('combat outcome transcript', () => {
         distanceFeet: 10,
         reachFeet: 5,
         movementRemainingFeet: 0,
+        refusalReason: 'movement_exhausted',
       },
       [{ id: 'the-seeker', name: 'The Seeker', participantType: 'player' }],
     );
@@ -148,7 +149,7 @@ describe('combat outcome transcript', () => {
     expect(line).not.toContain('could not move closer');
   });
 
-  it('gives a monster the same fact without the player advice (#1642)', () => {
+  it('keeps the moved line for a monster that spent its movement on a move (#1642)', () => {
     const line = formatCombatEngineOutcome(
       attack,
       {
@@ -159,12 +160,13 @@ describe('combat outcome transcript', () => {
         distanceFeet: 10,
         reachFeet: 5,
         movementRemainingFeet: 0,
+        refusalReason: 'movement_exhausted',
       },
       [{ id: 'the-seeker', name: 'The Seeker', participantType: 'monster' }],
     );
 
     expect(line).toBe(
-      '⚙️ Engine: The Seeker has no movement left this turn; Balthazar is 10 ft away (reach 5 ft); no attack was rolled.',
+      '⚙️ Engine: The Seeker moved 30 ft toward Balthazar; distance 10 ft (reach 5 ft); no attack was rolled.',
     );
   });
 

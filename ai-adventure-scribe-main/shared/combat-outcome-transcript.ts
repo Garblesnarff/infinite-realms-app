@@ -64,6 +64,8 @@ export interface CombatEngineResult {
   movedFeet?: number;
   /** Movement left after the approach. Zero means the attack was refused for want of movement (#1642). */
   movementRemainingFeet?: number;
+  /** Why an attack was not rolled, from the approach (#1642). `movement_exhausted` with no feet moved is the refusal the no-movement line names. */
+  refusalReason?: string;
   distanceFeet?: number;
   reachFeet?: number;
   d20?: number;
@@ -254,10 +256,12 @@ export function formatCombatEngineParts(
       isFiniteNumber(result.distanceFeet) && isFiniteNumber(result.reachFeet)
         ? `; distance ${result.distanceFeet} ft (reach ${result.reachFeet} ft)`
         : '';
-    // #1642: with no movement left the line says so, not "could not move closer". The player is
-    // told what the turn still allows; the sentence after the classifier phrase keeps the move chip.
+    // #1642: a refused attack with no feet moved and no movement left says so, not "could not move
+    // closer". A move that spent its movement keeps its "moves N ft" line. The sentence after the
+    // classifier phrase keeps the move chip.
     if (
-      result.movementRemainingFeet === 0 &&
+      result.movedFeet === 0 &&
+      result.refusalReason === 'movement_exhausted' &&
       isFiniteNumber(result.distanceFeet) &&
       isFiniteNumber(result.reachFeet)
     ) {
@@ -269,12 +273,7 @@ export function formatCombatEngineParts(
           kind: 'move',
           side,
           line: noMovementLine,
-          // A move that spent its movement keeps its "moves N ft" title; only a refusal with 0 ft
-          // moved takes the new words.
-          title:
-            result.movedFeet === 0
-              ? `${actor} has no movement left this turn. No attack this turn.`
-              : `${actor} ${movement.replace(/^moved /, 'moves ')}. No attack this turn.`,
+          title: `${actor} has no movement left this turn. No attack this turn.`,
         },
       });
       return parts;
