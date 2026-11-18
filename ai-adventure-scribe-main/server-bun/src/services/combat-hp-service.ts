@@ -33,6 +33,7 @@ import {
 } from '../../../db/schema/index';
 import { ValidationError, BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
+import { clearHiddenAttacker, isHiddenAttacker } from './combat/combat-turn-flags.js';
 import {
   getParticipantWithFullContext,
   getParticipantStatusScoped,
@@ -445,6 +446,10 @@ export class CombatHPService {
 
     if (damageAmount > 0) {
       await touchEncounterActivity(encounterId);
+    }
+    // #1637: a hidden participant that takes damage is found; the Hide mark ends.
+    if (result.modifiedDamage > 0 && (await isHiddenAttacker(encounterId, participantId))) {
+      await clearHiddenAttacker(encounterId, participantId);
     }
 
     // Telemetry only. The ownership check the old insert-select carried in its

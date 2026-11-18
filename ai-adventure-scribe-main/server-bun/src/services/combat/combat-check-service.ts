@@ -30,6 +30,7 @@ import {
   type ShoveOutcome,
 } from './combat-check-rules.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
+import { markHiddenAttacker } from './combat-turn-flags.js';
 import { claimTurnActionAndResolve } from './combat-turn-resources.js';
 import { getParticipantAbilityProfile } from './data-access.js';
 import { CHECK_CONDITION_SOURCE, grappleOf, grappleSource } from './grapple-source.js';
@@ -379,6 +380,7 @@ async function applyCheckOutcome(params: {
   // the target guard below. Placing it after would make its branch unreachable and a won hide
   // would record nothing at all.
   if (resolution.kind === 'hide') {
+    await markHiddenAttacker(encounterId, request.actorId);
     return {
       consequence: `${labelOf(params.state, request.actorId)} is hidden until an attack or discovery`,
     };

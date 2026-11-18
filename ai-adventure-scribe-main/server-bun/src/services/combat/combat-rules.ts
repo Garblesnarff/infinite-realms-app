@@ -64,6 +64,11 @@ export type AttackRuleInput = {
   requestedAdvantage?: boolean;
   requestedDisadvantage?: boolean;
   /**
+   * The attacker won a Hide check and has not attacked or taken damage since (#1637). The
+   * advantage source is "hidden"; the attack clears the mark, not this resolver.
+   */
+  attackerHidden?: boolean;
+  /**
    * The target took the Dodge action. Dodge imposes disadvantage on attacks against it, and
    * it is its own player-facing reason rather than a second "requested" source (#603).
    */
@@ -136,6 +141,7 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
   const disadvantageSources: string[] = [];
   if (input.requestedAdvantage) advantageSources.push('requested');
   if (input.requestedDisadvantage) disadvantageSources.push('requested');
+  if (input.attackerHidden) advantageSources.push('hidden');
   if (input.targetDodging) disadvantageSources.push('target is dodging');
   if (geometry && geometry.distanceFeet > weapon.normalRange)
     disadvantageSources.push('long range');
