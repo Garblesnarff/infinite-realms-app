@@ -52,7 +52,6 @@ const noEncounter = () => ({
   handleApplyDamage: vi.fn(),
   handleHealing: vi.fn(),
   nextTurn: vi.fn(),
-  rollInitiative: vi.fn(),
   showAdvantageModal: false,
   setShowAdvantageModal: vi.fn(),
   pendingAttack: null,

@@ -17,15 +17,8 @@ import { useCombatMechanics } from '@/hooks/use-combat-mechanics';
 import { useGameSession } from '@/hooks/use-game-session';
 
 export const useCombatActions = (_isDM: boolean = false) => {
-  const {
-    state,
-    startCombat,
-    endCombat,
-    nextTurn,
-    rollInitiative,
-    addParticipant,
-    refreshCombatState,
-  } = useCombat();
+  const { state, startCombat, endCombat, nextTurn, addParticipant, refreshCombatState } =
+    useCombat();
 
   const { sessionId } = useGameSession();
   const { state: characterState } = useCharacter();
@@ -253,7 +246,6 @@ export const useCombatActions = (_isDM: boolean = false) => {
     handleApplyDamage,
     handleHealing,
     nextTurn,
-    rollInitiative,
     showAdvantageModal,
     setShowAdvantageModal,
     pendingAttack,

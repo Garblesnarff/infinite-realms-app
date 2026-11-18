@@ -4,7 +4,6 @@ import type { ActionType, CombatEncounter as Encounter } from '@/types/combat';
 import type { SpellSlotLevel } from '@/types/combat-features';
 
 import { Button } from '@/components/ui/button';
-import DiceRoller from '@/components/ui/dice-roller';
 
 type Participant = Encounter['participants'][number];
 
@@ -20,8 +19,6 @@ interface SpecialActionsSectionProps {
     targetId?: string,
     additionalData?: unknown,
   ) => void;
-  onRollInitiative: (participantId: string) => void;
-  showInitiativeRoll?: boolean;
   onEnhancedAttack: (
     participantId: string,
     targetId?: string,
@@ -33,24 +30,9 @@ interface SpecialActionsSectionProps {
 }
 
 export const SpecialActionsSection: React.FC<SpecialActionsSectionProps> = React.memo(
-  ({
-    currentParticipant,
-    selectedEnemyId,
-    onCombatAction,
-    onRollInitiative,
-    showInitiativeRoll = false,
-    onEnhancedAttack,
-  }) => {
+  ({ currentParticipant, selectedEnemyId, onCombatAction, onEnhancedAttack }) => {
     return (
       <div className="flex gap-2 flex-wrap">
-        {showInitiativeRoll && (
-          <DiceRoller
-            dice="1d20"
-            label="Initiative"
-            modifier={0}
-            onRoll={() => onRollInitiative(currentParticipant.id)}
-          />
-        )}
         <Button
           variant="outline"
           size="sm"
