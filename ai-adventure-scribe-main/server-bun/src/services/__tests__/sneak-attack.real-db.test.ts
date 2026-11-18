@@ -12,7 +12,14 @@
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from 'bun:test';
 import { and, eq, sql } from 'drizzle-orm';
 
-import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
+import {
+  closeRealDb,
+  describeWithDb,
+  hasRealDb,
+  importWithRealDb,
+  realDb,
+  testId,
+} from './fixtures/real-db.js';
 import {
   campaigns,
   characterStats,
@@ -22,24 +29,29 @@ import {
   combatParticipants,
   gameSessions,
   inventoryItems,
+  tacticalMaps,
 } from '../../../../db/schema/index';
 import { setRngSeed } from '../../lib/rng.js';
 import { describeResolvedAttack } from '../combat/attack-narration.js';
-import {
+// The engine modules reach the database client when they load, so they load only with a database.
+const { combatAttackService } = await importWithRealDb(
+  () => import('../combat/combat-attack-service.js'),
+);
+const { CombatHPService } = await importWithRealDb(() => import('../combat-hp-service.js'));
+const { executeCombatCheck } = await importWithRealDb(
+  () => import('../combat/combat-check-service.js'),
+);
+const { saveTacticalMap } = await importWithRealDb(() => import('../combat/tactical-map-store.js'));
+const { resetTurnResources } = await importWithRealDb(
+  () => import('../combat/combat-turn-resources.js'),
+);
+const {
   clearHiddenForEncounter,
   combatTurnFlagsPreservingState,
   isHiddenAttacker,
   isSneakAttackSpent,
   markHiddenAttacker,
-} from '../combat/combat-turn-flags.js';
-import { resetTurnResources } from '../combat/combat-turn-resources.js';
-
-const combatAttackService = hasRealDb
-  ? (await import('../combat/combat-attack-service.js')).combatAttackService
-  : undefined;
-const { CombatHPService } = hasRealDb
-  ? await import('../combat-hp-service.js')
-  : { CombatHPService: undefined as never };
+} = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
 
 if (!hasRealDb) {
   console.warn('[sneak-attack] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.');
@@ -196,7 +208,7 @@ describeWithDb('Sneak Attack and the hidden attacker (#1637)', () => {
 
   const attack = (
     expectedVersion: number,
-    extra: { advantage?: boolean; disadvantage?: boolean } = {},
+    extra: { advantage?: boolean; disadvantage?: boolean; providedD20?: number } = {},
   ) =>
     combatAttackService!.resolveAttack(
       encounterId,
@@ -426,5 +438,121 @@ describeWithDb('Sneak Attack and the hidden attacker (#1637)', () => {
       .where(and(eq(gameSessions.id, sessionId)));
 
     expect(await isHiddenAttacker(encounterId, rogueId)).toBe(true);
+  });
+  it('a Hide check that succeeds marks the attacker, and the next attack has the advantage and the rider', async () => {
+    const version = await giveTurnToRogue();
+    // A natural 20 on the Hide roll. With no hostile watching, the DC is 0 and the check cannot fail.
+    const check = await executeCombatCheck(
+      {
+        encounterId,
+        intent: { kind: 'hide', verb: 'hide' },
+        actorId: rogueId,
+        userId,
+        expectedVersion: version,
+      },
+      () => 20,
+    );
+    expect(check.success).toBe(true);
+    expect(await isHiddenAttacker(encounterId, rogueId)).toBe(true);
+
+    // The player's own d20 of 15 (+5 to hit) hits AC 1 every time, so the rider is deterministic.
+    const outcome = await attack(await giveTurnToRogue(), { providedD20: 15 });
+
+    expect(outcome.hit).toBe(true);
+    expect(outcome.advantage).toBe(true);
+    expect(outcome.sneakAttackDice).toBe('1d6');
+    expect(await isHiddenAttacker(encounterId, rogueId)).toBe(false);
+  });
+
+  it('a flanking ally within 5 ft of the target adds the rider, and one beyond 5 ft adds none', async () => {
+    // A companion on the Rogue's side, placed on a real tactical map. Rogue at x=2, orc at x=3
+    // (5 ft apart, so the Rapier reaches), companion at x=4 (5 ft from the orc).
+    const [{ id: companionId }] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId,
+        name: 'Companion',
+        participantType: 'player',
+        turnOrder: 2,
+        initiative: 5,
+        armorClass: 12,
+        maxHp: 20,
+        speed: 30,
+      })
+      .returning({ id: combatParticipants.id });
+    await db.insert(combatParticipantStatus).values({
+      participantId: companionId,
+      currentHp: 20,
+      maxHp: 20,
+      isConscious: true,
+    });
+    const cells = Array.from({ length: 5 }, () =>
+      Array.from({ length: 12 }, () => ({
+        terrain: 'floor' as const,
+        blocksMovement: false,
+        blocksSight: false,
+        cover: 0 as 0 | 1 | 2 | 3,
+        elevation: 0,
+      })),
+    );
+    const placeMap = async (companionX: number) =>
+      saveTacticalMap!({
+        id: crypto.randomUUID(),
+        sessionId,
+        width: 12,
+        height: 5,
+        cells,
+        entities: [
+          {
+            id: rogueId,
+            slug: 'the-rogue',
+            x: 2,
+            y: 2,
+            size: 'medium' as const,
+            type: 'pc' as const,
+            speedFeet: 30,
+            movementRemaining: 30,
+          },
+          {
+            id: orcId,
+            slug: 'the-orc',
+            x: 3,
+            y: 2,
+            size: 'medium' as const,
+            type: 'monster' as const,
+            speedFeet: 30,
+            movementRemaining: 30,
+          },
+          {
+            id: companionId,
+            slug: 'the-companion',
+            x: companionX,
+            y: 2,
+            size: 'medium' as const,
+            type: 'pc' as const,
+            speedFeet: 30,
+            movementRemaining: 30,
+          },
+        ],
+      } as never);
+
+    try {
+      // Within 5 ft of the orc: the ally clause applies, with no advantage at all.
+      await placeMap(4);
+      const near = await attack(await giveTurnToRogue(), { providedD20: 15 });
+      expect(near.hit).toBe(true);
+      expect(near.advantage).toBe(false);
+      expect(near.sneakAttackDice).toBe('1d6');
+
+      // Beyond 5 ft of the orc (x=9 is 6 cells away): no rider, next round so the once-per-round mark is clear.
+      await setRound(2);
+      await placeMap(9);
+      const far = await attack(await giveTurnToRogue(), { providedD20: 15 });
+      expect(far.hit).toBe(true);
+      expect(far.sneakAttackDice).toBeUndefined();
+    } finally {
+      await db.delete(tacticalMaps).where(eq(tacticalMaps.sessionId, sessionId));
+      await db.delete(combatParticipants).where(eq(combatParticipants.id, companionId));
+    }
   });
 });
