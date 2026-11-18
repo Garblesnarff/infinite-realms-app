@@ -33,7 +33,7 @@ import {
 } from '../../../db/schema/index';
 import { ValidationError, BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
-import { clearHiddenAttacker } from './combat/combat-turn-flags.js';
+import { clearHiddenAttacker, isHiddenAttacker } from './combat/combat-turn-flags.js';
 import {
   getParticipantWithFullContext,
   getParticipantStatusScoped,
@@ -448,7 +448,7 @@ export class CombatHPService {
       await touchEncounterActivity(encounterId);
     }
     // #1637: a hidden participant that takes damage is found; the Hide mark ends.
-    if (result.modifiedDamage > 0) {
+    if (result.modifiedDamage > 0 && (await isHiddenAttacker(encounterId, participantId))) {
       await clearHiddenAttacker(encounterId, participantId);
     }
 

@@ -14,7 +14,6 @@
 import { and, eq, sql, type SQL } from 'drizzle-orm';
 
 import { getActiveConditionNames } from './data-access.js';
-import { db } from '../../../../db/client';
 import {
   characters,
   combatEncounters,
@@ -22,8 +21,8 @@ import {
   combatParticipantStatus,
   gameSessions,
 } from '../../../../db/schema/index';
-import { classLevelOf } from '../progression/limited-feature-uses.js';
 
+import type { db as DatabaseClient } from '../../../../db/client';
 import type { VitalsTx } from '../character-vitals-service.js';
 
 const HIDDEN_KEY = 'hiddenParticipants';
@@ -43,6 +42,14 @@ type FlagRecord = Record<string, unknown>;
 const sessionOfEncounter = (encounterId: string): SQL =>
   sql`(SELECT ${combatEncounters.sessionId} FROM ${combatEncounters} WHERE ${combatEncounters.id} = ${encounterId})`;
 
+/**
+ * The database client, loaded on first use. A static import would load the client whenever this
+ * module loads, which breaks suites that import the attack path without a database.
+ */
+async function database(): Promise<typeof DatabaseClient> {
+  return (await import('../../../../db/client')).db;
+}
+
 function flagEntry(state: unknown, key: string, participantId: string): FlagRecord | null {
   if (!state || typeof state !== 'object') return null;
   const bucket = (state as FlagRecord)[key];
@@ -52,6 +59,7 @@ function flagEntry(state: unknown, key: string, participantId: string): FlagReco
 }
 
 async function readSessionState(encounterId: string): Promise<unknown> {
+  const db = await database();
   const [row] = await db
     .select({ state: gameSessions.sessionState })
     .from(gameSessions)
@@ -65,6 +73,7 @@ export async function markHiddenAttacker(
   encounterId: string,
   participantId: string,
 ): Promise<void> {
+  const db = await database();
   await db
     .update(gameSessions)
     .set({
@@ -92,6 +101,7 @@ export async function clearHiddenAttacker(
   encounterId: string,
   participantId: string,
 ): Promise<void> {
+  const db = await database();
   await db
     .update(gameSessions)
     .set({
@@ -141,6 +151,7 @@ export async function markSneakAttackSpent(
   participantId: string,
   round: number,
 ): Promise<void> {
+  const db = await database();
   await db
     .update(gameSessions)
     .set({
@@ -159,6 +170,7 @@ export async function clearSneakAttackSpent(
   encounterId: string,
   participantId: string,
 ): Promise<void> {
+  const db = await database();
   await db
     .update(gameSessions)
     .set({
@@ -186,6 +198,8 @@ export function combatTurnFlagsPreservingState(incoming: SQL): SQL {
 
 /** The Rogue class level of a character, read the way the rest of the engine reads it (multiclass aware). */
 export async function rogueLevelOf(characterId: string): Promise<number> {
+  const db = await database();
+  const { classLevelOf } = await import('../progression/limited-feature-uses.js');
   const [row] = await db
     .select({
       class: characters.class,
@@ -208,6 +222,7 @@ export async function activeAlliesOf(
   attackerId: string,
   targetId: string,
 ): Promise<Array<{ id: string; conscious: boolean; currentHp: number; conditions: string[] }>> {
+  const db = await database();
   const rows = await db
     .select({
       id: combatParticipants.id,
