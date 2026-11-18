@@ -38,6 +38,9 @@ vi.mock('@/components/campaigns/StarterCampaignCard', () => ({
 vi.mock('@/components/launch/StarterCampaignsSection', () => ({
   StarterCampaignsSection: () => null,
 }));
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => ({ user: null, loading: false }),
+}));
 
 /** The data-rh managed tags from the real index.html, as raw tag strings. */
 const seedTags = (): string[] => {
