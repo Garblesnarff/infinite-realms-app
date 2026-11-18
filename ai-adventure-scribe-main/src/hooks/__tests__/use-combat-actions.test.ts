@@ -3,6 +3,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+
 // Mock dependencies BEFORE importing the module under test
 vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: vi.fn(),
@@ -10,6 +11,10 @@ vi.mock('@/contexts/CharacterContext', () => ({
 
 vi.mock('@/contexts/CombatContext', () => ({
   useCombat: vi.fn(),
+}));
+
+vi.mock('@/services/combat/combat-action-executor', () => ({
+  executeAuthoritativeCombatIntent: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/hooks/use-combat-ai-integration', () => ({
@@ -26,7 +31,6 @@ vi.mock('@/hooks/use-combat-mechanics', () => ({
     handleRacialTraitUse: vi.fn(),
     handleClassFeature: vi.fn(),
     handleDeathSave: vi.fn(),
-    handleConcentrationSave: vi.fn(),
     handleTwoWeaponAttack: vi.fn(),
   })),
 }));
@@ -64,6 +68,7 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { useCombatAIIntegration } from '@/hooks/use-combat-ai-integration';
 import { useGameSession } from '@/hooks/use-game-session';
+import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import { userDataApi } from '@/services/user-data-api';
 import { processReactionResponse } from '@/utils/reactionSystem';
 import { checkConcentration } from '@/utils/spell-management';
@@ -439,7 +444,15 @@ describe('useCombatActions', () => {
         } as any);
       });
 
-      expect(mockTakeAction).toHaveBeenCalled();
+      // #621 B2b: the server rolls the enemy's attack; the browser sends the intent and no roll.
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc-1',
+        { type: 'attack', actorId: 'enemy-1', targetId: 'p1' },
+        'dm',
+        expect.any(Number),
+        'typed',
+      );
+      expect(mockTakeAction).not.toHaveBeenCalled();
 
       act(() => {
         vi.advanceTimersByTime(1500);
@@ -459,7 +472,13 @@ describe('useCombatActions', () => {
         await result.current.handleEnemyAttack({ name: 'Glare', attackBonus: 4 } as any);
       });
 
-      expect(mockTakeAction).toHaveBeenCalled();
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc-1',
+        { type: 'attack', actorId: 'enemy-1', targetId: 'p1' },
+        'dm',
+        expect.any(Number),
+        'typed',
+      );
     });
   });
 

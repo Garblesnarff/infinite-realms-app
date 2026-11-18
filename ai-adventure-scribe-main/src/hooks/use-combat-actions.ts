@@ -225,13 +225,11 @@ export const useCombatActions = (_isDM: boolean = false) => {
     handleRacialTraitUse,
     handleClassFeature,
     handleDeathSave,
-    handleConcentrationSave,
     handleTwoWeaponAttack,
   } = useCombatMechanics({
     activeEncounter,
     handleCombatAction,
     takeAction,
-    updateParticipant,
     selectedEnemy,
   });
 
@@ -265,7 +263,6 @@ export const useCombatActions = (_isDM: boolean = false) => {
     handleClassFeature,
     handleReactionOpportunity,
     handleDeathSave,
-    handleConcentrationSave,
     handleTwoWeaponAttack,
     handleApplyDamage,
     handleHealing,

@@ -1,20 +1,17 @@
 import { useState, useCallback } from 'react';
 
-import type { ActionType, CombatAction, CombatEncounter, CombatParticipant } from '@/types/combat';
+import type { ActionType, CombatAction, CombatEncounter } from '@/types/combat';
 
 import logger from '@/lib/logger';
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
-import { calculateProficiencyBonus } from '@/utils/character-calculations';
 import { canUseClassFeature } from '@/utils/classFeatures';
 import { needsDeathSaves } from '@/utils/combat/deathSaves';
-import { rollDice } from '@/utils/diceUtils';
 import {
   createDefaultLightWeapons,
   equipMainHandWeapon,
   equipOffHandWeapon,
 } from '@/utils/equipmentUtils';
 import { canUseRacialTrait } from '@/utils/racialTraits';
-import { rollDie } from '@/utils/rng';
 import {
   canUseTwoWeaponFighting,
   makeMainHandAttack,
@@ -34,7 +31,6 @@ interface UseCombatMechanicsProps {
     additionalData?: any,
   ) => Promise<void>;
   takeAction: (action: Partial<CombatAction>) => Promise<void>;
-  updateParticipant: (participantId: string, updates: Partial<CombatParticipant>) => void;
   selectedEnemy: string | null;
 }
 
@@ -42,7 +38,6 @@ export const useCombatMechanics = ({
   activeEncounter,
   handleCombatAction,
   takeAction,
-  updateParticipant,
   selectedEnemy,
 }: UseCombatMechanicsProps) => {
   const [showAdvantageModal, setShowAdvantageModal] = useState(false);
@@ -127,6 +122,23 @@ export const useCombatMechanics = ({
       const feature = participant.classFeatures.find((f) => f.name === featureName);
       if (!feature || !canUseClassFeature(feature, participant.resources)) return;
 
+      // #621 B2b: Second Wind, Action Surge and Divine Sense go to the server, which spends the use and rolls the
+      // heal. The browser rolls no dice for them. The body matches the option the DM panel posts.
+      if (
+        feature.name === 'second_wind' ||
+        feature.name === 'action_surge' ||
+        feature.name === 'divine_sense'
+      ) {
+        await executeAuthoritativeCombatIntent(
+          activeEncounter.id,
+          { type: feature.name, actorId: participantId },
+          'dm',
+          Date.now(),
+          'typed',
+        );
+        return;
+      }
+
       let description = '';
       let actionType: ActionType = 'use_class_feature' as ActionType;
 
@@ -141,16 +153,6 @@ export const useCombatMechanics = ({
             actionType = 'use_class_feature' as ActionType;
           }
           break;
-        case 'action_surge':
-          description = `${participant.name} uses Action Surge for an additional action`;
-          actionType = 'action_surge' as ActionType;
-          break;
-        case 'second_wind': {
-          const healing = rollDice(10, 1, participant.level || 1);
-          description = `${participant.name} uses Second Wind to heal ${healing.total} hit points`;
-          actionType = 'second_wind' as ActionType;
-          break;
-        }
         default:
           description = `${participant.name} uses ${feature.name}`;
       }
@@ -185,43 +187,6 @@ export const useCombatMechanics = ({
       );
     },
     [activeEncounter],
-  );
-
-  // Handle concentration save
-  const handleConcentrationSave = useCallback(
-    async (participantId: string, dc: number) => {
-      if (!activeEncounter) return;
-
-      const participant = activeEncounter.participants.find((p) => p.id === participantId);
-      if (!participant || !participant.activeConcentration) return;
-
-      const conMod = participant.abilityScores?.constitution?.modifier ?? 0;
-      const proficiencyBonus = calculateProficiencyBonus(participant.level || 1);
-      const saveBonus = conMod + proficiencyBonus; // Assuming proficiency in Con saves
-      const rollResult = rollDie(20) + saveBonus;
-      const succeeded = rollResult >= dc;
-      const description = `${participant.name} makes concentration save: ${rollResult} ${succeeded ? '(Success)' : '(Failure)'}`;
-
-      const action = {
-        participantId,
-        actionType: 'concentration_save' as ActionType,
-        description,
-        concentrationResult: {
-          succeeded,
-          roll: rollResult,
-          dc,
-          spellLost: !succeeded,
-        },
-      };
-
-      if (!succeeded) {
-        // Drop concentration
-        updateParticipant(participantId, { activeConcentration: null });
-      }
-
-      await takeAction(action);
-    },
-    [activeEncounter, takeAction, updateParticipant],
   );
 
   // Handle two-weapon fighting attacks
@@ -273,7 +238,6 @@ export const useCombatMechanics = ({
     handleRacialTraitUse,
     handleClassFeature,
     handleDeathSave,
-    handleConcentrationSave,
     handleTwoWeaponAttack,
   };
 };

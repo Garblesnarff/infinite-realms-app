@@ -38,9 +38,6 @@ vi.mock('@/utils/equipmentUtils', () => ({
   equipOffHandWeapon: vi.fn(),
 }));
 
-vi.mock('@/utils/character-calculations', () => ({
-  calculateProficiencyBonus: vi.fn(),
-}));
 
 vi.mock('@/utils/racialTraits', () => ({
   canUseRacialTrait: vi.fn(),
@@ -56,7 +53,6 @@ vi.mock('@/utils/twoWeaponFighting', () => ({
 import { useCombatMechanics } from '../use-combat-mechanics';
 
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
-import * as characterCalculations from '@/utils/character-calculations';
 import * as classFeatures from '@/utils/classFeatures';
 import * as deathSaves from '@/utils/combat/deathSaves';
 import * as diceUtils from '@/utils/diceUtils';
@@ -401,6 +397,7 @@ describe('useCombatMechanics', () => {
       const fighterProps = {
         ...defaultProps,
         activeEncounter: {
+          id: 'enc-1',
           participants: [
             {
               id: 'p1',
@@ -419,20 +416,22 @@ describe('useCombatMechanics', () => {
         await result.current.handleClassFeature('p1', 'action_surge');
       });
 
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'action_surge',
-        'p1',
-        undefined,
-        expect.objectContaining({
-          featureUsed: 'action_surge',
-        }),
+      // #621 B2b: the server spends the use. Same body as the DM panel's Action Surge option.
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc-1',
+        { type: 'action_surge', actorId: 'p1' },
+        'dm',
+        expect.any(Number),
+        'typed',
       );
+      expect(mockHandleCombatAction).not.toHaveBeenCalled();
     });
 
     it('should handle Second Wind', async () => {
       const fighterProps = {
         ...defaultProps,
         activeEncounter: {
+          id: 'enc-1',
           participants: [
             {
               id: 'p1',
@@ -447,21 +446,21 @@ describe('useCombatMechanics', () => {
 
       const { result } = renderHook(() => useCombatMechanics(fighterProps));
       vi.mocked(classFeatures.canUseClassFeature).mockReturnValue(true);
-      vi.mocked(diceUtils.rollDice).mockReturnValue({ total: 12 } as any);
 
       await act(async () => {
         await result.current.handleClassFeature('p1', 'second_wind');
       });
 
-      expect(diceUtils.rollDice).toHaveBeenCalledWith(10, 1, 5);
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'second_wind',
-        'p1',
-        undefined,
-        expect.objectContaining({
-          description: 'Fighter uses Second Wind to heal 12 hit points',
-        }),
+      // #621 B2b: the server spends the use and rolls the heal. The browser rolls no dice.
+      expect(diceUtils.rollDice).not.toHaveBeenCalled();
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        'enc-1',
+        { type: 'second_wind', actorId: 'p1' },
+        'dm',
+        expect.any(Number),
+        'typed',
       );
+      expect(mockHandleCombatAction).not.toHaveBeenCalled();
     });
 
     it('should handle default case for unknown feature', async () => {
@@ -546,87 +545,6 @@ describe('useCombatMechanics', () => {
         await result.current.handleDeathSave('non-existent');
       });
       expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('handleConcentrationSave', () => {
-    it('should handle successful concentration save', async () => {
-      const concentratingProps = {
-        ...defaultProps,
-        activeEncounter: {
-          participants: [
-            {
-              id: 'p1',
-              name: 'Wizard',
-              activeConcentration: { spellName: 'Haste' },
-              abilityScores: { constitution: { modifier: 2 } },
-              level: 5,
-            },
-          ],
-        },
-      };
-
-      const { result } = renderHook(() => useCombatMechanics(concentratingProps));
-      vi.mocked(characterCalculations.calculateProficiencyBonus).mockReturnValue(3);
-      // Math.random() is used in handleConcentrationSave
-      vi.spyOn(Math, 'random').mockReturnValue(0.95); // (0.95 * 20) + 1 = 20. Total = 20 + 2 + 3 = 25.
-
-      await act(async () => {
-        await result.current.handleConcentrationSave('p1', 10);
-      });
-
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          actionType: 'concentration_save',
-          concentrationResult: expect.objectContaining({ succeeded: true, roll: 25 }),
-        }),
-      );
-      expect(mockUpdateParticipant).not.toHaveBeenCalled();
-    });
-
-    it('should handle failed concentration save and drop concentration', async () => {
-      const concentratingProps = {
-        ...defaultProps,
-        activeEncounter: {
-          participants: [
-            {
-              id: 'p1',
-              name: 'Wizard',
-              activeConcentration: { spellName: 'Haste' },
-              abilityScores: { constitution: { modifier: 0 } },
-              level: 1,
-            },
-          ],
-        },
-      };
-
-      const { result } = renderHook(() => useCombatMechanics(concentratingProps));
-      vi.mocked(characterCalculations.calculateProficiencyBonus).mockReturnValue(2);
-      vi.spyOn(Math, 'random').mockReturnValue(0.05); // (0.05 * 20) + 1 = 2. Total = 2 + 0 + 2 = 4.
-
-      await act(async () => {
-        await result.current.handleConcentrationSave('p1', 10);
-      });
-
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          concentrationResult: expect.objectContaining({ succeeded: false }),
-        }),
-      );
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', { activeConcentration: null });
-    });
-
-    it('should return early if participant not found or not concentrating', async () => {
-      const { result } = renderHook(() => useCombatMechanics(defaultProps));
-      await act(async () => {
-        await result.current.handleConcentrationSave('non-existent', 10);
-      });
-      expect(mockTakeAction).not.toHaveBeenCalled();
-
-      await act(async () => {
-        await result.current.handleConcentrationSave('p1', 10); // p1 is not concentrating in defaultProps
-      });
-      expect(mockTakeAction).not.toHaveBeenCalled();
     });
   });
 

@@ -83,7 +83,6 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
     handleClassFeature,
     handleReactionOpportunity,
     handleDeathSave,
-    handleConcentrationSave: _handleConcentrationSave,
     handleTwoWeaponAttack,
     handleApplyDamage,
     handleHealing,
