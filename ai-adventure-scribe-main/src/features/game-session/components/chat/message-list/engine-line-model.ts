@@ -229,7 +229,7 @@ export function parseEngineLine(line: string, options: EngineLineOptions = {}): 
   }
 
   if (
-    /; no attack was rolled\.$| moved to \(| fled from combat\.| withdrew from combat\./.test(
+    /; no attack was rolled\.| moved to \(| fled from combat\.| withdrew from combat\./.test(
       sentence,
     )
   ) {
