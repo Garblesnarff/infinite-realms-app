@@ -62,6 +62,8 @@ export interface CombatEngineResult {
   actorName?: string;
   targetName?: string;
   movedFeet?: number;
+  /** Movement left after the approach. Zero means the attack was refused for want of movement (#1642). */
+  movementRemainingFeet?: number;
   distanceFeet?: number;
   reachFeet?: number;
   d20?: number;
@@ -252,6 +254,26 @@ export function formatCombatEngineParts(
       isFiniteNumber(result.distanceFeet) && isFiniteNumber(result.reachFeet)
         ? `; distance ${result.distanceFeet} ft (reach ${result.reachFeet} ft)`
         : '';
+    // #1642: with no movement left the line says so, not "could not move closer". The player is
+    // told what the turn still allows; the sentence after the classifier phrase keeps the move chip.
+    if (
+      result.movementRemainingFeet === 0 &&
+      isFiniteNumber(result.distanceFeet) &&
+      isFiniteNumber(result.reachFeet)
+    ) {
+      const advice = side === 'party' ? ' Use a ranged attack, Dash, or end the turn.' : '';
+      const noMovementLine = `⚙️ Engine: ${actor} has no movement left this turn; ${target} is ${result.distanceFeet} ft away (reach ${result.reachFeet} ft); no attack was rolled.${advice}`;
+      parts.push({
+        line: noMovementLine,
+        card: {
+          kind: 'move',
+          side,
+          line: noMovementLine,
+          title: `${actor} has no movement left this turn. No attack this turn.`,
+        },
+      });
+      return parts;
+    }
     const line = `⚙️ Engine: ${actor} ${movement}${spacing}; no attack was rolled.`;
     parts.push({
       line,
