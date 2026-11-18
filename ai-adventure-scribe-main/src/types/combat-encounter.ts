@@ -199,11 +199,6 @@ export interface DiceRollQueue {
 export interface CombatContextValue {
   state: CombatState;
 
-  // Combat management
-  startCombat: (
-    sessionId: string,
-    initialParticipants: Partial<CombatParticipant>[],
-  ) => Promise<void>;
   endCombat: () => Promise<void>;
 
   /**
@@ -219,10 +214,7 @@ export interface CombatContextValue {
   // Turn management
   nextTurn: () => Promise<void>;
 
-  // Actions
-
   // Participants
-  addParticipant: (participant: Partial<CombatParticipant>) => Promise<void>;
   removeParticipant: (participantId: string) => Promise<void>;
   updateParticipant: (participantId: string, updates: Partial<CombatParticipant>) => Promise<void>;
 

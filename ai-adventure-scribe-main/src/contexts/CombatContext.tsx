@@ -61,7 +61,7 @@ interface CombatProviderProps {
 
 export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessionId }) => {
   const [state, dispatch] = useReducer(combatReducer, initialCombatState);
-  const { state: characterState } = useCharacter();
+  useCharacter();
 
   // Ref to provide current state to extracted handlers without stale closures
   const stateRef = useRef(state);
@@ -108,19 +108,16 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
   // Extracted Callback Hooks
   // ===========================
 
-  const { startCombat, endCombat, nextTurn } = useCombatLifecycle({
+  const { endCombat, nextTurn } = useCombatLifecycle({
     dispatch,
-    character: characterState.character,
   });
 
-  const { addParticipant, removeParticipant, updateParticipant, moveParticipant } =
-    useParticipantManagement({
-      state,
-      dispatch,
-      character: characterState.character,
-      addReactionOpportunity,
-      addParticipantReactionOpportunity,
-    });
+  const { removeParticipant, updateParticipant, moveParticipant } = useParticipantManagement({
+    state,
+    dispatch,
+    addReactionOpportunity,
+    addParticipantReactionOpportunity,
+  });
 
   // ===========================
   // Context Value
@@ -130,12 +127,10 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
   const contextValue: CombatContextValue = useMemo(
     () => ({
       state,
-      startCombat,
       endCombat,
       refreshCombatState,
       recordDeathSaveTally,
       nextTurn,
-      addParticipant,
       removeParticipant,
       updateParticipant,
       // Reaction management
@@ -157,12 +152,10 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
     }),
     [
       state,
-      startCombat,
       endCombat,
       refreshCombatState,
       recordDeathSaveTally,
       nextTurn,
-      addParticipant,
       removeParticipant,
       updateParticipant,
       addReactionOpportunity,

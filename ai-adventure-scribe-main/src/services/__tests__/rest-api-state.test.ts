@@ -266,8 +266,8 @@ describe('rest API state application', () => {
   });
 
   it('sends the exact hit-dice spend body the server route consumes (#264)', async () => {
-    // The combat test above spies on restApi.shortRest without restoring; this
-    // test needs the real implementation.
+    // Restore any spy an earlier test left on restApi.shortRest, so this test calls the real
+    // implementation.
     (restApi.shortRest as unknown as { mockRestore?: () => void }).mockRestore?.();
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

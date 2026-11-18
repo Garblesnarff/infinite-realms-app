@@ -61,11 +61,9 @@ import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-actio
 import { userDataApi } from '@/services/user-data-api';
 
 describe('useCombatActions', () => {
-  const mockStartCombat = vi.fn();
   const mockEndCombat = vi.fn();
   const mockNextTurn = vi.fn();
   const mockTakeAction = vi.fn();
-  const mockAddParticipant = vi.fn();
   const mockUpdateParticipant = vi.fn();
   const mockValidateCombatAction = vi.fn();
 
@@ -78,11 +76,9 @@ describe('useCombatActions', () => {
         activeEncounter: null,
         showInitiativeTracker: false,
       },
-      startCombat: mockStartCombat,
       endCombat: mockEndCombat,
       nextTurn: mockNextTurn,
       takeAction: mockTakeAction,
-      addParticipant: mockAddParticipant,
       updateParticipant: mockUpdateParticipant,
     } as any);
 
@@ -109,77 +105,6 @@ describe('useCombatActions', () => {
     expect(result.current.isInCombat).toBe(false);
     expect(result.current.showCombatMode).toBe(false);
     expect(result.current.selectedEnemy).toBe(null);
-  });
-
-  describe('handleStartCombat', () => {
-    it('should start combat when participants are present', async () => {
-      vi.mocked(useCombat).mockReturnValue({
-        state: {
-          isInCombat: false,
-          activeEncounter: {
-            participants: [
-              {
-                id: 'p1',
-                participantType: 'player',
-                name: 'Hero',
-                armorClass: 15,
-                currentHitPoints: 20,
-                maxHitPoints: 20,
-              },
-              {
-                id: 'm1',
-                participantType: 'monster',
-                name: 'Goblin',
-                armorClass: 12,
-                currentHitPoints: 7,
-                maxHitPoints: 7,
-              },
-            ],
-          },
-        },
-        startCombat: mockStartCombat,
-      } as any);
-
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleStartCombat();
-      });
-
-      expect(mockStartCombat).toHaveBeenCalled();
-      expect(result.current.showCombatMode).toBe(true);
-    });
-
-    it('should not start combat if already starting', async () => {
-      const { result } = renderHook(() => useCombatActions());
-
-      // Simulate no participants
-      await act(async () => {
-        await result.current.handleStartCombat();
-      });
-
-      expect(mockStartCombat).not.toHaveBeenCalled();
-    });
-
-    it('should not start combat if no player participants', async () => {
-      vi.mocked(useCombat).mockReturnValue({
-        state: {
-          isInCombat: false,
-          activeEncounter: {
-            participants: [{ id: 'm1', participantType: 'monster', name: 'Goblin' }],
-          },
-        },
-        startCombat: mockStartCombat,
-      } as any);
-
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleStartCombat();
-      });
-
-      expect(mockStartCombat).not.toHaveBeenCalled();
-    });
   });
 
   describe('handleEndCombat', () => {
@@ -380,23 +305,6 @@ describe('useCombatActions', () => {
         'dm',
         expect.any(Number),
         'typed',
-      );
-    });
-  });
-
-  describe('addEnemy', () => {
-    it('should add a new goblin participant', () => {
-      const { result } = renderHook(() => useCombatActions());
-
-      act(() => {
-        result.current.addEnemy();
-      });
-
-      expect(mockAddParticipant).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'Goblin',
-          participantType: 'monster',
-        }),
       );
     });
   });
