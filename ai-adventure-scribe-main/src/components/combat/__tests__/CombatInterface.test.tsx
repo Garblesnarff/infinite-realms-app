@@ -14,9 +14,6 @@ vi.mock('../CombatReadyCard', () => ({ CombatReadyCard: () => <div>Combat ready<
 vi.mock('../EnemyCard', () => ({ default: () => <div>Enemy card</div> }));
 vi.mock('../HPTracker', () => ({ default: () => <div>HP tracker</div> }));
 vi.mock('../InitiativeTracker', () => ({ default: () => <div>Initiative tracker</div> }));
-vi.mock('../ReactionOpportunityPanel', () => ({
-  default: () => <div>Reaction opportunities</div>,
-}));
 
 const mockCombatActions = () => ({
   state: { showCombatLog: false },
@@ -47,16 +44,12 @@ const mockCombatActions = () => ({
   handleEnemyAttack: vi.fn(),
   addEnemy: vi.fn(),
   handleEnhancedAttack: vi.fn(),
-  handleRacialTraitUse: vi.fn(),
   handleClassFeature: vi.fn(),
-  handleReactionOpportunity: vi.fn(),
   handleDeathSave: vi.fn(),
   handleConcentrationSave: vi.fn(),
-  handleTwoWeaponAttack: vi.fn(),
   handleApplyDamage: vi.fn(),
   handleHealing: vi.fn(),
   nextTurn: vi.fn(),
-  rollInitiative: vi.fn(),
   showAdvantageModal: false,
   setShowAdvantageModal: vi.fn(),
   pendingAttack: null,
@@ -121,6 +114,7 @@ describe('CombatInterface', () => {
       playerParticipants: [player],
       enemyParticipants: [npc],
       isPlayersTurn: false,
+      selectedEnemy: 'npc-1',
     } as never);
     const { rerender } = render(<CombatInterface isDM />);
 
@@ -132,21 +126,12 @@ describe('CombatInterface', () => {
       playerParticipants: [player],
       enemyParticipants: [npc],
       isPlayersTurn: true,
+      selectedEnemy: 'npc-1',
     } as never);
     rerender(<CombatInterface isDM />);
 
     expect(screen.getByText("Rook's Turn")).toBeInTheDocument();
-    for (const action of [
-      'Grapple',
-      'Shove',
-      'Two-Weapon Attack',
-      'Dash',
-      'Dodge',
-      'Help',
-      'Hide',
-      'Ready Action',
-      'Cast Spell',
-    ]) {
+    for (const action of ['Grapple', 'Shove', 'Dash', 'Dodge', 'Hide', 'Cast Spell']) {
       expect(screen.getByRole('button', { name: action })).toBeEnabled();
     }
   });

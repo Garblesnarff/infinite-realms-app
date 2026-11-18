@@ -218,11 +218,8 @@ export interface CombatContextValue {
 
   // Turn management
   nextTurn: () => Promise<void>;
-  rollInitiative: (participantId: string) => Promise<number>;
 
   // Actions
-  takeAction: (action: Partial<CombatAction>) => Promise<void>;
-  dealDamage: (participantId: string, damage: number, damageType?: DamageType) => Promise<void>;
 
   // Participants
   addParticipant: (participant: Partial<CombatParticipant>) => Promise<void>;

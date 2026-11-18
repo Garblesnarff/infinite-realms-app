@@ -17,7 +17,6 @@ import { CombatReadyCard } from './CombatReadyCard';
 import EnemyCard from './EnemyCard';
 import HPTracker from './HPTracker';
 import InitiativeTracker from './InitiativeTracker';
-import ReactionOpportunityPanel from './ReactionOpportunityPanel';
 
 import type { SpellCastHandlerRef } from '@/features/game-session/components/game/spell-cast-handler';
 
@@ -69,8 +68,6 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
     showCombatMode,
     isStartingCombat,
     actionValidation,
-    reactionOpportunities,
-    setReactionOpportunities,
     localShowInitiativeTracker,
     setLocalShowInitiativeTracker,
     handleStartCombat,
@@ -79,15 +76,11 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
     handleEnemyAttack,
     addEnemy,
     handleEnhancedAttack,
-    handleRacialTraitUse,
     handleClassFeature,
-    handleReactionOpportunity,
     handleDeathSave,
-    handleTwoWeaponAttack,
     handleApplyDamage,
     handleHealing,
     nextTurn,
-    rollInitiative,
     showAdvantageModal: _showAdvantageModal,
     setShowAdvantageModal: _setShowAdvantageModal,
     pendingAttack: _pendingAttack,
@@ -228,28 +221,12 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
                   onCombatAction={handleCombatAction}
                   onNextTurn={nextTurn}
                   onOpenSpellPicker={() => setSpellPickerOpen(true)}
-                  onRollInitiative={rollInitiative}
-                  onTwoWeaponAttack={handleTwoWeaponAttack}
                   onEnhancedAttack={handleEnhancedAttack}
                   onClassFeatureUse={handleClassFeature}
-                  onRacialTraitUse={handleRacialTraitUse}
                   onDeathSave={handleDeathSave}
                   showNextTurnButton={isDM}
-                  showInitiativeRoll={isDM}
                   showControls={isDM}
                   isPlayersTurn={isPlayersTurn}
-                />
-              )}
-
-              {isDM && (
-                <ReactionOpportunityPanel
-                  opportunities={reactionOpportunities}
-                  onReactionSelected={handleReactionOpportunity}
-                  onOpportunityDismissed={(opportunityId) =>
-                    setReactionOpportunities((prev) =>
-                      prev.filter((opp) => opp.id !== opportunityId),
-                    )
-                  }
                 />
               )}
 

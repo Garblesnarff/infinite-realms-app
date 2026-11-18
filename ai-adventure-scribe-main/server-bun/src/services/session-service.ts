@@ -11,6 +11,7 @@ import { eq, and, desc, sql, or, type SQL } from 'drizzle-orm';
 import { ClassFeaturesService } from './class-features-service.js';
 import { ammunitionPreservingSessionState } from './combat/ammunition.js';
 import { attackBudgetPreservingState } from './combat/attack-budget-service.js';
+import { combatTurnFlagsPreservingState } from './combat/combat-turn-flags.js';
 import { actionSurgePreservingState } from './combat/combat-turn-resources.js';
 import { enginePreservingSessionState } from './combat/pending-combat-entry.js';
 import { trackerPreservingState } from './dm/story-tracker.js';
@@ -645,7 +646,11 @@ export class SessionService {
                 trackerPreservingState(
                   ammunitionPreservingSessionState(
                     enginePreservingSessionState(
-                      attackBudgetPreservingState(actionSurgePreservingState(updates.sessionState)),
+                      combatTurnFlagsPreservingState(
+                        attackBudgetPreservingState(
+                          actionSurgePreservingState(updates.sessionState),
+                        ),
+                      ),
                     ),
                   ),
                 ),

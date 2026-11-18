@@ -636,6 +636,9 @@ export interface AttackProposal {
  */
 export interface AttackResult {
   hit: boolean;
+  /** #1637: Sneak Attack's rolled damage and its dice (e.g. "2d6"), when the rider applied. */
+  sneakAttackDamage?: number;
+  sneakAttackDice?: string;
   /** The kept natural d20 face used for this attack, when the result came from an attack roll. */
   d20?: number;
   /**

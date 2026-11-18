@@ -3,7 +3,6 @@
 import { renderHook, act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-
 // Mock dependencies BEFORE importing the module under test
 vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: vi.fn(),
@@ -28,10 +27,8 @@ vi.mock('@/hooks/use-combat-mechanics', () => ({
     pendingAttack: null,
     setPendingAttack: vi.fn(),
     handleEnhancedAttack: vi.fn(),
-    handleRacialTraitUse: vi.fn(),
     handleClassFeature: vi.fn(),
     handleDeathSave: vi.fn(),
-    handleTwoWeaponAttack: vi.fn(),
   })),
 }));
 
@@ -47,19 +44,11 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/utils/reactionSystem', () => ({
-  processReactionResponse: vi.fn(),
-}));
-
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     applyCharacterDamage: vi.fn().mockResolvedValue({}),
     applyCharacterHealing: vi.fn().mockResolvedValue({}),
   },
-}));
-
-vi.mock('@/utils/spell-management', () => ({
-  checkConcentration: vi.fn(),
 }));
 
 import { useCombatActions } from '../use-combat-actions';
@@ -70,8 +59,6 @@ import { useCombatAIIntegration } from '@/hooks/use-combat-ai-integration';
 import { useGameSession } from '@/hooks/use-game-session';
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import { userDataApi } from '@/services/user-data-api';
-import { processReactionResponse } from '@/utils/reactionSystem';
-import { checkConcentration } from '@/utils/spell-management';
 
 describe('useCombatActions', () => {
   const mockStartCombat = vi.fn();
@@ -94,7 +81,6 @@ describe('useCombatActions', () => {
       startCombat: mockStartCombat,
       endCombat: mockEndCombat,
       nextTurn: mockNextTurn,
-      rollInitiative: vi.fn(),
       takeAction: mockTakeAction,
       addParticipant: mockAddParticipant,
       updateParticipant: mockUpdateParticipant,
@@ -115,7 +101,6 @@ describe('useCombatActions', () => {
     } as any);
 
     mockValidateCombatAction.mockResolvedValue({ isValid: true, suggestions: [], errors: [] });
-    vi.mocked(checkConcentration).mockReturnValue(true);
   });
 
   it('should initialize with default state', () => {
@@ -297,33 +282,6 @@ describe('useCombatActions', () => {
       } as any);
     });
 
-    it('should execute action if validation passes', async () => {
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'target-1');
-      });
-
-      expect(mockValidateCombatAction).toHaveBeenCalled();
-      expect(mockTakeAction).toHaveBeenCalled();
-    });
-
-    it('should not execute action if validation fails', async () => {
-      mockValidateCombatAction.mockResolvedValue({
-        isValid: false,
-        suggestions: [],
-        errors: ['No movement left'],
-      });
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'target-1');
-      });
-
-      expect(mockTakeAction).not.toHaveBeenCalled();
-      expect(result.current.actionValidation?.isValid).toBe(false);
-    });
-
     it('should not execute if participant not found', async () => {
       const { result } = renderHook(() => useCombatActions());
 
@@ -346,62 +304,6 @@ describe('useCombatActions', () => {
         await result.current.handleCombatAction('attack', 'p1', 'target-1');
       });
 
-      expect(mockTakeAction).not.toHaveBeenCalled();
-    });
-
-    it('should proceed with action if validation throws', async () => {
-      mockValidateCombatAction.mockRejectedValue(new Error('Validation failed'));
-      const { result } = renderHook(() => useCombatActions());
-
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'target-1');
-      });
-
-      expect(mockTakeAction).toHaveBeenCalled();
-    });
-  });
-
-  describe('handleReactionOpportunity', () => {
-    const activeEncounter = {
-      id: 'enc-1',
-      participants: [{ id: 'p1', name: 'Hero' }],
-    };
-
-    beforeEach(() => {
-      vi.mocked(useCombat).mockReturnValue({
-        state: { activeEncounter, isInCombat: true },
-        takeAction: mockTakeAction,
-        updateParticipant: mockUpdateParticipant,
-      } as any);
-
-      vi.mocked(processReactionResponse).mockReturnValue({ actionType: 'reaction' } as any);
-    });
-
-    it('should process and take reaction action', async () => {
-      const { result } = renderHook(() => useCombatActions());
-      const opportunity = { id: 'opp-1', participantId: 'p1' } as any;
-
-      await act(async () => {
-        await result.current.handleReactionOpportunity(opportunity, 'attack' as any);
-      });
-
-      expect(processReactionResponse).toHaveBeenCalled();
-      expect(mockTakeAction).toHaveBeenCalled();
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', { reactionTaken: true });
-    });
-
-    it('should handle errors during reaction processing', async () => {
-      vi.mocked(processReactionResponse).mockImplementation(() => {
-        throw new Error('Reaction error');
-      });
-      const { result } = renderHook(() => useCombatActions());
-      const opportunity = { id: 'opp-1', participantId: 'p1' } as any;
-
-      await act(async () => {
-        await result.current.handleReactionOpportunity(opportunity, 'attack' as any);
-      });
-
-      // Should not crash and should log error
       expect(mockTakeAction).not.toHaveBeenCalled();
     });
   });

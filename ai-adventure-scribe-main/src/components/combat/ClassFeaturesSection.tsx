@@ -6,6 +6,10 @@ import type { CombatEncounter as Encounter, CharacterResources } from '@/types/c
 import { Button } from '@/components/ui/button';
 import { canUseClassFeature } from '@/utils/classFeatures';
 
+// The Fighter features and Divine Sense that the server answers (#975). Other class features have no
+// server intent, so they are not offered here.
+const SERVER_FEATURES = new Set(['second_wind', 'action_surge', 'divine_sense']);
+
 type Participant = Encounter['participants'][number];
 
 interface ClassFeaturesSectionProps {
@@ -22,7 +26,7 @@ export const ClassFeaturesSection: React.FC<ClassFeaturesSectionProps> = React.m
     return (
       <div className="flex gap-2 flex-wrap">
         {currentParticipant.classFeatures
-          .filter((feature) => feature.type !== 'passive')
+          .filter((feature) => feature.type !== 'passive' && SERVER_FEATURES.has(feature.name))
           .map((feature) => {
             const canUse = canUseClassFeature(
               feature,

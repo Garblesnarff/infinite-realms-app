@@ -32,33 +32,12 @@ vi.mock('@/utils/diceUtils', () => ({
   rollAttack: vi.fn(),
 }));
 
-vi.mock('@/utils/equipmentUtils', () => ({
-  createDefaultLightWeapons: vi.fn(),
-  equipMainHandWeapon: vi.fn(),
-  equipOffHandWeapon: vi.fn(),
-}));
-
-
-vi.mock('@/utils/racialTraits', () => ({
-  canUseRacialTrait: vi.fn(),
-}));
-
-vi.mock('@/utils/twoWeaponFighting', () => ({
-  canUseTwoWeaponFighting: vi.fn(),
-  makeMainHandAttack: vi.fn(),
-  canMakeOffHandAttack: vi.fn(),
-  makeOffHandAttack: vi.fn(),
-}));
-
 import { useCombatMechanics } from '../use-combat-mechanics';
 
 import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import * as classFeatures from '@/utils/classFeatures';
 import * as deathSaves from '@/utils/combat/deathSaves';
 import * as diceUtils from '@/utils/diceUtils';
-import * as equipmentUtils from '@/utils/equipmentUtils';
-import * as racialTraits from '@/utils/racialTraits';
-import * as twoWeaponFighting from '@/utils/twoWeaponFighting';
 
 describe('useCombatMechanics', () => {
   const mockHandleCombatAction = vi.fn();
@@ -215,184 +194,7 @@ describe('useCombatMechanics', () => {
     });
   });
 
-  describe('handleRacialTraitUse', () => {
-    it('should handle breath_weapon trait', async () => {
-      const dragonbornProps = {
-        ...defaultProps,
-        activeEncounter: {
-          participants: [
-            {
-              id: 'p1',
-              name: 'Dragonborn',
-              racialTraits: [{ name: 'breath_weapon' }],
-            },
-          ],
-        },
-      };
-
-      const { result } = renderHook(() => useCombatMechanics(dragonbornProps));
-      vi.mocked(racialTraits.canUseRacialTrait).mockReturnValue(true);
-
-      await act(async () => {
-        await result.current.handleRacialTraitUse('p1', 'breath_weapon');
-      });
-
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'bonus_action',
-        'p1',
-        undefined,
-        expect.objectContaining({
-          traitUsed: 'breath_weapon',
-          description: expect.stringContaining('uses their breath weapon'),
-        }),
-      );
-    });
-
-    it('should handle relentless_endurance trait', async () => {
-      const halfOrcProps = {
-        ...defaultProps,
-        activeEncounter: {
-          participants: [
-            {
-              id: 'p1',
-              name: 'Half-Orc',
-              racialTraits: [{ name: 'relentless_endurance' }],
-            },
-          ],
-        },
-      };
-
-      const { result } = renderHook(() => useCombatMechanics(halfOrcProps));
-      vi.mocked(racialTraits.canUseRacialTrait).mockReturnValue(true);
-
-      await act(async () => {
-        await result.current.handleRacialTraitUse('p1', 'relentless_endurance');
-      });
-
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'bonus_action',
-        'p1',
-        undefined,
-        expect.objectContaining({
-          traitUsed: 'relentless_endurance',
-          description: expect.stringContaining('drops to 1 hit point'),
-        }),
-      );
-    });
-
-    it('should not use trait if requirements not met', async () => {
-      const { result } = renderHook(() => useCombatMechanics(defaultProps));
-      vi.mocked(racialTraits.canUseRacialTrait).mockReturnValue(false);
-
-      await act(async () => {
-        await result.current.handleRacialTraitUse('p1', 'lucky');
-      });
-
-      expect(mockHandleCombatAction).not.toHaveBeenCalled();
-    });
-
-    it('should handle default case for unknown trait', async () => {
-      const unknownProps = {
-        ...defaultProps,
-        activeEncounter: {
-          participants: [
-            {
-              id: 'p1',
-              name: 'Hero',
-              racialTraits: [{ name: 'mysterious_power' }],
-            },
-          ],
-        },
-      };
-
-      const { result } = renderHook(() => useCombatMechanics(unknownProps));
-      vi.mocked(racialTraits.canUseRacialTrait).mockReturnValue(true);
-
-      await act(async () => {
-        await result.current.handleRacialTraitUse('p1', 'mysterious_power');
-      });
-
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'bonus_action',
-        'p1',
-        undefined,
-        expect.objectContaining({
-          traitUsed: 'mysterious_power',
-          description: expect.stringContaining('uses mysterious_power'),
-        }),
-      );
-    });
-  });
-
   describe('handleClassFeature', () => {
-    it('should handle rage activation', async () => {
-      const rageProps = {
-        ...defaultProps,
-        activeEncounter: {
-          participants: [
-            {
-              id: 'p1',
-              name: 'Barbarian',
-              classFeatures: [{ name: 'rage' }],
-              resources: { rage: { current: 2 } },
-              isRaging: false,
-            },
-          ],
-        },
-      };
-
-      const { result } = renderHook(() => useCombatMechanics(rageProps));
-      vi.mocked(classFeatures.canUseClassFeature).mockReturnValue(true);
-
-      await act(async () => {
-        await result.current.handleClassFeature('p1', 'rage');
-      });
-
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'use_class_feature',
-        'p1',
-        undefined,
-        expect.objectContaining({
-          featureUsed: 'rage',
-          description: expect.stringContaining('enters a rage'),
-        }),
-      );
-    });
-
-    it('should handle rage deactivation', async () => {
-      const rageProps = {
-        ...defaultProps,
-        activeEncounter: {
-          participants: [
-            {
-              id: 'p1',
-              name: 'Barbarian',
-              classFeatures: [{ name: 'rage' }],
-              resources: { rage: { current: 2 } },
-              isRaging: true,
-            },
-          ],
-        },
-      };
-
-      const { result } = renderHook(() => useCombatMechanics(rageProps));
-      vi.mocked(classFeatures.canUseClassFeature).mockReturnValue(true);
-
-      await act(async () => {
-        await result.current.handleClassFeature('p1', 'rage');
-      });
-
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'end_rage',
-        'p1',
-        undefined,
-        expect.objectContaining({
-          featureUsed: 'rage',
-          description: expect.stringContaining('stops raging'),
-        }),
-      );
-    });
-
     it('should handle Action Surge', async () => {
       const fighterProps = {
         ...defaultProps,
@@ -462,38 +264,35 @@ describe('useCombatMechanics', () => {
       );
       expect(mockHandleCombatAction).not.toHaveBeenCalled();
     });
+  });
 
-    it('should handle default case for unknown feature', async () => {
-      const unknownProps = {
-        ...defaultProps,
-        activeEncounter: {
-          participants: [
-            {
-              id: 'p1',
-              name: 'Hero',
-              classFeatures: [{ name: 'unknown_talent' }],
-              resources: { unknown_talent: { current: 1 } },
-            },
-          ],
-        },
-      };
-
-      const { result } = renderHook(() => useCombatMechanics(unknownProps));
+  describe('handleClassFeature with no server intent (#621 B2b step 2)', () => {
+    it('sends nothing for a feature that has no server intent', async () => {
+      vi.mocked(executeAuthoritativeCombatIntent).mockClear();
       vi.mocked(classFeatures.canUseClassFeature).mockReturnValue(true);
-
-      await act(async () => {
-        await result.current.handleClassFeature('p1', 'unknown_talent');
-      });
-
-      expect(mockHandleCombatAction).toHaveBeenCalledWith(
-        'use_class_feature',
-        'p1',
-        undefined,
-        expect.objectContaining({
-          featureUsed: 'unknown_talent',
-          description: expect.stringContaining('uses unknown_talent'),
+      const { result } = renderHook(() =>
+        useCombatMechanics({
+          activeEncounter: {
+            id: 'enc-1',
+            participants: [
+              {
+                id: 'p1',
+                name: 'Barbarian',
+                classFeatures: [{ name: 'rage' }],
+                resources: {},
+                isRaging: false,
+              },
+            ],
+            currentTurnParticipantId: 'p1',
+          } as any,
         }),
       );
+
+      await act(async () => {
+        await result.current.handleClassFeature('p1', 'rage');
+      });
+
+      expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
     });
   });
 
@@ -545,114 +344,6 @@ describe('useCombatMechanics', () => {
         await result.current.handleDeathSave('non-existent');
       });
       expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('handleTwoWeaponAttack', () => {
-    it('should handle two-weapon fighting and execute both attacks', async () => {
-      const fighterProps = {
-        ...defaultProps,
-        activeEncounter: {
-          participants: [
-            {
-              id: 'p1',
-              name: 'Dual Wielder',
-              mainHandWeapon: { name: 'Scimitar' },
-              offHandWeapon: { name: 'Shortsword' },
-            },
-          ],
-        },
-      };
-
-      const { result } = renderHook(() => useCombatMechanics(fighterProps));
-      vi.mocked(twoWeaponFighting.canUseTwoWeaponFighting).mockReturnValue(true);
-      vi.mocked(twoWeaponFighting.canMakeOffHandAttack).mockReturnValue(true);
-      vi.mocked(twoWeaponFighting.makeMainHandAttack).mockReturnValue({ type: 'main' } as any);
-      vi.mocked(twoWeaponFighting.makeOffHandAttack).mockReturnValue({ type: 'off' } as any);
-
-      await act(async () => {
-        await result.current.handleTwoWeaponAttack('p1', 'p2');
-      });
-
-      expect(twoWeaponFighting.makeMainHandAttack).toHaveBeenCalled();
-      expect(twoWeaponFighting.makeOffHandAttack).toHaveBeenCalled();
-      expect(mockTakeAction).toHaveBeenCalledTimes(2);
-    });
-
-    it('should equip default weapons if none present', async () => {
-      const unarmedProps = {
-        ...defaultProps,
-        activeEncounter: {
-          participants: [
-            {
-              id: 'p1',
-              name: 'Unarmed',
-              mainHandWeapon: null,
-              offHandWeapon: null,
-            },
-          ],
-        },
-      };
-
-      const { result } = renderHook(() => useCombatMechanics(unarmedProps));
-      const mockWeapons = { scimitar: { name: 'S' }, shortsword: { name: 'SS' } };
-      vi.mocked(equipmentUtils.createDefaultLightWeapons).mockReturnValue(mockWeapons as any);
-      vi.mocked(equipmentUtils.equipMainHandWeapon).mockReturnValue({
-        mainHandWeapon: mockWeapons.scimitar,
-      } as any);
-      vi.mocked(equipmentUtils.equipOffHandWeapon).mockReturnValue({
-        mainHandWeapon: mockWeapons.scimitar,
-        offHandWeapon: mockWeapons.shortsword,
-      } as any);
-      vi.mocked(twoWeaponFighting.canUseTwoWeaponFighting).mockReturnValue(true);
-
-      await act(async () => {
-        await result.current.handleTwoWeaponAttack('p1', 'p2');
-      });
-
-      expect(equipmentUtils.createDefaultLightWeapons).toHaveBeenCalled();
-      expect(equipmentUtils.equipMainHandWeapon).toHaveBeenCalled();
-      expect(equipmentUtils.equipOffHandWeapon).toHaveBeenCalled();
-    });
-
-    it('should log warning if two-weapon fighting is not allowed', async () => {
-      const { result } = renderHook(() => useCombatMechanics(defaultProps));
-      vi.mocked(twoWeaponFighting.canUseTwoWeaponFighting).mockReturnValue(false);
-
-      await act(async () => {
-        await result.current.handleTwoWeaponAttack('p1', 'p2');
-      });
-
-      // No attacks should be made
-      expect(mockTakeAction).not.toHaveBeenCalled();
-    });
-
-    it('should handle missing target and selectedEnemy', async () => {
-      const noEnemyProps = {
-        ...defaultProps,
-        selectedEnemy: null,
-      };
-      const { result } = renderHook(() => useCombatMechanics(noEnemyProps));
-      vi.mocked(twoWeaponFighting.canUseTwoWeaponFighting).mockReturnValue(true);
-
-      await act(async () => {
-        await result.current.handleTwoWeaponAttack('p1');
-      });
-
-      expect(twoWeaponFighting.makeMainHandAttack).toHaveBeenCalledWith(expect.anything(), '');
-    });
-
-    it('should not make off-hand attack if not allowed', async () => {
-      const { result } = renderHook(() => useCombatMechanics(defaultProps));
-      vi.mocked(twoWeaponFighting.canUseTwoWeaponFighting).mockReturnValue(true);
-      vi.mocked(twoWeaponFighting.canMakeOffHandAttack).mockReturnValue(false);
-
-      await act(async () => {
-        await result.current.handleTwoWeaponAttack('p1', 'p2');
-      });
-
-      expect(twoWeaponFighting.makeMainHandAttack).toHaveBeenCalled();
-      expect(twoWeaponFighting.makeOffHandAttack).not.toHaveBeenCalled();
     });
   });
 });

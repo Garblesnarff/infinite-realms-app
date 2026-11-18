@@ -18,13 +18,21 @@
 import { logAttackResolution, participantSlug } from './attack-telemetry.js';
 import { appliesBlessDie } from './bless-rider.js';
 import { mookGroupAttackBonus } from './boss-moves.js';
-import { resolveAttackRules } from './combat-rules.js';
+import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
+import {
+  activeAlliesOf,
+  claimSneakAttack,
+  clearHiddenAttacker,
+  clearSneakAttackSpent,
+  isHiddenAttacker,
+  rogueLevelOf,
+} from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
   claimTurnReactionAndResolve,
 } from './combat-turn-resources.js';
-import { calculateDamage, resolveCriticalHit } from './damage-calculator.js';
+import { calculateDamage, resolveCriticalHit, rollDamageDice } from './damage-calculator.js';
 import {
   getParticipantWithStats,
   getParticipantsWithStatsBatch,
@@ -56,6 +64,13 @@ import {
   sorceryPointsLedger,
   spendMetamagicPoints,
 } from './resource-ledger.js';
+import {
+  appliesSneakAttackRider,
+  SNEAK_ATTACK_ALLY_REACH_FEET,
+  sneakAttackDice,
+  sneakAttackWeaponQualifies,
+  splitResistedSneakTotal,
+} from './sneak-attack-rider.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import {
@@ -446,6 +461,84 @@ export class CombatAttackService {
   }
 
   /**
+   * Sneak Attack on a hit (#1637, 2014 SRD 5.1). Returns the rider's part of the hit, or null when it
+   * does not apply: a Rogue's finesse or ranged weapon, with advantage from an engine source or a
+   * non-incapacitated ally within 5 ft of the target (the ally clause needs a tactical map). It never
+   * applies with any disadvantage source, and it is once per turn. The turn is claimed in one guarded
+   * UPDATE before any damage; a claim error means no rider, and the attack goes on.
+   */
+  private async sneakAttackRiderDamage(input: {
+    encounterId: string;
+    attackerId: string;
+    targetId: string;
+    characterId: string | null | undefined;
+    weapon: WeaponRuleProfile;
+    rules: {
+      advantage: boolean;
+      advantageSources: string[];
+      disadvantageSources: string[];
+    };
+    tacticalMap: Awaited<ReturnType<typeof loadActiveTacticalMap>>;
+    defenses: ReturnType<typeof aggregateResistances>;
+    isCritical: boolean;
+    weaponCalc: { damageBeforeResistances: number };
+  }): Promise<{ damage: number; dice: string } | null> {
+    if (!input.characterId || !sneakAttackWeaponQualifies(input.weapon)) return null;
+    const dice = sneakAttackDice(await rogueLevelOf(input.characterId), input.isCritical);
+    if (!dice) return null;
+
+    let allyWithinReachOfTarget = false;
+    const map = input.tacticalMap;
+    const target = map?.entities.find((entity) => entity.id === input.targetId);
+    if (map && target) {
+      for (const ally of await activeAlliesOf(
+        input.encounterId,
+        input.attackerId,
+        input.targetId,
+      )) {
+        const entity = map.entities.find((candidate) => candidate.id === ally.id);
+        if (entity && getDistance(entity, target) <= SNEAK_ATTACK_ALLY_REACH_FEET) {
+          allyWithinReachOfTarget = true;
+          break;
+        }
+      }
+    }
+    const applies = appliesSneakAttackRider({
+      advantage: input.rules.advantage,
+      disadvantage: input.rules.disadvantageSources.length > 0,
+      advantageSources: input.rules.advantageSources,
+      allyWithinReachOfTarget,
+      alreadyUsedThisTurn: false,
+    });
+    if (!applies) return null;
+
+    try {
+      const claimed = await claimSneakAttack(input.encounterId, input.attackerId);
+      if (!claimed) return null;
+    } catch (error) {
+      logger.warn({
+        msg: 'COMBAT_SNEAK_ATTACK_CLAIM_FAILED',
+        encounterId: input.encounterId,
+        participantId: input.attackerId,
+        error,
+      });
+      return null;
+    }
+
+    // Weapon and rider share the weapon's damage type, so resistance applies once to the total. The
+    // weapon's own part was resisted alone in damageCalc; the rider's part is what the total adds.
+    const split = splitResistedSneakTotal({
+      weaponRaw: input.weaponCalc.damageBeforeResistances,
+      riderRaw: rollDamageDice(dice, false),
+      damageType: input.weapon.damageType,
+      resistances: input.defenses.resistances,
+      vulnerabilities: input.defenses.vulnerabilities,
+      immunities: input.defenses.immunities,
+    });
+    return { damage: split.rider, dice };
+  }
+
+  /**
    * Divine Smite on a hit (#1362, 2014 PHB p.85): spend the declared slot, then roll the Smite
    * dice (see divine-smite-rider.ts) radiant, resisted on its own the way the Hex rider's
    * necrotic damage is. The slot was checked up front, so a spend that still fails here is a
@@ -567,14 +660,21 @@ export class CombatAttackService {
     if (!targetData) throw new NotFoundError('Target participant', targetId);
     if (!attackerData) throw new NotFoundError('Attacker participant', attackerId);
 
-    const [weapon, attackerProfile, attackerConditions, targetConditions, tacticalMap] =
-      await Promise.all([
-        getEquippedWeaponProfile(attackerData.participant, weaponId),
-        getParticipantAbilityProfile(attackerData.participant),
-        getActiveConditionNames(attackerId),
-        getActiveConditionNames(targetId),
-        loadActiveTacticalMap(attackerData.participant.encounter.sessionId),
-      ]);
+    const [
+      weapon,
+      attackerProfile,
+      attackerConditions,
+      targetConditions,
+      tacticalMap,
+      attackerHidden,
+    ] = await Promise.all([
+      getEquippedWeaponProfile(attackerData.participant, weaponId),
+      getParticipantAbilityProfile(attackerData.participant),
+      getActiveConditionNames(attackerId),
+      getActiveConditionNames(targetId),
+      loadActiveTacticalMap(attackerData.participant.encounter.sessionId),
+      isHiddenAttacker(encounterId, attackerId),
+    ]);
     const { participant: targetParticipant, stats: targetStats } = targetData;
     const baseTargetAc = resolveParticipantArmorClass(targetParticipant.armorClass, {
       participantId: targetParticipant.id,
@@ -600,6 +700,7 @@ export class CombatAttackService {
       requestedAdvantage: advantage,
       requestedDisadvantage: disadvantage,
       targetDodging: targetParticipant.isDodging,
+      attackerHidden,
       attackerConditions,
       targetConditions,
       fightingStyles: attackerProfile.fightingStyles,
@@ -748,6 +849,10 @@ export class CombatAttackService {
     // fleer's turn, so claiming a turn action for the attacker would spend a second creature's
     // Action for a blow provoked by the first one.
     const resolveAttackRoll = async () => {
+      // #1637: the attack spends a Hide's advantage, hit or miss, once it is actually resolving.
+      if (rules.advantageSources.includes('hidden')) {
+        await clearHiddenAttacker(encounterId, attackerId);
+      }
       // The player's own die when they rolled one, and only then. `rollD20Pair` already applied
       // advantage when it rolled; a provided die was rolled in the popup, which was told the
       // advantage state by `proposeAttack` and submits the die it kept. Rolling a second die
@@ -924,7 +1029,21 @@ export class CombatAttackService {
               defenses,
             });
       const smiteApplied = smite?.applied ? smite : null;
-      const totalDamage = damageCalc.finalDamage + hexDamage + (smiteApplied?.damage ?? 0);
+      // #1637: Sneak Attack, once per turn. The turn is claimed here, before any damage is applied.
+      const sneak = await this.sneakAttackRiderDamage({
+        encounterId,
+        attackerId,
+        targetId,
+        characterId: attackerData.participant.characterId,
+        weapon,
+        rules,
+        tacticalMap,
+        defenses,
+        isCritical: isCrit,
+        weaponCalc: damageCalc,
+      });
+      const totalDamage =
+        damageCalc.finalDamage + hexDamage + (smiteApplied?.damage ?? 0) + (sneak?.damage ?? 0);
 
       // Apply damage to target HP
       try {
@@ -989,6 +1108,11 @@ export class CombatAttackService {
         } else if (smite && !smite.applied) {
           transcriptLines.push(divineSmiteNotAppliedLine(smite.slotLevel));
         }
+        if (sneak) {
+          transcriptLines.push(
+            `Sneak Attack: ${sneak.dice} ${weapon.damageType}, ${sneak.damage} damage.`,
+          );
+        }
 
         const attackResult: HexAttackResult = {
           hit: true,
@@ -1009,21 +1133,36 @@ export class CombatAttackService {
           finalDamage: appliedDamage,
           ...(hexDamage > 0 ? { hexDamage } : {}),
           ...(smiteApplied ? { divineSmiteDamage: smiteApplied.damage } : {}),
+          ...(sneak ? { sneakAttackDamage: sneak.damage, sneakAttackDice: sneak.dice } : {}),
           // #1522: the weapon part and the radiant part, each resisted on its own type. The
           // rolled parts are reported as rolled; the per-hit cap can lower finalDamage below them.
-          ...(smiteApplied
+          ...(smiteApplied || sneak
             ? {
                 damageParts: [
                   { damageType: weapon.damageType, amount: damageCalc.finalDamage },
                   ...(hexDamage > 0
                     ? [{ damageType: 'necrotic', amount: hexDamage, source: 'Hex' }]
                     : []),
-                  {
-                    damageType: 'radiant',
-                    amount: smiteApplied.damage,
-                    source: 'Divine Smite',
-                    dice: `${smiteApplied.diceCount}d8`,
-                  },
+                  ...(sneak
+                    ? [
+                        {
+                          damageType: weapon.damageType,
+                          amount: sneak.damage,
+                          source: 'Sneak Attack',
+                          dice: sneak.dice,
+                        },
+                      ]
+                    : []),
+                  ...(smiteApplied
+                    ? [
+                        {
+                          damageType: 'radiant',
+                          amount: smiteApplied.damage,
+                          source: 'Divine Smite',
+                          dice: `${smiteApplied.diceCount}d8`,
+                        },
+                      ]
+                    : []),
                 ],
               }
             : {}),
@@ -1055,6 +1194,13 @@ export class CombatAttackService {
         if (smiteApplied) {
           await SpellSlotsService.refundSpellSlot(smiteApplied.spent, userId).catch((refundError) =>
             logger.error({ msg: 'COMBAT_SMITE_SLOT_REFUND_FAILED', refundError }),
+          );
+        }
+        // #1637: a Sneak Attack claimed for a turn whose damage never landed is released, so the turn
+        // is not spent on damage that was never applied.
+        if (sneak) {
+          await clearSneakAttackSpent(encounterId, attackerId).catch((releaseError) =>
+            logger.error({ msg: 'COMBAT_SNEAK_CLAIM_RELEASE_FAILED', releaseError }),
           );
         }
         throw new InternalServerError('Attack succeeded but damage application failed', { error });

@@ -18,7 +18,6 @@ import React, {
 
 import { useCharacter } from './CharacterContext';
 import { combatReducer, initialCombatState } from './combat/combat-reducer';
-import { createHealthHandlers } from './combat/health-handlers';
 import {
   createReactionHandlers,
   createParticipantReactionHandlers,
@@ -26,7 +25,6 @@ import {
 import { useAuthoritativeCombatSync } from './combat/use-authoritative-combat-sync';
 import { useCombatLifecycle } from './combat/use-combat-lifecycle';
 import { useParticipantManagement } from './combat/use-participant-management';
-import { useTakeAction } from './combat/use-take-action';
 import { createWeaponHandlers } from './combat/weapon-handlers';
 
 import type { CombatContextValue, DeathSaveTally } from '@/types/combat';
@@ -106,24 +104,13 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
   const { equipMainHandWeapon, equipOffHandWeapon, unequipMainHandWeapon, unequipOffHandWeapon } =
     useMemo(() => createWeaponHandlers(dispatch), []);
 
-  const { dealDamage } = useMemo(() => createHealthHandlers(dispatch, () => stateRef.current), []);
-
   // ===========================
   // Extracted Callback Hooks
   // ===========================
 
-  const { startCombat, endCombat, nextTurn, rollInitiative } = useCombatLifecycle({
-    state,
+  const { startCombat, endCombat, nextTurn } = useCombatLifecycle({
     dispatch,
     character: characterState.character,
-  });
-
-  const takeAction = useTakeAction({
-    state,
-    dispatch,
-    dealDamage,
-    addReactionOpportunity,
-    addParticipantReactionOpportunity,
   });
 
   const { addParticipant, removeParticipant, updateParticipant, moveParticipant } =
@@ -148,9 +135,6 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
       refreshCombatState,
       recordDeathSaveTally,
       nextTurn,
-      rollInitiative,
-      takeAction,
-      dealDamage,
       addParticipant,
       removeParticipant,
       updateParticipant,
@@ -178,9 +162,6 @@ export const CombatProvider: React.FC<CombatProviderProps> = ({ children, sessio
       refreshCombatState,
       recordDeathSaveTally,
       nextTurn,
-      rollInitiative,
-      takeAction,
-      dealDamage,
       addParticipant,
       removeParticipant,
       updateParticipant,

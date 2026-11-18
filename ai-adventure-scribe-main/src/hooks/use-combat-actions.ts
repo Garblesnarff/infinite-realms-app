@@ -17,21 +17,12 @@ import { useCombatMechanics } from '@/hooks/use-combat-mechanics';
 import { useGameSession } from '@/hooks/use-game-session';
 
 export const useCombatActions = (_isDM: boolean = false) => {
-  const {
-    state,
-    startCombat,
-    endCombat,
-    nextTurn,
-    rollInitiative,
-    takeAction,
-    addParticipant,
-    updateParticipant,
-    refreshCombatState,
-  } = useCombat();
+  const { state, startCombat, endCombat, nextTurn, addParticipant, refreshCombatState } =
+    useCombat();
 
   const { sessionId } = useGameSession();
   const { state: characterState } = useCharacter();
-  const { validateCombatAction } = useCombatAIIntegration({
+  useCombatAIIntegration({
     sessionId: sessionId ?? undefined,
     characterId: characterState.character?.id,
     campaignId: undefined, // Will be passed from parent if needed
@@ -141,15 +132,11 @@ export const useCombatActions = (_isDM: boolean = false) => {
     setReactionOpportunities,
     handleCombatAction,
     handleEnemyAttack,
-    handleReactionOpportunity,
     handleApplyDamage,
     handleHealing,
   } = useCombatActionHandlers({
     activeEncounter: activeEncounter || null,
-    takeAction,
-    updateParticipant,
     nextTurn,
-    validateCombatAction,
     selectedEnemy,
     refreshCombatState,
   });
@@ -222,15 +209,10 @@ export const useCombatActions = (_isDM: boolean = false) => {
     pendingAttack,
     setPendingAttack,
     handleEnhancedAttack,
-    handleRacialTraitUse,
     handleClassFeature,
     handleDeathSave,
-    handleTwoWeaponAttack,
   } = useCombatMechanics({
     activeEncounter,
-    handleCombatAction,
-    takeAction,
-    selectedEnemy,
   });
 
   return {
@@ -259,15 +241,11 @@ export const useCombatActions = (_isDM: boolean = false) => {
     handleEnemyAttack,
     addEnemy,
     handleEnhancedAttack,
-    handleRacialTraitUse,
     handleClassFeature,
-    handleReactionOpportunity,
     handleDeathSave,
-    handleTwoWeaponAttack,
     handleApplyDamage,
     handleHealing,
     nextTurn,
-    rollInitiative,
     showAdvantageModal,
     setShowAdvantageModal,
     pendingAttack,

@@ -1347,6 +1347,88 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     expect(typeof r.hit).toBe('boolean');
     expect((await entityAt(f, f.heroId)).movementRemaining).toBe(30);
   });
+
+  test('a first-action move spends the movement and keeps the action and the turn (#1642)', async () => {
+    const { deriveCombatEntryFirstAction } = await importWithRealDb(
+      () => import('../combat/combat-entry-first-action.js'),
+    );
+    // 40 ft apart: the opening move spends the whole 30 ft and leaves the foe 10 ft away.
+    const f = await seed({ width: 12, height: 12, hero: { x: 2, y: 6 }, foe: { x: 10, y: 6 } });
+    const [heroParticipant] = await db
+      .select({ characterId: combatParticipants.characterId })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, f.heroId));
+    const heroCharacterId = heroParticipant!.characterId;
+    const first = (await deriveCombatEntryFirstAction({
+      sessionId: f.sessionId,
+      combatState: {
+        encounter: { id: f.encounterId },
+        participants: [
+          { id: f.heroId, name: 'Pin Fighter', initiative: 20, initiativeModifier: 0, participantType: 'player', characterId: heroCharacterId },
+          { id: f.foeId, name: 'Pin Goblin', initiative: 10, initiativeModifier: 0, participantType: 'monster' },
+        ],
+      },
+      player: { characterId: heroCharacterId, name: 'Pin Fighter' },
+      declaredAttack: { verb: 'attack', actorName: 'Pin Goblin', attackSource: 'weapon', weaponStated: true, weaponName: 'longsword' },
+    })) as unknown as {
+      type: string;
+      notice: string;
+      combat_action: { movement_feet: number; x: number; y: number };
+    };
+    expect(first.type).toBe('move');
+    expect(first.combat_action.movement_feet).toBe(30);
+
+    await executeCombatIntent(
+      f.encounterId,
+      { type: 'move', actorId: f.heroId, x: first.combat_action.x, y: first.combat_action.y },
+      f.userId,
+      'dm',
+    );
+    const hero = await entityAt(f, f.heroId);
+    expect({ x: hero.x, y: hero.y, movementRemaining: hero.movementRemaining }).toEqual({
+      x: 8,
+      y: 4,
+      movementRemaining: 0,
+    });
+    const [enc] = await db
+      .select({ currentTurnOrder: combatEncounters.currentTurnOrder })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, f.encounterId));
+    const [heroRow] = await db
+      .select({ actionUsed: combatParticipants.actionUsed })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, f.heroId));
+    expect(enc!.currentTurnOrder).toBe(0);
+    expect(heroRow!.actionUsed).toBe(false);
+
+    // The wording the player reads (#1642): the notice says what is left, and the refusal line
+    // says there is no movement left, not "could not move closer".
+    expect(first.notice).not.toContain('Your turn is spent');
+    expect(first.notice).toContain('You have no movement left this turn; your action is not used');
+
+    const r = await attack(f, f.heroId, f.foeId);
+    expect(r.resolvedAs).toBe('movement_only');
+    expect(r.refusalReason).toBe('movement_exhausted');
+    expect(r.movedFeet).toBe(0);
+    expect(r.distanceFeet).toBe(10);
+    expect(r.movementRemainingFeet).toBe(0);
+    const { formatCombatEngineOutcome } = await import('../../../../shared/combat-outcome-transcript');
+    const refusalLine = formatCombatEngineOutcome(
+      { actor_id: f.heroId, action_type: 'attack', target_ids: [f.foeId] },
+      r as never,
+      [{ id: f.heroId, name: 'Pin Fighter', participantType: 'player' }],
+    );
+    expect(refusalLine).toContain('has no movement left this turn');
+    expect(refusalLine).not.toContain('could not move closer');
+  });
+
+  test('round 1, foe 10 ft away: the melee attack closes the gap and rolls (#1642)', async () => {
+    const f = await seed({ width: 12, height: 12, hero: { x: 2, y: 6 }, foe: { x: 4, y: 6 } });
+    const r = await attack(f, f.heroId, f.foeId);
+    expect(r.resolvedAs).not.toBe('movement_only');
+    expect(typeof r.d20).toBe('number');
+    expect((await entityAt(f, f.heroId)).movementRemaining).toBe(25);
+  });
 });
 
 /**

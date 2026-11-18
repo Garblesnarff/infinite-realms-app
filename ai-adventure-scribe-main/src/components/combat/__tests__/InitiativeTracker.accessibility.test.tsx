@@ -43,7 +43,6 @@ vi.mock('@/contexts/CombatContext', () => ({
       isInCombat: true,
     },
     nextTurn: vi.fn(),
-    rollInitiative: vi.fn(),
   })),
 }));
 

@@ -30,11 +30,8 @@ describe('ActionPanel player controls', () => {
           onCombatAction={vi.fn()}
           onNextTurn={vi.fn()}
           onOpenSpellPicker={vi.fn()}
-          onRollInitiative={vi.fn()}
-          onTwoWeaponAttack={vi.fn()}
           onEnhancedAttack={vi.fn()}
           onClassFeatureUse={vi.fn()}
-          onRacialTraitUse={vi.fn()}
           onDeathSave={vi.fn()}
         />
       </TooltipProvider>,

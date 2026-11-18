@@ -4,7 +4,6 @@ import type { ActionType, CombatEncounter as Encounter } from '@/types/combat';
 import type { SpellSlotLevel } from '@/types/combat-features';
 
 import { Button } from '@/components/ui/button';
-import DiceRoller from '@/components/ui/dice-roller';
 
 type Participant = Encounter['participants'][number];
 
@@ -20,9 +19,6 @@ interface SpecialActionsSectionProps {
     targetId?: string,
     additionalData?: unknown,
   ) => void;
-  onRollInitiative: (participantId: string) => void;
-  showInitiativeRoll?: boolean;
-  onTwoWeaponAttack: (participantId: string, targetId?: string) => void;
   onEnhancedAttack: (
     participantId: string,
     targetId?: string,
@@ -34,28 +30,13 @@ interface SpecialActionsSectionProps {
 }
 
 export const SpecialActionsSection: React.FC<SpecialActionsSectionProps> = React.memo(
-  ({
-    currentParticipant,
-    selectedEnemyId,
-    onCombatAction,
-    onRollInitiative,
-    showInitiativeRoll = false,
-    onTwoWeaponAttack,
-    onEnhancedAttack,
-  }) => {
+  ({ currentParticipant, selectedEnemyId, onCombatAction, onEnhancedAttack }) => {
     return (
       <div className="flex gap-2 flex-wrap">
-        {showInitiativeRoll && (
-          <DiceRoller
-            dice="1d20"
-            label="Initiative"
-            modifier={0}
-            onRoll={() => onRollInitiative(currentParticipant.id)}
-          />
-        )}
         <Button
           variant="outline"
           size="sm"
+          disabled={!selectedEnemyId}
           onClick={() =>
             onCombatAction('grapple', currentParticipant.id, selectedEnemyId || undefined)
           }
@@ -65,18 +46,12 @@ export const SpecialActionsSection: React.FC<SpecialActionsSectionProps> = React
         <Button
           variant="outline"
           size="sm"
+          disabled={!selectedEnemyId}
           onClick={() =>
             onCombatAction('shove', currentParticipant.id, selectedEnemyId || undefined)
           }
         >
           Shove
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onTwoWeaponAttack(currentParticipant.id, selectedEnemyId || undefined)}
-        >
-          Two-Weapon Attack
         </Button>
         {/* #1362: one button per slot level the Paladin has left, read from the participant
             the action bar already holds. The chosen level travels with the attack. */}
