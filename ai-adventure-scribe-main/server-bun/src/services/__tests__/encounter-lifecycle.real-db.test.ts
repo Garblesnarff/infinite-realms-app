@@ -1421,6 +1421,14 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     expect(refusalLine).toContain('has no movement left this turn');
     expect(refusalLine).not.toContain('could not move closer');
   });
+
+  test('round 1, foe 10 ft away: the melee attack closes the gap and rolls (#1642)', async () => {
+    const f = await seed({ width: 12, height: 12, hero: { x: 2, y: 6 }, foe: { x: 4, y: 6 } });
+    const r = await attack(f, f.heroId, f.foeId);
+    expect(r.resolvedAs).not.toBe('movement_only');
+    expect(typeof r.d20).toBe('number');
+    expect((await entityAt(f, f.heroId)).movementRemaining).toBe(25);
+  });
 });
 
 /**
