@@ -11,6 +11,10 @@
  *   "round:turn order". A reaction on another creature's turn is a different turn, so it can claim
  *   its own Sneak Attack. The claim is one UPDATE made before damage is applied.
  *
+ * - `raging`: a Barbarian's Rage (#1638), recorded as the encounter and the round it expires at.
+ *   The claim is one guarded UPDATE, the same shape as the Sneak Attack claim. Rage ends when its
+ *   round passes or when the fight ends.
+ *
  * Every entry records its encounter, so a flag from an earlier fight never grants anything.
  */
 import { and, eq, sql, type SQL } from 'drizzle-orm';
@@ -29,6 +33,9 @@ import type { VitalsTx } from '../character-vitals-service.js';
 
 const HIDDEN_KEY = 'hiddenParticipants';
 const SNEAK_KEY = 'sneakAttackSpent';
+const RAGE_KEY = 'raging';
+/** Rage lasts 10 rounds (2014 SRD 5.1; the reduced first scope of #1638). */
+export const RAGE_DURATION_ROUNDS = 10;
 /** Conditions that make a creature unable to act for the Sneak Attack flanking clause (2014). */
 const INCAPACITATING_CONDITIONS = [
   'incapacitated',
@@ -55,6 +62,10 @@ const sessionOfEncounter = (encounterId: string): SQL =>
 /** The current turn of an encounter, as "round:turn order". */
 const turnOfEncounter = (encounterId: string): SQL =>
   sql`(SELECT ${combatEncounters.currentRound}::text || ':' || ${combatEncounters.currentTurnOrder}::text FROM ${combatEncounters} WHERE ${combatEncounters.id} = ${encounterId})`;
+
+/** The current round of an encounter. */
+const roundOfEncounter = (encounterId: string): SQL =>
+  sql`(SELECT ${combatEncounters.currentRound} FROM ${combatEncounters} WHERE ${combatEncounters.id} = ${encounterId})`;
 
 function flagEntry(state: unknown, key: string, participantId: string): FlagRecord | null {
   if (!state || typeof state !== 'object') return null;
@@ -167,6 +178,77 @@ export async function clearSneakAttackSpent(
 }
 
 /**
+ * Claim Rage for this participant in this encounter, in one guarded UPDATE. The statement writes
+ * only when there is no live Rage: the stored entry belongs to another encounter, or its round has
+ * passed. It returns the round the new mark expires at, or null when nothing was written, so a
+ * second activation while raging writes nothing.
+ */
+export async function claimRage(
+  encounterId: string,
+  participantId: string,
+): Promise<number | null> {
+  const db = await database();
+  const round = roundOfEncounter(encounterId);
+  const storedEntry = sql`(${gameSessions.sessionState} -> ${RAGE_KEY} -> ${participantId})`;
+  const claimed = await db
+    .update(gameSessions)
+    .set({
+      sessionState: sql`jsonb_set(
+        COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${RAGE_KEY}}`}::text[],
+        COALESCE(${gameSessions.sessionState} -> ${RAGE_KEY}, '{}'::jsonb) || jsonb_build_object(
+          ${participantId}::text,
+          jsonb_build_object('encounterId', ${encounterId}::text,
+            'expiresRound', ${round} + ${RAGE_DURATION_ROUNDS}::int)),
+        true)`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(gameSessions.id, sessionOfEncounter(encounterId)),
+        sql`(${storedEntry} ->> 'encounterId') IS DISTINCT FROM ${encounterId}::text
+          OR (${storedEntry} ->> 'expiresRound')::int <= ${round}`,
+      ),
+    )
+    .returning({ state: gameSessions.sessionState });
+  // The expiry round the stored mark carries, read back from the row this claim wrote.
+  const entry = flagEntry(claimed[0]?.state ?? null, RAGE_KEY, participantId);
+  return entry?.encounterId === encounterId && typeof entry.expiresRound === 'number'
+    ? entry.expiresRound
+    : null;
+}
+
+/** Whether this participant is raging in this encounter at the current round. */
+export async function isRaging(encounterId: string, participantId: string): Promise<boolean> {
+  const db = await database();
+  const [row] = await db
+    .select({
+      state: gameSessions.sessionState,
+      round: sql<number>`${roundOfEncounter(encounterId)}`,
+    })
+    .from(gameSessions)
+    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)))
+    .limit(1);
+  const entry = flagEntry(row?.state ?? null, RAGE_KEY, participantId);
+  return (
+    entry?.encounterId === encounterId &&
+    typeof entry.expiresRound === 'number' &&
+    Number(row?.round) < entry.expiresRound
+  );
+}
+
+/** Drop one participant's Rage mark: the activation failed after its claim, so nothing was spent. */
+export async function clearRage(encounterId: string, participantId: string): Promise<void> {
+  const db = await database();
+  await db
+    .update(gameSessions)
+    .set({
+      sessionState: sql`COALESCE(${gameSessions.sessionState}, '{}'::jsonb) #- ARRAY[${RAGE_KEY}, ${participantId}]::text[]`,
+      updatedAt: new Date(),
+    })
+    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
+}
+
+/**
  * Drop every flag of one fight (hidden marks and Sneak Attack claims), inside the caller's
  * transaction when it has one. Called when the fight ends.
  */
@@ -184,8 +266,10 @@ export async function clearFightFlags(
     .update(gameSessions)
     .set({
       sessionState: sql`jsonb_set(
-        jsonb_set(COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${HIDDEN_KEY}}`}::text[], ${keep(HIDDEN_KEY)}, true),
-        ${`{${SNEAK_KEY}}`}::text[], ${keep(SNEAK_KEY)}, true)`,
+        jsonb_set(
+          jsonb_set(COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${HIDDEN_KEY}}`}::text[], ${keep(HIDDEN_KEY)}, true),
+          ${`{${SNEAK_KEY}}`}::text[], ${keep(SNEAK_KEY)}, true),
+        ${`{${RAGE_KEY}}`}::text[], ${keep(RAGE_KEY)}, true)`,
       updatedAt: new Date(),
     })
     .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
@@ -198,7 +282,7 @@ export async function clearFightFlags(
  */
 export function combatTurnFlagsPreservingState(incoming: SQL): SQL {
   let merged = incoming;
-  for (const key of [HIDDEN_KEY, SNEAK_KEY]) {
+  for (const key of [HIDDEN_KEY, SNEAK_KEY, RAGE_KEY]) {
     const stored = sql`${gameSessions.sessionState} -> ${key}`;
     merged = sql`CASE WHEN jsonb_typeof(${stored}) = 'object'
       THEN ((${merged}) - ${key}) || jsonb_build_object(${key}::text, ${stored})
@@ -207,8 +291,11 @@ export function combatTurnFlagsPreservingState(incoming: SQL): SQL {
   return merged;
 }
 
-/** The Rogue class level of a character, read the way the rest of the engine reads it (multiclass aware). */
-export async function rogueLevelOf(characterId: string): Promise<number> {
+/** The level a character has in one class, read the way the rest of the engine reads it (multiclass aware). */
+export async function classLevelOfCharacter(
+  characterId: string,
+  className: string,
+): Promise<number> {
   const db = await database();
   const { classLevelOf } = await import('../progression/limited-feature-uses.js');
   const [row] = await db
@@ -220,7 +307,12 @@ export async function rogueLevelOf(characterId: string): Promise<number> {
     .from(characters)
     .where(eq(characters.id, characterId))
     .limit(1);
-  return row ? classLevelOf(row, 'Rogue') : 0;
+  return row ? classLevelOf(row, className) : 0;
+}
+
+/** The Rogue class level of a character (Sneak Attack, #1637). */
+export async function rogueLevelOf(characterId: string): Promise<number> {
+  return classLevelOfCharacter(characterId, 'Rogue');
 }
 
 /**

@@ -6,6 +6,7 @@ import { spendRangedAmmunition } from './ammunition-spend.js';
 import { ammunitionForWeapon } from './ammunition.js';
 import { attackBudgetPlan } from './attack-budget-service.js';
 import { describeRefusedSpell, describeResolvedSpell } from './attack-narration.js';
+import { rageIsOffered, resolveRage } from './barbarian-rage-service.js';
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
 import { executeCombatCheck } from './combat-check-service.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
@@ -105,6 +106,7 @@ import { isPlayerCombatSpell, resolveCatalogSpell, twinnedAllowed } from '../../
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
 import { planApproach } from '../../tactical/approach.js';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
+import { classLevelOf } from '../progression/limited-feature-uses.js';
 import { paladinLevelOf } from '../progression/paladin-features-service.js';
 
 import type { CombatAttackService as CombatAttackServiceType } from './combat-attack-service.js';
@@ -183,7 +185,7 @@ export type CombatIntent =
    * spend the tracked use on the character's sheet.
    */
   | {
-      type: 'second_wind' | 'action_surge' | 'divine_sense';
+      type: 'second_wind' | 'action_surge' | 'divine_sense' | 'rage';
       actorId: string;
       expectedVersion: number;
     }
@@ -255,6 +257,8 @@ const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
   'second_wind',
   'action_surge',
   'divine_sense',
+  // #1638: Rage is a Barbarian's own use, the same as a feature spend.
+  'rage',
   // #1147: an item spend is the player's own resource, same as a feature spend.
   'use_item',
   'flexible_casting',
@@ -329,6 +333,7 @@ export const VERSIONED_INTENT_TYPES = new Set([
   'second_wind',
   'action_surge',
   'divine_sense',
+  'rage',
   // #1362: a divine_smite legal option submits an 'attack' intent (divineSmiteSlotLevel), so it
   // is claim-based too. Listed so the legal-action version test holds; no intent carries this type.
   'divine_smite',
@@ -1907,6 +1912,29 @@ export async function executeCombatIntent(
         'second_wind',
         result as SecondWindResult,
       );
+    } else if (intent.type === 'rage') {
+      // #1638: Rage is a bonus action. The claim wraps the resolution, so a refusal inside (no
+      // Barbarian level, already raging, no uses left) refunds the bonus action.
+      const actorCharacterId = (actor as unknown as { characterId?: string | null }).characterId;
+      result = await claimTurnBonusActionAndResolve(
+        intent.actorId,
+        encounterId,
+        intent.expectedVersion,
+        async () => {
+          if (!actorCharacterId) {
+            throw new BusinessLogicError("Rage is not on this character's sheet", {
+              reason: 'feature_not_on_sheet',
+              featureName: 'Rage',
+            });
+          }
+          return resolveRage({
+            characterId: actorCharacterId,
+            userId,
+            participantId: intent.actorId,
+            encounterId,
+          });
+        },
+      );
     } else if (intent.type === 'flexible_casting') {
       // #1233: Flexible Casting is a bonus action. The claim wraps the spend, so a refusal (no
       // feature, no points, no slot, a created level above 5th) refunds the bonus action.
@@ -2690,6 +2718,30 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     }
     if ((uses.actionSurge ?? 0) > 0) {
       actions.push({ type: 'action_surge', label: 'Action Surge' });
+    }
+    // #1638: Rage, a bonus action on a Barbarian with a use left and no live Rage. A chip that can
+    // only be refused (no use, already raging) is a trap, so both are checked here. Gated on the
+    // Barbarian level first, as the Paladin read is, so other actors' requests stay database-free.
+    const barbarianLevel = classLevelOf(
+      {
+        class: actor.characterClass ?? null,
+        level: actor.characterLevel ?? null,
+        classLevels: actor.characterClassLevels,
+      },
+      'Barbarian',
+    );
+    if (
+      barbarianLevel > 0 &&
+      !actor.bonusActionUsed &&
+      actor.characterId &&
+      (await rageIsOffered({
+        characterId: actor.characterId,
+        userId,
+        participantId: actor.id,
+        encounterId,
+      }))
+    ) {
+      actions.push({ type: 'rage', label: 'Rage' });
     }
     // Divine Sense belongs only to Paladins. Keep the pooled-feature lookup behind the
     // class gate so every non-paladin legal-actions request stays database-free in unit

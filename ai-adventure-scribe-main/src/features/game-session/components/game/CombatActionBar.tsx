@@ -78,6 +78,8 @@ export const LEGAL_ACTION_PLACEMENT = {
   second_wind: 'more',
   action_surge: 'more',
   divine_sense: 'more',
+  /** #1638: Rage, a Barbarian's bonus action, sits with the other Fighter-style features. */
+  rage: 'more',
   // #1554: Lay on Hands is an Action, but its chips name a target and an amount, so they ride More.
   lay_on_hands: 'more',
   // #1414: Inspiration arms advantage on the next roll; it spends no Action, so it rides More
