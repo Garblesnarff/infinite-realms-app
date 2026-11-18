@@ -213,6 +213,10 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
                 'bg-infinite-gold text-slate-950 outline outline-2 outline-offset-2 outline-foreground',
               actor.state === 'waiting' && 'bg-black/40 text-white/70',
               actor.state === 'down' && 'bg-red-950/60 text-red-300/80 line-through',
+              // #1606: the dying chip keeps its 92px width; narrower padding fits the badge.
+              tableLook &&
+                actorIsDying(actor, actor.id === summary.active.id ? playerDown : false) &&
+                '[body.ir-table-look_&]:px-1',
             )}
           >
             {tableLook ? (
@@ -224,7 +228,7 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
                 {actorIsDying(actor, actor.id === summary.active.id ? playerDown : false) ? (
                   <span
                     data-testid="combat-turn-dying"
-                    className="inline-flex items-center gap-1 rounded-full bg-[#475569] px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-[#f1f5f9]"
+                    className="inline-flex max-w-full flex-wrap items-center justify-center gap-x-1 rounded bg-[#475569] px-0.5 py-0.5 text-xs font-bold leading-tight tracking-tight text-[#f1f5f9]"
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
                       <path
@@ -237,7 +241,7 @@ export const CombatTurnBar: React.FC<CombatTurnBarProps> = ({
                       />
                     </svg>
                     {/* #1507: a hero at 0 HP is Unconscious, the tracker's word (DyingStates state 9). */}
-                    Unconscious
+                    <span>Unconscious</span>
                   </span>
                 ) : (
                   actor.state === 'now' && <span>{actor.isPlayer ? 'Your turn' : 'Now'}</span>
