@@ -18,7 +18,13 @@
 import { logAttackResolution, participantSlug } from './attack-telemetry.js';
 import { appliesBlessDie } from './bless-rider.js';
 import { mookGroupAttackBonus } from './boss-moves.js';
-import { resolveAttackRules } from './combat-rules.js';
+import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
+import {
+  activeAlliesOf,
+  isSneakAttackSpent,
+  markSneakAttackSpent,
+  rogueLevelOf,
+} from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
@@ -56,6 +62,12 @@ import {
   sorceryPointsLedger,
   spendMetamagicPoints,
 } from './resource-ledger.js';
+import {
+  appliesSneakAttackRider,
+  SNEAK_ATTACK_ALLY_REACH_FEET,
+  sneakAttackDice,
+  sneakAttackWeaponQualifies,
+} from './sneak-attack-rider.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import {
@@ -443,6 +455,67 @@ export class CombatAttackService {
       vulnerabilities: defenses.vulnerabilities,
       immunities: defenses.immunities,
     }).finalDamage;
+  }
+
+  /**
+   * Sneak Attack on a hit (#1637, 2014 SRD 5.1): ⌈level/2⌉d6 of the weapon's damage type, once per
+   * round, for a Rogue's finesse or ranged weapon with advantage from an engine source or a
+   * non-incapacitated ally within 5 ft of the target (the ally clause needs a tactical map).
+   * Null when the rider does not apply. Dice double on a crit inside sneakAttackDice.
+   */
+  private async sneakAttackRiderDamage(input: {
+    encounterId: string;
+    attackerId: string;
+    targetId: string;
+    characterId: string | null | undefined;
+    weapon: WeaponRuleProfile;
+    rules: { advantage: boolean; disadvantage: boolean; advantageSources: string[] };
+    tacticalMap: Awaited<ReturnType<typeof loadActiveTacticalMap>>;
+    defenses: ReturnType<typeof aggregateResistances>;
+    isCritical: boolean;
+    round: number;
+  }): Promise<{ damage: number; dice: string } | null> {
+    if (!input.characterId || !sneakAttackWeaponQualifies(input.weapon)) return null;
+    const dice = sneakAttackDice(await rogueLevelOf(input.characterId), input.isCritical);
+    if (!dice) return null;
+    if (await isSneakAttackSpent(input.encounterId, input.attackerId, input.round)) return null;
+
+    let allyWithinReachOfTarget = false;
+    const map = input.tacticalMap;
+    const target = map?.entities.find((entity) => entity.id === input.targetId);
+    if (map && target) {
+      for (const ally of await activeAlliesOf(
+        input.encounterId,
+        input.attackerId,
+        input.targetId,
+      )) {
+        const entity = map.entities.find((candidate) => candidate.id === ally.id);
+        if (entity && getDistance(entity, target) <= SNEAK_ATTACK_ALLY_REACH_FEET) {
+          allyWithinReachOfTarget = true;
+          break;
+        }
+      }
+    }
+    const applies = appliesSneakAttackRider({
+      advantage: input.rules.advantage,
+      disadvantage: input.rules.disadvantage,
+      advantageSources: input.rules.advantageSources,
+      allyWithinReachOfTarget,
+      alreadyUsedThisTurn: false,
+    });
+    if (!applies) return null;
+
+    const damage = calculateDamage({
+      damageDice: dice,
+      damageBonus: 0,
+      damageType: input.weapon.damageType as DamageType,
+      // The dice already carry the crit doubling, so the calculator must not double them again.
+      isCritical: false,
+      resistances: input.defenses.resistances,
+      vulnerabilities: input.defenses.vulnerabilities,
+      immunities: input.defenses.immunities,
+    }).finalDamage;
+    return { damage, dice };
   }
 
   /**
@@ -924,7 +997,21 @@ export class CombatAttackService {
               defenses,
             });
       const smiteApplied = smite?.applied ? smite : null;
-      const totalDamage = damageCalc.finalDamage + hexDamage + (smiteApplied?.damage ?? 0);
+      // #1637: Sneak Attack, once per round, resisted on the weapon's own damage type.
+      const sneak = await this.sneakAttackRiderDamage({
+        encounterId,
+        attackerId,
+        targetId,
+        characterId: attackerData.participant.characterId,
+        weapon,
+        rules,
+        tacticalMap,
+        defenses,
+        isCritical: isCrit,
+        round: attackRound,
+      });
+      const totalDamage =
+        damageCalc.finalDamage + hexDamage + (smiteApplied?.damage ?? 0) + (sneak?.damage ?? 0);
 
       // Apply damage to target HP
       try {
@@ -952,6 +1039,7 @@ export class CombatAttackService {
         // dice said: the per-hit cap can rewrite it. Reporting the rolled number here would
         // put a damage figure in the telemetry that the target's HP never reflects.
         const appliedDamage = hpResult.damageDealt ?? totalDamage;
+        if (sneak) await markSneakAttackSpent(encounterId, attackerId, attackRound);
 
         // Logged after the HP write, with the post-write HP included: damage that is
         // calculated but never persisted -- the exact failure mode this telemetry exists to
@@ -989,6 +1077,11 @@ export class CombatAttackService {
         } else if (smite && !smite.applied) {
           transcriptLines.push(divineSmiteNotAppliedLine(smite.slotLevel));
         }
+        if (sneak) {
+          transcriptLines.push(
+            `Sneak Attack: ${sneak.dice} ${weapon.damageType}, ${sneak.damage} damage.`,
+          );
+        }
 
         const attackResult: HexAttackResult = {
           hit: true,
@@ -1009,21 +1102,36 @@ export class CombatAttackService {
           finalDamage: appliedDamage,
           ...(hexDamage > 0 ? { hexDamage } : {}),
           ...(smiteApplied ? { divineSmiteDamage: smiteApplied.damage } : {}),
+          ...(sneak ? { sneakAttackDamage: sneak.damage, sneakAttackDice: sneak.dice } : {}),
           // #1522: the weapon part and the radiant part, each resisted on its own type. The
           // rolled parts are reported as rolled; the per-hit cap can lower finalDamage below them.
-          ...(smiteApplied
+          ...(smiteApplied || sneak
             ? {
                 damageParts: [
                   { damageType: weapon.damageType, amount: damageCalc.finalDamage },
                   ...(hexDamage > 0
                     ? [{ damageType: 'necrotic', amount: hexDamage, source: 'Hex' }]
                     : []),
-                  {
-                    damageType: 'radiant',
-                    amount: smiteApplied.damage,
-                    source: 'Divine Smite',
-                    dice: `${smiteApplied.diceCount}d8`,
-                  },
+                  ...(sneak
+                    ? [
+                        {
+                          damageType: weapon.damageType,
+                          amount: sneak.damage,
+                          source: 'Sneak Attack',
+                          dice: sneak.dice,
+                        },
+                      ]
+                    : []),
+                  ...(smiteApplied
+                    ? [
+                        {
+                          damageType: 'radiant',
+                          amount: smiteApplied.damage,
+                          source: 'Divine Smite',
+                          dice: `${smiteApplied.diceCount}d8`,
+                        },
+                      ]
+                    : []),
                 ],
               }
             : {}),
