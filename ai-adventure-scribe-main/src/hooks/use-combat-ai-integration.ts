@@ -10,10 +10,8 @@ import { useCallback } from 'react';
 
 import type { CombatEvent, CombatAction, CombatParticipant, CombatEncounter } from '@/types/combat';
 import type { CombatMessageData } from '@/utils/combat/ai-narration-utils';
-import type { DetectedCombatAction } from '@/utils/combatDetection';
 
 import { useCombat } from '@/contexts/CombatContext';
-import { useCombatDetection } from '@/hooks/combat/use-combat-detection';
 import { logger } from '@/lib/logger';
 import { callEdgeFunction } from '@/utils/edgeFunctionHandler';
 
@@ -33,7 +31,6 @@ export interface UseCombatAIIntegrationReturn {
     participant: CombatParticipant,
   ) => Promise<{ isValid: boolean; suggestions: string[]; errors: string[] }>;
   processCombatEvent: (event: CombatEvent) => Promise<void>;
-  createCombatActionRoll: (action: DetectedCombatAction) => Promise<CombatMessageData | null>;
   isInCombat: boolean;
   encounter: CombatEncounter | null;
 }
@@ -48,8 +45,6 @@ export const useCombatAIIntegration = (
   }
 
   const { state } = combatContext;
-
-  const { createCombatActionRoll } = useCombatDetection();
 
   // Kept as a compatibility no-op while the retired combat-event narration path is removed.
   const processCombatEvent = useCallback(async (_event: CombatEvent) => undefined, []);
@@ -102,7 +97,6 @@ export const useCombatAIIntegration = (
   return {
     validateCombatAction,
     processCombatEvent,
-    createCombatActionRoll,
     isInCombat: state.isInCombat,
     encounter: state.activeEncounter,
   };

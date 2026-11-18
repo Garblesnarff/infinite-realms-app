@@ -66,15 +66,12 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
     selectedEnemy,
     setSelectedEnemy,
     showCombatMode,
-    isStartingCombat,
     actionValidation,
     localShowInitiativeTracker,
     setLocalShowInitiativeTracker,
-    handleStartCombat,
     handleEndCombat,
     handleCombatAction,
     handleEnemyAttack,
-    addEnemy,
     handleEnhancedAttack,
     handleClassFeature,
     handleDeathSave,
@@ -108,12 +105,8 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
   if (!isInCombat && !showCombatMode) {
     return (
       <CombatReadyCard
-        isDM={isDM}
         playerParticipants={playerParticipants}
         enemyParticipants={enemyParticipants}
-        isStartingCombat={isStartingCombat}
-        onAddEnemy={addEnemy}
-        onStartCombat={handleStartCombat}
         activeCharacterName={activeCharacterName}
       />
     );
@@ -287,25 +280,6 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
                       <div className="text-center py-8 text-muted-foreground">
                         <Users className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                         <p>No enemies in combat</p>
-                        {isDM && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={addEnemy}
-                                className="mt-2"
-                                aria-label="Add a new enemy to the encounter"
-                              >
-                                Add Enemy
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Add a new enemy to the encounter</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
                       </div>
                     )}
                   </div>

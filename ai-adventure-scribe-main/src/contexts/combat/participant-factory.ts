@@ -7,7 +7,6 @@
 import type { Character } from '@/types/character';
 import type { CombatParticipant, FightingStyleName } from '@/types/combat';
 
-import { rollDie } from '@/utils/diceRolls';
 import { FIGHTING_STYLES } from '@/utils/fightingStyles';
 
 /**
@@ -37,8 +36,6 @@ export interface CharacterData {
  * Options for participant creation
  */
 export interface CreateParticipantOptions {
-  /** Whether to roll initiative (default: true) */
-  rollInitiative?: boolean;
   /** Character data to enrich player participants */
   characterData?: CharacterData | null;
 }
@@ -50,7 +47,7 @@ export function createCombatParticipant(
   partial: Partial<CombatParticipant>,
   options: CreateParticipantOptions = {},
 ): CombatParticipant {
-  const { rollInitiative: shouldRollInitiative = true, characterData } = options;
+  const { characterData } = options;
 
   const participant: CombatParticipant = {
     id: partial.id || crypto.randomUUID(),
@@ -59,9 +56,7 @@ export function createCombatParticipant(
     name: partial.name || 'Unknown',
     displayName: partial.displayName,
     characterId: partial.characterId,
-    initiative: shouldRollInitiative
-      ? rollDie(20) + (partial.initiative || 0)
-      : partial.initiative || 0,
+    initiative: partial.initiative || 0,
     initiativeBonus: partial.initiativeBonus ?? partial.initiative ?? 0,
     armorClass: partial.armorClass || 10,
     speed: partial.speed || 30,
