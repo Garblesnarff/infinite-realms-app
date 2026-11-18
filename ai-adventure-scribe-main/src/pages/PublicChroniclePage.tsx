@@ -184,7 +184,7 @@ const PublicChroniclePage: React.FC = () => {
               <img src={asideImage} alt="" className="block h-full w-full object-cover" />
             </div>
           ) : null}
-          <div className="ir-chronicle-aside-body px-6 pb-6">
+          <div className={`ir-chronicle-aside-body px-6 pb-6${asideImage ? '' : ' pt-6'}`}>
             {asideTitle ? (
               <h2 className="ir-chronicle-aside-title m-0 break-words font-serif text-2xl md:text-[28px]">
                 {asideTitle}
