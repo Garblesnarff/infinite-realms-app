@@ -5,6 +5,7 @@ import type { StarterCampaign } from '@/hooks/use-starter-campaigns';
 
 import { tableImageUrl } from '@/features/campaigns/table/image-url';
 import { TableImage } from '@/features/campaigns/table/TableImage';
+import { formatStarterLevelRange } from '@/utils/campaign/starter-level-range';
 
 /**
  * Public Explore card, drawn from the PublicExplore board (docs/design/canvas/PublicExplore.dc.html):
@@ -41,11 +42,11 @@ export const difficultyLabelFor = (difficulty: string | null | undefined): strin
 export const metaLineFor = (
   campaign: Pick<StarterCampaign, 'levelRange' | 'estimatedSessions'>,
 ) => {
-  const level = campaign.levelRange?.trim();
+  // The level is the played range, as the detail page shows it (a glued span such as 7-10-11 is 7-11).
+  const level = formatStarterLevelRange(campaign.levelRange);
   const sessions = campaign.estimatedSessions?.trim().replace(/-/g, '–');
-  return [level ? `Level ${level}` : null, sessions ? `${sessions} sessions` : null]
-    .filter(Boolean)
-    .join(' · ');
+  const sessionsLabel = sessions === '1' ? '1 session' : sessions ? `${sessions} sessions` : null;
+  return [level ? `Level ${level}` : null, sessionsLabel].filter(Boolean).join(' · ');
 };
 
 export const PublicExploreCard: React.FC<{

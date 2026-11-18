@@ -527,7 +527,11 @@ const CampaignDetailPage: React.FC = () => {
   }
   const sessionsLabel =
     formatStarterCampaignLength(campaign.overview) ??
-    (campaign.estimatedSessions ? `${campaign.estimatedSessions} sessions` : null);
+    (campaign.estimatedSessions === '1'
+      ? '1 session'
+      : campaign.estimatedSessions
+        ? `${campaign.estimatedSessions} sessions`
+        : null);
   if (sessionsLabel) metaSegments.push(<span key="sessions">{sessionsLabel}</span>);
   if (campaign.tone.length > 0) {
     metaSegments.push(
