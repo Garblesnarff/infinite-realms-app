@@ -3,7 +3,6 @@ import React from 'react';
 
 import { ClassFeaturesSection } from './ClassFeaturesSection';
 import { ParticipantStatusSection } from './ParticipantStatusSection';
-import { RacialTraitsSection } from './RacialTraitsSection';
 import { SpecialActionsSection } from './SpecialActionsSection';
 import { StandardActionsSection } from './StandardActionsSection';
 
@@ -32,7 +31,6 @@ interface ActionPanelProps {
   onNextTurn: () => void;
   onOpenSpellPicker: () => void;
   onRollInitiative: (participantId: string) => void;
-  onTwoWeaponAttack: (participantId: string, targetId?: string) => void;
   onEnhancedAttack: (
     participantId: string,
     targetId?: string,
@@ -42,7 +40,6 @@ interface ActionPanelProps {
     divineSmiteSlotLevel?: number,
   ) => void;
   onClassFeatureUse: (participantId: string, featureName: string) => void;
-  onRacialTraitUse: (participantId: string, traitName: string) => void;
   onDeathSave: (participantId: string) => void;
   showNextTurnButton?: boolean;
   showInitiativeRoll?: boolean;
@@ -70,10 +67,8 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
     onNextTurn,
     onOpenSpellPicker,
     onRollInitiative,
-    onTwoWeaponAttack,
     onEnhancedAttack,
     onClassFeatureUse,
-    onRacialTraitUse,
     onDeathSave,
     showNextTurnButton = false,
     showInitiativeRoll = false,
@@ -173,7 +168,6 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
                 onCombatAction={onCombatAction}
                 onRollInitiative={onRollInitiative}
                 showInitiativeRoll={showInitiativeRoll}
-                onTwoWeaponAttack={onTwoWeaponAttack}
                 onEnhancedAttack={onEnhancedAttack}
               />
 
@@ -191,11 +185,6 @@ const ActionPanel: React.FC<ActionPanelProps> = React.memo(
               <ClassFeaturesSection
                 currentParticipant={currentParticipant}
                 onClassFeatureUse={onClassFeatureUse}
-              />
-
-              <RacialTraitsSection
-                currentParticipant={currentParticipant}
-                onRacialTraitUse={onRacialTraitUse}
               />
 
               <ParticipantStatusSection

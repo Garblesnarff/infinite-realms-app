@@ -22,7 +22,6 @@ interface SpecialActionsSectionProps {
   ) => void;
   onRollInitiative: (participantId: string) => void;
   showInitiativeRoll?: boolean;
-  onTwoWeaponAttack: (participantId: string, targetId?: string) => void;
   onEnhancedAttack: (
     participantId: string,
     targetId?: string,
@@ -40,7 +39,6 @@ export const SpecialActionsSection: React.FC<SpecialActionsSectionProps> = React
     onCombatAction,
     onRollInitiative,
     showInitiativeRoll = false,
-    onTwoWeaponAttack,
     onEnhancedAttack,
   }) => {
     return (
@@ -56,6 +54,7 @@ export const SpecialActionsSection: React.FC<SpecialActionsSectionProps> = React
         <Button
           variant="outline"
           size="sm"
+          disabled={!selectedEnemyId}
           onClick={() =>
             onCombatAction('grapple', currentParticipant.id, selectedEnemyId || undefined)
           }
@@ -65,18 +64,12 @@ export const SpecialActionsSection: React.FC<SpecialActionsSectionProps> = React
         <Button
           variant="outline"
           size="sm"
+          disabled={!selectedEnemyId}
           onClick={() =>
             onCombatAction('shove', currentParticipant.id, selectedEnemyId || undefined)
           }
         >
           Shove
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onTwoWeaponAttack(currentParticipant.id, selectedEnemyId || undefined)}
-        >
-          Two-Weapon Attack
         </Button>
         {/* #1362: one button per slot level the Paladin has left, read from the participant
             the action bar already holds. The chosen level travels with the attack. */}
