@@ -21,6 +21,8 @@ import { mookGroupAttackBonus } from './boss-moves.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
 import {
   activeAlliesOf,
+  clearHiddenAttacker,
+  isHiddenAttacker,
   isSneakAttackSpent,
   markSneakAttackSpent,
   rogueLevelOf,
@@ -640,14 +642,21 @@ export class CombatAttackService {
     if (!targetData) throw new NotFoundError('Target participant', targetId);
     if (!attackerData) throw new NotFoundError('Attacker participant', attackerId);
 
-    const [weapon, attackerProfile, attackerConditions, targetConditions, tacticalMap] =
-      await Promise.all([
-        getEquippedWeaponProfile(attackerData.participant, weaponId),
-        getParticipantAbilityProfile(attackerData.participant),
-        getActiveConditionNames(attackerId),
-        getActiveConditionNames(targetId),
-        loadActiveTacticalMap(attackerData.participant.encounter.sessionId),
-      ]);
+    const [
+      weapon,
+      attackerProfile,
+      attackerConditions,
+      targetConditions,
+      tacticalMap,
+      attackerHidden,
+    ] = await Promise.all([
+      getEquippedWeaponProfile(attackerData.participant, weaponId),
+      getParticipantAbilityProfile(attackerData.participant),
+      getActiveConditionNames(attackerId),
+      getActiveConditionNames(targetId),
+      loadActiveTacticalMap(attackerData.participant.encounter.sessionId),
+      isHiddenAttacker(encounterId, attackerId),
+    ]);
     const { participant: targetParticipant, stats: targetStats } = targetData;
     const baseTargetAc = resolveParticipantArmorClass(targetParticipant.armorClass, {
       participantId: targetParticipant.id,
@@ -673,6 +682,7 @@ export class CombatAttackService {
       requestedAdvantage: advantage,
       requestedDisadvantage: disadvantage,
       targetDodging: targetParticipant.isDodging,
+      attackerHidden,
       attackerConditions,
       targetConditions,
       fightingStyles: attackerProfile.fightingStyles,
@@ -821,6 +831,10 @@ export class CombatAttackService {
     // fleer's turn, so claiming a turn action for the attacker would spend a second creature's
     // Action for a blow provoked by the first one.
     const resolveAttackRoll = async () => {
+      // #1637: the attack spends a Hide's advantage, hit or miss, once it is actually resolving.
+      if (rules.advantageSources.includes('hidden')) {
+        await clearHiddenAttacker(encounterId, attackerId);
+      }
       // The player's own die when they rolled one, and only then. `rollD20Pair` already applied
       // advantage when it rolled; a provided die was rolled in the popup, which was told the
       // advantage state by `proposeAttack` and submits the die it kept. Rolling a second die

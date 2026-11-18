@@ -24,6 +24,9 @@ import {
 } from '../../../../db/schema/index';
 import { classLevelOf } from '../progression/limited-feature-uses.js';
 
+import type { VitalsTx } from '../character-vitals-service.js';
+
+const HIDDEN_KEY = 'hiddenParticipants';
 const SNEAK_KEY = 'sneakAttackSpent';
 /** Conditions that make a creature unable to act for the Sneak Attack flanking clause (2014). */
 const INCAPACITATING_CONDITIONS = [
@@ -55,6 +58,70 @@ async function readSessionState(encounterId: string): Promise<unknown> {
     .where(eq(gameSessions.id, sessionOfEncounter(encounterId)))
     .limit(1);
   return row?.state ?? null;
+}
+
+/** Store the hidden mark for one participant (a successful Hide check). */
+export async function markHiddenAttacker(
+  encounterId: string,
+  participantId: string,
+): Promise<void> {
+  await db
+    .update(gameSessions)
+    .set({
+      sessionState: sql`jsonb_set(
+        jsonb_set(COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${HIDDEN_KEY}}`}::text[],
+          COALESCE(${gameSessions.sessionState} -> ${HIDDEN_KEY}, '{}'::jsonb), true),
+        ARRAY[${HIDDEN_KEY}, ${participantId}]::text[],
+        jsonb_build_object('encounterId', ${encounterId}::text), true)`,
+      updatedAt: new Date(),
+    })
+    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
+}
+
+/** Whether this participant's next attack in this encounter has the hidden advantage. */
+export async function isHiddenAttacker(
+  encounterId: string,
+  participantId: string,
+): Promise<boolean> {
+  const state = await readSessionState(encounterId);
+  return flagEntry(state, HIDDEN_KEY, participantId)?.encounterId === encounterId;
+}
+
+/** Drop one participant's hidden mark: the attack, or damage taken, ends it. */
+export async function clearHiddenAttacker(
+  encounterId: string,
+  participantId: string,
+): Promise<void> {
+  await db
+    .update(gameSessions)
+    .set({
+      sessionState: sql`COALESCE(${gameSessions.sessionState}, '{}'::jsonb) #- ARRAY[${HIDDEN_KEY}, ${participantId}]::text[]`,
+      updatedAt: new Date(),
+    })
+    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
+}
+
+/**
+ * Drop every hidden mark that belongs to an encounter, inside the caller's transaction when it
+ * has one. Called when the fight ends.
+ */
+export async function clearHiddenForEncounter(
+  executor: Pick<VitalsTx, 'update'>,
+  encounterId: string,
+): Promise<void> {
+  await executor
+    .update(gameSessions)
+    .set({
+      sessionState: sql`jsonb_set(
+        COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${HIDDEN_KEY}}`}::text[],
+        COALESCE((
+          SELECT jsonb_object_agg(e.key, e.value)
+          FROM jsonb_each(COALESCE(${gameSessions.sessionState} -> ${HIDDEN_KEY}, '{}'::jsonb)) AS e(key, value)
+          WHERE e.value ->> 'encounterId' <> ${encounterId}::text
+        ), '{}'::jsonb), true)`,
+      updatedAt: new Date(),
+    })
+    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
 }
 
 /** Whether this Rogue already took Sneak Attack in this round. */
@@ -108,7 +175,7 @@ export async function clearSneakAttackSpent(
  */
 export function combatTurnFlagsPreservingState(incoming: SQL): SQL {
   let merged = incoming;
-  for (const key of [SNEAK_KEY]) {
+  for (const key of [HIDDEN_KEY, SNEAK_KEY]) {
     const stored = sql`${gameSessions.sessionState} -> ${key}`;
     merged = sql`CASE WHEN jsonb_typeof(${stored}) = 'object'
       THEN ((${merged}) - ${key}) || jsonb_build_object(${key}::text, ${stored})
