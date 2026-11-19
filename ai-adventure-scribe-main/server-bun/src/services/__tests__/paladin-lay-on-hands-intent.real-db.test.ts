@@ -27,7 +27,10 @@ import {
   featureUsageLog,
   gameSessions,
 } from '../../../../db/schema/index';
-import { LAY_ON_HANDS_HEAL_INTENT_BODY } from '../../../../shared/test-fixtures/lay-on-hands-intent';
+import {
+  LAY_ON_HANDS_CHOSEN_AMOUNT_INTENT_BODY,
+  LAY_ON_HANDS_HEAL_INTENT_BODY,
+} from '../../../../shared/test-fixtures/lay-on-hands-intent';
 
 if (hasRealDb && !process.env.DATABASE_URL && process.env.TEST_DATABASE_URL) {
   process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
@@ -55,6 +58,9 @@ const { resolveCombatLayOnHands } = await importWithRealDb(
   () => import('../../services/dm/combat-lay-on-hands.js'),
 );
 const { intentRoutes } = await importWithRealDb(() => import('../../routes/v1/combat/intents.js'));
+const { getLegalCombatActions } = await importWithRealDb(
+  () => import('../combat/combat-intent-service.js'),
+);
 
 const app = hasRealDb
   ? createRequestPipelineApp().use(new Elysia({ prefix: '/v1/combat' }).use(intentRoutes))
@@ -86,6 +92,26 @@ describeWithDb('Lay on Hands combat intent through the real route (#1554)', () =
         actorId: heroId,
         targetId: heroId,
         amount,
+        expectedVersion: await version(),
+      },
+    };
+    return app!.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer 1554-test-token' },
+        body: JSON.stringify(body),
+      }),
+    );
+  };
+
+  /** #1670: the chosen-amount body the client sends, with this test's real ids. */
+  const sendChosenFixture = async () => {
+    const body = {
+      ...LAY_ON_HANDS_CHOSEN_AMOUNT_INTENT_BODY,
+      intent: {
+        ...LAY_ON_HANDS_CHOSEN_AMOUNT_INTENT_BODY.intent,
+        actorId: heroId,
+        targetId: heroId,
         expectedVersion: await version(),
       },
     };
@@ -265,6 +291,31 @@ describeWithDb('Lay on Hands combat intent through the real route (#1554)', () =
     expect(after.pool).toBe(0);
     expect(after.usage).toBe(1);
     expect(after.actionUsed).toBe(true);
+  });
+
+  // #1670: the player stepped the heal to 3 of the 5 offered. The engine heals 3, draws 3, and the
+  // response carries the pool number the sheet panel shows at once.
+  it('a chosen heal of 3 gives HP +3, pool -3, and the response carries the engine pool', async () => {
+    await setHp(7);
+    const response = await sendChosenFixture();
+    expect(response.status, await response.clone().text()).toBe(200);
+    const after = await readState();
+    expect(after.hp).toBe(10);
+    expect(after.pool).toBe(2);
+    expect(after.usage).toBe(1);
+    expect(after.actionUsed).toBe(true);
+    const payload = (await response.json()) as { result?: { poolRemaining?: number } };
+    expect(payload.result?.poolRemaining).toBe(2);
+  });
+
+  // #1670: the heal chip the More stepper reads carries the engine's default and its cap.
+  it('the legal-actions heal chip carries the engine cap as maxAmount', async () => {
+    await setHp(7);
+    const legal = await getLegalCombatActions(encounterId, userId);
+    const heal = legal.actions.find(
+      (action) => action.type === 'lay_on_hands' && action.cure === undefined,
+    );
+    expect(heal).toMatchObject({ targetId: heroId, amount: 5, maxAmount: 5 });
   });
 
   it('an amount over the pool is 422 and nothing is spent', async () => {

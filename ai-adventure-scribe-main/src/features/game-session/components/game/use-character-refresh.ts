@@ -64,7 +64,18 @@ export function useCharacterRefreshOnCombatUpdate(
     window.addEventListener('character-state-updated', refreshCharacter);
     // #1357: the session socket reopened after a drop; events sent while it was closed are lost.
     window.addEventListener('session-socket-reconnected', refreshCharacter);
+    // #1670: an intent result carries the engine's pool number; the panel takes it at once.
+    const applyPoolUses = (event: Event): void => {
+      if (cancelled) return;
+      const detail = (
+        event as CustomEvent<{ feature: string; currentUses: number; maxUses?: number }>
+      ).detail;
+      if (!detail || typeof detail.currentUses !== 'number') return;
+      characterDispatch({ type: 'SET_TRACKED_USES', payload: detail });
+    };
+    window.addEventListener('character-pool-updated', applyPoolUses);
     return () => {
+      window.removeEventListener('character-pool-updated', applyPoolUses);
       cancelled = true;
       window.removeEventListener('combat-state-updated', refreshCharacter);
       window.removeEventListener('character-state-updated', refreshCharacter);

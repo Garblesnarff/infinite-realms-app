@@ -45,6 +45,31 @@ import {
 } from '@/services/combat/roll-outcome-display';
 import { getSpellById } from '@/utils/spell-lookup';
 
+/**
+ * #1670: the engine's pool number goes to the in-game sheet panel at once. The refresh that
+ * follows an intent reads the same number back, but the panel should not wait on that read
+ * (#1085: the panel showed the old pool until a reload).
+ */
+function publishEnginePoolUses(
+  feature: 'lay_on_hands' | 'second_wind' | 'action_surge',
+  result: unknown,
+): void {
+  const engine = (result ?? {}) as {
+    poolRemaining?: unknown;
+    poolMax?: unknown;
+    usesRemaining?: unknown;
+  };
+  const currentUses = feature === 'lay_on_hands' ? engine.poolRemaining : engine.usesRemaining;
+  if (typeof currentUses !== 'number') return;
+  const maxUses =
+    feature === 'lay_on_hands' && typeof engine.poolMax === 'number' ? engine.poolMax : undefined;
+  window.dispatchEvent(
+    new CustomEvent('character-pool-updated', {
+      detail: { feature, currentUses, ...(maxUses !== undefined ? { maxUses } : {}) },
+    }),
+  );
+}
+
 export function fleeProvokerOf(label: string): string | null {
   return label.match(/\((.+?) attacks\)/)?.[1] ?? null;
 }
@@ -65,6 +90,8 @@ export type LegalAction = {
   /** #1554: a Lay on Hands chip: the target participant, the engine's heal amount or a cure. */
   targetId?: string;
   amount?: number;
+  /** #1670: the most points the More stepper may pick: the engine's cap (missing HP, or the pool). */
+  maxAmount?: number;
   cure?: 'disease' | 'poison';
   /**
    * #1206: the slot a leveled spell chip spends: the lowest remaining slot at or above the
@@ -418,6 +445,9 @@ export function useCombatLegalActions(input: {
             Date.now(),
             action.type === 'divine_sense' ? 'action_bar' : 'typed',
           );
+          if (action.type === 'second_wind' || action.type === 'action_surge') {
+            publishEnginePoolUses(action.type, result);
+          }
           window.dispatchEvent(new CustomEvent('character-state-updated'));
           const parts = [
             ...formatCombatActionParts(
@@ -485,6 +515,7 @@ export function useCombatLegalActions(input: {
             Date.now(),
             'action_bar',
           );
+          publishEnginePoolUses('lay_on_hands', result);
           window.dispatchEvent(new CustomEvent('character-state-updated'));
           const parts = [
             ...formatCombatActionParts(

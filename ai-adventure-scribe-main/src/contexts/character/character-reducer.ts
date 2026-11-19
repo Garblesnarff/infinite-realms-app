@@ -95,6 +95,27 @@ export function characterReducer(state: CharacterState, action: CharacterAction)
       case 'UPDATE_CHARACTER':
         return handleUpdateCharacter(state, action.payload);
 
+      case 'SET_TRACKED_USES': {
+        // #1670: the engine's pool number, written where the sheet panel reads class features.
+        if (!state.character) return state;
+        const { feature, currentUses, maxUses } = action.payload;
+        const prior = state.character.classFeatures?.[feature];
+        return {
+          ...state,
+          character: {
+            ...state.character,
+            classFeatures: {
+              ...state.character.classFeatures,
+              [feature]: {
+                ...(prior && typeof prior === 'object' ? prior : {}),
+                currentUses,
+                ...(maxUses !== undefined ? { maxUses } : {}),
+              },
+            },
+          },
+        };
+      }
+
       case 'SET_GENDER':
         return {
           ...state,

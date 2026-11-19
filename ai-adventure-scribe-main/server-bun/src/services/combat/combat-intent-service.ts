@@ -2807,10 +2807,13 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
           const who = t.id === actor.id ? 'yourself' : name;
           const amount = Math.min(missing, loh.remaining);
           if (amount > 0) {
+            // #1670: `amount` is the default (the smaller of "to full" and the pool). `maxAmount`
+            // is the cap the player's stepper may not pass; the engine checks both on the intent.
             actions.push({
               type: 'lay_on_hands',
               targetId: t.id,
               amount,
+              maxAmount: amount,
               label: `Lay on Hands — heal ${who} ${amount} HP`,
             });
           }
