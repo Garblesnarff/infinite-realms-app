@@ -55,7 +55,7 @@ vi.mock('../../../../db/client', () => {
     set: vi.fn().mockReturnThis(),
     then: vi.fn((resolve: any) => {
       return Promise.resolve(mockState.results).then(resolve);
-    }),
+    })
   };
   const db = {
     select: vi.fn(() => mockQueryBuilder),
@@ -69,9 +69,9 @@ vi.mock('../../../../db/client', () => {
     query: {
       combatParticipants: {
         findFirst: vi.fn(),
-      },
+      }
     },
-    execute: vi.fn(),
+    execute: vi.fn()
   };
   return { db };
 });
@@ -109,9 +109,7 @@ describe('CombatHPService', () => {
   };
 
   beforeEach(() => {
-    vi.mocked(CombatInitiativeService.getCurrentTurn).mockResolvedValue({
-      id: mockParticipantId,
-    } as any);
+    vi.mocked(CombatInitiativeService.getCurrentTurn).mockResolvedValue({ id: mockParticipantId } as any);
     vi.clearAllMocks();
     mockState.results = [];
   });
@@ -122,43 +120,30 @@ describe('CombatHPService', () => {
         // Mock empty result
         mockState.results = [];
 
-        await expect(
-          HPDataAccess.getParticipantWithFullContext(
-            mockParticipantId,
-            mockEncounterId,
-            mockUserId,
-          ),
-        ).rejects.toThrow(NotFoundError);
+        await expect(HPDataAccess.getParticipantWithFullContext(mockParticipantId, mockEncounterId, mockUserId))
+          .rejects.toThrow(NotFoundError);
       });
 
       it('should return context if participant found and authorized', async () => {
-        const mockResult = [
-          {
-            participant: mockParticipant,
-            status: mockStatus,
-            currentRound: 1,
-          },
-        ];
+        const mockResult = [{
+          participant: mockParticipant,
+          status: mockStatus,
+          currentRound: 1
+        }];
 
         mockState.results = mockResult;
 
-        const result = await HPDataAccess.getParticipantWithFullContext(
-          mockParticipantId,
-          mockEncounterId,
-          mockUserId,
-        );
+        const result = await HPDataAccess.getParticipantWithFullContext(mockParticipantId, mockEncounterId, mockUserId);
         expect(result).toEqual(mockResult[0]);
       });
     });
 
     describe('getParticipantStatusScoped', () => {
       it('should return status if found and authorized', async () => {
-        mockState.results = [
-          {
-            encounterId: mockEncounterId,
-            status: mockStatus,
-          },
-        ];
+        mockState.results = [{
+          encounterId: mockEncounterId,
+          status: mockStatus
+        }];
 
         const result = await HPDataAccess.getParticipantStatusScoped(mockParticipantId, mockUserId);
         expect(result?.status).toEqual(mockStatus);
@@ -173,12 +158,10 @@ describe('CombatHPService', () => {
 
     describe('getParticipantStatus', () => {
       it('should return status', async () => {
-        mockState.results = [
-          {
-            encounterId: mockEncounterId,
-            status: mockStatus,
-          },
-        ];
+        mockState.results = [{
+          encounterId: mockEncounterId,
+          status: mockStatus
+        }];
 
         const result = await HPDataAccess.getParticipantStatus(mockParticipantId, mockUserId);
         expect(result).toEqual(mockStatus);
@@ -199,20 +182,18 @@ describe('CombatHPService', () => {
   describe('CombatHPService', () => {
     describe('applyDamage', () => {
       it('should apply damage and log it', async () => {
-        const mockResult = [
-          {
-            participant: mockParticipant,
-            status: mockStatus,
-            currentRound: 1,
-          },
-        ];
+        const mockResult = [{
+          participant: mockParticipant,
+          status: mockStatus,
+          currentRound: 1
+        }];
         mockState.results = mockResult;
 
         const result = await CombatHPService.applyDamage(
           mockParticipantId,
           mockEncounterId,
           { damageAmount: 10, damageType: 'piercing' },
-          mockUserId,
+          mockUserId
         );
 
         expect(result.newCurrentHp).toBe(10);
@@ -223,19 +204,17 @@ describe('CombatHPService', () => {
       });
 
       it('should write the character record and the participant mirror in one transaction', async () => {
-        mockState.results = [
-          {
-            participant: mockPlayerParticipant,
-            status: mockStatus,
-            currentRound: 1,
-          },
-        ];
+        mockState.results = [{
+          participant: mockPlayerParticipant,
+          status: mockStatus,
+          currentRound: 1
+        }];
 
         const result = await CombatHPService.applyDamage(
           mockParticipantId,
           mockEncounterId,
           { damageAmount: 6, damageType: 'slashing' },
-          mockUserId,
+          mockUserId
         );
 
         expect(result.newCurrentHp).toBe(14);
@@ -252,20 +231,18 @@ describe('CombatHPService', () => {
     describe('healDamage', () => {
       it('should heal participant', async () => {
         const injuredStatus = { ...mockStatus, currentHp: 10 };
-        mockState.results = [
-          {
-            participant: mockParticipant,
-            status: injuredStatus,
-            currentRound: 1,
-          },
-        ];
+        mockState.results = [{
+          participant: mockParticipant,
+          status: injuredStatus,
+          currentRound: 1
+        }];
 
         const result = await CombatHPService.healDamage(
           mockParticipantId,
           mockEncounterId,
           5,
           undefined,
-          mockUserId,
+          mockUserId
         );
 
         expect(result.newCurrentHp).toBe(15);
@@ -275,19 +252,17 @@ describe('CombatHPService', () => {
 
     describe('setTempHP', () => {
       it('should set temp HP', async () => {
-        mockState.results = [
-          {
-            participant: mockParticipant,
-            status: mockStatus,
-            currentRound: 1,
-          },
-        ];
+        mockState.results = [{
+          participant: mockParticipant,
+          status: mockStatus,
+          currentRound: 1
+        }];
 
         const result = await CombatHPService.setTempHP(
           mockParticipantId,
           mockEncounterId,
           10,
-          mockUserId,
+          mockUserId
         );
 
         expect(result.newTempHp).toBe(10);
@@ -299,18 +274,16 @@ describe('CombatHPService', () => {
       it('should roll death save for unconscious participant', async () => {
         vi.spyOn(Math, 'random').mockReturnValue(0.7); // Natural 15
         const unconsciousStatus = { ...mockStatus, currentHp: 0, isConscious: false };
-        mockState.results = [
-          {
-            participant: mockParticipant,
-            status: unconsciousStatus,
-            currentRound: 1,
-          },
-        ];
+        mockState.results = [{
+          participant: mockParticipant,
+          status: unconsciousStatus,
+          currentRound: 1
+        }];
 
         const result = await CombatHPService.rollDeathSave(
           mockParticipantId,
           mockEncounterId,
-          mockUserId,
+          mockUserId
         );
 
         expect(result.successes).toBe(1);
@@ -318,28 +291,23 @@ describe('CombatHPService', () => {
       });
 
       it('should throw BusinessLogicError if conscious', async () => {
-        mockState.results = [
-          {
-            participant: mockParticipant,
-            status: mockStatus, // Conscious
-            currentRound: 1,
-          },
-        ];
+        mockState.results = [{
+          participant: mockParticipant,
+          status: mockStatus, // Conscious
+          currentRound: 1
+        }];
 
-        await expect(
-          CombatHPService.rollDeathSave(mockParticipantId, mockEncounterId, mockUserId),
-        ).rejects.toThrow(BusinessLogicError);
+        await expect(CombatHPService.rollDeathSave(mockParticipantId, mockEncounterId, mockUserId))
+          .rejects.toThrow(BusinessLogicError);
       });
     });
 
     describe('checkConscious', () => {
       it('should return consciousness state', async () => {
-        mockState.results = [
-          {
-            encounterId: mockEncounterId,
-            status: mockStatus,
-          },
-        ];
+        mockState.results = [{
+          encounterId: mockEncounterId,
+          status: mockStatus
+        }];
 
         const result = await CombatHPService.checkConscious(mockParticipantId, mockUserId);
         expect(result).toBe(true);
@@ -349,20 +317,18 @@ describe('CombatHPService', () => {
     describe('stabilizeWithMedicine', () => {
       it('should stabilize dying participant on success', async () => {
         const dyingStatus = { ...mockStatus, currentHp: 0, isConscious: false };
-        mockState.results = [
-          {
-            participant: mockParticipant,
-            status: dyingStatus,
-            currentRound: 1,
-          },
-        ];
+        mockState.results = [{
+          participant: mockParticipant,
+          status: dyingStatus,
+          currentRound: 1
+        }];
 
         const result = await CombatHPService.stabilizeWithMedicine(
           mockParticipantId,
           mockEncounterId,
           10, // Medicine check roll
-          2, // Modifier
-          mockUserId,
+          2,  // Modifier
+          mockUserId
         );
 
         expect(result.success).toBe(true);
@@ -373,14 +339,9 @@ describe('CombatHPService', () => {
     describe('getDamageLog', () => {
       it('should fetch damage log with authorization', async () => {
         const mockLogs = [{ id: 'log-1', damageAmount: 10 }];
-        mockState.results = mockLogs.map((l) => ({ log: l }));
+        mockState.results = mockLogs.map(l => ({ log: l }));
 
-        const result = await CombatHPService.getDamageLog(
-          mockEncounterId,
-          undefined,
-          undefined,
-          mockUserId,
-        );
+        const result = await CombatHPService.getDamageLog(mockEncounterId, undefined, undefined, mockUserId);
 
         expect(result).toEqual(mockLogs);
         expect(db.select).toHaveBeenCalled();
