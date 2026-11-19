@@ -111,6 +111,14 @@ const narrationCalls: Array<Record<string, unknown>> = [];
 const serverLog = (level: string) => (data: unknown, msg?: unknown) => {
   serverLogs.push({ level, data, msg });
 };
+const actualTurnFlags = await import('../../../../services/combat/combat-turn-flags.js');
+// The Hide and Rage marks are read from the session row, which this harness does not model. The real
+// functions are kept; only the two reads a spell cast makes return "not hidden" and "not raging".
+mock.module('../../../../services/combat/combat-turn-flags.js', () => ({
+  ...actualTurnFlags,
+  isHiddenAttacker: async () => false,
+  isRaging: async () => false,
+}));
 mock.module('../../../../../../db/client', () => ({
   withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(),
   db: {},
