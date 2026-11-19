@@ -1,3 +1,5 @@
+import { rollDie } from '../../lib/rng.js';
+
 import type { EngineResultCard } from '../../../../shared/engine-result-card.js';
 
 /**
@@ -81,4 +83,39 @@ export function serverVerdictLine(text: string, success: boolean): string {
     return trimmed.replace(/\s(success|fail)$/i, ` ${verdict}`);
   }
   return `${trimmed} ${verdict}`;
+}
+
+/** Compare independent dice in shadow mode; the client result remains authoritative. */
+export function narrativeCheckShadow(input: {
+  text: string;
+  request: IssuedRollRequest;
+  context?: Record<string, unknown>;
+}): { client: number; server: number; matches: boolean } | null {
+  if (typeof input.request.type !== 'string' || !NARRATIVE_CHECK_TYPES.has(input.request.type))
+    return null;
+  const dice = input.context?.diceRoll;
+  const detail =
+    dice && typeof dice === 'object' && !Array.isArray(dice)
+      ? (dice as Record<string, unknown>)
+      : undefined;
+  const fromLine = input.text.match(/\(nat\s+(\d+)(?:[+-]\d+)?\)/i);
+  const parsed = parseReportedCheckLine(input.text);
+  const client =
+    typeof detail?.naturalRoll === 'number'
+      ? detail.naturalRoll
+      : fromLine
+        ? Number(fromLine[1])
+        : parsed?.total;
+  if (!Number.isInteger(client) || client! < 1 || client! > 20) return null;
+  const first = rollDie(20);
+  const advantage = detail?.advantage === true || /\[ADV\]/i.test(input.text);
+  const disadvantage = detail?.disadvantage === true || /\[DIS\]/i.test(input.text);
+  const second = advantage !== disadvantage ? rollDie(20) : first;
+  const server =
+    advantage && !disadvantage
+      ? Math.max(first, second)
+      : disadvantage && !advantage
+        ? Math.min(first, second)
+        : first;
+  return { client: client!, server, matches: client === server };
 }

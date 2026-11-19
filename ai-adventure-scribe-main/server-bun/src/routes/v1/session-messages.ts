@@ -3,11 +3,13 @@ import { Elysia, t } from 'elysia';
 import { verifySessionOwnership } from './combat/helpers.js';
 import { PLAYER_INPUT_MAX_CHARS } from '../../../../shared/player-input-cap.js';
 import { logger } from '../../lib/logger.js';
+import { narrativeCheckShadowCounter } from '../../lib/metrics.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
 import { expireStaleHeldReplies } from '../../services/dm/dm-reply-persistence.js';
 import {
   narrativeCheckCard,
+  narrativeCheckShadow,
   serverVerdictLine,
 } from '../../services/session/narrative-check-outcome.js';
 import { SessionMessageService } from '../../services/session/session-message-service.js';
@@ -43,6 +45,18 @@ async function withServerCheckOutcome<
     userId,
     rollRequestId,
   );
+  const shadow = issued
+    ? narrativeCheckShadow({ text: message.message, request: issued, context })
+    : null;
+  if (shadow) {
+    narrativeCheckShadowCounter.inc({ result: shadow.matches ? 'match' : 'mismatch' });
+    if (!shadow.matches) {
+      logger.info(
+        { clientNatural: shadow.client, serverNatural: shadow.server },
+        'narrative check independent shadow mismatch',
+      );
+    }
+  }
   const card = issued ? narrativeCheckCard({ text: message.message, request: issued }) : null;
   if (!card) {
     logger.warn(

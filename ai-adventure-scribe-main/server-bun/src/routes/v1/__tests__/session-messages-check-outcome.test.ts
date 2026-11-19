@@ -20,9 +20,13 @@ import {
 } from '../../../../../shared/test-fixtures/ability-check-saves';
 import { storySaveAnswerBody } from '../../../../../shared/test-fixtures/story-rolls';
 
+const shadowLogs: Array<{ clientNatural?: number; serverNatural?: number }> = [];
+
 const noopLogger = {
   debug: () => {},
-  info: () => {},
+  info: (data: { clientNatural?: number; serverNatural?: number }) => {
+    if (data?.clientNatural !== undefined) shadowLogs.push(data);
+  },
   warn: () => {},
   error: () => {},
   child: () => noopLogger,
@@ -142,6 +146,8 @@ mock.module('../../../services/character-service.js', () => ({
 
 const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
 const { sessionMessageRoutes } = await import('../session-messages.js');
+const { setRngSeed } = await import('../../../lib/rng.js');
+const { narrativeCheckShadowCounter } = await import('../../../lib/metrics.js');
 
 // The production composition: the request pipeline (with its error handler) and then the routes.
 const app = createRequestPipelineApp().use(sessionMessageRoutes);
@@ -168,6 +174,8 @@ describe('POST /v1/sessions/:id/messages — narrative ability check outcome (#1
   beforeEach(() => {
     saved.length = 0;
     lookups.length = 0;
+    shadowLogs.length = 0;
+    setRngSeed(undefined);
   });
 
   it('accepts the exact body the client sends today and writes a SUCCESS card', async () => {
@@ -195,6 +203,22 @@ describe('POST /v1/sessions/:id/messages — narrative ability check outcome (#1
     expect((row!.context as Record<string, unknown>).engineCards).toEqual([
       ABILITY_CHECK_CARD_SUCCESS,
     ]);
+  });
+
+  it('counts and logs an independent shadow mismatch while accepting the exact client body', async () => {
+    setRngSeed(1); // The first shadow d20 is 13; the shared body reports 12.
+    const before = await narrativeCheckShadowCounter.get();
+    const prior = before.values.find((value) => value.labels.result === 'mismatch')?.value ?? 0;
+    const response = await post(ABILITY_CHECK_SAVE_BODY);
+    expect(response.status).toBe(200);
+    expect(saved[0]![0]!.message).toBe(ATHLETICS_CHECK_LINE);
+    expect((saved[0]![0]!.context as Record<string, unknown>).engineCards).toEqual([
+      ABILITY_CHECK_CARD_SUCCESS,
+    ]);
+    expect(shadowLogs).toEqual([{ clientNatural: 12, serverNatural: 13 }]);
+    const after = await narrativeCheckShadowCounter.get();
+    expect(after.values.find((value) => value.labels.result === 'mismatch')?.value).toBe(prior + 1);
+    setRngSeed(undefined);
   });
 
   it('writes a FAIL card when the reported total is under the issued DC, whatever word the client wrote', async () => {
