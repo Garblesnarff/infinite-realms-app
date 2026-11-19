@@ -56,7 +56,7 @@ export function aggregateResistances(
 }
 
 /** The three damage types Rage resists (2014 SRD 5.1). */
-const RAGE_RESISTANCES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
+export const RAGE_RESISTANCES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
 
 /**
  * Adds Rage's resistances to a target's own. The types are merged, not replaced, so a racial

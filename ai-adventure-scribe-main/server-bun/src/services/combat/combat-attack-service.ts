@@ -61,7 +61,11 @@ import { appliesHexRider, hexRiderDice } from './hex-rider.js';
 import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { markPlayerDamageProvocation } from './npc-provocation.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
-import { aggregateResistances, withRageResistances } from './resistance-resolver.js';
+import {
+  aggregateResistances,
+  RAGE_RESISTANCES,
+  withRageResistances,
+} from './resistance-resolver.js';
 import {
   metamagicOptionsLedger,
   sorceryPointsLedger,
@@ -1704,10 +1708,12 @@ export class CombatAttackService {
         };
 
         // Aggregate resistances using the extracted module. #1654: a raging target resists the three
-        // physical types from a spell too (the merge is once per type, so a racial one is kept).
-        const targetIsRaging = targetParticipant.characterId
-          ? await isRaging(encounterId, targetId)
-          : false;
+        // physical types from a spell too (the merge is once per type, so a racial one is kept). Rage
+        // only changes physical damage, so only a physical spell reads the Rage mark.
+        const targetIsRaging =
+          damageType && RAGE_RESISTANCES.includes(damageType) && targetParticipant.characterId
+            ? await isRaging(encounterId, targetId)
+            : false;
         const defenses = withRageResistances(
           aggregateResistances(targetParticipant, targetStats),
           targetIsRaging,
