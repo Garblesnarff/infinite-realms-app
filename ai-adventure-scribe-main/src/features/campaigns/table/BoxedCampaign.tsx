@@ -1,11 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
+import { GenreChips } from './GenreChips';
 import { tableImageUrl } from './image-url';
 import { TableImage } from './TableImage';
 import { showTargetNumbersByDefault } from '../../../../shared/show-target-numbers';
 
 import type { StarterCampaign } from '@/hooks/use-starter-campaigns';
+
+import { formatStarterLevelRange } from '@/utils/campaign/starter-level-range';
 
 /** Boxed-set tilt from the Campaigns board: left, straight, right. */
 const TILTS = [-2.5, 0, 2.5];
@@ -49,7 +52,8 @@ export const BoxedCampaign: React.FC<{
           ? 'Easy'
           : 'Medium';
   const hard = difficultyLabel === 'Hard' || difficultyLabel === 'Deadly';
-  const level = campaign.levelRange?.trim();
+  // The played range, as the detail page and the signed-out card print it (#1672).
+  const level = formatStarterLevelRange(campaign.levelRange);
   const footer = [level ? `Level ${level}` : null, 'Ready-made heroes'].filter(Boolean).join(' · ');
   const tilt = tiltFor(index, campaign.slug);
 
@@ -87,16 +91,7 @@ export const BoxedCampaign: React.FC<{
                 background: 'linear-gradient(180deg, transparent 45%, rgba(7,11,20,0.92) 100%)',
               }}
             />
-            <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
-              {campaign.genre.map((genre) => (
-                <span
-                  key={genre}
-                  className="rounded-[5px] border border-[rgba(234,238,250,0.35)] bg-[#070b14] px-2 py-[3px] font-heading text-[11px] capitalize tracking-[0.08em] text-[#eaeefa]"
-                >
-                  {genre}
-                </span>
-              ))}
-            </div>
+            <GenreChips genres={campaign.genre} />
             <span
               className="normal-case absolute right-3 top-3 rounded-[5px] border bg-[#070b14] px-2 py-[3px] font-heading text-[11px] font-bold tracking-[0.08em]"
               style={{
