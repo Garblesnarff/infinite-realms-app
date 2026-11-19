@@ -319,4 +319,47 @@ describe('useCombatLegalActions pool numbers (#1670)', () => {
       window.removeEventListener('character-pool-updated', listener);
     }
   });
+
+  // #1679: Action Surge publishes its engine use count, as Second Wind does.
+  it('Action Surge publishes the engine use count', async () => {
+    routeFetchFor(
+      { type: 'action_surge', label: 'Action Surge' },
+      { applied: true, action: 'action_surge', usesRemaining: 0 },
+    );
+    const published: unknown[] = [];
+    const listener = (event: Event) => published.push((event as CustomEvent).detail);
+    window.addEventListener('character-pool-updated', listener);
+    try {
+      const { result } = renderHook(() =>
+        useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+      );
+      await waitFor(() => expect(result.current.actions).toHaveLength(1));
+      await act(async () => {
+        await result.current.runAction({ type: 'action_surge', label: 'Action Surge' } as never);
+      });
+      expect(published).toEqual([{ feature: 'action_surge', currentUses: 0 }]);
+    } finally {
+      window.removeEventListener('character-pool-updated', listener);
+    }
+  });
+
+  // #1679: Rage publishes the engine's remaining rage uses from the rage result, like the others.
+  it('Rage publishes the engine use count from the rage result', async () => {
+    routeFetchFor({ type: 'rage', label: 'Rage' }, { usesRemaining: 2, expiresRound: 4 });
+    const published: unknown[] = [];
+    const listener = (event: Event) => published.push((event as CustomEvent).detail);
+    window.addEventListener('character-pool-updated', listener);
+    try {
+      const { result } = renderHook(() =>
+        useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+      );
+      await waitFor(() => expect(result.current.actions).toHaveLength(1));
+      await act(async () => {
+        await result.current.runAction({ type: 'rage', label: 'Rage' } as never);
+      });
+      expect(published).toEqual([{ feature: 'rage', currentUses: 2 }]);
+    } finally {
+      window.removeEventListener('character-pool-updated', listener);
+    }
+  });
 });
