@@ -2,6 +2,7 @@ import React from 'react';
 
 import { tableImageUrl } from './image-url';
 import { TableImage } from './TableImage';
+import { useScrollEdges } from './useScrollEdges';
 
 import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
 
@@ -35,6 +36,9 @@ export const HeroFan: React.FC<{
 }> = ({ templates, disabled, signedIn, onPlay, vitals }) => {
   const [selectedId, setSelectedId] = React.useState(templates[0]?.id);
   const buttons = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const row = React.useRef<HTMLDivElement>(null);
+  // Which side of the row has heroes scrolled out of view: an edge fade marks it (#1672).
+  const edges = useScrollEdges(row);
   const selected = templates.find((template) => template.id === selectedId) ?? templates[0];
   if (!selected) return null;
 
@@ -52,75 +56,93 @@ export const HeroFan: React.FC<{
       <p className="font-heading text-xs tracking-[0.18em] text-[#d5b070]">YOUR HERO</p>
       {/* The row scrolls sideways only when the fan is wider than the page. The inner row is
           at least as wide as the scroller and as wide as its cards, so centring applies when the
-          fan fits and an overflowing fan starts at the first card instead of clipping both ends. */}
-      <div
-        role="group"
-        aria-label="Choose your hero"
-        className="max-w-full snap-x overflow-x-auto pb-4 pt-10"
-      >
-        <div className="flex w-max min-w-full items-end justify-center px-3">
-          {templates.map((template, index) => {
-            const image = tableImageUrl(template.cardImageUrl ?? template.portraitUrl, 360, 540);
-            let preview: { hp: number; ac: number } | null = null;
-            try {
-              preview = vitals(template);
-            } catch {
-              /* A bad template must not hide the other heroes. */
-            }
-            const active = template.id === selected.id;
-            const fan = fanFor(index, templates.length);
-            const lift = fan.lift - (active ? 12 : 0);
-            return (
-              <button
-                key={template.id}
-                ref={(node) => {
-                  buttons.current[index] = node;
-                }}
-                type="button"
-                aria-pressed={active}
-                tabIndex={active ? 0 : -1}
-                aria-label={`Choose ${template.name}`}
-                onClick={() => setSelectedId(template.id)}
-                onKeyDown={(event) => move(event, index)}
-                style={
-                  {
-                    '--lift': `${lift}px`,
-                    '--rot': `${fan.rot}deg`,
-                    '--scale': active ? '1.08' : '1',
-                    marginLeft: index === 0 ? 0 : '-14px',
-                    zIndex: active ? 3 : 1,
-                  } as React.CSSProperties
-                }
-                className="ir-action-card min-h-11 w-[clamp(132px,17vw,206px)] shrink-0 snap-center overflow-hidden rounded-lg text-left [transform:translateY(var(--lift))_rotate(var(--rot))_scale(var(--scale))] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f6e3b8] motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:[transform:translateY(calc(var(--lift)_-_14px))_rotate(0deg)_scale(var(--scale))] motion-reduce:transition-none"
-              >
-                <TableImage
-                  src={image}
-                  alt=""
-                  width={360}
-                  height={540}
-                  className="aspect-[2/3] w-full object-cover"
-                  fallback={
-                    <span className="flex aspect-[2/3] items-center justify-center text-4xl">
-                      {template.name.charAt(0)}
-                    </span>
+          fan fits and an overflowing fan starts at the first card instead of clipping both ends.
+          The relative wrapper holds the edge fades (#1672). */}
+      <div className="relative">
+        <div
+          ref={row}
+          role="group"
+          aria-label="Choose your hero"
+          className="max-w-full snap-x overflow-x-auto pb-4 pt-10"
+        >
+          <div className="flex w-max min-w-full items-end justify-center px-3">
+            {templates.map((template, index) => {
+              const image = tableImageUrl(template.cardImageUrl ?? template.portraitUrl, 360, 540);
+              let preview: { hp: number; ac: number } | null = null;
+              try {
+                preview = vitals(template);
+              } catch {
+                /* A bad template must not hide the other heroes. */
+              }
+              const active = template.id === selected.id;
+              const fan = fanFor(index, templates.length);
+              const lift = fan.lift - (active ? 12 : 0);
+              return (
+                <button
+                  key={template.id}
+                  ref={(node) => {
+                    buttons.current[index] = node;
+                  }}
+                  type="button"
+                  aria-pressed={active}
+                  tabIndex={active ? 0 : -1}
+                  aria-label={`Choose ${template.name}`}
+                  onClick={() => setSelectedId(template.id)}
+                  onKeyDown={(event) => move(event, index)}
+                  style={
+                    {
+                      '--lift': `${lift}px`,
+                      '--rot': `${fan.rot}deg`,
+                      '--scale': active ? '1.08' : '1',
+                      marginLeft: index === 0 ? 0 : '-14px',
+                      zIndex: active ? 3 : 1,
+                    } as React.CSSProperties
                   }
-                />
-                <span className="block p-2">
-                  <strong className="block">{template.name}</strong>
-                  <span className="block text-xs">
-                    {template.race} {template.class}
-                  </span>
-                  {template.tagline && <span className="block text-xs">{template.tagline}</span>}
-                  {preview && (
+                  className="ir-action-card min-h-11 w-[clamp(132px,17vw,206px)] shrink-0 snap-center overflow-hidden rounded-lg text-left [transform:translateY(var(--lift))_rotate(var(--rot))_scale(var(--scale))] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f6e3b8] motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:[transform:translateY(calc(var(--lift)_-_14px))_rotate(0deg)_scale(var(--scale))] motion-reduce:transition-none"
+                >
+                  <TableImage
+                    src={image}
+                    alt=""
+                    width={360}
+                    height={540}
+                    className="aspect-[2/3] w-full object-cover"
+                    fallback={
+                      <span className="flex aspect-[2/3] items-center justify-center text-4xl">
+                        {template.name.charAt(0)}
+                      </span>
+                    }
+                  />
+                  <span className="block p-2">
+                    <strong className="block">{template.name}</strong>
                     <span className="block text-xs">
-                      HP {preview.hp} · AC {preview.ac}
+                      {template.race} {template.class}
                     </span>
-                  )}
-                </span>
-              </button>
-            );
-          })}
+                    {template.tagline && <span className="block text-xs">{template.tagline}</span>}
+                    {preview && (
+                      <span className="block text-xs">
+                        HP {preview.hp} · AC {preview.ac}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
+        {edges.left && (
+          <div
+            aria-hidden="true"
+            data-testid="hero-row-fade-left"
+            className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-[#1a0f07] to-transparent"
+          />
+        )}
+        {edges.right && (
+          <div
+            aria-hidden="true"
+            data-testid="hero-row-fade-right"
+            className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#1a0f07] to-transparent"
+          />
+        )}
       </div>
       <p className="text-center text-sm italic text-[#f1e6cb]">{heroCountLine(templates.length)}</p>
       <div className="ir-parchment rounded p-4">
