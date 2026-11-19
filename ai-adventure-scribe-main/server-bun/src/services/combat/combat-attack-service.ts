@@ -24,6 +24,7 @@ import {
   claimSneakAttack,
   clearHiddenAttacker,
   clearSneakAttackSpent,
+  markLightAttack,
   isHiddenAttacker,
   rogueLevelOf,
   classLevelOfCharacter,
@@ -719,6 +720,7 @@ export class CombatAttackService {
       targetConditions,
       fightingStyles: attackerProfile.fightingStyles,
       ragingDamageBonus,
+      offHand: input.offHand === true,
     });
     // #728 (house rule): a mook attacking with its pack gets +1 to hit for each extra standing
     // mook, to a maximum of +3. Applied here, inside prepareAttack, so the proposal popup and
@@ -870,6 +872,15 @@ export class CombatAttackService {
       if (rules.advantageSources.includes('hidden')) {
         await clearHiddenAttacker(encounterId, attackerId);
       }
+      // #1639: an Attack action with a light melee weapon marks this turn for an off-hand attack. The
+      // mark is written only once the attack has resolved (a hit after its damage, or a miss), so a
+      // damage failure that releases the claim leaves no mark. A reaction and an off-hand swing are not
+      // the Attack action.
+      const markLightAttackAction = async (): Promise<void> => {
+        if (!isReaction && !input.offHand && weapon.light === true && weapon.meleeWeapon === true) {
+          await markLightAttack(encounterId, attackerId, weapon.id);
+        }
+      };
       // The player's own die when they rolled one, and only then. `rollD20Pair` already applied
       // advantage when it rolled; a provided die was rolled in the popup, which was told the
       // advantage state by `proposeAttack` and submits the die it kept. Rolling a second die
@@ -963,6 +974,7 @@ export class CombatAttackService {
           targetHpAfter: null,
         });
         // Miss - no damage
+        await markLightAttackAction();
         return {
           hit: false,
           d20: attackRoll,
@@ -1225,6 +1237,7 @@ export class CombatAttackService {
           ...(concentration ? { concentration } : {}),
           ...(transcriptLines.length ? { transcriptLines } : {}),
         };
+        await markLightAttackAction();
         return attackResult;
       } catch (error) {
         logger.error({ msg: 'Failed to apply damage to HP', error });
@@ -1244,6 +1257,16 @@ export class CombatAttackService {
         throw new InternalServerError('Attack succeeded but damage application failed', { error });
       }
     };
+    // #1639: an off-hand attack is the bonus action, so it claims that and never the Attack action.
+    // It takes no Extra Attack swing either.
+    if (input.offHand) {
+      return claimTurnBonusActionAndResolve(
+        attackerId,
+        encounterId,
+        expectedVersion,
+        resolveAttackRoll,
+      );
+    }
     if (isReaction) return claimTurnReactionAndResolve(attackerId, encounterId, resolveAttackRoll);
     if (attackerData.participant.participantType === 'player') {
       const { claimAttackSwing } = await import('./attack-budget-service.js');
