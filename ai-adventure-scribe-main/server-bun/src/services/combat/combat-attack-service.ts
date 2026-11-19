@@ -28,6 +28,7 @@ import {
   rogueLevelOf,
   classLevelOfCharacter,
   isRaging,
+  markRageActive,
 } from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
@@ -684,7 +685,7 @@ export class CombatAttackService {
       attackerCharacterId ? isRaging(encounterId, attackerId) : false,
       targetData.participant.characterId ? isRaging(encounterId, targetId) : false,
     ]);
-    // #1638: Rage's +2 damage follows the attacker's Barbarian level (levels 1 to 8).
+    // #1638: Rage's damage follows the attacker's Barbarian level (+2, +3 at 9, +4 at 16; #1654).
     const ragingDamageBonus =
       attackerRaging && attackerCharacterId
         ? rageDamageBonusAt(await classLevelOfCharacter(attackerCharacterId, 'Barbarian'))
@@ -746,6 +747,7 @@ export class CombatAttackService {
       mookGroupBonus,
       fightingStyles: attackerProfile.fightingStyles,
       targetRaging,
+      attackerRaging,
     };
   }
 
@@ -816,6 +818,7 @@ export class CombatAttackService {
       mookGroupBonus,
       fightingStyles,
       targetRaging,
+      attackerRaging,
     } = await this.prepareAttack(encounterId, input, userId);
 
     if (!rules.legal) {
@@ -869,6 +872,10 @@ export class CombatAttackService {
       // #1637: the attack spends a Hide's advantage, hit or miss, once it is actually resolving.
       if (rules.advantageSources.includes('hidden')) {
         await clearHiddenAttacker(encounterId, attackerId);
+      }
+      // #1654: a raging Barbarian who attacks a hostile creature keeps Rage through the next turn start.
+      if (attackerRaging && targetParticipant.participantType !== 'player') {
+        await markRageActive(encounterId, attackerId);
       }
       // The player's own die when they rolled one, and only then. `rollD20Pair` already applied
       // advantage when it rolled; a provided die was rolled in the popup, which was told the
@@ -1696,8 +1703,15 @@ export class CombatAttackService {
           cover: seatedAc?.cover ?? null,
         };
 
-        // Aggregate resistances using the extracted module
-        const defenses = aggregateResistances(targetParticipant, targetStats);
+        // Aggregate resistances using the extracted module. #1654: a raging target resists the three
+        // physical types from a spell too (the merge is once per type, so a racial one is kept).
+        const targetIsRaging = targetParticipant.characterId
+          ? await isRaging(encounterId, targetId)
+          : false;
+        const defenses = withRageResistances(
+          aggregateResistances(targetParticipant, targetStats),
+          targetIsRaging,
+        );
 
         // #754: Hex is a no-damage bonus-action curse. The engine acknowledges the cast here;
         // the shared path below spends the slot and claims the bonus action (castingTime is

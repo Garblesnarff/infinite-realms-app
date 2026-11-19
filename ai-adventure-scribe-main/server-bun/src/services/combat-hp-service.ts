@@ -33,7 +33,13 @@ import {
 } from '../../../db/schema/index';
 import { ValidationError, BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
-import { clearHiddenAttacker, isHiddenAttacker } from './combat/combat-turn-flags.js';
+import {
+  clearHiddenAttacker,
+  clearRage,
+  isHiddenAttacker,
+  isRaging,
+  markRageActive,
+} from './combat/combat-turn-flags.js';
 import {
   getParticipantWithFullContext,
   getParticipantStatusScoped,
@@ -42,11 +48,13 @@ import {
   initializeParticipantStatus,
 } from './combat/hp-data-access.js';
 import { HPMechanics } from './combat/hp-mechanics.js';
+import { withRageResistances } from './combat/resistance-resolver.js';
 
 import type { CombatResolvedVitals, VitalsTx } from './character-vitals-service.js';
 import type { CombatParticipantStatus, CombatDamageLog } from '../../../db/schema/index';
 import type {
   DamageResult,
+  DamageType,
   HealingResult,
   DeathSaveResult,
   StabilizationResult,
@@ -360,12 +368,26 @@ export class CombatHPService {
     // `targetIsPlayer` is read off the participant row here rather than taken from the caller.
     // The per-hit cap is a safety property, and a safety property that every call site has to
     // remember to opt into is one that a future call site will forget.
+    // #1654: a raging Barbarian resists bludgeoning, piercing and slashing from every source that
+    // reaches this path (hazards, non-attack damage). A caller that already applied resistances
+    // says so with `ignoreResistances`, and then nothing is merged here.
+    const raging =
+      !options.ignoreResistances && participant.characterId
+        ? await isRaging(encounterId, participantId)
+        : false;
     const result = HPMechanics.calculateDamageResult(
       participantId,
       status,
       {
         damageImmunities: participant.damageImmunities,
-        damageResistances: participant.damageResistances,
+        damageResistances: withRageResistances(
+          {
+            resistances: (participant.damageResistances ?? []) as DamageType[],
+            vulnerabilities: [],
+            immunities: [],
+          },
+          raging,
+        ).resistances,
         damageVulnerabilities: participant.damageVulnerabilities,
       },
       {
@@ -450,6 +472,16 @@ export class CombatHPService {
     // #1637: a hidden participant that takes damage is found; the Hide mark ends.
     if (result.modifiedDamage > 0 && (await isHiddenAttacker(encounterId, participantId))) {
       await clearHiddenAttacker(encounterId, participantId);
+    }
+    // #1654: a character's Rage. Damage taken is activity for the turn (it keeps Rage through the
+    // next turn start), and a fall to 0 HP or unconscious ends Rage at once (2014 SRD 5.1).
+    if (participant.characterId) {
+      if (result.modifiedDamage > 0) {
+        await markRageActive(encounterId, participantId);
+      }
+      if (result.newCurrentHp <= 0 || !result.isConscious) {
+        await clearRage(encounterId, participantId);
+      }
     }
 
     // Telemetry only. The ownership check the old insert-select carried in its

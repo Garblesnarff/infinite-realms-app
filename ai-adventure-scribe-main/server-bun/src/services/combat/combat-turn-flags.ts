@@ -11,9 +11,11 @@
  *   "round:turn order". A reaction on another creature's turn is a different turn, so it can claim
  *   its own Sneak Attack. The claim is one UPDATE made before damage is applied.
  *
- * - `raging`: a Barbarian's Rage (#1638), recorded as the encounter and the round it expires at.
- *   The claim is one guarded UPDATE, the same shape as the Sneak Attack claim. Rage ends when its
- *   round passes or when the fight ends.
+ * - `raging`: a Barbarian's Rage (#1638), recorded as the encounter, the round it expires at, and
+ *   an `active` mark for the turn (#1654). The claim is one guarded UPDATE, the same shape as the
+ *   Sneak Attack claim. Rage ends when its round passes, when the fight ends, when the Barbarian
+ *   drops to 0 HP or falls unconscious, or at a turn start with no attack on a hostile and no
+ *   damage since the last turn.
  *
  * Every entry records its encounter, so a flag from an earlier fight never grants anything.
  */
@@ -246,6 +248,52 @@ export async function clearRage(encounterId: string, participantId: string): Pro
       updatedAt: new Date(),
     })
     .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
+}
+
+/**
+ * Record that a raging participant attacked a hostile creature or took damage in this turn (#1654).
+ * Writes only when a live Rage for this encounter exists, so a call for a participant who is not
+ * raging does nothing.
+ */
+export async function markRageActive(encounterId: string, participantId: string): Promise<void> {
+  const db = await database();
+  const entry = sql`(${gameSessions.sessionState} -> ${RAGE_KEY} -> ${participantId})`;
+  await db
+    .update(gameSessions)
+    .set({
+      sessionState: sql`jsonb_set(${gameSessions.sessionState}, ARRAY[${RAGE_KEY}, ${participantId}, 'active']::text[], 'true'::jsonb, true)`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(gameSessions.id, sessionOfEncounter(encounterId)),
+        sql`(${entry} ->> 'encounterId') = ${encounterId}::text`,
+      ),
+    );
+}
+
+/**
+ * At the start of a raging participant's turn (#1654, 2014 SRD 5.1): Rage ends early when the
+ * Barbarian neither attacked a hostile creature nor took damage since their last turn. Either way
+ * the activity mark is reset for the turn that starts now. A live Rage for this encounter only.
+ */
+export async function endRageIfIdle(encounterId: string, participantId: string): Promise<void> {
+  const db = await database();
+  const entry = sql`(${gameSessions.sessionState} -> ${RAGE_KEY} -> ${participantId})`;
+  await db
+    .update(gameSessions)
+    .set({
+      sessionState: sql`CASE WHEN (${entry} ->> 'active') = 'true'
+        THEN jsonb_set(${gameSessions.sessionState}, ARRAY[${RAGE_KEY}, ${participantId}, 'active']::text[], 'false'::jsonb, true)
+        ELSE ${gameSessions.sessionState} #- ARRAY[${RAGE_KEY}, ${participantId}]::text[] END`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(gameSessions.id, sessionOfEncounter(encounterId)),
+        sql`(${entry} ->> 'encounterId') = ${encounterId}::text`,
+      ),
+    );
 }
 
 /**
