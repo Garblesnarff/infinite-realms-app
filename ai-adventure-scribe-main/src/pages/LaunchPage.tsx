@@ -239,7 +239,7 @@ const LaunchPage: React.FC = () => {
           >
             <h2
               id="landing-join"
-              className="font-heading text-3xl font-bold text-[#f3deb0] sm:text-[40px]"
+              className="font-heading text-3xl font-bold leading-[1.12] text-[#f3deb0] sm:text-[40px]"
             >
               Be a founding adventurer
             </h2>
@@ -267,31 +267,31 @@ const LaunchPage: React.FC = () => {
             <span>© {new Date().getFullYear()} InfiniteRealms. All rights reserved.</span>
             <Link
               to="/pricing"
-              className="inline-flex min-h-11 items-center text-[#d5b070] hover:text-[#f3deb0]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#d5b070] hover:text-[#f3deb0]"
             >
               Pricing
             </Link>
             <Link
               to="/pricing#faq"
-              className="inline-flex min-h-11 items-center text-[#d5b070] hover:text-[#f3deb0]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#d5b070] hover:text-[#f3deb0]"
             >
               FAQ
             </Link>
             <Link
               to="/explore"
-              className="inline-flex min-h-11 items-center text-[#d5b070] hover:text-[#f3deb0]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#d5b070] hover:text-[#f3deb0]"
             >
               Explore
             </Link>
             <Link
               to="/privacy"
-              className="inline-flex min-h-11 items-center text-[#d5b070] hover:text-[#f3deb0]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#d5b070] hover:text-[#f3deb0]"
             >
               Privacy Policy
             </Link>
             <Link
               to="/terms"
-              className="inline-flex min-h-11 items-center text-[#d5b070] hover:text-[#f3deb0]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#d5b070] hover:text-[#f3deb0]"
             >
               Terms of Service
             </Link>

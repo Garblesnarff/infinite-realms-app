@@ -54,74 +54,80 @@ export const HeroFan: React.FC<{
   return (
     <div className="space-y-4">
       <p className="font-heading text-xs tracking-[0.18em] text-[#d5b070]">YOUR HERO</p>
+      {/* The row scrolls sideways only when the fan is wider than the page. The inner row is
+          at least as wide as the scroller and as wide as its cards, so centring applies when the
+          fan fits and an overflowing fan starts at the first card instead of clipping both ends.
+          The relative wrapper holds the edge fades (#1672). */}
       <div className="relative">
         <div
           ref={row}
           role="group"
           aria-label="Choose your hero"
-          className="flex max-w-full snap-x items-end overflow-x-auto px-3 pb-4 pt-10 md:justify-center"
+          className="max-w-full snap-x overflow-x-auto pb-4 pt-10"
         >
-          {templates.map((template, index) => {
-            const image = tableImageUrl(template.cardImageUrl ?? template.portraitUrl, 360, 540);
-            let preview: { hp: number; ac: number } | null = null;
-            try {
-              preview = vitals(template);
-            } catch {
-              /* A bad template must not hide the other heroes. */
-            }
-            const active = template.id === selected.id;
-            const fan = fanFor(index, templates.length);
-            const lift = fan.lift - (active ? 12 : 0);
-            return (
-              <button
-                key={template.id}
-                ref={(node) => {
-                  buttons.current[index] = node;
-                }}
-                type="button"
-                aria-pressed={active}
-                tabIndex={active ? 0 : -1}
-                aria-label={`Choose ${template.name}`}
-                onClick={() => setSelectedId(template.id)}
-                onKeyDown={(event) => move(event, index)}
-                style={
-                  {
-                    '--lift': `${lift}px`,
-                    '--rot': `${fan.rot}deg`,
-                    '--scale': active ? '1.08' : '1',
-                    marginLeft: index === 0 ? 0 : '-14px',
-                    zIndex: active ? 3 : 1,
-                  } as React.CSSProperties
-                }
-                className="ir-action-card min-h-11 w-[clamp(132px,17vw,206px)] shrink-0 snap-center overflow-hidden rounded-lg text-left [transform:translateY(var(--lift))_rotate(var(--rot))_scale(var(--scale))] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f6e3b8] motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:[transform:translateY(calc(var(--lift)_-_14px))_rotate(0deg)_scale(var(--scale))] motion-reduce:transition-none"
-              >
-                <TableImage
-                  src={image}
-                  alt=""
-                  width={360}
-                  height={540}
-                  className="aspect-[2/3] w-full object-cover"
-                  fallback={
-                    <span className="flex aspect-[2/3] items-center justify-center text-4xl">
-                      {template.name.charAt(0)}
-                    </span>
+          <div className="flex w-max min-w-full items-end justify-center px-3">
+            {templates.map((template, index) => {
+              const image = tableImageUrl(template.cardImageUrl ?? template.portraitUrl, 360, 540);
+              let preview: { hp: number; ac: number } | null = null;
+              try {
+                preview = vitals(template);
+              } catch {
+                /* A bad template must not hide the other heroes. */
+              }
+              const active = template.id === selected.id;
+              const fan = fanFor(index, templates.length);
+              const lift = fan.lift - (active ? 12 : 0);
+              return (
+                <button
+                  key={template.id}
+                  ref={(node) => {
+                    buttons.current[index] = node;
+                  }}
+                  type="button"
+                  aria-pressed={active}
+                  tabIndex={active ? 0 : -1}
+                  aria-label={`Choose ${template.name}`}
+                  onClick={() => setSelectedId(template.id)}
+                  onKeyDown={(event) => move(event, index)}
+                  style={
+                    {
+                      '--lift': `${lift}px`,
+                      '--rot': `${fan.rot}deg`,
+                      '--scale': active ? '1.08' : '1',
+                      marginLeft: index === 0 ? 0 : '-14px',
+                      zIndex: active ? 3 : 1,
+                    } as React.CSSProperties
                   }
-                />
-                <span className="block p-2">
-                  <strong className="block">{template.name}</strong>
-                  <span className="block text-xs">
-                    {template.race} {template.class}
-                  </span>
-                  {template.tagline && <span className="block text-xs">{template.tagline}</span>}
-                  {preview && (
+                  className="ir-action-card min-h-11 w-[clamp(132px,17vw,206px)] shrink-0 snap-center overflow-hidden rounded-lg text-left [transform:translateY(var(--lift))_rotate(var(--rot))_scale(var(--scale))] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#f6e3b8] motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-out motion-safe:hover:[transform:translateY(calc(var(--lift)_-_14px))_rotate(0deg)_scale(var(--scale))] motion-reduce:transition-none"
+                >
+                  <TableImage
+                    src={image}
+                    alt=""
+                    width={360}
+                    height={540}
+                    className="aspect-[2/3] w-full object-cover"
+                    fallback={
+                      <span className="flex aspect-[2/3] items-center justify-center text-4xl">
+                        {template.name.charAt(0)}
+                      </span>
+                    }
+                  />
+                  <span className="block p-2">
+                    <strong className="block">{template.name}</strong>
                     <span className="block text-xs">
-                      HP {preview.hp} · AC {preview.ac}
+                      {template.race} {template.class}
                     </span>
-                  )}
-                </span>
-              </button>
-            );
-          })}
+                    {template.tagline && <span className="block text-xs">{template.tagline}</span>}
+                    {preview && (
+                      <span className="block text-xs">
+                        HP {preview.hp} · AC {preview.ac}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
         {edges.left && (
           <div
@@ -147,7 +153,7 @@ export const HeroFan: React.FC<{
         {selected.tagline && <p>{selected.tagline}</p>}
         <button
           type="button"
-          className="ir-brass-btn mt-3 min-h-11 min-w-11 rounded px-4"
+          className="ir-brass-btn mt-3 min-h-11 w-full min-w-11 rounded px-4 sm:w-auto sm:whitespace-nowrap"
           disabled={disabled}
           onClick={() => onPlay(selected)}
         >

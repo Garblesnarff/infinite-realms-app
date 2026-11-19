@@ -23,8 +23,8 @@ for (const width of [342, 384]) {
     page,
   }) => {
     const cards = page.locator(`[data-width="${width}"] article`);
-    expect(await cards.count()).toBe(3);
-    for (let i = 0; i < 3; i++) {
+    expect(await cards.count()).toBe(4);
+    for (let i = 0; i < 4; i++) {
       const m = await cards.nth(i).evaluate((article) => {
         const inner = article.querySelector('a > div') as HTMLElement;
         const box = inner.getBoundingClientRect();
@@ -108,4 +108,25 @@ test('wider chip type drops chips to fit and counts them (measured, not estimate
   expect(words).toHaveLength(1);
   expect(words[0].t).toBe('Psychological Terror');
   for (const c of m.chips) expect(c.r).toBeLessThanOrEqual(m.diffLeft);
+});
+
+test('one over-long genre ends with an ellipsis inside the card', async ({ page }) => {
+  const card = page.locator('[data-width="342"] article').nth(2);
+  const chip = card.locator('.left-3 > span');
+  await expect(chip).toHaveCount(1);
+  const m = await chip.evaluate((el) => {
+    const inner = el.closest('a > div') as HTMLElement;
+    const diff = inner.querySelector('.right-3') as HTMLElement;
+    return {
+      truncated: el.scrollWidth > el.clientWidth,
+      overflowStyle: getComputedStyle(el).textOverflow,
+      chipRight: el.getBoundingClientRect().right,
+      diffLeft: diff.getBoundingClientRect().left,
+      innerRight: inner.getBoundingClientRect().right,
+    };
+  });
+  expect(m.truncated).toBe(true);
+  expect(m.overflowStyle).toBe('ellipsis');
+  expect(m.chipRight).toBeLessThanOrEqual(m.diffLeft);
+  expect(m.chipRight).toBeLessThanOrEqual(m.innerRight);
 });

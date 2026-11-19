@@ -43,6 +43,8 @@ export const GenreChips: React.FC<{ genres: string[] }> = ({ genres }) => {
   if (total === 0) return null;
   const shown = genres.slice(0, count);
   const hidden = total - shown.length;
+  // One chip left: a name too long for the row ends with an ellipsis instead of spilling out.
+  const single = shown.length === 1;
 
   return (
     <div
@@ -52,13 +54,13 @@ export const GenreChips: React.FC<{ genres: string[] }> = ({ genres }) => {
       {shown.map((genre) => (
         <span
           key={genre}
-          className="shrink-0 whitespace-nowrap rounded-[5px] border border-[rgba(234,238,250,0.35)] bg-[#070b14] px-2 py-[3px] font-heading text-[11px] capitalize tracking-[0.08em] text-[#eaeefa]"
+          className={`${single ? 'min-w-0 truncate' : 'shrink-0 whitespace-nowrap'} rounded-[5px] border border-[rgba(234,238,250,0.35)] bg-[#070b14] px-2 py-[3px] font-heading text-[12px] capitalize tracking-[0.08em] text-[#eaeefa]`}
         >
           {genre}
         </span>
       ))}
       {hidden > 0 && (
-        <span className="shrink-0 whitespace-nowrap rounded-[5px] border border-[rgba(234,238,250,0.35)] bg-[#070b14] px-2 py-[3px] font-heading text-[11px] tracking-[0.08em] text-[#eaeefa]">
+        <span className="shrink-0 whitespace-nowrap rounded-[5px] border border-[rgba(234,238,250,0.35)] bg-[#070b14] px-2 py-[3px] font-heading text-[12px] tracking-[0.08em] text-[#eaeefa]">
           +{hidden}
         </span>
       )}

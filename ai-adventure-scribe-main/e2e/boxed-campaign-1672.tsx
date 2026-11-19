@@ -51,6 +51,15 @@ const campaigns: StarterCampaign[] = [
   },
   {
     ...base,
+    id: 'd',
+    slug: 'long-genre',
+    title: 'Long Genre',
+    genre: ['Extraordinarily Long Genre Name Beyond The Row Width'],
+    difficulty: 'hard',
+    levelRange: '1-3',
+  },
+  {
+    ...base,
     id: 'c',
     slug: 'short-one',
     title: 'Short One',
