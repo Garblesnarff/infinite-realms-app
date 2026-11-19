@@ -18,14 +18,17 @@ import { useMessageHandlerLogic } from '../use-message-handler-logic';
 import {
   consumeCombatEntryTypedAnswer,
   requestCombatEntryAnswer,
+  requestCombatEntryConfirmation,
   setCombatEntryConfirmationHost,
   settlePendingCombatEntryConfirmation,
   type CombatEntryConfirmationHost,
 } from '@/services/combat/combat-entry-confirmation-bridge';
+import { startCombatEntryDelivery } from '@/services/combat/combat-entry-delivery';
 
 const sendMessageMock = vi.hoisted(() => vi.fn());
 const toastMock = vi.hoisted(() => vi.fn());
 const getAIResponseMock = vi.hoisted(() => vi.fn());
+const enterCombatMock = vi.hoisted(() => vi.fn());
 const queueCtl = vi.hoisted(() => ({
   isSending: false,
   actualSendMessageRef: {
@@ -91,7 +94,10 @@ vi.mock('@/infrastructure/api/rest-client', () => ({
   subscribeToNetworkRetry: () => (): void => {},
 }));
 vi.mock('@/services/auth/TokenService', () => ({ clearPendingInput: vi.fn() }));
-vi.mock('@/services/user-data-api', () => ({ isTerminalDefeatError: () => false }));
+vi.mock('@/services/user-data-api', () => ({
+  isTerminalDefeatError: () => false,
+  userDataApi: { enterCombat: enterCombatMock },
+}));
 vi.mock('@/utils/error-handler', () => ({ handleAsyncError: vi.fn() }));
 vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -278,5 +284,107 @@ describe('useMessageHandlerLogic timeout flag (#1315 round 2)', () => {
 
   it('plain timeout does not set the flag', async () => {
     expect(await driveTimeout(false)).toBe(false);
+  });
+});
+
+/**
+ * #1668: one DM reply carries a fight card and a save roll. The player answers the save roll
+ * while the fight card is still up. The roll answer is not an answer to the card, so the
+ * delivery must keep waiting. Only the card's own Decline may return `declined`.
+ */
+describe('a roll answered while the fight card is up (#1668)', () => {
+  let capturedSettle: ((confirmed: boolean, target?: string) => void) | null = null;
+  const host: CombatEntryConfirmationHost = {
+    present: (_spec, settle) => {
+      capturedSettle = settle;
+      return () => {};
+    },
+  };
+  const PENDING = {
+    combatants: [{ name: 'Vance' }],
+    sceneSpec: {},
+  } as unknown as Parameters<typeof startCombatEntryDelivery>[0]['pending'];
+  const PLAYER = { name: 'The Scholar', initiativeModifier: 2 } as Parameters<
+    typeof startCombatEntryDelivery
+  >[0]['player'];
+  const SAVE_ROLL_CONTEXT = {
+    intent: 'dice_roll',
+    rollRequestId: 'roll-save-1668',
+    diceRoll: {
+      formula: '1d20+2',
+      count: 1,
+      dieType: 20,
+      modifier: 2,
+      results: [18],
+      total: 20,
+      requestType: 'save',
+      description: 'Dexterity save',
+    },
+  } as unknown as Parameters<
+    ReturnType<typeof renderHandler>['result']['current']['handleSendMessage']
+  >[1];
+
+  const delay = (ms: number): Promise<'still-waiting'> =>
+    new Promise((resolve) => setTimeout(() => resolve('still-waiting'), ms));
+
+  const startDelivery = (sessionId: string) =>
+    startCombatEntryDelivery({
+      sessionId,
+      pending: PENDING,
+      player: PLAYER,
+      confirm: () => requestCombatEntryConfirmation(CARD_SPEC),
+      rollInitiative: async () => ({ d20: null }),
+    });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    capturedSettle = null;
+    queueCtl.handleSendMessage = async () => {};
+    enterCombatMock.mockReset();
+    enterCombatMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ encounter: { id: 'enc-1668' } }),
+    });
+    setCombatEntryConfirmationHost(host, 'owner-1668');
+  });
+
+  afterEach(() => {
+    settlePendingCombatEntryConfirmation(false);
+    setCombatEntryConfirmationHost(null);
+    consumeCombatEntryTypedAnswer('__cleanup__');
+  });
+
+  it('the save roll answer does not decline the card: the delivery keeps waiting', async () => {
+    const { result } = renderHandler();
+    const delivery = startDelivery('session-1668-roll');
+    await waitFor(() => expect(capturedSettle).not.toBeNull());
+
+    await act(async () => {
+      await result.current.handleSendMessage('Rolled 20 on the Dexterity save', SAVE_ROLL_CONTEXT);
+    });
+
+    // On main this resolves `declined` at once: handleSendMessage settles the card as
+    // "typed a different answer" before it knows the send is a roll answer.
+    const outcome = await Promise.race([delivery.then((r) => r.kind), delay(100)]);
+    expect(outcome).toBe('still-waiting');
+
+    // The player now presses Start the fight: the delivery seats the encounter.
+    capturedSettle?.(true);
+    await expect(delivery).resolves.toMatchObject({ kind: 'seated', encounterId: 'enc-1668' });
+  });
+
+  it('a real Decline on the card still resolves the delivery as declined (#400)', async () => {
+    const { result } = renderHandler();
+    const delivery = startDelivery('session-1668-decline');
+    await waitFor(() => expect(capturedSettle).not.toBeNull());
+
+    await act(async () => {
+      await result.current.handleSendMessage('Rolled 20 on the Dexterity save', SAVE_ROLL_CONTEXT);
+    });
+    // The card's own Decline, after the roll answer, is the real decline.
+    capturedSettle?.(false);
+    await expect(delivery).resolves.toEqual({ kind: 'declined' });
+    expect(enterCombatMock).not.toHaveBeenCalled();
   });
 });
