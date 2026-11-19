@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { and, eq } from 'drizzle-orm';
 
+import { applyFightOverHint } from './fight-over-hint.js';
 import { db } from '../../../../db/client';
 import { dialogueHistory } from '../../../../db/schema/index';
 import { buildNpcEngineMessage } from '../../../../shared/npc-engine-message';
@@ -49,12 +50,19 @@ export function writeNpcEngineRow(
   actionId: string,
   result: unknown,
   userId: string,
+  origin?: string,
 ): Promise<NpcEngineRow[]> {
-  const message = buildNpcEngineMessage(
+  const built = buildNpcEngineMessage(
     state.participants,
     state.encounter.currentRound,
     intent,
     result,
+  );
+  // #1644: only an action-bar kill has no DM turn after it; the hint goes on that row alone.
+  const message = applyFightOverHint(
+    built,
+    origin,
+    (result as { endedReason?: string | null } | null)?.endedReason,
   );
   return storeEngineRow(
     state,
