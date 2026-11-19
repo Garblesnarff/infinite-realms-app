@@ -297,6 +297,20 @@ export const useCharacterData = (characterId: string | undefined) => {
     fetchCharacter();
   }, [fetchCharacter]);
 
+  // #1679: HP or pool changes made in another open tab reach this sheet on the engine's state
+  // event, and a return to this tab refetches too, so the sheet is not stale until a reload.
+  useEffect(() => {
+    const refreshSilently = () => {
+      void fetchCharacter({ silent: true });
+    };
+    window.addEventListener('character-state-updated', refreshSilently);
+    window.addEventListener('focus', refreshSilently);
+    return () => {
+      window.removeEventListener('character-state-updated', refreshSilently);
+      window.removeEventListener('focus', refreshSilently);
+    };
+  }, [fetchCharacter]);
+
   /**
    * #2701: the sheet's save path. The managers call this with the edited
    * character; the changed fields are written through the existing character

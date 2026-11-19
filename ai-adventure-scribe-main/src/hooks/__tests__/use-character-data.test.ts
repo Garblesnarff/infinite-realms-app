@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/services/user-data-api', () => ({
@@ -371,5 +371,45 @@ describe('useCharacterData', () => {
       'Failed to parse character JSON field',
       expect.anything(),
     );
+  });
+
+  // #1679: a hurt hero in another open tab reaches this sheet on the engine's state event or on
+  // window focus, so Heal self reflects the current HP without a reload.
+  it('refetches the character when character-state-updated fires', async () => {
+    vi.mocked(userDataApi.getCharacter).mockResolvedValue({
+      id: mockCharacterId,
+      user_id: mockUserId,
+      name: 'Test Hero',
+      character_stats: {},
+    } as any);
+
+    const { result } = renderHook(() => useCharacterData(mockCharacterId));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(userDataApi.getCharacter).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent('character-state-updated'));
+    });
+
+    await waitFor(() => expect(userDataApi.getCharacter).toHaveBeenCalledTimes(2));
+  });
+
+  it('refetches the character when the window regains focus', async () => {
+    vi.mocked(userDataApi.getCharacter).mockResolvedValue({
+      id: mockCharacterId,
+      user_id: mockUserId,
+      name: 'Test Hero',
+      character_stats: {},
+    } as any);
+
+    const { result } = renderHook(() => useCharacterData(mockCharacterId));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(userDataApi.getCharacter).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      window.dispatchEvent(new Event('focus'));
+    });
+
+    await waitFor(() => expect(userDataApi.getCharacter).toHaveBeenCalledTimes(2));
   });
 });
