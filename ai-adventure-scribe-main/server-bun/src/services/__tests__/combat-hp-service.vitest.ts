@@ -26,6 +26,8 @@ vi.mock('../combat/combat-turn-flags.js', () => ({
   rogueLevelOf: vi.fn(async () => 0),
   activeAlliesOf: vi.fn(async () => []),
   RAGE_DURATION_ROUNDS: 10,
+  markLightAttack: vi.fn(async () => {}),
+  readLightAttackMark: vi.fn(async () => null),
 }));
 vi.mock('../combat-initiative-service.js', () => ({
   CombatInitiativeService: { getCurrentTurn: vi.fn() },
