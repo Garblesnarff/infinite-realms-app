@@ -131,6 +131,8 @@ mock.module('../../../../services/combat/combat-turn-flags.js', () => ({
   rogueLevelOf: async () => 0,
   activeAlliesOf: async () => [],
   RAGE_DURATION_ROUNDS: 10,
+  markLightAttack: async () => {},
+  readLightAttackMark: async () => null,
 }));
 mock.module('../../../../../../db/client', () => ({
   withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(),

@@ -36,6 +36,8 @@ mock.module('../combat-turn-flags.js', () => ({
   rogueLevelOf: async () => 0,
   activeAlliesOf: async () => [],
   RAGE_DURATION_ROUNDS: 10,
+  markLightAttack: async () => {},
+  readLightAttackMark: async () => null,
 }));
 mock.module('../../../../../db/client', () => ({
   db: new Proxy(
