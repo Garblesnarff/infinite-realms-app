@@ -127,12 +127,23 @@ export function narrativeCheckShadow(input: {
       ? (dice as Record<string, unknown>)
       : undefined;
   const fromLine = input.text.match(/\(nat\s+(\d+)(?:[+-]\d+)?\)/i);
+  const faces = Array.isArray(detail?.results) ? detail.results : [];
+  const pair =
+    faces.length === 2 && faces.every((face) => Number.isInteger(face) && face >= 1 && face <= 20)
+      ? (faces as number[])
+      : null;
+  const advantage = detail?.advantage === true;
+  const disadvantage = detail?.disadvantage === true;
   const natural =
     typeof detail?.naturalRoll === 'number'
       ? detail.naturalRoll
       : fromLine
         ? Number(fromLine[1])
-        : null;
+        : pair && advantage !== disadvantage
+          ? advantage
+            ? Math.max(...pair)
+            : Math.min(...pair)
+          : null;
   if (!Number.isInteger(natural) || natural! < 1 || natural! > 20) return { result: 'no_natural' };
   if (input.modifier === null) return { result: 'no_modifier' };
   const parsed = parseReportedCheckLine(input.text);

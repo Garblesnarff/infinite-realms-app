@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+
 import { issuedCheckModifier, narrativeCheckShadow } from '../narrative-check-outcome.js';
 
 describe('narrative check shadow', () => {
@@ -28,6 +29,21 @@ describe('narrative check shadow', () => {
           modifier: 5,
         }),
       ).toEqual({ result: 'match' });
+  });
+  test('uses two reported faces for advantage and disadvantage', () => {
+    for (const [advantage, expected] of [
+      [true, 17],
+      [false, 6],
+    ] as const) {
+      expect(
+        narrativeCheckShadow({
+          text: `Athletics: ${expected} ${expected >= 15 ? 'success' : 'fail'}`,
+          request,
+          modifier: 5,
+          context: { diceRoll: { results: [12, 1], advantage, disadvantage: !advantage } },
+        }),
+      ).toEqual({ result: 'match' });
+    }
   });
   test('ignores saves and counts invalid reported natural as unavailable', () => {
     expect(
