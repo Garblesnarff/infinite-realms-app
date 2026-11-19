@@ -475,6 +475,13 @@ describe('CombatActionBar', () => {
         death_save: { type: 'death_save', label: 'Death saving throw' },
         // #1638: Rage, a Barbarian's bonus action, rides the More menu.
         rage: { type: 'rage', label: 'Rage' },
+        // #1639: the off-hand attack, a bonus action, rides the More menu.
+        off_hand_attack: {
+          type: 'off_hand_attack',
+          label: 'Off-hand attack with Dagger (bonus action)',
+          weaponId: 'dagger',
+          targetIds: ['orc-1'],
+        },
       };
       expect(Object.keys(oneOfEach).sort()).toEqual(Object.keys(LEGAL_ACTION_PLACEMENT).sort());
       const user = userEvent.setup();

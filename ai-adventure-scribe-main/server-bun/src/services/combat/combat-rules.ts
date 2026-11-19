@@ -44,6 +44,10 @@ export type WeaponRuleProfile = {
   meleeWeapon?: boolean;
   /** The weapon has the two-handed property. */
   twoHanded?: boolean;
+  /** The weapon has the light property (#1639). Unarmed strikes and monster attacks leave it unset. */
+  light?: boolean;
+  /** The copies the row holds (#1639). Absent for a monster attack, which is one attack. */
+  quantity?: number;
   /** Another weapon is wielded besides this one. A shield is not a weapon. */
   otherWeaponWielded?: boolean;
 };
@@ -79,6 +83,11 @@ export type AttackRuleInput = {
   fightingStyles?: unknown;
   /** Rage's damage bonus while the attacker rages (#1638), from its Barbarian level. 0 or absent when not raging. */
   ragingDamageBonus?: number;
+  /**
+   * The off-hand attack of Two-Weapon Fighting (#1639): a bonus-action attack whose damage takes no
+   * ability modifier unless it is negative. The attack roll keeps its modifier.
+   */
+  offHand?: boolean;
 };
 
 type AttackResolutionAbility = 'strength' | 'dexterity';
@@ -218,7 +227,8 @@ function styleBonuses(
         archeryAttackBonus(input.fightingStyles, weapon.rangedWeapon === true),
     damageBonus:
       weapon.fixedDamageBonus ??
-      modifier +
+      // #1639: an off-hand attack adds the ability modifier to its damage only when it is negative.
+      (input.offHand ? Math.min(modifier, 0) : modifier) +
         weapon.magicBonus +
         duelingDamageBonus(input.fightingStyles, {
           meleeWeapon: weapon.meleeWeapon === true,

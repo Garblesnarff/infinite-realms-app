@@ -18,6 +18,8 @@ interface FeaturesTabProps {
   // #2701 / #224: persists the edited character and resolves true when the
   // write landed. ClassFeatureTracker toasts only then.
   onUpdate: CharacterSheetUpdateFn;
+  // #1576: reloads the saved character after a server-side Second Wind (no write).
+  onServerStateChanged?: () => Promise<void> | void;
 }
 
 interface Feature {
@@ -35,7 +37,7 @@ interface Feature {
 /**
  * Features & Traits tab showing racial traits, class features, and special abilities
  */
-const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
+const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate, onServerStateChanged }) => {
   const className = character.class?.name ?? '';
   // Racial traits come from both the race and the subrace (#389: Hill Dwarf's
   // Dwarven Toughness lives on the subrace and was never listed). Dedupe in
@@ -110,7 +112,11 @@ const FeaturesTab: React.FC<FeaturesTabProps> = ({ character, onUpdate }) => {
   return (
     <div className="space-y-6">
       {/* Class Feature Tracker */}
-      <ClassFeatureTracker character={character} onUpdate={onUpdate} />
+      <ClassFeatureTracker
+        character={character}
+        onUpdate={onUpdate}
+        onServerStateChanged={onServerStateChanged}
+      />
 
       {/* #1233: Divine Smite, Metamagic and Flexible Casting spend through the use route */}
       {character.id && (

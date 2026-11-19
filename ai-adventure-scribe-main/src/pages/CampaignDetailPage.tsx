@@ -50,6 +50,7 @@ import { userDataApi } from '@/services/user-data-api';
 import { previewCampaignOverview } from '@/utils/campaign/preview-campaign-overview';
 import { formatStarterCampaignLength } from '@/utils/campaign/starter-campaign-length';
 import { formatStarterLevelRange } from '@/utils/campaign/starter-level-range';
+import { isDistinctSubtitle } from '@/utils/campaign/subtitle';
 
 /** Session key for the hero a signed-out visitor picked before signing in. */
 const PENDING_HERO_KEY = 'ir-pending-starter-hero';
@@ -611,8 +612,8 @@ const CampaignDetailPage: React.FC = () => {
             <h1 className="font-heading text-[34px] max-[700px]:text-[26px] leading-tight text-foreground">
               {campaign.title}
             </h1>
-            {/* The tagline is a second line only when it says something the title does not. */}
-            {campaign.tagline && campaign.tagline.trim() !== campaign.title.trim() && (
+            {/* The tagline is a second line only when it says something the title does not (#1672). */}
+            {isDistinctSubtitle(campaign.title, campaign.tagline) && (
               <p className="text-muted-foreground mt-2 line-clamp-3">{campaign.tagline}</p>
             )}
             <p className="text-sm text-muted-foreground mt-3">

@@ -89,6 +89,8 @@ export async function askPlayerForAttackDie(params: PlayerAttackDieParams): Prom
       actorId: action.actor_id,
       targetId,
       weaponId: action.weapon_id || undefined,
+      // #1639: the off-hand chip proposes the bonus-action swing, so the proposal is the same attack.
+      ...(action.off_hand === true ? { offHand: true } : {}),
     });
     if (proposal.movementOnly) {
       // The attacker could not reach; the approach already moved it and there is no attack to

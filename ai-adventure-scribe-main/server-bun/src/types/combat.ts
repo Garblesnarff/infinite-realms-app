@@ -602,6 +602,11 @@ export interface AttackRollInput {
    * means no Smite.
    */
   divineSmiteSlotLevel?: number;
+  /**
+   * #1639: the off-hand attack of Two-Weapon Fighting. It is a bonus action, not the Attack action, and
+   * its damage takes no ability modifier unless that modifier is negative.
+   */
+  offHand?: boolean;
 }
 
 /**
