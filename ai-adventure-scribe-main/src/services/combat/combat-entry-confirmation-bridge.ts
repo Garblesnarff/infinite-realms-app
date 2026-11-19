@@ -39,6 +39,11 @@ export interface CombatEntryConfirmationSpec {
 export interface CombatEntryAnswer {
   confirmed: boolean;
   target?: string;
+  /**
+   * #1678: a newer card replaced this one. It is neither a yes nor a decline, so the caller
+   * must not record a decline or write a "no encounter" notice for it.
+   */
+  superseded?: boolean;
 }
 
 export interface CombatEntryConfirmationHost {
@@ -66,7 +71,7 @@ let pending: {
   spec: CombatEntryConfirmationSpec;
   ownerKey: string | undefined;
   answer: Promise<CombatEntryAnswer>;
-  settle: (confirmed: boolean, target?: string) => void;
+  settle: (confirmed: boolean, target?: string, superseded?: boolean) => void;
   dismiss: () => void;
 } | null = null;
 
@@ -179,11 +184,30 @@ export function settlePendingCombatEntryConfirmation(confirmed: boolean, target?
   return true;
 }
 
-/** Wait for the player to either seat or decline a detected combat entry. */
+/**
+ * #1678: a newer entry card replaces the open one. The open card is dismissed and settled as
+ * superseded, which is not a decline.
+ */
+function supersedePendingCombatEntryConfirmation(): boolean {
+  if (!pending) return false;
+  const superseded = pending;
+  pending = null;
+  notifyPendingChange();
+  superseded.dismiss();
+  superseded.settle(false, undefined, true);
+  return true;
+}
+
+/**
+ * Wait for the player to either seat or decline a detected combat entry. Resolves `superseded`
+ * (#1678) when a newer card replaced this one: that is neither a yes nor a decline.
+ */
 export function requestCombatEntryConfirmation(
   spec: CombatEntryConfirmationSpec,
-): Promise<boolean> {
-  return requestCombatEntryAnswer(spec).then((answer) => answer.confirmed);
+): Promise<boolean | 'superseded'> {
+  return requestCombatEntryAnswer(spec).then((answer) =>
+    answer.superseded ? 'superseded' : answer.confirmed,
+  );
 }
 
 /** Like `requestCombatEntryConfirmation`, and reports which creature the player picked. */
@@ -205,19 +229,27 @@ export function requestCombatEntryAnswer(
   }
 
   if (pending) {
-    logger.warn('[CombatEntry] superseded by a new entry confirmation; declining the previous one');
-    settlePendingCombatEntryConfirmation(false);
+    logger.warn(
+      '[CombatEntry] superseded by a new entry confirmation; the previous one is replaced',
+    );
+    supersedePendingCombatEntryConfirmation();
   }
 
   const published: { answer: Promise<CombatEntryAnswer> | null } = { answer: null };
   const answer = new Promise<CombatEntryAnswer>((resolve) => {
     let settled = false;
     let dismissPopup = (): void => {};
-    const settle = (confirmed: boolean, target?: string): void => {
+    const settle = (confirmed: boolean, target?: string, superseded?: boolean): void => {
       if (settled) return;
       settled = true;
-      logger.info(`[CombatEntry] confirmation ${confirmed ? 'accepted' : 'declined'}`);
-      resolve({ confirmed, ...(target ? { target } : {}) });
+      logger.info(
+        `[CombatEntry] confirmation ${superseded ? 'superseded' : confirmed ? 'accepted' : 'declined'}`,
+      );
+      resolve({
+        confirmed,
+        ...(target ? { target } : {}),
+        ...(superseded ? { superseded: true } : {}),
+      });
     };
 
     pending = {

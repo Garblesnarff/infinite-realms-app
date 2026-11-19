@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   CombatEntryConfirmationUnavailableError,
   consumeCombatEntryTypedAnswer,
+  hasPendingCombatEntryConfirmation,
   markCombatEntryTypedAnswer,
   onCombatEntryConfirmationPendingChange,
   requestCombatEntryAnswer,
@@ -84,5 +85,31 @@ describe('combat-entry-confirmation-bridge', () => {
     markCombatEntryTypedAnswer('fire bolt');
     expect(consumeCombatEntryTypedAnswer('fire bolt')).toBe(true);
     expect(consumeCombatEntryTypedAnswer('fire bolt')).toBe(false);
+  });
+});
+
+describe('a newer entry card replaces the open one (#1678)', () => {
+  beforeEach(() => {
+    setCombatEntryConfirmationHost(null);
+  });
+
+  it('settles the older card as superseded, not declined, and leaves the newer card up', async () => {
+    const settles: Array<(confirmed: boolean, target?: string) => void> = [];
+    setCombatEntryConfirmationHost({
+      present: (_spec, settle) => {
+        settles.push(settle);
+        return () => {};
+      },
+    });
+    const base = { actorLabel: 'The Scholar', initiativeRoll: null, initiativeModifier: 1 };
+
+    const older = requestCombatEntryAnswer({ ...base, combatantLabels: ['Valerius'] });
+    const newer = requestCombatEntryAnswer({ ...base, combatantLabels: ['Orc Chief'] });
+
+    await expect(older).resolves.toEqual({ confirmed: false, superseded: true });
+    expect(hasPendingCombatEntryConfirmation()).toBe(true);
+    settles[1](true);
+    await expect(newer).resolves.toEqual({ confirmed: true });
+    expect(hasPendingCombatEntryConfirmation()).toBe(false);
   });
 });

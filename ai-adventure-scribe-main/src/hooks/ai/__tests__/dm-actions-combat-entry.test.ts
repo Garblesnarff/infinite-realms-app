@@ -1070,6 +1070,29 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     );
   });
 
+  it('a superseded entry card is not a decline: no notice, no seat, no attack (#1678)', async () => {
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('superseded');
+    const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
+
+    const outcome = await invoke(
+      {
+        combat_transition: 'none',
+        combat_entry_pending: PENDING_ENTRY,
+        text: 'Vance catches your arm before the punch lands.',
+        combat_actions: [PLAYER_ACTION],
+      },
+      refresh,
+    );
+
+    expect(userDataApi.enterCombat).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+    expect(resolveDeclaredCombatActions).not.toHaveBeenCalled();
+    expect(outcome.activeEncounter).toBeNull();
+    expect(outcome.result.combat_actions).toEqual([]);
+    expect(outcome.localNotices ?? []).toEqual([]);
+    expect(outcome.localNotice ?? '').not.toContain('No encounter was seated');
+  });
+
   it('declines combat entry without seating an encounter or resolving the attack', async () => {
     vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
     const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
