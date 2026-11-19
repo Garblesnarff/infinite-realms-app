@@ -74,9 +74,13 @@ export const ExploreGalleryPage: React.FC = () => {
               <ArrowLeft className="h-[18px] w-[18px] text-[#d5b070]" aria-hidden="true" />
               Back to home
             </Link>
-            <Link to="/" aria-label="Infinite Realms, home" className="flex items-center gap-3">
+            <Link
+              to="/"
+              aria-label="Infinite Realms, home"
+              className="flex min-h-11 items-center gap-3"
+            >
               <Sparkles className="w-5 h-5 text-[#4fb6c4]" aria-hidden="true" />
-              <span className="font-heading text-xl tracking-[0.2em] text-[#eaeefa]">
+              <span className="font-heading text-base tracking-[0.08em] text-[#eaeefa] sm:text-xl sm:tracking-[0.2em]">
                 INFINITE <span className="text-[#d5b070]">REALMS</span>
               </span>
             </Link>
