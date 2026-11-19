@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { FeatureSection } from './class-feature-tracker/FeatureSection';
+import { refusalToastText } from './class-feature-tracker/refusal-toast-text';
 import { ResourceSection } from './class-feature-tracker/ResourceSection';
 import { SheetRestControls } from './class-feature-tracker/SheetRestControls';
 
@@ -105,7 +106,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({
         logger.error('Second Wind failed', error);
         toast({
           title: 'Second Wind',
-          description: error instanceof Error ? error.message : 'Nothing was spent.',
+          description: refusalToastText(error),
           variant: 'destructive',
         });
       }

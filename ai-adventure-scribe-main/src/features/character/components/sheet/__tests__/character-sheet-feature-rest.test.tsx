@@ -85,6 +85,8 @@ const restBodies: Array<{ restType: 'short' | 'long'; body: unknown }> = [];
 const secondWindBodies: Array<Record<string, unknown>> = [];
 const secondWindResponses: Array<Record<string, number>> = [];
 const secondWindRoll = { value: 4 };
+// When on, the stub refuses Second Wind with the route's 422 body (a refusal the server explained).
+const secondWindRefusal = { on: false };
 
 const json = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), {
@@ -145,6 +147,7 @@ describe('CharacterSheet feature use and rests (#224)', () => {
     secondWindBodies.length = 0;
     secondWindResponses.length = 0;
     secondWindRoll.value = 4;
+    secondWindRefusal.on = false;
     resetRow();
     markAuthReady();
     vi.stubGlobal(
@@ -191,6 +194,16 @@ describe('CharacterSheet feature use and rests (#224)', () => {
         if (url === `${API}/v1/characters/${CID}/second-wind` && method === 'POST') {
           const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
           secondWindBodies.push(body);
+          if (secondWindRefusal.on) {
+            return json(
+              {
+                error: 'Second Wind has no uses remaining — it refreshes on a short rest',
+                code: 'BUSINESS_LOGIC_ERROR',
+                details: { reason: 'feature_uses_exhausted' },
+              },
+              422,
+            );
+          }
           const features = { ...(serverRow.class_features ?? {}) };
           const feature = features.second_wind ?? {
             name: 'second_wind',
@@ -403,6 +416,32 @@ describe('CharacterSheet feature use and rests (#224)', () => {
     expect(secondWindBodies).toEqual([SECOND_WIND_SHEET_BODY]);
     expect(healBodies).toHaveLength(0);
     expect(screen.queryByText('20/10')).not.toBeInTheDocument();
+  });
+
+  it('a refused Second Wind toasts the server reason, with no HTTP status number', async () => {
+    secondWindRefusal.on = true;
+    renderSheet();
+    const user = userEvent.setup();
+    await openFeatures();
+    await user.click(screen.getByRole('button', { name: /use feature/i }));
+
+    await waitFor(() => {
+      expect(secondWindBodies).toHaveLength(1);
+    });
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Second Wind', variant: 'destructive' }),
+      );
+    });
+    const refusal = mockToast.mock.calls.find(
+      ([call]) => (call as { variant?: string }).variant === 'destructive',
+    )![0] as { description: string };
+    expect(refusal.description).toBe(
+      'Second Wind has no uses remaining — it refreshes on a short rest',
+    );
+    expect(refusal.description).not.toContain('422');
+    // A refusal spends nothing and heals nothing: the sheet is not reloaded for it.
+    expect(healBodies).toHaveLength(0);
   });
 
   it('#214: the Main tab vitals also offer Short Rest and Long Rest', async () => {

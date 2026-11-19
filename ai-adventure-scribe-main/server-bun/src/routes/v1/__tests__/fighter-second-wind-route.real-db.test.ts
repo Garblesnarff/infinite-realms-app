@@ -103,6 +103,16 @@ describeWithDb('POST /v1/characters/:id/second-wind (#1576)', () => {
       .update(characterStats)
       .set({ currentHitPoints })
       .where(eq(characterStats.characterId, characterId));
+  // The sheet's mirror of the use: the tracker shows currentUses / maxUses from this JSON.
+  const sheetSecondWind = async (characterId: string) => {
+    const [row] = await db
+      .select({ classFeatures: characters.classFeatures })
+      .from(characters)
+      .where(eq(characters.id, characterId))
+      .limit(1);
+    return (row?.classFeatures as Record<string, { currentUses?: number; maxUses?: number }> | null)
+      ?.second_wind;
+  };
   const hpNow = async (characterId: string): Promise<number> =>
     (
       await db
@@ -227,6 +237,8 @@ describeWithDb('POST /v1/characters/:id/second-wind (#1576)', () => {
     expect(body.usesRemaining).toBe(0);
     expect(await uses(fighterId)).toBe(0);
     expect(await usageRows()).toBe(1);
+    // The mirror the sheet shows: one use of one, spent.
+    expect(await sheetSecondWind(fighterId)).toMatchObject({ currentUses: 0, maxUses: 1 });
   });
 
   it('caps the heal at max HP when the room left is smaller than 1d10 + level', async () => {
@@ -238,6 +250,7 @@ describeWithDb('POST /v1/characters/:id/second-wind (#1576)', () => {
     expect(body.newHp).toBe(12);
     expect(body.maxHp).toBe(12);
     expect(await hpNow(fighterId)).toBe(12);
+    expect(await sheetSecondWind(fighterId)).toMatchObject({ currentUses: 0, maxUses: 1 });
   });
 
   it('a second use before a rest is refused with nothing changed', async () => {

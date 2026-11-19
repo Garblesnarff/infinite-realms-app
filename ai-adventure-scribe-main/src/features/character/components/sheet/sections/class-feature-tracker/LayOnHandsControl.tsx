@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 
+import { refusalToastText } from './refusal-toast-text';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useIsInCombatOptional } from '@/contexts/in-combat-flag';
@@ -12,19 +14,6 @@ interface LayOnHandsControlProps {
   characterId: string;
   /** The pool's remaining points, as the sheet shows them. */
   pool: number;
-}
-
-/**
- * #1643: a refusal the server explained (a 4xx with its reason) shows that reason alone, with no
- * HTTP status number. Anything else keeps the error's message.
- */
-function refusalToastText(error: unknown): string {
-  const status = (error as { status?: unknown } | null)?.status;
-  const reason = (error as { payload?: { error?: unknown } } | null)?.payload?.error;
-  if (typeof status === 'number' && status >= 400 && status < 500 && reason) {
-    return String(reason);
-  }
-  return error instanceof Error ? error.message : 'Nothing was spent.';
 }
 
 /**
