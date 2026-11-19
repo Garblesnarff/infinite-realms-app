@@ -48,6 +48,13 @@ const TABLE: Record<LegalActionType, Row> = {
     action: attackAction(SCHOLAR, REEVES),
     value: PLAYER_HITS_ENEMY,
   },
+  // #1639: an off-hand swing prints the attack line, and the line names the off-hand weapon.
+  off_hand_attack: {
+    prints: true,
+    formatAs: 'attack',
+    action: attackAction(SCHOLAR, REEVES),
+    value: PLAYER_HITS_ENEMY,
+  },
   spell: {
     prints: true,
     formatAs: 'cast_spell',

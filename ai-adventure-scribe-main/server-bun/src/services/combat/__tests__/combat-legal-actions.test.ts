@@ -6,6 +6,14 @@ import type { WeaponRuleProfile } from '../combat-rules.js';
 
 process.env.DATABASE_URL ??= 'postgres://test.invalid/unused';
 
+// #1639: the off-hand chip reads the turn's light-attack mark from the session. This file has no
+// database, so the read is answered here (no mark), and every other export stays the real one.
+const realTurnFlags = await import('../combat-turn-flags.js');
+mock.module('../combat-turn-flags.js', () => ({
+  ...realTurnFlags,
+  readLightAttackMark: async () => null,
+}));
+
 let remainingSwing = false;
 mock.module('../attack-budget-service.js', () => ({
   attackBudgetPlan: async () => ({ plan: remainingSwing ? { payment: 'remaining' } : null }),

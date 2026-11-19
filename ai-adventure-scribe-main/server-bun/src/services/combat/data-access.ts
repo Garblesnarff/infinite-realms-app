@@ -141,6 +141,7 @@ function candidateToProfile(
     rangedWeapon,
     meleeWeapon: Boolean(catalog) && !rangedWeapon,
     twoHanded: Boolean(catalog?.weaponProperties?.twoHanded),
+    light: Boolean(catalog?.weaponProperties?.light),
   };
 }
 

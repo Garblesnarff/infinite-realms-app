@@ -58,6 +58,8 @@ const attackFields = {
   // #1362: Divine Smite's slot level, spent only if the attack hits. Bounded to the spell slot
   // levels a character can hold.
   divineSmiteSlotLevel: t.Optional(t.Number({ minimum: 1, maximum: 9 })),
+  // #1639: the off-hand attack, a bonus action. The engine refuses it unless the Attack action came first.
+  offHand: t.Optional(t.Boolean()),
 };
 
 const spellFields = {

@@ -59,6 +59,8 @@ export interface StructuredCombatAction {
   movement_feet: number;
   /** #1362: for an attack, the Paladin's Divine Smite slot level, spent only if the attack hits. */
   divine_smite_slot_level?: number;
+  /** #1639: the off-hand attack, a bonus action after the Attack action with a light melee weapon. */
+  off_hand?: boolean;
   /** #1233: a Metamagic option armed for this cast; the server checks it and spends the points. */
   metamagic?: string;
   x?: number;
@@ -101,6 +103,8 @@ export type ClientCombatIntent =
       d20Rolls?: [number, number];
       /** #1362: the slot a Paladin spends on Divine Smite if this melee attack hits. */
       divineSmiteSlotLevel?: number;
+      /** #1639: the off-hand attack, a bonus action. */
+      offHand?: boolean;
     }
   | {
       type: 'spell';
@@ -420,6 +424,7 @@ export async function executeStructuredCombatActionWithBoundary(
         ...(typeof action.divine_smite_slot_level === 'number'
           ? { divineSmiteSlotLevel: action.divine_smite_slot_level }
           : {}),
+        ...(action.off_hand === true ? { offHand: true } : {}),
       },
       'dm',
       dmStartedAt,

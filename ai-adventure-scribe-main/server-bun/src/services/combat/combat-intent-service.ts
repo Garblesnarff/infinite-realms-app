@@ -24,6 +24,7 @@ import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.j
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
+import { readLightAttackMark } from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
@@ -57,6 +58,7 @@ import {
   type SecondWindResult,
 } from './fighter-features-service.js';
 import { resolveFlexibleCasting, type FlexibleCastingResult } from './flexible-casting-resolver.js';
+import { assertOffHandAttackAllowed } from './off-hand-attack-service.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import {
   hasLeftTheBoard,
@@ -141,6 +143,8 @@ export type CombatIntent =
       d20Rolls?: [number, number];
       /** #1362: the slot a Paladin spends on Divine Smite if this melee attack hits. */
       divineSmiteSlotLevel?: number;
+      /** #1639: the off-hand attack, a bonus action after the Attack action with a light melee weapon. */
+      offHand?: boolean;
     }
   | {
       type: 'spell';
@@ -337,6 +341,9 @@ export const VERSIONED_INTENT_TYPES = new Set([
   // #1362: a divine_smite legal option submits an 'attack' intent (divineSmiteSlotLevel), so it
   // is claim-based too. Listed so the legal-action version test holds; no intent carries this type.
   'divine_smite',
+  // #1639: an off_hand_attack legal option submits an 'attack' intent with offHand, so it is
+  // claim-based too. Listed so the legal-action version test holds; no intent carries this type.
+  'off_hand_attack',
   'use_item',
   // #1233: a Flexible Casting intent spends the player's sorcery points and slot ledger.
   'flexible_casting',
@@ -1489,6 +1496,15 @@ export async function executeCombatIntent(
       // does not back (see refuseUngroundedPlayerWeapon); DM narration keeps the
       // ungrounded substitute path below so a fight is never stopped by a weapon name.
       refuseUngroundedPlayerWeapon(grounding, source);
+      // #1639: an off-hand attack is refused before any claim, roll or move.
+      if (intent.offHand) {
+        await assertOffHandAttackAllowed({
+          encounterId,
+          actorId: intent.actorId,
+          weaponId: grounding.weaponId,
+          equipped,
+        });
+      }
       const groundedWeaponId = isUnarmedWeaponClaim(intent.weaponId)
         ? UNARMED_STRIKE.id
         : grounding.weaponId;
@@ -1520,14 +1536,17 @@ export async function executeCombatIntent(
         weaponSubstituted: !grounding.grounded,
         actorIsPlayer,
       } satisfies AttackVisibilityContext;
-      const approach = await decideAttackApproach({
-        sessionId: encounter.sessionId,
-        actorId: intent.actorId,
-        actorLabel,
-        targetId: intent.targetId,
-        targetLabel,
-        weapon,
-      });
+      // An off-hand attack is melee in place: it never moves the actor, and the bonus action is not a move.
+      const approach = intent.offHand
+        ? ({ movementOnly: false, attackType: 'melee' } as const)
+        : await decideAttackApproach({
+            sessionId: encounter.sessionId,
+            actorId: intent.actorId,
+            actorLabel,
+            targetId: intent.targetId,
+            targetLabel,
+            weapon,
+          });
       if (approach.movementOnly) {
         result = exposeAttackVisibility(approach.result, visibility);
       } else {
@@ -1551,6 +1570,8 @@ export async function executeCombatIntent(
               // land on the weapon the reach check was made against.
               weaponId: groundedWeaponId,
               attackType: approach.attackType,
+              // #1639: the off-hand swing claims the bonus action, not the Attack action.
+              offHand: intent.offHand === true,
               expectedVersion: intent.expectedVersion,
               advantage: intent.advantage,
               disadvantage: intent.disadvantage,
@@ -2465,7 +2486,14 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
   const canAttack =
     !actor.actionUsed ||
     (actor.participantType === 'player' && !!(await attackBudgetPlan(encounterId, actor.id)).plan);
-  if (canAttack) {
+  // #1639: the light weapon that took this turn's Attack action, read before the gate so the
+  // off-hand chip is offered after the Action is spent. An off-hand swing can only follow a spent
+  // Action, so the read waits for that; without a live mark nothing below opens.
+  const lightAttackWeaponId =
+    actor.actionUsed && actor.characterId && !actor.bonusActionUsed
+      ? await readLightAttackMark(encounterId, actor.id)
+      : null;
+  if (canAttack || lightAttackWeaponId) {
     const [equippedWeapons, attackerConditions] = await Promise.all([
       listEquippedWeaponProfiles(actor),
       getActiveConditionNames(actor.id),
@@ -2525,13 +2553,15 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         });
         return { targetId: target.id, legal: rules.legal, refusal: rules.refusal };
       });
-    actions.push(...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }));
+    if (canAttack) {
+      actions.push(...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }));
+    }
     // #1362: Divine Smite is declared with a melee weapon attack, before the roll: the rider
     // spends the slot only on a hit. One option per melee weapon and slot level the Paladin can
     // still spend, against the targets that weapon can reach now (no move-first). The client
     // sends the attack intent with divineSmiteSlotLevel; combat-attack-service refuses it again
     // before the roll if the class or slot no longer holds.
-    if (actor.characterId && actor.characterClass?.toLowerCase().includes('paladin')) {
+    if (canAttack && actor.characterId && actor.characterClass?.toLowerCase().includes('paladin')) {
       const ledger = await spellSlotLedger(actor.characterId, actor);
       const slotLevels = [...ledger.entries()]
         .filter(([, count]) => count > 0)
@@ -2555,6 +2585,31 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         }
       }
     }
+    // #1639: the off-hand attack, a bonus action once the Attack action with a light melee weapon is
+    // taken this turn. It is offered only for a light melee weapon other than the one that took the
+    // Attack action, against the targets that weapon can reach now.
+    if (lightAttackWeaponId) {
+      {
+        for (const weapon of equippedWeapons.filter(
+          (candidate) =>
+            candidate.light === true &&
+            candidate.meleeWeapon === true &&
+            candidate.id !== lightAttackWeaponId,
+        )) {
+          const reachableTargetIds = targetsForWeapon(weapon)
+            .filter((target) => target.legal)
+            .map((target) => target.targetId);
+          if (reachableTargetIds.length) {
+            actions.push({
+              type: 'off_hand_attack',
+              label: `Off-hand attack with ${weapon.name} (bonus action)`,
+              weaponId: weapon.id,
+              targetIds: reachableTargetIds,
+            });
+          }
+        }
+      }
+    }
     // #1059: a carried ranged weapon the package left unequipped (the
     // shortbow, the light crossbow) while a melee weapon holds the main
     // hand is offered as 'Equip and attack': the client equips it — the
@@ -2563,7 +2618,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     // is no main hand to preserve; the create pass equips the package's
     // main ranged weapon for that shape, and the sheet/typed equip paths
     // cover the rest.
-    if (equippedWeapons.length > 0) {
+    if (canAttack && equippedWeapons.length > 0) {
       const carriedWeapons = await listCarriedWeaponProfiles(actor);
       const equippedNames = new Set(
         equippedWeapons.map((weapon) => normalizeWeaponName(weapon.name)),
