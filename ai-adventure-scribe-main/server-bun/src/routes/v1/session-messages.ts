@@ -3,11 +3,14 @@ import { Elysia, t } from 'elysia';
 import { verifySessionOwnership } from './combat/helpers.js';
 import { PLAYER_INPUT_MAX_CHARS } from '../../../../shared/player-input-cap.js';
 import { logger } from '../../lib/logger.js';
+import { narrativeCheckShadowCounter } from '../../lib/metrics.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { CharacterService } from '../../services/character-service.js';
 import { expireStaleHeldReplies } from '../../services/dm/dm-reply-persistence.js';
 import {
+  issuedCheckModifier,
   narrativeCheckCard,
+  narrativeCheckShadow,
   serverVerdictLine,
 } from '../../services/session/narrative-check-outcome.js';
 import { SessionMessageService } from '../../services/session/session-message-service.js';
@@ -43,6 +46,43 @@ async function withServerCheckOutcome<
     userId,
     rollRequestId,
   );
+  try {
+    if (issued) {
+      let modifier = issuedCheckModifier(issued, null);
+      if (modifier === null) {
+        const session = await SessionService.getSessionById(sessionId, userId);
+        const { db } = await import('../../../../db/client');
+        const character = session.characterId
+          ? await db.query.characters.findFirst({
+              where: (row, { and, eq, or }) =>
+                and(
+                  eq(row.id, session.characterId!),
+                  or(eq(row.userId, userId), eq(row.ownerId, userId)),
+                ),
+              with: { stats: true },
+            })
+          : null;
+        modifier = issuedCheckModifier(issued, character);
+      }
+      const shadow = narrativeCheckShadow({
+        text: message.message,
+        request: issued,
+        context,
+        modifier,
+      });
+      if (shadow) {
+        narrativeCheckShadowCounter.inc({ result: shadow.result });
+        if (shadow.result === 'mismatch') logger.info('narrative check shadow mismatch');
+      }
+    }
+  } catch (error) {
+    try {
+      narrativeCheckShadowCounter.inc({ result: 'error' });
+    } catch {
+      /* observational only */
+    }
+    logger.warn({ error }, 'narrative check shadow failed');
+  }
   const card = issued ? narrativeCheckCard({ text: message.message, request: issued }) : null;
   if (!card) {
     logger.warn(
