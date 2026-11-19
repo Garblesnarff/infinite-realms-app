@@ -21,3 +21,10 @@ export const httpRequestDuration = new Histogram({
   buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
   registers: [register],
 });
+
+export const narrativeCheckShadowCounter = new Counter({
+  name: 'narrative_check_shadow_total',
+  help: 'Shadow arithmetic and verdict comparisons for issued narrative checks',
+  labelNames: ['result'],
+  registers: [register],
+});

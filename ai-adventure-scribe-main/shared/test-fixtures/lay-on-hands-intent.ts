@@ -19,6 +19,22 @@ export const LAY_ON_HANDS_HEAL_INTENT_BODY = {
   origin: 'action_bar',
 } as const;
 
+/**
+ * #1670: a heal the player chose in the More stepper: 3 of the 5 points the chip offered. The
+ * stepper's amount travels as the intent's `amount`, so the wire body is the one the route accepts.
+ */
+export const LAY_ON_HANDS_CHOSEN_AMOUNT_INTENT_BODY = {
+  intent: {
+    type: 'lay_on_hands',
+    actorId: 'participant-paladin',
+    targetId: 'participant-ally',
+    amount: 3,
+    expectedVersion: 7,
+  },
+  source: 'player',
+  origin: 'action_bar',
+} as const;
+
 /** A poison cure from the action bar chip: 5 points, no amount. */
 export const LAY_ON_HANDS_CURE_INTENT_BODY = {
   intent: {

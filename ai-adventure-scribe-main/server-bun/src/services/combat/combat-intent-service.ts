@@ -2275,7 +2275,14 @@ export async function executeCombatIntent(
       const { writeNpcEngineRow } = await import('./npc-engine-row.js');
       const actionId = submitted.actionId ?? randomUUID();
       const npcResult = { ...(settled as Record<string, unknown>), actionId };
-      const engineRows = await writeNpcEngineRow(state, intent, actionId, npcResult, userId);
+      const engineRows = await writeNpcEngineRow(
+        state,
+        intent,
+        actionId,
+        npcResult,
+        userId,
+        origin,
+      );
       await flushVictoryNotice();
       return { ...npcResult, engineRows, sessionId: encounter.sessionId };
     }
@@ -2297,7 +2304,7 @@ export async function executeCombatIntent(
       const npcResult = { ...(settled as Record<string, unknown>), actionId };
       let engineRows: Awaited<ReturnType<typeof writeNpcEngineRow>> | null = null;
       try {
-        engineRows = await writeNpcEngineRow(state, intent, actionId, npcResult, userId);
+        engineRows = await writeNpcEngineRow(state, intent, actionId, npcResult, userId, origin);
       } catch (rowError) {
         // Same reasoning as the flush: the blow landed and the ending is claimed,
         // so a failed transcript write must not reach the catch below and be
@@ -2800,10 +2807,13 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
           const who = t.id === actor.id ? 'yourself' : name;
           const amount = Math.min(missing, loh.remaining);
           if (amount > 0) {
+            // #1670: `amount` is the default (the smaller of "to full" and the pool). `maxAmount`
+            // is the cap the player's stepper may not pass; the engine checks both on the intent.
             actions.push({
               type: 'lay_on_hands',
               targetId: t.id,
               amount,
+              maxAmount: amount,
               label: `Lay on Hands — heal ${who} ${amount} HP`,
             });
           }
