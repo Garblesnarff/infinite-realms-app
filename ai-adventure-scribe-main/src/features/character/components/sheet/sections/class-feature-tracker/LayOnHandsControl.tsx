@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,6 +35,7 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
   const { toast } = useToast();
   const [amount, setAmount] = useState('1');
   const [busy, setBusy] = useState(false);
+  const fullHealthHintId = useId();
   // In combat the Lay on Hands is an Action: the sheet control steps aside for the combat chips.
   const inCombat = useIsInCombatOptional();
   // #1643: at full HP a heal is refused, so Heal self is disabled with the reason beside it.
@@ -84,13 +85,16 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
         <Button
           size="sm"
           disabled={busy || !validAmount || atFullHealth}
+          aria-describedby={atFullHealth ? fullHealthHintId : undefined}
           onClick={() => run({ amount: parsed })}
         >
           Heal self
         </Button>
       </div>
       {atFullHealth && (
-        <p className="text-xs text-muted-foreground">You are already at full health.</p>
+        <p id={fullHealthHintId} className="text-xs text-muted-foreground">
+          You are already at full health.
+        </p>
       )}
       <div className="flex gap-2">
         <Button
