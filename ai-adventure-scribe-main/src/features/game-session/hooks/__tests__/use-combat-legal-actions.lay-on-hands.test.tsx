@@ -327,7 +327,9 @@ describe('useCombatLegalActions pool numbers (#1670)', () => {
       { applied: true, action: 'action_surge', usesRemaining: 0 },
     );
     const published: unknown[] = [];
-    const listener = (event: Event) => published.push((event as CustomEvent).detail);
+    const listener = (event: Event): void => {
+      published.push((event as CustomEvent).detail);
+    };
     window.addEventListener('character-pool-updated', listener);
     try {
       const { result } = renderHook(() =>
@@ -347,7 +349,9 @@ describe('useCombatLegalActions pool numbers (#1670)', () => {
   it('Rage publishes the engine use count from the rage result', async () => {
     routeFetchFor({ type: 'rage', label: 'Rage' }, { usesRemaining: 2, expiresRound: 4 });
     const published: unknown[] = [];
-    const listener = (event: Event) => published.push((event as CustomEvent).detail);
+    const listener = (event: Event): void => {
+      published.push((event as CustomEvent).detail);
+    };
     window.addEventListener('character-pool-updated', listener);
     try {
       const { result } = renderHook(() =>
