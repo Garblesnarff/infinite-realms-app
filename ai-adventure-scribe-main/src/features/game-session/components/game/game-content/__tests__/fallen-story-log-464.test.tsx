@@ -269,7 +269,7 @@ describe('FallenStoryLog (#464)', () => {
     expect(log).toHaveTextContent('automatic critical hit');
     expect(log).toHaveTextContent('Two death-save failures');
     expect(log).toHaveTextContent('6 slashing damage');
-    expect(log).toHaveTextContent('The Scholar is unconscious.');
+    expect(log).not.toHaveTextContent('The Scholar is unconscious.');
     expect(log.children).toHaveLength(1);
     state.messages = [{ id: 'm1', sender: 'dm', text: DM_TEXT }];
   });

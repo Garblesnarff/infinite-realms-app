@@ -63,7 +63,7 @@ export function createCombatParticipantsFromDetection(
       participantType: 'player',
       name: playerCharacter.name,
       characterId: playerCharacter.id,
-      initiative: dexModifier, // This will be added to d20 roll in startCombat
+      initiative: dexModifier, // Initiative modifier; the server rolls initiative when combat starts
       armorClass: playerCharacter.armor_class || 10,
       maxHitPoints: playerCharacter.hit_points || 10,
       currentHitPoints: playerCharacter.hit_points || 10,
@@ -91,9 +91,7 @@ export function createCombatParticipantsFromDetection(
     );
 
     const initiativeModifier =
-      monster?.abilities?.dexterity != null
-        ? abilityModifier(monster.abilities.dexterity)
-        : 0;
+      monster?.abilities?.dexterity != null ? abilityModifier(monster.abilities.dexterity) : 0;
     const attackActions =
       monster?.actions?.filter((action) => action.attack_bonus !== undefined) ?? [];
     const multiattack = monster?.actions?.find((action) => action.name === 'Multiattack');
@@ -102,7 +100,7 @@ export function createCombatParticipantsFromDetection(
       id: `enemy-${enemy.name.toLowerCase()}-${i}`,
       participantType: 'monster' as CombatParticipant['participantType'],
       name: `${enemy.name} ${i > 0 ? i + 1 : ''}`.trim(),
-      initiative: initiativeModifier, // This will be added to d20 roll in startCombat
+      initiative: initiativeModifier, // Initiative modifier; the server rolls initiative when combat starts
       armorClass: monster?.armorClass ?? enemy.suggestedAC,
       maxHitPoints: monster?.hitPoints ?? enemy.suggestedHP,
       currentHitPoints: monster?.hitPoints ?? enemy.suggestedHP,

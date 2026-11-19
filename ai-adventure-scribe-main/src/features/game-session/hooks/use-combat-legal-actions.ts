@@ -404,7 +404,8 @@ export function useCombatLegalActions(input: {
         } else if (
           action.type === 'second_wind' ||
           action.type === 'action_surge' ||
-          action.type === 'divine_sense'
+          action.type === 'divine_sense' ||
+          action.type === 'rage'
         ) {
           // #975: the Fighter features, like Dash — the engine spends the tracked
           // use and applies the effect, the notice prints the engine line, and the

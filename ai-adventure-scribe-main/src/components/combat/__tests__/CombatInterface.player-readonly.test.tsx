@@ -157,7 +157,6 @@ function renderFight({
     selectedEnemy: null,
     setSelectedEnemy: vi.fn(),
     showCombatMode: true,
-    isStartingCombat: false,
     actionValidation: null,
     // A pending reaction is a button that starts an action, so it must not reach a player.
     reactionOpportunities: [
@@ -172,11 +171,9 @@ function renderFight({
     setReactionOpportunities: vi.fn(),
     localShowInitiativeTracker: true,
     setLocalShowInitiativeTracker: vi.fn(),
-    handleStartCombat: vi.fn(),
     handleEndCombat: vi.fn(),
     handleCombatAction: vi.fn(),
     handleEnemyAttack: vi.fn(),
-    addEnemy: vi.fn(),
     handleEnhancedAttack: vi.fn(),
     handleClassFeature: vi.fn(),
     handleDeathSave: vi.fn(),

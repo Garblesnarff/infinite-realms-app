@@ -142,9 +142,22 @@ function FallenEndStateWithCharacter({
   const starterSlug = sessionData.starter_campaign_id
     ? (starterCampaigns.find((c) => c.id === sessionData.starter_campaign_id)?.slug ?? null)
     : null;
+  const character = characterState.character;
+  // The same portrait and identity line the restored end screen shows (GameContent.tsx).
+  const identity = [
+    character?.race?.name,
+    character?.class?.name,
+    character?.level ? `Level ${character.level}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   return (
     <FallenEndState
-      characterName={characterState.character?.name ?? null}
+      characterName={character?.name ?? null}
+      portraitUrl={character?.image_url ?? character?.avatar_url}
+      identity={identity}
+      // A death that happens on the live screen fades in; a reload stays still (GameContent.tsx).
+      fadeIn
       finalLines={finalLines}
       campaignName={campaignState.campaign?.name ?? null}
       chooseHeroHref={buildChooseHeroHref({

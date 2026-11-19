@@ -75,6 +75,13 @@ const TABLE: Record<LegalActionType, Row> = {
     value: { healed: 6, newHp: 14, maxHp: 14 },
   },
   action_surge: { prints: true, formatAs: 'action_surge', action: { actor_id: ACTOR }, value: {} },
+  // #1638: Rage prints the uses left and the round it lasts until.
+  rage: {
+    prints: true,
+    formatAs: 'rage',
+    action: { actor_id: ACTOR },
+    value: { usesRemaining: 1, expiresRound: 11 },
+  },
   divine_sense: {
     prints: true,
     formatAs: 'divine_sense',

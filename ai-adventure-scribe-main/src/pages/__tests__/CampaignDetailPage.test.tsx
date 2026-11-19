@@ -527,6 +527,15 @@ describe('CampaignDetailPage heroes (#89)', () => {
     expect(navTarget.search).toContain('new=true');
   });
 
+  it('says "1 session" for a single estimated session', () => {
+    state.campaign = campaign({ levelRange: '1', estimatedSessions: '1', overview: null });
+    state.templates = [];
+    renderPage();
+
+    expect(screen.getByText('1 session')).toBeInTheDocument();
+    expect(screen.queryByText('1 sessions')).not.toBeInTheDocument();
+  });
+
   it('omits the level segment when the campaign declares no range', () => {
     state.campaign = campaign({ levelRange: null, estimatedSessions: '8-12', tone: [] });
     state.templates = [];

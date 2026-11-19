@@ -26,6 +26,8 @@ import {
   clearSneakAttackSpent,
   isHiddenAttacker,
   rogueLevelOf,
+  classLevelOfCharacter,
+  isRaging,
 } from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
@@ -58,7 +60,7 @@ import { appliesHexRider, hexRiderDice } from './hex-rider.js';
 import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { markPlayerDamageProvocation } from './npc-provocation.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
-import { aggregateResistances } from './resistance-resolver.js';
+import { aggregateResistances, withRageResistances } from './resistance-resolver.js';
 import {
   metamagicOptionsLedger,
   sorceryPointsLedger,
@@ -78,6 +80,7 @@ import {
   rerollGreatWeaponFace,
 } from '../../../../shared/fighting-style';
 import {
+  rageDamageBonusAt,
   METAMAGIC_COSTS,
   METAMAGIC_OPTION_LABELS,
 } from '../../../../shared/limited-feature-counts';
@@ -660,6 +663,7 @@ export class CombatAttackService {
     if (!targetData) throw new NotFoundError('Target participant', targetId);
     if (!attackerData) throw new NotFoundError('Attacker participant', attackerId);
 
+    const attackerCharacterId = attackerData.participant.characterId ?? null;
     const [
       weapon,
       attackerProfile,
@@ -667,6 +671,8 @@ export class CombatAttackService {
       targetConditions,
       tacticalMap,
       attackerHidden,
+      attackerRaging,
+      targetRaging,
     ] = await Promise.all([
       getEquippedWeaponProfile(attackerData.participant, weaponId),
       getParticipantAbilityProfile(attackerData.participant),
@@ -674,7 +680,15 @@ export class CombatAttackService {
       getActiveConditionNames(targetId),
       loadActiveTacticalMap(attackerData.participant.encounter.sessionId),
       isHiddenAttacker(encounterId, attackerId),
+      // Rage belongs to a character, so a participant with no character skips the two reads.
+      attackerCharacterId ? isRaging(encounterId, attackerId) : false,
+      targetData.participant.characterId ? isRaging(encounterId, targetId) : false,
     ]);
+    // #1638: Rage's +2 damage follows the attacker's Barbarian level (levels 1 to 8).
+    const ragingDamageBonus =
+      attackerRaging && attackerCharacterId
+        ? rageDamageBonusAt(await classLevelOfCharacter(attackerCharacterId, 'Barbarian'))
+        : 0;
     const { participant: targetParticipant, stats: targetStats } = targetData;
     const baseTargetAc = resolveParticipantArmorClass(targetParticipant.armorClass, {
       participantId: targetParticipant.id,
@@ -704,6 +718,7 @@ export class CombatAttackService {
       attackerConditions,
       targetConditions,
       fightingStyles: attackerProfile.fightingStyles,
+      ragingDamageBonus,
     });
     // #728 (house rule): a mook attacking with its pack gets +1 to hit for each extra standing
     // mook, to a maximum of +3. Applied here, inside prepareAttack, so the proposal popup and
@@ -730,6 +745,7 @@ export class CombatAttackService {
       rules,
       mookGroupBonus,
       fightingStyles: attackerProfile.fightingStyles,
+      targetRaging,
     };
   }
 
@@ -799,6 +815,7 @@ export class CombatAttackService {
       rules,
       mookGroupBonus,
       fightingStyles,
+      targetRaging,
     } = await this.prepareAttack(encounterId, input, userId);
 
     if (!rules.legal) {
@@ -981,8 +998,11 @@ export class CombatAttackService {
       // When the die is not a natural 20 the line says what made the hit critical (#2640).
       const critReason = autoCritReason(targetConditions, attackRoll, isCrit);
 
-      // Aggregate resistances using the extracted module
-      const defenses = aggregateResistances(targetParticipant, targetStats);
+      // Aggregate resistances using the extracted module; Rage adds its three types (#1638).
+      const defenses = withRageResistances(
+        aggregateResistances(targetParticipant, targetStats),
+        targetRaging,
+      );
 
       const rerollGreatWeapon =
         weapon.fixedDamageBonus === undefined &&
@@ -1006,6 +1026,21 @@ export class CombatAttackService {
             }
           : {}),
       });
+
+      // #1638: Rage's flat +2 is listed as its own part. It takes the weapon's resistances, so the
+      // weapon part and the Rage part are one resisted total split in two; the parts sum to finalDamage.
+      const ragePart =
+        rules.ragingDamage > 0
+          ? calculateDamage({
+              damageDice: '0',
+              damageBonus: 0,
+              damageType: weapon.damageType as DamageType,
+              damageRoll: rules.ragingDamage,
+              resistances: defenses.resistances,
+              vulnerabilities: defenses.vulnerabilities,
+              immunities: defenses.immunities,
+            }).finalDamage
+          : 0;
 
       // #754: Hex adds 1d6 necrotic to a hit on its cursed target, resisted separately.
       const hexDamage = await this.hexRiderDamage(
@@ -1136,10 +1171,13 @@ export class CombatAttackService {
           ...(sneak ? { sneakAttackDamage: sneak.damage, sneakAttackDice: sneak.dice } : {}),
           // #1522: the weapon part and the radiant part, each resisted on its own type. The
           // rolled parts are reported as rolled; the per-hit cap can lower finalDamage below them.
-          ...(smiteApplied || sneak
+          ...(smiteApplied || sneak || ragePart > 0
             ? {
                 damageParts: [
-                  { damageType: weapon.damageType, amount: damageCalc.finalDamage },
+                  { damageType: weapon.damageType, amount: damageCalc.finalDamage - ragePart },
+                  ...(ragePart > 0
+                    ? [{ damageType: weapon.damageType, amount: ragePart, source: 'Rage' }]
+                    : []),
                   ...(hexDamage > 0
                     ? [{ damageType: 'necrotic', amount: hexDamage, source: 'Hex' }]
                     : []),

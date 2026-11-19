@@ -129,4 +129,25 @@ describe('PublicExploreCard helpers', () => {
     expect(metaLineFor({ levelRange: null, estimatedSessions: '5' })).toBe('5 sessions');
     expect(metaLineFor({ levelRange: null, estimatedSessions: null })).toBe('');
   });
+
+  it('says "1 session" for one session and "N sessions" otherwise', () => {
+    expect(metaLineFor({ levelRange: '1', estimatedSessions: '1' })).toBe('Level 1 · 1 session');
+    expect(metaLineFor({ levelRange: null, estimatedSessions: '1' })).toBe('1 session');
+    expect(metaLineFor({ levelRange: null, estimatedSessions: '2' })).toBe('2 sessions');
+  });
+
+  it('shows the played level for the glued Abyssal Descent span (7-10-11 is 7-11)', () => {
+    expect(metaLineFor({ levelRange: '7-10-11', estimatedSessions: '10-15' })).toBe(
+      'Level 7-11 · 10–15 sessions',
+    );
+  });
+});
+
+describe('PublicExploreCard board copy', () => {
+  it('renders the played level and "1 session" on the card', () => {
+    renderCard({ levelRange: '7-10-11', estimatedSessions: '1' });
+    expect(screen.getByText('Level 7-11 · 1 session')).toBeInTheDocument();
+    expect(screen.queryByText(/7-10-11/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/1 sessions/)).not.toBeInTheDocument();
+  });
 });
