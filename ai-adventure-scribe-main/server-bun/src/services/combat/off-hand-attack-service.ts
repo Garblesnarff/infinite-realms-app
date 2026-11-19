@@ -41,10 +41,20 @@ export async function assertOffHandAttackAllowed(input: {
       { reason: 'not_light' },
     );
   }
-  if (weapon.id === markedWeaponId) {
+  if (!isOffHandCandidate(weapon, markedWeaponId)) {
     throw new BusinessLogicError(
       'The off-hand attack needs a different weapon from the one that took the Attack action.',
       { reason: 'same_weapon' },
     );
   }
+}
+
+/**
+ * A light melee weapon the other hand can hold: a different row, or a second copy of the row that took
+ * the Attack action. A row that holds two or more copies is two weapons (a premade's two shortswords
+ * are stored as one row of quantity 2).
+ */
+export function isOffHandCandidate(weapon: WeaponRuleProfile, markedWeaponId: string): boolean {
+  if (weapon.light !== true || weapon.meleeWeapon !== true) return false;
+  return weapon.id !== markedWeaponId || (weapon.quantity ?? 1) >= 2;
 }

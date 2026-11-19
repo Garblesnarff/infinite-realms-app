@@ -31,3 +31,11 @@ export function offHandAttackBody() {
     source: 'dm' as const,
   };
 }
+
+/**
+ * The proposal the action bar posts before the off-hand roll (#1639): the same attack body with
+ * `phase: 'propose'`, which is what `askPlayerForAttackDie` sends for the off-hand chip.
+ */
+export function offHandProposeBody() {
+  return { ...offHandAttackBody(), phase: 'propose' as const };
+}

@@ -46,6 +46,8 @@ export type WeaponRuleProfile = {
   twoHanded?: boolean;
   /** The weapon has the light property (#1639). Unarmed strikes and monster attacks leave it unset. */
   light?: boolean;
+  /** The copies the row holds (#1639). Absent for a monster attack, which is one attack. */
+  quantity?: number;
   /** Another weapon is wielded besides this one. A shield is not a weapon. */
   otherWeaponWielded?: boolean;
 };

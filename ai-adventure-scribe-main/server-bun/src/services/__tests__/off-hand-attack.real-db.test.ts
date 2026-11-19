@@ -9,7 +9,7 @@
  * The attack path is the production `executeCombatIntent`. The RNG is seeded. No suite here calls the
  * live DM. Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
-import { afterAll, beforeAll, expect, it } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import {
@@ -32,6 +32,10 @@ import {
 } from '../../../../db/schema/index';
 import { setRngSeed } from '../../lib/rng.js';
 
+const { SessionService } = await importWithRealDb(() => import('../session-service.js'));
+const { readLightAttackMark } = await importWithRealDb(
+  () => import('../combat/combat-turn-flags.js'),
+);
 const { clearAttackBudget } = await importWithRealDb(
   () => import('../combat/attack-budget-service.js'),
 );
@@ -356,5 +360,92 @@ describeWithDb('Off-hand attack, Two-Weapon Fighting (#1639)', () => {
     expect(chips[0]).toMatchObject({ weaponId: dagger, targetIds: [allyId] });
     await offHandIntent(dagger);
     expect(await offered()).toEqual([]);
+  });
+
+  describe('a row of two copies is two weapons (#1639)', () => {
+    /** Replaces the fighter's equipped weapon rows and returns the new row ids, in order. */
+    const setInventory = async (rows: Array<{ name: string; quantity: number }>) => {
+      await db.delete(inventoryItems).where(eq(inventoryItems.characterId, fighterCharacterId));
+      return db
+        .insert(inventoryItems)
+        .values(
+          rows.map((row) => ({
+            characterId: fighterCharacterId,
+            name: row.name,
+            itemType: 'weapon',
+            isEquipped: true,
+            quantity: row.quantity,
+          })),
+        )
+        .returning({ id: inventoryItems.id });
+    };
+
+    afterEach(async () => {
+      // Put back the fixture the other tests in this file read by name.
+      await setInventory([
+        { name: 'Shortsword', quantity: 1 },
+        { name: 'Dagger', quantity: 1 },
+        { name: 'Longsword', quantity: 1 },
+      ]);
+    });
+
+    it('two rows of one shortsword: the second row is the off-hand weapon', async () => {
+      const [first, second] = await setInventory([
+        { name: 'Shortsword', quantity: 1 },
+        { name: 'Shortsword', quantity: 1 },
+      ]);
+      await freshTurn();
+      await attackAction(first.id);
+      await offHandIntent(second.id);
+      expect(await bonusActionUsed()).toBe(true);
+    });
+
+    it('one row of two shortswords: the second copy is the off-hand weapon', async () => {
+      const [row] = await setInventory([{ name: 'Shortsword', quantity: 2 }]);
+      await freshTurn();
+      await attackAction(row.id);
+      await offHandIntent(row.id);
+      expect(await bonusActionUsed()).toBe(true);
+    });
+
+    it('a single shortsword cannot be both weapons', async () => {
+      const [row] = await setInventory([{ name: 'Shortsword', quantity: 1 }]);
+      await freshTurn();
+      await attackAction(row.id);
+      await expect(offHandIntent(row.id)).rejects.toMatchObject({
+        details: { reason: 'same_weapon' },
+      });
+      expect(await bonusActionUsed()).toBe(false);
+    });
+  });
+
+  describe('client writes cannot touch the light-attack mark (#1639)', () => {
+    const update = (sessionState: Record<string, unknown>) =>
+      SessionService!.updateSession(sessionId, userId, { sessionState } as never);
+
+    it('a client whole-blob write that omits the mark keeps it', async () => {
+      await freshTurn();
+      const shortsword = await weaponIdOf('Shortsword');
+      await attackAction(shortsword);
+      await update({ notes: 'client snapshot' });
+      expect(await readLightAttackMark(encounterId, fighterId)).toBe(shortsword);
+    });
+
+    it('a client write that empties the bucket cannot clear the mark', async () => {
+      await freshTurn();
+      const shortsword = await weaponIdOf('Shortsword');
+      await attackAction(shortsword);
+      await update({ lightAttack: {} });
+      expect(await readLightAttackMark(encounterId, fighterId)).toBe(shortsword);
+    });
+
+    it('a client write cannot set a mark the engine did not write', async () => {
+      await freshTurn();
+      const dagger = await weaponIdOf('Dagger');
+      await update({
+        lightAttack: { [fighterId]: { encounterId, turn: '1:0', weaponId: dagger } },
+      });
+      expect(await readLightAttackMark(encounterId, fighterId)).toBeNull();
+    });
   });
 });

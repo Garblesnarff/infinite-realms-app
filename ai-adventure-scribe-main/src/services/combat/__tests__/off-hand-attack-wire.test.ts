@@ -22,8 +22,11 @@ import {
   OFF_HAND_TARGET_ID,
   OFF_HAND_WEAPON_ID,
   offHandAttackBody,
+  offHandProposeBody,
 } from '../../../../shared/test-fixtures/off-hand-attack-intent';
 import { executeStructuredCombatActionWithBoundary } from '../combat-action-executor';
+import { proposeAuthoritativeAttack } from '../combat-attack-proposal';
+import { askPlayerForAttackDie } from '../player-attack-roll';
 
 const jsonResponse = (body: unknown) =>
   new Response(JSON.stringify(body), {
@@ -63,5 +66,46 @@ describe('Off-hand attack action bar wire body (#1639)', () => {
     const { dmStartedAt, ...posted } = JSON.parse(String(intentCall?.[1]?.body));
     expect(typeof dmStartedAt).toBe('number');
     expect(posted).toEqual(offHandAttackBody());
+  });
+
+  it('proposes the off-hand swing with the shared propose body before the roll', async () => {
+    fetchWithAuth.mockImplementation(async () =>
+      jsonResponse({ accepted: true, proposal: { legal: true, weaponName: 'Dagger' } }),
+    );
+    await proposeAuthoritativeAttack('enc-1', {
+      type: 'attack',
+      actorId: OFF_HAND_ACTOR_ID,
+      targetId: OFF_HAND_TARGET_ID,
+      weaponId: OFF_HAND_WEAPON_ID,
+      offHand: true,
+    });
+    const proposeCall = fetchWithAuth.mock.calls.find(([url]) =>
+      String(url).endsWith('/v1/combat/enc-1/intent'),
+    );
+    expect(JSON.parse(String(proposeCall?.[1]?.body))).toEqual(offHandProposeBody());
+  });
+
+  it('the action bar chip proposes with the off-hand flag, not as an ordinary attack', async () => {
+    fetchWithAuth.mockImplementation(async () =>
+      jsonResponse({ accepted: true, proposal: { legal: false, refusal: 'out_of_range' } }),
+    );
+    await askPlayerForAttackDie({
+      encounterId: 'enc-1',
+      action: {
+        actor_id: OFF_HAND_ACTOR_ID,
+        action_type: 'attack',
+        target_ids: [OFF_HAND_TARGET_ID],
+        weapon_id: OFF_HAND_WEAPON_ID,
+        spell_id: null,
+        slot_level: null,
+        movement_feet: 0,
+        off_hand: true,
+      } as any,
+      actorLabel: 'The Fighter',
+    });
+    const proposeCall = fetchWithAuth.mock.calls.find(([url]) =>
+      String(url).endsWith('/v1/combat/enc-1/intent'),
+    );
+    expect(JSON.parse(String(proposeCall?.[1]?.body)).intent).toMatchObject({ offHand: true });
   });
 });

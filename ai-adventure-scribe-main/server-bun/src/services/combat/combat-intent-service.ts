@@ -58,7 +58,7 @@ import {
   type SecondWindResult,
 } from './fighter-features-service.js';
 import { resolveFlexibleCasting, type FlexibleCastingResult } from './flexible-casting-resolver.js';
-import { assertOffHandAttackAllowed } from './off-hand-attack-service.js';
+import { assertOffHandAttackAllowed, isOffHandCandidate } from './off-hand-attack-service.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import {
   hasLeftTheBoard,
@@ -1074,20 +1074,34 @@ export async function proposeCombatAttack(
   const groundedWeaponId = isUnarmedWeaponClaim(resolvedAttack.weaponId)
     ? UNARMED_STRIKE.id
     : grounding.weaponId;
-  if ((actor as unknown as TurnResourceView).actionUsed) {
+  // #1639: an off-hand proposal is the bonus action, so the Action check does not apply to it. It is
+  // checked read-only here (mark, weapon, copies), so a refused off-hand swing never reaches the popup.
+  const offHand = resolvedAttack.offHand === true;
+  if (offHand) {
+    await assertOffHandAttackAllowed({
+      encounterId,
+      actorId: resolvedAttack.actorId,
+      weaponId: groundedWeaponId,
+      equipped,
+    });
+  }
+  if (!offHand && (actor as unknown as TurnResourceView).actionUsed) {
     const available = await attackBudgetPlan(encounterId, actor.id);
     if (!available.plan) {
       throw new BusinessLogicError('Action already used this turn', { participantId: actor.id });
     }
   }
-  const approach = await decideAttackApproach({
-    sessionId: encounter.sessionId,
-    actorId: resolvedAttack.actorId,
-    actorLabel,
-    targetId: resolvedAttack.targetId,
-    targetLabel,
-    weapon: grounding.weapon,
-  });
+  // An off-hand swing is melee in place: it never moves the actor (as in the executed branch).
+  const approach = offHand
+    ? ({ movementOnly: false, attackType: 'melee' } as const)
+    : await decideAttackApproach({
+        sessionId: encounter.sessionId,
+        actorId: resolvedAttack.actorId,
+        actorLabel,
+        targetId: resolvedAttack.targetId,
+        targetLabel,
+        weapon: grounding.weapon,
+      });
   if (approach.movementOnly) return { movementOnly: true, result: approach.result };
   const attackService = await createCombatAttackService();
   const proposal = await attackService.proposeAttack(
@@ -1101,6 +1115,7 @@ export async function proposeCombatAttack(
       expectedVersion: encounter.version,
       advantage: resolvedAttack.advantage,
       disadvantage: resolvedAttack.disadvantage,
+      offHand,
     },
     userId,
   );
@@ -2590,11 +2605,8 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     // Attack action, against the targets that weapon can reach now.
     if (lightAttackWeaponId) {
       {
-        for (const weapon of equippedWeapons.filter(
-          (candidate) =>
-            candidate.light === true &&
-            candidate.meleeWeapon === true &&
-            candidate.id !== lightAttackWeaponId,
+        for (const weapon of equippedWeapons.filter((candidate) =>
+          isOffHandCandidate(candidate, lightAttackWeaponId),
         )) {
           const reachableTargetIds = targetsForWeapon(weapon)
             .filter((target) => target.legal)
