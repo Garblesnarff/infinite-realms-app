@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { GameLoadingOverlay, GameLayout } from './game-content';
 import { CampaignCompleteEndState } from './game-content/CompletionScreen';
 import { buildChooseHeroHref, FallenEndState, FallenStoryLog } from './game-content/DeathScreen';
+import { EndedSessionChoice } from './game-content/EndedSessionChoice';
 import { SessionRestPrompt } from './game-content/SessionRestPrompt';
 import { useGameRails } from './game-content/use-game-rails';
 import { useSessionRestGate } from './game-content/use-session-rest-gate';
@@ -254,6 +255,25 @@ const GameContent: React.FC = () => {
           Try again
         </Button>
       </div>
+    );
+  }
+
+  if (vitalGate.status === 'ended') {
+    // #1669: opened by the link of an ended session. Nothing is created or resumed until the player picks.
+    return (
+      <GameProviders
+        sessionId={sessionId}
+        starterCampaignId={effectiveStarterCampaignId}
+        characterId={characterIdFromParams}
+      >
+        <EndedSessionChoice
+          sessionId={sessionId}
+          campaignId={sessionData.campaign_id ?? null}
+          characterId={characterIdFromParams}
+          sessionNumber={sessionData.session_number ?? null}
+          sceneDescription={sessionData.current_scene_description ?? null}
+        />
+      </GameProviders>
     );
   }
 

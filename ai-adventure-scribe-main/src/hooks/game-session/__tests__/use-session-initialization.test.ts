@@ -213,12 +213,9 @@ describe('useSessionInitialization', () => {
     });
   });
 
-  it('should handle error when loading specific session and fall back to searching', async () => {
+  it('should show an error, and not start or search for another session, when the named session cannot be loaded (#1669)', async () => {
     // Return error for specific session load
     vi.mocked(userDataApi.getSession).mockRejectedValueOnce(new Error('Not found'));
-
-    // Fall back to fetching recent sessions
-    vi.mocked(userDataApi.listSessions).mockResolvedValueOnce([]);
 
     mockCreateGameSession.mockResolvedValue('new-id');
 
@@ -230,8 +227,10 @@ describe('useSessionInitialization', () => {
     );
 
     await waitFor(() => {
-      expect(mockCreateGameSession).toHaveBeenCalled();
+      expect(mockSetSessionState).toHaveBeenCalledWith('error');
     });
+    expect(mockCreateGameSession).not.toHaveBeenCalled();
+    expect(userDataApi.listSessions).not.toHaveBeenCalled();
   });
 
   it('should resume an active, non-expired session', async () => {

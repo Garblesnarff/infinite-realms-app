@@ -182,6 +182,17 @@ export const useSessionInitialization = ({
 
           if (specificError) {
             logger.error('[Session Init] Error loading specific session:', specificError);
+            // #1669: a link to a session that cannot be opened must not quietly start a different one.
+            if (mountedRef.current) {
+              setSessionState('error');
+              toastRef.current({
+                title: 'Error',
+                description: 'Could not open that session.',
+                variant: 'destructive',
+              });
+            }
+            sessionInitializedRef.current = false;
+            return;
           } else if (specificSession && mountedRef.current) {
             const extended = specificSession as ExtendedGameSession;
             setSessionData(extended);
@@ -301,10 +312,14 @@ export const useSessionInitialization = ({
           // the resumed session.
           let completionState = null;
           try {
-            completionState =
-              await userDataApi.fetchSessionCompletionState(lastCompletedSession.id);
+            completionState = await userDataApi.fetchSessionCompletionState(
+              lastCompletedSession.id,
+            );
           } catch (error) {
-            logger.warn('[Session Init] Completion-state check failed, continuing normally:', error);
+            logger.warn(
+              '[Session Init] Completion-state check failed, continuing normally:',
+              error,
+            );
           }
           if (abortSignal.aborted || !mountedRef.current) {
             logger.info('[Session Init] Aborted after completion-state check');

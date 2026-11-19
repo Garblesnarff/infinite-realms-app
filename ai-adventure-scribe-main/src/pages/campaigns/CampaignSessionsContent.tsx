@@ -17,6 +17,10 @@ interface CampaignSessionsContentProps {
   onViewChronicle: (id: string) => void;
   onGenerateChronicle: (id: string) => void;
   userPlan?: string;
+  /** #1669: ids of the sessions the hero can resume. */
+  resumableIds?: ReadonlySet<string>;
+  onResume?: (session: SessionListItem) => void;
+  resumingId?: string | null;
   hasNextPage?: boolean;
   isFetchingNextPage: boolean;
   fetchNextPage: () => void;
@@ -33,6 +37,9 @@ export const CampaignSessionsContent: React.FC<CampaignSessionsContentProps> = (
   onViewChronicle,
   onGenerateChronicle,
   userPlan,
+  resumableIds,
+  onResume,
+  resumingId,
   hasNextPage,
   isFetchingNextPage,
   fetchNextPage,
@@ -82,6 +89,9 @@ export const CampaignSessionsContent: React.FC<CampaignSessionsContentProps> = (
           onViewChronicle={onViewChronicle}
           onGenerateChronicle={onGenerateChronicle}
           userPlan={userPlan}
+          canResume={resumableIds?.has(session.id) ?? false}
+          onResume={onResume}
+          resuming={resumingId === session.id}
         />
       ))}
       {hasNextPage && (

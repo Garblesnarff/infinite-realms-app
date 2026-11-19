@@ -6,7 +6,7 @@
  * Handles session lifecycle, message history, and state management.
  */
 
-import { eq, and, desc, sql, or, type SQL } from 'drizzle-orm';
+import { eq, and, desc, isNull, ne, sql, or, type SQL } from 'drizzle-orm';
 
 import { ClassFeaturesService } from './class-features-service.js';
 import { ammunitionPreservingSessionState } from './combat/ammunition.js';
@@ -226,6 +226,14 @@ function completedPreservingEndTime(clientEndTime: Date | null): SQL {
  * Session Service
  * Provides type-safe database operations for game sessions and messages
  */
+/** #1669: why a completed session cannot be resumed. */
+export type ResumeRefusal =
+  | 'not_completed'
+  | 'not_resumable'
+  | 'fallen'
+  | 'one_shot'
+  | 'already_active';
+
 export class SessionService {
   /**
    * Get the joined gameplay context.
@@ -724,6 +732,77 @@ export class SessionService {
     });
 
     return session || null;
+  }
+
+  /**
+   * #1669: the sessions this user can resume: completed, the hero not fallen, and the campaign not a
+   * one-shot. Optionally one campaign. Newest first. Owner-filtered (campaign or character owner).
+   */
+  static async listResumableSessions(userId: string, campaignId?: string): Promise<GameSession[]> {
+    const rows = await db
+      .select({ session: gameSessions })
+      .from(gameSessions)
+      .innerJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characterStats, eq(characterStats.characterId, gameSessions.characterId))
+      .where(
+        and(
+          eq(gameSessions.status, 'completed'),
+          getOwnershipCondition(userId),
+          campaignId ? eq(gameSessions.campaignId, campaignId) : undefined,
+          or(isNull(characterStats.vitalState), ne(characterStats.vitalState, 'dead')),
+          or(isNull(campaigns.campaignLength), ne(campaigns.campaignLength, 'one-shot')),
+        ),
+      )
+      .orderBy(desc(gameSessions.sessionNumber));
+    return rows.map((row) => row.session);
+  }
+
+  /**
+   * #1669: Resume session. Only the status of the completed row changes back to `active` and its
+   * end time clears. Messages, trackers (session_state) and the closed fight stay as they are.
+   * Refusals are returned as a reason; the route answers 409 with it.
+   */
+  static async resumeSession(
+    sessionId: string,
+    userId: string,
+  ): Promise<{ ok: true; session: GameSession } | { ok: false; reason: ResumeRefusal }> {
+    const [row] = await db
+      .select({
+        session: gameSessions,
+        vitalState: characterStats.vitalState,
+        campaignLength: campaigns.campaignLength,
+      })
+      .from(gameSessions)
+      .innerJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
+      .leftJoin(characterStats, eq(characterStats.characterId, gameSessions.characterId))
+      .where(and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)));
+    if (!row) throw new NotFoundError('Session', sessionId);
+    const { campaignId, characterId } = row.session;
+    if (!campaignId || !characterId) return { ok: false, reason: 'not_resumable' };
+    if (row.session.status !== 'completed') return { ok: false, reason: 'not_completed' };
+    if (row.vitalState === 'dead') return { ok: false, reason: 'fallen' };
+    if (row.campaignLength === 'one-shot') return { ok: false, reason: 'one_shot' };
+
+    const [active] = await db
+      .select({ id: gameSessions.id })
+      .from(gameSessions)
+      .where(
+        and(
+          eq(gameSessions.campaignId, campaignId),
+          eq(gameSessions.characterId, characterId),
+          eq(gameSessions.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (active) return { ok: false, reason: 'already_active' };
+
+    const [updated] = await db
+      .update(gameSessions)
+      .set({ status: 'active', endTime: null, updatedAt: new Date() })
+      .where(and(eq(gameSessions.id, sessionId), eq(gameSessions.status, 'completed')))
+      .returning();
+    if (!updated) return { ok: false, reason: 'not_completed' };
+    return { ok: true, session: updated };
   }
 
   /**

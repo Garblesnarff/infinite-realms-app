@@ -45,6 +45,10 @@ interface SessionCardProps {
   onViewChronicle?: (sessionId: string) => void;
   onGenerateChronicle?: (sessionId: string) => void;
   userPlan?: string;
+  /** #1669: this completed session can be resumed; shows Start new session and Resume session. */
+  canResume?: boolean;
+  onResume?: (session: SessionListItem) => void;
+  resuming?: boolean;
 }
 
 const statusStyles: Record<string, string> = {
@@ -70,6 +74,9 @@ const SessionCard: React.FC<SessionCardProps> = ({
   onViewChronicle,
   onGenerateChronicle,
   userPlan,
+  canResume,
+  onResume,
+  resuming,
 }) => {
   // QA-011: an expired active session must not read Active (the overview hides Resume for it).
   const statusKey =
@@ -107,6 +114,8 @@ const SessionCard: React.FC<SessionCardProps> = ({
   const buttonLabel = isResumable ? 'Resume Session' : 'Continue Session';
   const buttonVariant = isResumable ? 'default' : 'outline';
   const helperText = isResumable ? 'Resume where you left off' : 'Create continuation session';
+  // #1669: an ended session the hero can resume is offered two different things.
+  const twoChoices = Boolean(canResume && onResume && session.status === 'completed');
 
   return (
     <Card className="p-4 md:p-5 shadow-sm border border-border">
@@ -154,15 +163,39 @@ const SessionCard: React.FC<SessionCardProps> = ({
         </div>
 
         <div className="flex w-full flex-col items-stretch gap-2 md:w-auto md:items-end">
-          <Button
-            onClick={() => onContinue(session)}
-            disabled={continueDisabled}
-            variant={buttonVariant as 'default' | 'outline'}
-            className="w-full md:w-44"
-          >
-            {continuing ? 'Continuing...' : buttonLabel}
-          </Button>
-          {!continueDisabled && !continuing && (
+          {twoChoices ? (
+            <>
+              <Button
+                onClick={() => onContinue(session)}
+                disabled={continueDisabled}
+                variant="outline"
+                className="w-full md:w-44"
+              >
+                {continuing ? 'Starting...' : 'Start new session'}
+              </Button>
+              <Button
+                onClick={() => onResume?.(session)}
+                disabled={continueDisabled || Boolean(resuming)}
+                className="w-full md:w-44"
+              >
+                {resuming ? 'Resuming...' : 'Resume session'}
+              </Button>
+              <p className="text-xs text-muted-foreground text-center md:text-right">
+                Start new keeps the scene in a new session. Resume reopens this one with its chat
+                and story.
+              </p>
+            </>
+          ) : (
+            <Button
+              onClick={() => onContinue(session)}
+              disabled={continueDisabled}
+              variant={buttonVariant as 'default' | 'outline'}
+              className="w-full md:w-44"
+            >
+              {continuing ? 'Continuing...' : buttonLabel}
+            </Button>
+          )}
+          {!continueDisabled && !continuing && !twoChoices && (
             <p className="text-xs text-muted-foreground text-center md:text-right">{helperText}</p>
           )}
           {continueDisabled && !session.character?.id && (

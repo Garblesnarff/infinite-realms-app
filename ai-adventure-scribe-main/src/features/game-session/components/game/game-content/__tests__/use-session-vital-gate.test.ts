@@ -13,7 +13,11 @@ import { useSessionVitalGate } from '../use-session-vital-gate';
 import { userDataApi } from '@/services/user-data-api';
 
 vi.mock('@/services/user-data-api', () => ({
-  userDataApi: { fetchSessionFallenState: vi.fn(), fetchSessionCompletionState: vi.fn() },
+  userDataApi: {
+    fetchSessionFallenState: vi.fn(),
+    fetchSessionCompletionState: vi.fn(),
+    getSession: vi.fn(),
+  },
 }));
 vi.mock('@/lib/logger', () => ({
   default: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
@@ -41,6 +45,15 @@ describe('useSessionVitalGate (#2517)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(userDataApi.fetchSessionCompletionState).mockResolvedValue(null as any);
+    // #1669: a session that is not completed reads as alive (the chat), as before.
+    vi.mocked(userDataApi.getSession).mockResolvedValue({ id: 's1', status: 'active' } as any);
+  });
+
+  it('reads an ended (completed, not one-shot) session as ended, so the player picks (#1669)', async () => {
+    vi.mocked(userDataApi.getSession).mockResolvedValue({ id: 's1', status: 'completed' } as any);
+    const { result } = renderHook(() => useSessionVitalGate('s1'));
+    await waitFor(() => expect(result.current.status).toBe('ended'));
+    expect(userDataApi.getSession).toHaveBeenCalledWith('s1');
   });
 
   it('stays unknown while the load payload is in flight', async () => {

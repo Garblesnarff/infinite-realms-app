@@ -111,3 +111,54 @@ export async function continueOrResumeSession({
     setContinuingId(null);
   }
 }
+
+interface ResumeEndedSessionParams {
+  session: SessionListItem;
+  campaignId: string;
+  navigate: NavigateFunction;
+  queryClient: QueryClient;
+  toast: ReturnType<typeof useToast>['toast'];
+  setResumingId: (id: string | null) => void;
+}
+
+/**
+ * #1669: Resume session. Reopens THIS ended session: the server sets it active again with its
+ * messages, trackers and state. A refusal (fallen hero, one-shot, another active session) is shown
+ * with the server's words and nothing changes.
+ */
+export async function resumeEndedSession({
+  session,
+  campaignId,
+  navigate,
+  queryClient,
+  toast,
+  setResumingId,
+}: ResumeEndedSessionParams): Promise<void> {
+  if (!session.character?.id) {
+    toast({
+      title: 'Character required',
+      description: 'This session is missing a character link. Please reassign before resuming.',
+      variant: 'destructive',
+    });
+    return;
+  }
+
+  setResumingId(session.id);
+  try {
+    await userDataApi.resumeSession(session.id);
+    await queryClient.invalidateQueries({ queryKey: ['campaign', campaignId, 'sessions'] });
+    await queryClient.invalidateQueries({
+      queryKey: ['campaign', campaignId, 'resumable-sessions'],
+    });
+    navigate(`/app/game/${campaignId}?character=${session.character.id}&session=${session.id}`);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unable to resume session.';
+    toast({
+      title: 'Could not resume session',
+      description: message,
+      variant: 'destructive',
+    });
+  } finally {
+    setResumingId(null);
+  }
+}
