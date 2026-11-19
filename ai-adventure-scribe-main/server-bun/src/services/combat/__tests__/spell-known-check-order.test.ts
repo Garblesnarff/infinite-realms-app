@@ -17,6 +17,26 @@ import type { TacticalMap } from '../../../tactical/types.js';
  * ones.
  */
 
+// The Hide and Rage marks live in the session row, which this harness does not model: nothing is hidden
+// or raging. The stub keeps every export the engine imports, so the module graph still links.
+mock.module('../combat-turn-flags.js', () => ({
+  markHiddenAttacker: async () => {},
+  isHiddenAttacker: async () => false,
+  clearHiddenAttacker: async () => {},
+  claimSneakAttack: async () => false,
+  clearSneakAttackSpent: async () => {},
+  claimRage: async () => null,
+  isRaging: async () => false,
+  clearRage: async () => {},
+  markRageActive: async () => {},
+  endRageIfIdle: async () => {},
+  clearFightFlags: async () => {},
+  combatTurnFlagsPreservingState: (incoming: unknown) => incoming,
+  classLevelOfCharacter: async () => 0,
+  rogueLevelOf: async () => 0,
+  activeAlliesOf: async () => [],
+  RAGE_DURATION_ROUNDS: 10,
+}));
 mock.module('../../../../../db/client', () => ({
   db: new Proxy(
     {},
