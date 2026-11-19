@@ -1,4 +1,4 @@
-import { rollDie } from '../../lib/rng.js';
+import { abilityModifier } from '../../../../shared/ability-modifier.js';
 
 import type { EngineResultCard } from '../../../../shared/engine-result-card.js';
 
@@ -20,6 +20,7 @@ export interface IssuedRollRequest {
   type?: unknown;
   dc?: unknown;
   rollRequestId?: unknown;
+  formula?: unknown;
 }
 
 // `ability_check` is a live request type (src/hooks/use-ai-response.ts), so it gets the same card.
@@ -85,12 +86,39 @@ export function serverVerdictLine(text: string, success: boolean): string {
   return `${trimmed} ${verdict}`;
 }
 
-/** Compare independent dice in shadow mode; the client result remains authoritative. */
+/** Resolve only a server-issued formula; never use a modifier from the submitted message. */
+export function issuedCheckModifier(request: IssuedRollRequest, character: unknown): number | null {
+  if (typeof request.formula !== 'string') return null;
+  const formula = request.formula.replace(/\s+/g, '').toLowerCase();
+  const match = formula.match(/^1?d20((?:[+-]\d+)*)$/);
+  if (match) return (match[1]!.match(/[+-]\d+/g) ?? []).reduce((sum, n) => sum + Number(n), 0);
+  const symbolic = formula.match(
+    /^1?d20([+-])(str|strength|dex|dexterity|con|constitution|int|intelligence|wis|wisdom|cha|charisma)$/,
+  );
+  if (!symbolic || !character || typeof character !== 'object') return null;
+  const names: Record<string, string> = {
+    str: 'strength',
+    dex: 'dexterity',
+    con: 'constitution',
+    int: 'intelligence',
+    wis: 'wisdom',
+    cha: 'charisma',
+  };
+  const stats = (character as { stats?: unknown }).stats;
+  const row = Array.isArray(stats) ? stats[0] : stats;
+  if (!row || typeof row !== 'object') return null;
+  const key = names[symbolic[2]!] ?? symbolic[2]!;
+  const score = (row as Record<string, unknown>)[key];
+  if (typeof score !== 'number' || !Number.isFinite(score)) return null;
+  return (symbolic[1] === '-' ? -1 : 1) * abilityModifier(score);
+}
+
 export function narrativeCheckShadow(input: {
   text: string;
   request: IssuedRollRequest;
   context?: Record<string, unknown>;
-}): { client: number; server: number; matches: boolean } | null {
+  modifier: number | null;
+}): { result: 'match' | 'mismatch' | 'no_natural' | 'no_modifier' | 'no_verdict' } | null {
   if (typeof input.request.type !== 'string' || !NARRATIVE_CHECK_TYPES.has(input.request.type))
     return null;
   const dice = input.context?.diceRoll;
@@ -99,23 +127,22 @@ export function narrativeCheckShadow(input: {
       ? (dice as Record<string, unknown>)
       : undefined;
   const fromLine = input.text.match(/\(nat\s+(\d+)(?:[+-]\d+)?\)/i);
-  const parsed = parseReportedCheckLine(input.text);
-  const client =
+  const natural =
     typeof detail?.naturalRoll === 'number'
       ? detail.naturalRoll
       : fromLine
         ? Number(fromLine[1])
-        : parsed?.total;
-  if (!Number.isInteger(client) || client! < 1 || client! > 20) return null;
-  const first = rollDie(20);
-  const advantage = detail?.advantage === true || /\[ADV\]/i.test(input.text);
-  const disadvantage = detail?.disadvantage === true || /\[DIS\]/i.test(input.text);
-  const second = advantage !== disadvantage ? rollDie(20) : first;
-  const server =
-    advantage && !disadvantage
-      ? Math.max(first, second)
-      : disadvantage && !advantage
-        ? Math.min(first, second)
-        : first;
-  return { client: client!, server, matches: client === server };
+        : null;
+  if (!Number.isInteger(natural) || natural! < 1 || natural! > 20) return { result: 'no_natural' };
+  if (input.modifier === null) return { result: 'no_modifier' };
+  const parsed = parseReportedCheckLine(input.text);
+  const verdict = input.text.match(/\s(success|fail)\s*$/i)?.[1]?.toLowerCase();
+  const dc = input.request.dc;
+  if (!parsed || typeof dc !== 'number' || !Number.isFinite(dc) || !verdict)
+    return { result: 'no_verdict' };
+  const total = natural! + input.modifier;
+  return {
+    result:
+      total === parsed.total && total >= dc === (verdict === 'success') ? 'match' : 'mismatch',
+  };
 }

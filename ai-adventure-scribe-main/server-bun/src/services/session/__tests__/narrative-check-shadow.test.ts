@@ -1,42 +1,45 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
+import { issuedCheckModifier, narrativeCheckShadow } from '../narrative-check-outcome.js';
 
-import { setRngSeed } from '../../../lib/rng.js';
-import { narrativeCheckShadow } from '../narrative-check-outcome.js';
-
-afterEach(() => setRngSeed(undefined));
-
-describe('independent narrative-check shadow dice', () => {
-  test('compares a natural face without changing the submitted value', () => {
-    setRngSeed(1);
+describe('narrative check shadow', () => {
+  const request = { type: 'skill_check', formula: '1d20+5', dc: 15 };
+  test('compares the reported natural with server modifier and verdict', () => {
     expect(
-      narrativeCheckShadow({
-        text: 'Athletics: 17 (nat 12+5) success',
-        request: { type: 'skill_check' },
-      }),
-    ).toEqual({ client: 12, server: 13, matches: false });
+      narrativeCheckShadow({ text: 'Athletics: 17 (nat 12+5) success', request, modifier: 5 }),
+    ).toEqual({ result: 'match' });
+    expect(
+      narrativeCheckShadow({ text: 'Athletics: 18 (nat 12+6) success', request, modifier: 5 }),
+    ).toEqual({ result: 'mismatch' });
+    expect(
+      narrativeCheckShadow({ text: 'Athletics: 17 (nat 12+5) fail', request, modifier: 5 }),
+    ).toEqual({ result: 'mismatch' });
   });
-  test('uses the total when the formatter omits a zero modifier', () => {
-    setRngSeed(1);
-    expect(
-      narrativeCheckShadow({ text: 'Athletics: 13 success', request: { type: 'check' } }),
-    ).toEqual({ client: 13, server: 13, matches: true });
+  test('does not infer a natural from the total', () => {
+    expect(narrativeCheckShadow({ text: 'Athletics: 13 success', request, modifier: 0 })).toEqual({
+      result: 'no_natural',
+    });
   });
-  test('rolls both dice for advantage and disadvantage', () => {
-    setRngSeed(1);
-    expect(
-      narrativeCheckShadow({ text: 'Athletics: 13 [ADV] success', request: { type: 'check' } })
-        ?.server,
-    ).toBe(13);
-    setRngSeed(1);
-    expect(
-      narrativeCheckShadow({ text: 'Athletics: 13 [DIS] success', request: { type: 'check' } })
-        ?.server,
-    ).toBe(1);
+  test('checks kept natural for advantage and disadvantage', () => {
+    for (const flag of ['ADV', 'DIS'])
+      expect(
+        narrativeCheckShadow({
+          text: `Athletics: 17 (nat 12+5) [${flag}] success`,
+          request,
+          modifier: 5,
+        }),
+      ).toEqual({ result: 'match' });
   });
-  test('does not compare saves or an invalid reported natural', () => {
-    expect(narrativeCheckShadow({ text: 'Wisdom: 14', request: { type: 'save' } })).toBeNull();
+  test('ignores saves and counts invalid reported natural as unavailable', () => {
     expect(
-      narrativeCheckShadow({ text: 'Athletics: 25 (nat 21+4)', request: { type: 'check' } }),
+      narrativeCheckShadow({ text: 'Wisdom: 14', request: { type: 'save' }, modifier: 0 }),
     ).toBeNull();
+    expect(
+      narrativeCheckShadow({ text: 'Athletics: 25 (nat 21+4)', request, modifier: 4 }),
+    ).toEqual({ result: 'no_natural' });
+  });
+  test('resolves numeric and character-backed symbolic server formulas', () => {
+    expect(issuedCheckModifier(request, null)).toBe(5);
+    expect(issuedCheckModifier({ formula: '1d20+STR' }, { stats: { strength: 16 } })).toBe(3);
+    expect(issuedCheckModifier({ formula: '1d20+STR' }, null)).toBeNull();
   });
 });

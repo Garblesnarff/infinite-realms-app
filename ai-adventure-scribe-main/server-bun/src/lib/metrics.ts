@@ -24,7 +24,7 @@ export const httpRequestDuration = new Histogram({
 
 export const narrativeCheckShadowCounter = new Counter({
   name: 'narrative_check_shadow_total',
-  help: 'Independent shadow d20 comparisons for issued narrative checks',
+  help: 'Shadow arithmetic and verdict comparisons for issued narrative checks',
   labelNames: ['result'],
   registers: [register],
 });
