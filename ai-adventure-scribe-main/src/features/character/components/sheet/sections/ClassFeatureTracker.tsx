@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { FeatureSection } from './class-feature-tracker/FeatureSection';
+import { refusalToastText } from './class-feature-tracker/refusal-toast-text';
 import { ResourceSection } from './class-feature-tracker/ResourceSection';
 import { SheetRestControls } from './class-feature-tracker/SheetRestControls';
 
@@ -15,13 +16,19 @@ import { getClassFeatures, getCharacterResources } from '@/utils/classFeatures';
 interface ClassFeatureTrackerProps {
   character: Character;
   onUpdate: CharacterSheetUpdateFn;
+  /** Reloads the saved character after a server-side feature use (#1576). Makes no write. */
+  onServerStateChanged?: () => Promise<void> | void;
 }
 
 /**
  * ClassFeatureTracker component displays and manages character class feature usage
  * including resources like spell slots, ki points, rages, etc.
  */
-const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, onUpdate }) => {
+const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({
+  character,
+  onUpdate,
+  onServerStateChanged,
+}) => {
   const { toast } = useToast();
   // Get class features for the character
   const classFeatures = character.class
@@ -43,9 +50,7 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
   // #712: the Lay on Hands bar reads static level x 5 values. When the
   // server has mirrored the real pool into the sheet JSON (a spend or a
   // rest), show the real pool so the bar and the feature row agree.
-  const layOnHandsTracked = trackedClassFeatures.find(
-    (feature) => feature.name === 'lay_on_hands',
-  );
+  const layOnHandsTracked = trackedClassFeatures.find((feature) => feature.name === 'lay_on_hands');
   const layOnHandsResources =
     characterResources && layOnHandsTracked?.currentUses !== undefined
       ? {
@@ -87,22 +92,25 @@ const ClassFeatureTracker: React.FC<ClassFeatureTrackerProps> = ({ character, on
     const updatedCharacter = { ...character, classFeatures: classFeaturesState };
 
     if (feature.name === 'second_wind') {
-      const roll = Math.floor(Math.random() * 10) + 1;
-      const level = character.level ?? 1;
-      // #214: server-side heal delta — the server adds the amount and clamps
-      // to max HP. Never send an absolute HP computed from client state.
+      // #1576: the server rolls 1d10 plus the fighter level, heals and spends the use in one
+      // transaction. The sheet shows the server's numbers; it neither rolls nor saves the character.
       try {
-        await userDataApi.applyCharacterHealing(character.id, roll + level);
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        logger.error('Failed to save Second Wind healing', error);
+        const result = await userDataApi.secondWind(character.id);
         toast({
-          title: 'Save failed',
-          description: reason,
+          title: 'Feature used',
+          description: `second wind: ${result.usesRemaining} / ${feature.maxUses}. Healed ${result.healed} HP (now ${result.newHp} of ${result.maxHp}).`,
+        });
+        // The sheet reloads the server's saved state (HP and the use) without a save of its own.
+        await onServerStateChanged?.();
+      } catch (error) {
+        logger.error('Second Wind failed', error);
+        toast({
+          title: 'Second Wind',
+          description: refusalToastText(error),
           variant: 'destructive',
         });
-        return;
       }
+      return;
     }
 
     const saved = await onUpdate(updatedCharacter);

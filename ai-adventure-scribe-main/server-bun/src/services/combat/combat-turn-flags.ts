@@ -17,6 +17,11 @@
  *   drops to 0 HP or falls unconscious, or at a turn start with no attack on a hostile and no
  *   damage since the last turn.
  *
+ * - `lightAttack` (#1639): the weapon a participant swung with its Attack action this turn, when that
+ *   weapon is a light melee weapon. It is recorded as the encounter, the turn, and the weapon id, and an
+ *   off-hand attack reads it. It is written after the Attack action is claimed, so a refused attack
+ *   writes nothing.
+ *
  * Every entry records its encounter, so a flag from an earlier fight never grants anything.
  */
 import { and, eq, sql, type SQL } from 'drizzle-orm';
@@ -36,6 +41,7 @@ import type { VitalsTx } from '../character-vitals-service.js';
 const HIDDEN_KEY = 'hiddenParticipants';
 const SNEAK_KEY = 'sneakAttackSpent';
 const RAGE_KEY = 'raging';
+const LIGHT_ATTACK_KEY = 'lightAttack';
 /** Rage lasts 10 rounds (2014 SRD 5.1; the reduced first scope of #1638). */
 export const RAGE_DURATION_ROUNDS = 10;
 /** Conditions that make a creature unable to act for the Sneak Attack flanking clause (2014). */
@@ -219,6 +225,53 @@ export async function claimRage(
     : null;
 }
 
+/** Record the light melee weapon this participant swung with its Attack action this turn (#1639). */
+export async function markLightAttack(
+  encounterId: string,
+  participantId: string,
+  weaponId: string,
+): Promise<void> {
+  const db = await database();
+  const turn = turnOfEncounter(encounterId);
+  await db
+    .update(gameSessions)
+    .set({
+      sessionState: sql`jsonb_set(
+        COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${LIGHT_ATTACK_KEY}}`}::text[],
+        COALESCE(${gameSessions.sessionState} -> ${LIGHT_ATTACK_KEY}, '{}'::jsonb) || jsonb_build_object(
+          ${participantId}::text,
+          jsonb_build_object('encounterId', ${encounterId}::text, 'turn', ${turn}, 'weaponId', ${weaponId}::text)),
+        true)`,
+      updatedAt: new Date(),
+    })
+    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
+}
+
+/**
+ * The light melee weapon this participant swung with its Attack action this turn, or null. A mark
+ * from another turn or another fight reads as null, so it never pays for an off-hand attack here.
+ */
+export async function readLightAttackMark(
+  encounterId: string,
+  participantId: string,
+): Promise<string | null> {
+  const db = await database();
+  const [row] = await db
+    .select({
+      state: gameSessions.sessionState,
+      turn: sql<string>`${turnOfEncounter(encounterId)}`,
+    })
+    .from(gameSessions)
+    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)))
+    .limit(1);
+  const entry = flagEntry(row?.state ?? null, LIGHT_ATTACK_KEY, participantId);
+  return entry?.encounterId === encounterId &&
+    entry.turn === row?.turn &&
+    typeof entry.weaponId === 'string'
+    ? entry.weaponId
+    : null;
+}
+
 /** Whether this participant is raging in this encounter at the current round. */
 export async function isRaging(encounterId: string, participantId: string): Promise<boolean> {
   const db = await database();
@@ -315,9 +368,11 @@ export async function clearFightFlags(
     .set({
       sessionState: sql`jsonb_set(
         jsonb_set(
-          jsonb_set(COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${HIDDEN_KEY}}`}::text[], ${keep(HIDDEN_KEY)}, true),
-          ${`{${SNEAK_KEY}}`}::text[], ${keep(SNEAK_KEY)}, true),
-        ${`{${RAGE_KEY}}`}::text[], ${keep(RAGE_KEY)}, true)`,
+          jsonb_set(
+            jsonb_set(COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${HIDDEN_KEY}}`}::text[], ${keep(HIDDEN_KEY)}, true),
+            ${`{${SNEAK_KEY}}`}::text[], ${keep(SNEAK_KEY)}, true),
+          ${`{${RAGE_KEY}}`}::text[], ${keep(RAGE_KEY)}, true),
+        ${`{${LIGHT_ATTACK_KEY}}`}::text[], ${keep(LIGHT_ATTACK_KEY)}, true)`,
       updatedAt: new Date(),
     })
     .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
@@ -329,14 +384,22 @@ export async function clearFightFlags(
  * client's copy, and a stored value that is absent removes the client's copy.
  */
 export function combatTurnFlagsPreservingState(incoming: SQL): SQL {
-  let merged = incoming;
-  for (const key of [HIDDEN_KEY, SNEAK_KEY, RAGE_KEY]) {
-    const stored = sql`${gameSessions.sessionState} -> ${key}`;
-    merged = sql`CASE WHEN jsonb_typeof(${stored}) = 'object'
-      THEN ((${merged}) - ${key}) || jsonb_build_object(${key}::text, ${stored})
-      ELSE (${merged}) - ${key} END`;
-  }
-  return merged;
+  // The incoming blob is written once, with each turn-flag key removed from it, and the stored
+  // object (when there is one) is put back beside it. A CASE per key that repeated the incoming
+  // expression in both branches doubled the statement for every key (#1639 added the fourth).
+  const keys = [HIDDEN_KEY, SNEAK_KEY, RAGE_KEY, LIGHT_ATTACK_KEY];
+  const storedObject = (key: string): SQL =>
+    sql`CASE WHEN jsonb_typeof(${gameSessions.sessionState} -> ${key}) = 'object'
+      THEN ${gameSessions.sessionState} -> ${key} END`;
+  const stored = sql.join(
+    keys.flatMap((key) => [sql`${key}::text`, storedObject(key)]),
+    sql`, `,
+  );
+  return sql`((${incoming}) - ARRAY[${sql.join(
+    keys.map((key) => sql`${key}`),
+    sql`, `,
+  )}]::text[])
+    || jsonb_strip_nulls(jsonb_build_object(${stored}))`;
 }
 
 /** The level a character has in one class, read the way the rest of the engine reads it (multiclass aware). */
