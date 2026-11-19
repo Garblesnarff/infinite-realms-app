@@ -279,4 +279,79 @@ describeWithDb('Start new session and Resume session are two choices (#1669)', (
     expect(old.status).toBe('completed');
     expect(old.sessionState).toEqual(TRACKER);
   });
+  it('two resumes of one hero at once: exactly one succeeds, the other is refused (409)', async () => {
+    const first = await seedAdventure({});
+    // A second ended session of the same hero in the same adventure.
+    const [{ id: secondId }] = await db
+      .insert(gameSessions)
+      .values({
+        campaignId: first.campaignId,
+        characterId: first.characterId,
+        status: 'completed',
+        sessionNumber: 2,
+        endTime: new Date(),
+      })
+      .returning({ id: gameSessions.id });
+
+    const [a, b] = await Promise.all([
+      post(`/v1/sessions/${first.sessionId}/resume`, owner),
+      post(`/v1/sessions/${secondId}/resume`, owner),
+    ]);
+    const statuses = [a.status, b.status].sort();
+    expect(statuses).toEqual([200, 409]);
+
+    const active = await db
+      .select({ id: gameSessions.id })
+      .from(gameSessions)
+      .where(
+        and(
+          eq(gameSessions.characterId, first.characterId),
+          eq(gameSessions.status, 'active'),
+        ),
+      );
+    expect(active.length).toBe(1);
+  });
+
+  it('the resumable list leaves out every session of a hero who has an active one', async () => {
+    const seeded = await seedAdventure({});
+    await db.insert(gameSessions).values({
+      campaignId: seeded.campaignId,
+      characterId: seeded.characterId,
+      status: 'active',
+      sessionNumber: 2,
+    });
+    const list = await get(`/v1/sessions/resumable?campaign_id=${seeded.campaignId}`, owner);
+    expect(((await list.json()) as unknown[]).length).toBe(0);
+  });
+
+  it('the resumable list can be narrowed to one hero', async () => {
+    const seeded = await seedAdventure({});
+    const [{ id: otherHero }] = await db
+      .insert(characters)
+      .values({ userId: ownerId, campaignId: seeded.campaignId, name: testId('1669-other'), class: 'Rogue', level: 1 })
+      .returning({ id: characters.id });
+    await db.insert(characterStats).values({
+      characterId: otherHero,
+      charisma: 8,
+      maxHitPoints: 10,
+      currentHitPoints: 10,
+      temporaryHitPoints: 0,
+      isConscious: true,
+      vitalState: 'standing',
+    });
+    await db.insert(gameSessions).values({
+      campaignId: seeded.campaignId,
+      characterId: otherHero,
+      status: 'completed',
+      sessionNumber: 1,
+      endTime: new Date(),
+    });
+    const list = await get(
+      `/v1/sessions/resumable?campaign_id=${seeded.campaignId}&character_id=${seeded.characterId}`,
+      owner,
+    );
+    const rows = (await list.json()) as Array<{ id: string; character_id: string }>;
+    expect(rows.length).toBe(1);
+    expect(rows[0].character_id).toBe(seeded.characterId);
+  });
 });

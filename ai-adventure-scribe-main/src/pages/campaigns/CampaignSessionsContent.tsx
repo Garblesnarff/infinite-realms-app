@@ -77,6 +77,11 @@ export const CampaignSessionsContent: React.FC<CampaignSessionsContentProps> = (
     );
   }
 
+  // #1669: a hero with an active session in this adventure cannot resume an older one; say so on the card.
+  const activeHeroIds = new Set(
+    sessions.flatMap((s) => (s.status === 'active' && s.character?.id ? [s.character.id] : [])),
+  );
+
   return (
     <div className="space-y-4">
       {sessions.map((session) => (
@@ -90,6 +95,11 @@ export const CampaignSessionsContent: React.FC<CampaignSessionsContentProps> = (
           onGenerateChronicle={onGenerateChronicle}
           userPlan={userPlan}
           canResume={resumableIds?.has(session.id) ?? false}
+          resumeOffReason={
+            session.character?.id && activeHeroIds.has(session.character.id)
+              ? 'Resume is off: this hero already has an active session in this adventure.'
+              : undefined
+          }
           onResume={onResume}
           resuming={resumingId === session.id}
         />

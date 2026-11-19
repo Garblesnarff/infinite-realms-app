@@ -358,8 +358,11 @@ export const userDataApi = {
   getSession: (sessionId: string): Promise<any> =>
     request(`/v1/sessions/${encodeURIComponent(sessionId)}`),
   /** #1669: the completed sessions this user can resume in one adventure. */
-  listResumableSessions: (campaignId: string): Promise<any[]> =>
-    request(`/v1/sessions/resumable?campaign_id=${encodeURIComponent(campaignId)}`),
+  listResumableSessions: (campaignId: string, characterId?: string): Promise<any[]> => {
+    const query = new URLSearchParams({ campaign_id: campaignId });
+    if (characterId) query.set('character_id', characterId);
+    return request(`/v1/sessions/resumable?${query.toString()}`);
+  },
   /** #1669: Resume session. A refusal is a 409 whose message says why. */
   resumeSession: (sessionId: string): Promise<any> =>
     request(`/v1/sessions/${encodeURIComponent(sessionId)}/resume`, { method: 'POST' }),

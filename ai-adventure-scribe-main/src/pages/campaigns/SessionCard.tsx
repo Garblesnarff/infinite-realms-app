@@ -49,6 +49,8 @@ interface SessionCardProps {
   canResume?: boolean;
   onResume?: (session: SessionListItem) => void;
   resuming?: boolean;
+  /** #1669: why Resume is off for this ended session, shown under the button. */
+  resumeOffReason?: string;
 }
 
 const statusStyles: Record<string, string> = {
@@ -77,6 +79,7 @@ const SessionCard: React.FC<SessionCardProps> = ({
   canResume,
   onResume,
   resuming,
+  resumeOffReason,
 }) => {
   // QA-011: an expired active session must not read Active (the overview hides Resume for it).
   const statusKey =
@@ -169,14 +172,14 @@ const SessionCard: React.FC<SessionCardProps> = ({
                 onClick={() => onContinue(session)}
                 disabled={continueDisabled}
                 variant="outline"
-                className="w-full md:w-44"
+                className="min-h-11 w-full md:w-44"
               >
                 {continuing ? 'Starting...' : 'Start new session'}
               </Button>
               <Button
                 onClick={() => onResume?.(session)}
                 disabled={continueDisabled || Boolean(resuming)}
-                className="w-full md:w-44"
+                className="min-h-11 w-full md:w-44"
               >
                 {resuming ? 'Resuming...' : 'Resume session'}
               </Button>
@@ -190,7 +193,7 @@ const SessionCard: React.FC<SessionCardProps> = ({
               onClick={() => onContinue(session)}
               disabled={continueDisabled}
               variant={buttonVariant as 'default' | 'outline'}
-              className="w-full md:w-44"
+              className="min-h-11 w-full md:w-44"
             >
               {continuing ? 'Continuing...' : buttonLabel}
             </Button>
@@ -202,6 +205,9 @@ const SessionCard: React.FC<SessionCardProps> = ({
             <p className="text-xs text-destructive/80 text-center md:text-right">
               Character missing. Reassign before continuing.
             </p>
+          )}
+          {resumeOffReason && !twoChoices && session.status === 'completed' && (
+            <p className="text-xs text-muted-foreground text-center md:text-right">{resumeOffReason}</p>
           )}
           {expired && session.status === 'active' && (
             <p className="text-xs text-muted-foreground text-center md:text-right">

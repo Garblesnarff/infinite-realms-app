@@ -52,6 +52,8 @@ const GameContent: React.FC = () => {
   const forceNew = searchParams.get('new') === 'true';
   const specificSessionId = searchParams.get('session') || undefined;
   const starterCampaignIdFromParams = searchParams.get('starterCampaign') || undefined;
+  // #1669: "Start new session" was chosen on the choice screen; the game load creates the continuation.
+  const continueNew = searchParams.get('continue') === '1';
   const { state: campaignState } = useCampaign();
 
   // BUG FIX: page refresh was creating a new session instead of resuming.
@@ -67,6 +69,7 @@ const GameContent: React.FC = () => {
       (prev) => {
         const next = new URLSearchParams(prev);
         next.delete('new');
+        next.delete('continue');
         return next;
       },
       { replace: true },
@@ -81,6 +84,7 @@ const GameContent: React.FC = () => {
     specificSessionId,
     starterCampaignIdFromParams,
     clearForceNewParam,
+    continueNew,
   );
 
   useEffect(() => {
@@ -181,6 +185,17 @@ const GameContent: React.FC = () => {
     );
   }
 
+  if (sessionState === 'choosing') {
+    // #1669: the hero has sessions that can be resumed; nothing is created until the player chooses.
+    return (
+      <EndedSessionChoice
+        campaignId={campaignIdFromParams ?? null}
+        characterId={characterIdFromParams}
+        starterCampaignId={starterCampaignIdFromParams ?? null}
+      />
+    );
+  }
+
   if (!sessionId || !sessionData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -267,11 +282,9 @@ const GameContent: React.FC = () => {
         characterId={characterIdFromParams}
       >
         <EndedSessionChoice
-          sessionId={sessionId}
           campaignId={sessionData.campaign_id ?? null}
           characterId={characterIdFromParams}
-          sessionNumber={sessionData.session_number ?? null}
-          sceneDescription={sessionData.current_scene_description ?? null}
+          starterCampaignId={effectiveStarterCampaignId}
         />
       </GameProviders>
     );

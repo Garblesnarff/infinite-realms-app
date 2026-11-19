@@ -16,6 +16,8 @@ import { userDataApi } from '@/services/user-data-api';
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getSession: vi.fn(),
+    // #1669: no resumable sessions by default, so a hero continues silently as before.
+    listResumableSessions: vi.fn().mockResolvedValue([]),
     listSessions: vi.fn(),
     createSession: vi.fn(),
     fetchSessionFallenState: vi.fn(),

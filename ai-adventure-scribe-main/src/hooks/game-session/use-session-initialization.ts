@@ -11,6 +11,8 @@ interface UseSessionInitializationProps {
   forceNew?: boolean;
   specificSessionId?: string;
   starterCampaignId?: string;
+  /** #1669: "Start new session" was chosen; skip the choice and create the continuation. */
+  continueNew?: boolean;
   setSessionData: (data: ExtendedGameSession | null) => void;
   setSessionState: (state: SessionState) => void;
   createGameSession: (campId: string, charId: string) => Promise<string | null>;
@@ -39,6 +41,7 @@ export const useSessionInitialization = ({
   forceNew,
   specificSessionId,
   starterCampaignId,
+  continueNew,
   setSessionData,
   setSessionState,
   createGameSession,
@@ -85,6 +88,7 @@ export const useSessionInitialization = ({
       forceNew ? 'force-new' : 'reuse',
       specificSessionId || 'none',
       starterCampaignId || 'none',
+      continueNew ? 'continue-new' : 'offer-choice',
     ].join(':');
 
     if (lastInitKeyRef.current !== initKey) {
@@ -312,14 +316,10 @@ export const useSessionInitialization = ({
           // the resumed session.
           let completionState = null;
           try {
-            completionState = await userDataApi.fetchSessionCompletionState(
-              lastCompletedSession.id,
-            );
+            completionState =
+              await userDataApi.fetchSessionCompletionState(lastCompletedSession.id);
           } catch (error) {
-            logger.warn(
-              '[Session Init] Completion-state check failed, continuing normally:',
-              error,
-            );
+            logger.warn('[Session Init] Completion-state check failed, continuing normally:', error);
           }
           if (abortSignal.aborted || !mountedRef.current) {
             logger.info('[Session Init] Aborted after completion-state check');
@@ -336,6 +336,37 @@ export const useSessionInitialization = ({
               sessionInitializedRef.current = true;
             }
             return;
+          }
+
+          // #1669: a hero with sessions that can be resumed is offered the choice, never a silent
+          // continuation. "Start new session" comes back here with continueNew, which skips the check.
+          if (!continueNew) {
+            let resumable: unknown[] = [];
+            try {
+              resumable = await userDataApi.listResumableSessions(campaignId, characterId);
+            } catch (error) {
+              logger.error('[Session Init] Resumable-sessions check failed:', error);
+              if (mountedRef.current && !abortSignal.aborted) {
+                setSessionState('error');
+                toastRef.current({
+                  title: 'Error',
+                  description: "Could not check this hero's sessions.",
+                  variant: 'destructive',
+                });
+              }
+              sessionInitializedRef.current = false;
+              return;
+            }
+            if (abortSignal.aborted || !mountedRef.current) {
+              logger.info('[Session Init] Aborted after resumable-sessions check');
+              return;
+            }
+            if (resumable.length > 0) {
+              logger.info('[Session Init] Offering the session choice; resumable sessions exist');
+              setSessionState('choosing');
+              sessionInitializedRef.current = true;
+              return;
+            }
           }
 
           logger.info(
@@ -367,6 +398,8 @@ export const useSessionInitialization = ({
               setSessionData(data as ExtendedGameSession);
               setSessionState('active');
               sessionInitializedRef.current = true;
+              // #1669: the choice's URL flag is spent once the continuation exists, so a refresh resumes it.
+              if (continueNew) onForceNewSessionCreatedRef.current?.();
             }
             return;
           } catch (error) {
@@ -425,6 +458,7 @@ export const useSessionInitialization = ({
     forceNew,
     specificSessionId,
     starterCampaignId,
+    continueNew,
     setSessionData,
     setSessionState,
     mountedRef,

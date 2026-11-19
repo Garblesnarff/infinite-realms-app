@@ -151,6 +151,7 @@ const completeSessionSchema = t.Object({
 
 const resumableSessionsQuery = t.Object({
   campaign_id: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  character_id: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
 });
 
 /** #1669: the words the client shows for each refusal of Resume session (409). */
@@ -250,6 +251,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       const rows = await SessionService.listResumableSessions(
         (user as { userId: string }).userId,
         query.campaign_id,
+        query.character_id,
       );
       return rows.map(mapSessionToApi);
     },
@@ -402,8 +404,12 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
         // must never fail the manual end itself — the route-contract tests
         // exercise this handler without a real database.
         try {
-          const { payPendingEndingXp } = await import('../../services/dm/story-xp.js');
-          const { playerMessage } = await import('../../services/dm/story-spell-slots.js');
+          const { payPendingEndingXp } = await import(
+            '../../services/dm/story-xp.js'
+          );
+          const { playerMessage } = await import(
+            '../../services/dm/story-spell-slots.js'
+          );
           const lastPlayerMessage = await playerMessage(id);
           if (lastPlayerMessage?.createdAt) {
             await payPendingEndingXp({
@@ -416,7 +422,10 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
           logger.warn({
             msg: '[Sessions] Deferred ending XP payment skipped on manual end',
             sessionId: id,
-            error: pendingError instanceof Error ? pendingError.message : String(pendingError),
+            error:
+              pendingError instanceof Error
+                ? pendingError.message
+                : String(pendingError),
           });
         }
         const session = await SessionService.completeSession(
