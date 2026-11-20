@@ -2,7 +2,7 @@
  * When Rage ends and what it resists (#1654), against a real Postgres.
  *
  * - Rage ends the moment the Barbarian drops to 0 HP (and so falls unconscious).
- * - Rage ends at the END of the Barbarian's turn, before the order advances, when they neither attacked a
+ * - Rage ends at the END of the Barbarian's turn, once the advance is written, when they neither attacked a
  *   hostile creature nor took damage since their last turn (2014 SRD 5.1). The engine says so in one line.
  * - A raging Barbarian resists bludgeoning, piercing and slashing from non-attack damage (hazards).
  *
@@ -10,7 +10,7 @@
  * `CombatInitiativeService.advanceTurn`. No suite here calls the live DM. Requires TEST_DATABASE_URL or
  * DATABASE_URL -- see fixtures/real-db.ts.
  */
-import { afterAll, beforeAll, expect, it } from 'bun:test';
+import { afterAll, beforeAll, expect, it, spyOn } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import {
@@ -36,9 +36,9 @@ const { CombatHPService } = await importWithRealDb(() => import('../combat-hp-se
 const { CombatInitiativeService } = await importWithRealDb(
   () => import('../combat-initiative-service.js'),
 );
-const { claimRage, clearRage, isRaging } = await importWithRealDb(
-  () => import('../combat/combat-turn-flags.js'),
-);
+const combatTurnFlags = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
+const { claimRage, clearRage, isRaging } = combatTurnFlags;
+const { logger } = await importWithRealDb(() => import('../../lib/logger.js'));
 const { combatAttackService } = await importWithRealDb(
   () => import('../combat/combat-attack-service.js'),
 );
@@ -343,5 +343,28 @@ describeWithDb('When Rage ends and what it resists (#1654)', () => {
 
     expect(await isRaging(encounterId, barbarianId)).toBe(false);
     expect(result.engineLines).toContain("The Barbarian's rage ends.");
+  });
+
+  it('a failed turn-end check does not fail the turn: it is logged, and no line is written', async () => {
+    await resetFight();
+    await claimRage(encounterId, barbarianId);
+    const error = spyOn(logger, 'error');
+    const check = spyOn(combatTurnFlags, 'endRageIfIdle').mockRejectedValueOnce(
+      new Error('check write failed'),
+    );
+    try {
+      const turn = await endBarbarianTurn();
+
+      expect(turn.currentParticipant.id).toBe(goblinId);
+      expect(turn.engineLines).toEqual([]);
+      expect(
+        error.mock.calls.some((call) =>
+          JSON.stringify(call).includes('RAGE_TURN_END_CHECK_FAILED'),
+        ),
+      ).toBe(true);
+    } finally {
+      check.mockRestore();
+      error.mockRestore();
+    }
   });
 });

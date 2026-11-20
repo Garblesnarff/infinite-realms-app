@@ -27,6 +27,7 @@ import {
   type CombatParticipant,
 } from '../../../db/schema/index';
 import { NotFoundError, BusinessLogicError } from '../lib/errors.js';
+import { logger } from '../lib/logger.js';
 import { resetTurnResources } from './combat/combat-turn-resources.js';
 import { resolveParticipantType } from './combat/participant-type.js';
 
@@ -304,9 +305,20 @@ export class CombatInitiativeService {
     // attack on a hostile and no damage since their last turn loses Rage now (2014 SRD 5.1). The check
     // runs after the advance is written, so a refused advance (turn conflict) ends nothing.
     const engineLines: string[] = [];
+    // The advance is committed by now, so a failed check must not fail the turn: it is logged and the turn
+    // goes on with no line.
     if (previousParticipant?.characterId) {
-      const rage = await endRageIfIdle(encounterId, previousParticipant.id);
-      if (rage === 'ended') engineLines.push(`${previousParticipant.name}'s rage ends.`);
+      try {
+        const rage = await endRageIfIdle(encounterId, previousParticipant.id);
+        if (rage === 'ended') engineLines.push(`${previousParticipant.name}'s rage ends.`);
+      } catch (error) {
+        logger.error({
+          msg: 'RAGE_TURN_END_CHECK_FAILED',
+          encounterId,
+          participantId: previousParticipant.id,
+          error,
+        });
+      }
     }
 
     // Get new current participant from memory

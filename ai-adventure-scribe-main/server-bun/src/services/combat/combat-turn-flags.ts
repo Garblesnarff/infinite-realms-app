@@ -337,7 +337,7 @@ export async function markRageActive(encounterId: string, participantId: string)
 }
 
 /**
- * At the END of a raging participant's turn, before the order advances (#1654, 2014 SRD 5.1): Rage ends
+ * At the END of a raging participant's turn, once the advance is written (#1654, 2014 SRD 5.1): Rage ends
  * when the Barbarian neither attacked a hostile creature nor took damage since their last turn. A turn
  * that kept Rage resets the activity mark for the next turn. Returns 'ended', 'kept', or 'none' (no live
  * Rage for this encounter).
