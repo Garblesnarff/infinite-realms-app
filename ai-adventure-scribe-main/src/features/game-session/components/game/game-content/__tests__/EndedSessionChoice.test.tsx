@@ -106,9 +106,26 @@ describe('EndedSessionChoice (#1669)', () => {
     expect(assign).toHaveBeenCalledWith('/app/game/camp-1?character=char-1&session=sess-two');
   });
 
+  it('#1691: opening the list moves keyboard focus to the list', async () => {
+    vi.mocked(userDataApi.listResumableSessions).mockResolvedValue(rows);
+    renderChoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume session' }));
+    expect(screen.getByRole('list', { name: 'Sessions to resume' })).toHaveFocus();
+  });
+
+  it('#1691: the list has a capped height and scrolls, so a long list is not a very long page', async () => {
+    vi.mocked(userDataApi.listResumableSessions).mockResolvedValue(rows);
+    renderChoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Resume session' }));
+    const list = screen.getByRole('list', { name: 'Sessions to resume' });
+    expect(list).toHaveClass('max-h-[60vh]', 'overflow-y-auto');
+  });
+
   it('a missing hero shows an error line, not a silent stop', () => {
     renderChoice({ characterId: null });
-    expect(screen.getByRole('alert')).toHaveTextContent('This link has no hero. Pick a hero first.');
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'This link has no hero. Pick a hero first.',
+    );
     expect(screen.queryByRole('button', { name: 'Start new session' })).not.toBeInTheDocument();
     expect(userDataApi.listResumableSessions).not.toHaveBeenCalled();
   });

@@ -96,7 +96,7 @@ export const CampaignSessionsContent: React.FC<CampaignSessionsContentProps> = (
           userPlan={userPlan}
           canResume={resumableIds?.has(session.id) ?? false}
           resumeOffReason={
-            session.character?.id && activeHeroIds.has(session.character.id)
+            resumableIds && session.character?.id && activeHeroIds.has(session.character.id)
               ? 'Resume is off: this hero already has an active session in this adventure.'
               : undefined
           }
