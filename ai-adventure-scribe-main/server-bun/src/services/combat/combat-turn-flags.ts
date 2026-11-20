@@ -11,9 +11,11 @@
  *   "round:turn order". A reaction on another creature's turn is a different turn, so it can claim
  *   its own Sneak Attack. The claim is one UPDATE made before damage is applied.
  *
- * - `raging`: a Barbarian's Rage (#1638), recorded as the encounter and the round it expires at.
- *   The claim is one guarded UPDATE, the same shape as the Sneak Attack claim. Rage ends when its
- *   round passes or when the fight ends.
+ * - `raging`: a Barbarian's Rage (#1638), recorded as the encounter, the round it expires at, and
+ *   an `active` mark for the turn (#1654). The claim is one guarded UPDATE, the same shape as the
+ *   Sneak Attack claim. Rage ends when its round passes, when the fight ends, when the Barbarian
+ *   drops to 0 HP or falls unconscious, or at a turn start with no attack on a hostile and no
+ *   damage since the last turn.
  *
  * - `lightAttack` (#1639): the weapon a participant swung with its Attack action this turn, when that
  *   weapon is a light melee weapon. It is recorded as the encounter, the turn, and the weapon id, and an
@@ -289,16 +291,80 @@ export async function isRaging(encounterId: string, participantId: string): Prom
   );
 }
 
-/** Drop one participant's Rage mark: the activation failed after its claim, so nothing was spent. */
-export async function clearRage(encounterId: string, participantId: string): Promise<void> {
+/**
+ * Drop one participant's Rage mark. Writes only when this encounter's entry exists, so a drop to 0 HP
+ * by a creature that is not raging costs no write. Returns true when a live Rage was ended.
+ */
+export async function clearRage(encounterId: string, participantId: string): Promise<boolean> {
   const db = await database();
-  await db
+  const entry = sql`(${gameSessions.sessionState} -> ${RAGE_KEY} -> ${participantId})`;
+  const cleared = await db
     .update(gameSessions)
     .set({
       sessionState: sql`COALESCE(${gameSessions.sessionState}, '{}'::jsonb) #- ARRAY[${RAGE_KEY}, ${participantId}]::text[]`,
       updatedAt: new Date(),
     })
-    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
+    .where(
+      and(
+        eq(gameSessions.id, sessionOfEncounter(encounterId)),
+        sql`(${entry} ->> 'encounterId') = ${encounterId}::text`,
+      ),
+    )
+    .returning({ id: gameSessions.id });
+  return cleared.length > 0;
+}
+
+/**
+ * Record that a raging participant attacked a hostile creature or took damage in this turn (#1654).
+ * Writes only when a live Rage for this encounter exists, so a call for a participant who is not
+ * raging does nothing.
+ */
+export async function markRageActive(encounterId: string, participantId: string): Promise<void> {
+  const db = await database();
+  const entry = sql`(${gameSessions.sessionState} -> ${RAGE_KEY} -> ${participantId})`;
+  await db
+    .update(gameSessions)
+    .set({
+      sessionState: sql`jsonb_set(${gameSessions.sessionState}, ARRAY[${RAGE_KEY}, ${participantId}, 'active']::text[], 'true'::jsonb, true)`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(gameSessions.id, sessionOfEncounter(encounterId)),
+        sql`(${entry} ->> 'encounterId') = ${encounterId}::text`,
+      ),
+    );
+}
+
+/**
+ * At the END of a raging participant's turn, once the advance is written (#1654, 2014 SRD 5.1): Rage ends
+ * when the Barbarian neither attacked a hostile creature nor took damage since their last turn. A turn
+ * that kept Rage resets the activity mark for the next turn. Returns 'ended', 'kept', or 'none' (no live
+ * Rage for this encounter).
+ */
+export async function endRageIfIdle(
+  encounterId: string,
+  participantId: string,
+): Promise<'ended' | 'kept' | 'none'> {
+  const db = await database();
+  const before = flagEntry(await readSessionState(encounterId), RAGE_KEY, participantId);
+  if (before?.encounterId !== encounterId) return 'none';
+  const entry = sql`(${gameSessions.sessionState} -> ${RAGE_KEY} -> ${participantId})`;
+  await db
+    .update(gameSessions)
+    .set({
+      sessionState: sql`CASE WHEN (${entry} ->> 'active') = 'true'
+        THEN jsonb_set(${gameSessions.sessionState}, ARRAY[${RAGE_KEY}, ${participantId}, 'active']::text[], 'false'::jsonb, true)
+        ELSE ${gameSessions.sessionState} #- ARRAY[${RAGE_KEY}, ${participantId}]::text[] END`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(gameSessions.id, sessionOfEncounter(encounterId)),
+        sql`(${entry} ->> 'encounterId') = ${encounterId}::text`,
+      ),
+    );
+  return before.active === true ? 'kept' : 'ended';
 }
 
 /**

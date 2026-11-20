@@ -29,6 +29,7 @@ import {
   rogueLevelOf,
   classLevelOfCharacter,
   isRaging,
+  markRageActive,
 } from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
@@ -61,7 +62,11 @@ import { appliesHexRider, hexRiderDice } from './hex-rider.js';
 import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { markPlayerDamageProvocation } from './npc-provocation.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
-import { aggregateResistances, withRageResistances } from './resistance-resolver.js';
+import {
+  aggregateResistances,
+  RAGE_RESISTANCES,
+  withRageResistances,
+} from './resistance-resolver.js';
 import {
   metamagicOptionsLedger,
   sorceryPointsLedger,
@@ -685,7 +690,7 @@ export class CombatAttackService {
       attackerCharacterId ? isRaging(encounterId, attackerId) : false,
       targetData.participant.characterId ? isRaging(encounterId, targetId) : false,
     ]);
-    // #1638: Rage's +2 damage follows the attacker's Barbarian level (levels 1 to 8).
+    // #1638: Rage's damage follows the attacker's Barbarian level (+2, +3 at 9, +4 at 16; #1654).
     const ragingDamageBonus =
       attackerRaging && attackerCharacterId
         ? rageDamageBonusAt(await classLevelOfCharacter(attackerCharacterId, 'Barbarian'))
@@ -748,6 +753,7 @@ export class CombatAttackService {
       mookGroupBonus,
       fightingStyles: attackerProfile.fightingStyles,
       targetRaging,
+      attackerRaging,
     };
   }
 
@@ -818,6 +824,7 @@ export class CombatAttackService {
       mookGroupBonus,
       fightingStyles,
       targetRaging,
+      attackerRaging,
     } = await this.prepareAttack(encounterId, input, userId);
 
     if (!rules.legal) {
@@ -881,6 +888,10 @@ export class CombatAttackService {
       // #1637: the attack spends a Hide's advantage, hit or miss, once it is actually resolving.
       if (rules.advantageSources.includes('hidden')) {
         await clearHiddenAttacker(encounterId, attackerId);
+      }
+      // #1654: a raging Barbarian who attacks a hostile creature keeps Rage through the next turn start.
+      if (attackerRaging && targetParticipant.participantType !== 'player') {
+        await markRageActive(encounterId, attackerId);
       }
       // #1639: an Attack action with a light melee weapon marks this turn for an off-hand attack. The
       // mark is written only once the attack has resolved (a hit after its damage, or a miss), so a
@@ -1162,6 +1173,8 @@ export class CombatAttackService {
           },
         );
         transcriptLines.push(...concentrationLines);
+        // #1654: a blow that drops a raging creature to 0 HP ends its Rage, and the engine says so.
+        if (hpResult.rageEnded) transcriptLines.push(`${targetParticipant.name}'s rage ends.`);
         if (smiteApplied) {
           transcriptLines.push(
             `Divine Smite: ${smiteApplied.diceCount}d8 radiant, ${smiteApplied.damage} damage (level ${input.divineSmiteSlotLevel} slot).`,
@@ -1744,8 +1757,17 @@ export class CombatAttackService {
           cover: seatedAc?.cover ?? null,
         };
 
-        // Aggregate resistances using the extracted module
-        const defenses = aggregateResistances(targetParticipant, targetStats);
+        // Aggregate resistances using the extracted module. #1654: a raging target resists the three
+        // physical types from a spell too (the merge is once per type, so a racial one is kept). Rage
+        // only changes physical damage, so only a physical spell reads the Rage mark.
+        const targetIsRaging =
+          damageType && RAGE_RESISTANCES.includes(damageType) && targetParticipant.characterId
+            ? await isRaging(encounterId, targetId)
+            : false;
+        const defenses = withRageResistances(
+          aggregateResistances(targetParticipant, targetStats),
+          targetIsRaging,
+        );
 
         // #754: Hex is a no-damage bonus-action curse. The engine acknowledges the cast here;
         // the shared path below spends the slot and claims the bonus action (castingTime is

@@ -33,7 +33,13 @@ import {
 } from '../../../db/schema/index';
 import { ValidationError, BusinessLogicError, NotFoundError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
-import { clearHiddenAttacker, isHiddenAttacker } from './combat/combat-turn-flags.js';
+import {
+  clearHiddenAttacker,
+  clearRage,
+  isHiddenAttacker,
+  isRaging,
+  markRageActive,
+} from './combat/combat-turn-flags.js';
 import {
   getParticipantWithFullContext,
   getParticipantStatusScoped,
@@ -42,11 +48,13 @@ import {
   initializeParticipantStatus,
 } from './combat/hp-data-access.js';
 import { HPMechanics } from './combat/hp-mechanics.js';
+import { withRageResistances } from './combat/resistance-resolver.js';
 
 import type { CombatResolvedVitals, VitalsTx } from './character-vitals-service.js';
 import type { CombatParticipantStatus, CombatDamageLog } from '../../../db/schema/index';
 import type {
   DamageResult,
+  DamageType,
   HealingResult,
   DeathSaveResult,
   StabilizationResult,
@@ -360,12 +368,26 @@ export class CombatHPService {
     // `targetIsPlayer` is read off the participant row here rather than taken from the caller.
     // The per-hit cap is a safety property, and a safety property that every call site has to
     // remember to opt into is one that a future call site will forget.
+    // #1654: a raging Barbarian resists bludgeoning, piercing and slashing from every source that
+    // reaches this path (hazards, non-attack damage). A caller that already applied resistances
+    // says so with `ignoreResistances`, and then nothing is merged here.
+    const raging =
+      !options.ignoreResistances && participant.characterId
+        ? await isRaging(encounterId, participantId)
+        : false;
     const result = HPMechanics.calculateDamageResult(
       participantId,
       status,
       {
         damageImmunities: participant.damageImmunities,
-        damageResistances: participant.damageResistances,
+        damageResistances: withRageResistances(
+          {
+            resistances: (participant.damageResistances ?? []) as DamageType[],
+            vulnerabilities: [],
+            immunities: [],
+          },
+          raging,
+        ).resistances,
         damageVulnerabilities: participant.damageVulnerabilities,
       },
       {
@@ -451,6 +473,26 @@ export class CombatHPService {
     if (result.modifiedDamage > 0 && (await isHiddenAttacker(encounterId, participantId))) {
       await clearHiddenAttacker(encounterId, participantId);
     }
+    // #1654: a character's Rage, written after the HP commit. Damage taken (HP or temp HP lost, after
+    // resistance) is activity for the turn: it keeps Rage through the turn end. A fall to 0 HP or
+    // unconscious ends Rage at once (2014 SRD 5.1). A failed write is logged; the damage already landed.
+    let rageEnded = false;
+    if (participant.characterId) {
+      if (result.modifiedDamage + result.tempHpLost > 0) {
+        try {
+          await markRageActive(encounterId, participantId);
+        } catch (error) {
+          logger.error({ msg: 'RAGE_ACTIVITY_MARK_FAILED', encounterId, participantId, error });
+        }
+      }
+      if (result.newCurrentHp <= 0 || !result.isConscious) {
+        try {
+          rageEnded = await clearRage(encounterId, participantId);
+        } catch (error) {
+          logger.error({ msg: 'RAGE_CLEAR_ON_FALL_FAILED', encounterId, participantId, error });
+        }
+      }
+    }
 
     // Telemetry only. The ownership check the old insert-select carried in its
     // WHERE clause is redundant here: the UPDATE above ran under the same
@@ -482,7 +524,7 @@ export class CombatHPService {
       }
     }
 
-    return result;
+    return { ...result, rageEnded };
   }
 
   /**
