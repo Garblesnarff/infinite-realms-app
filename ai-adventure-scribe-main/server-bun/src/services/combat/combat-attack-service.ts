@@ -821,6 +821,16 @@ export class CombatAttackService {
     } = await this.prepareAttack(encounterId, input, userId);
 
     if (!rules.legal) {
+      if (rules.refusal === 'out_of_range') {
+        // #1651: say who is too far, how far it is, and the reach, in the same words the spell path uses.
+        const reach = weapon.longRange ?? weapon.normalRange;
+        const targetName = targetParticipant.name ?? 'the target';
+        const feet = geometry?.distanceFeet ?? reach;
+        throw new BusinessLogicError(
+          `Attack refused: ${targetName} is ${feet} feet away, out of your ${reach}-foot reach — move closer and attack again`,
+          { refusal: rules.refusal, reason: rules.refusal, reachFeet: reach, distanceFeet: feet },
+        );
+      }
       throw new BusinessLogicError(`Attack refused: ${rules.refusal}`, { refusal: rules.refusal });
     }
 
@@ -1093,6 +1103,9 @@ export class CombatAttackService {
         damageCalc.finalDamage + hexDamage + (smiteApplied?.damage ?? 0) + (sneak?.damage ?? 0);
 
       // Apply damage to target HP
+      // #1651: set once the HP write has landed. A failure after it is not a reason to give the
+      // Sneak Attack back, because the damage was applied.
+      let damageApplied = false;
       try {
         // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
         const hpResult = await CombatHPService.applyDamage(
@@ -1117,6 +1130,7 @@ export class CombatAttackService {
         // The applied figure is what the HP layer actually took, which is not always what the
         // dice said: the per-hit cap can rewrite it. Reporting the rolled number here would
         // put a damage figure in the telemetry that the target's HP never reflects.
+        damageApplied = true;
         const appliedDamage = hpResult.damageDealt ?? totalDamage;
 
         // Logged after the HP write, with the post-write HP included: damage that is
@@ -1249,7 +1263,7 @@ export class CombatAttackService {
         }
         // #1637: a Sneak Attack claimed for a turn whose damage never landed is released, so the turn
         // is not spent on damage that was never applied.
-        if (sneak) {
+        if (sneak && !damageApplied) {
           await clearSneakAttackSpent(encounterId, attackerId).catch((releaseError) =>
             logger.error({ msg: 'COMBAT_SNEAK_CLAIM_RELEASE_FAILED', releaseError }),
           );
@@ -1349,6 +1363,10 @@ export class CombatAttackService {
     const spellRange = spellReachFeet(spell);
     const casterConditions = await getActiveConditionNames(casterId);
     const spellRules = new Map<string, ReturnType<typeof resolveAttackRules>>();
+    // #1651: a hidden caster's attack spell gets the unseen-attacker advantage; a save-only spell
+    // gets none. Either kind of spell clears the mark when it is committed (hit or miss).
+    const casterHidden =
+      spell.attackType || spell.saveAbility ? await isHiddenAttacker(encounterId, casterId) : false;
     const seatedAcByTarget = new Map<
       string,
       { seated: number; effective: number; cover: 0 | 1 | 2 | 3 | null }
@@ -1390,6 +1408,7 @@ export class CombatAttackService {
         geometry,
         attackerConditions: casterConditions,
         targetConditions,
+        attackerHidden: Boolean(spell.attackType) && casterHidden,
       });
       if (!rules.legal) {
         const targetName = targetData.participant.name ?? 'the target';
@@ -1426,6 +1445,7 @@ export class CombatAttackService {
       seatedAcByTarget,
       spellModifier,
       spellAttackBonus,
+      casterHidden,
     };
   }
 
@@ -1518,6 +1538,7 @@ export class CombatAttackService {
       spellModifier,
       spellAttackBonus,
       slotLevel,
+      casterHidden,
     } = await this.prepareSpellCast(encounterId, input, userId);
     // #754: Hex curses one creature; refuse a multi-target cast before anything is spent.
     if (spell.id === 'hex' && targetIds.length !== 1) {
@@ -1664,6 +1685,10 @@ export class CombatAttackService {
       }
 
       spellCommitted = true;
+      // #1651: the cast spends a hidden caster's position, hit or miss, once it is committed.
+      if (casterHidden) {
+        await clearHiddenAttacker(encounterId, casterId);
+      }
       // Parallelize spell resolution for all targets using the pre-fetched data map.
       const resolutionPromises = targetIds.map(async (targetId) => {
         const targetData = allParticipantDataMap.get(targetId);
