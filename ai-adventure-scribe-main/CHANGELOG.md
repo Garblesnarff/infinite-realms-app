@@ -2,6 +2,51 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.53.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.52.0...v0.53.0) (2026-11-20)
+
+
+### Features
+
+* **barbarian:** Rage ends when it should, and resists every source ([#1654](https://github.com/Garblesnarff/infinite-realms-app/issues/1654)) ([#1683](https://github.com/Garblesnarff/infinite-realms-app/issues/1683)) ([e5c3246](https://github.com/Garblesnarff/infinite-realms-app/commit/e5c3246fa893ca7d3a7e8ac2d81b3fe55d44d0e7))
+* **barbarian:** Rage in a fight ([#1638](https://github.com/Garblesnarff/infinite-realms-app/issues/1638)) ([945b050](https://github.com/Garblesnarff/infinite-realms-app/commit/945b05001d557854caaf82d15291b9f313200989))
+* **combat:** two-weapon fighting off-hand attack ([#1639](https://github.com/Garblesnarff/infinite-realms-app/issues/1639)) ([aac1d5b](https://github.com/Garblesnarff/infinite-realms-app/commit/aac1d5b6a678fbd6344cdc903509d3afede7646e))
+* **dice:** shadow narrative check rolls on the server ([edf50e6](https://github.com/Garblesnarff/infinite-realms-app/commit/edf50e6b7020e21871d55bd8508443cd43c090c2))
+* **sessions:** Start new session and Resume session are two choices ([#1669](https://github.com/Garblesnarff/infinite-realms-app/issues/1669)) ([#1677](https://github.com/Garblesnarff/infinite-realms-app/issues/1677)) ([49185b8](https://github.com/Garblesnarff/infinite-realms-app/commit/49185b83f75cb5e533c2b397aba4c46bb04ab3ff))
+
+
+### Bug Fixes
+
+* **combat-entry:** another prompt cannot decline a starting fight ([#1668](https://github.com/Garblesnarff/infinite-realms-app/issues/1668)) ([feb898f](https://github.com/Garblesnarff/infinite-realms-app/commit/feb898f0544e47afcda2216ccd8f7061118e52b1))
+* **combat-entry:** only a decision declines the fight prompt ([#1678](https://github.com/Garblesnarff/infinite-realms-app/issues/1678)) ([#1682](https://github.com/Garblesnarff/infinite-realms-app/issues/1682)) ([87a40fc](https://github.com/Garblesnarff/infinite-realms-app/commit/87a40fcd984c24f4eebb773366d580afdd003df6))
+* **combat:** each eligible hostile makes its opportunity attack on Flee ([#1577](https://github.com/Garblesnarff/infinite-realms-app/issues/1577)) ([#1667](https://github.com/Garblesnarff/infinite-realms-app/issues/1667)) ([6b62b60](https://github.com/Garblesnarff/infinite-realms-app/commit/6b62b6001ebe21c3571495fd4ec6129d32058a7c))
+* **combat:** hidden attackers and spell attacks ([#1651](https://github.com/Garblesnarff/infinite-realms-app/issues/1651)) ([#1685](https://github.com/Garblesnarff/infinite-realms-app/issues/1685)) ([fc41969](https://github.com/Garblesnarff/infinite-realms-app/commit/fc419697d1c8d36a682a5b1208e43f86486ac114))
+* **combat:** one owner for opportunity attacks on movement ([#1577](https://github.com/Garblesnarff/infinite-realms-app/issues/1577)) ([#1687](https://github.com/Garblesnarff/infinite-realms-app/issues/1687)) ([dee02dc](https://github.com/Garblesnarff/infinite-realms-app/commit/dee02dc63b2e99515cfb9bf43c83cd072c935494))
+* **combat:** say what is left after a first-action move ([#1642](https://github.com/Garblesnarff/infinite-realms-app/issues/1642)) ([6a4445c](https://github.com/Garblesnarff/infinite-realms-app/commit/6a4445c148c7b8f1a34f690e8c049b1a9bd3c224))
+* **combat:** the end of a fight hands the turn back in plain words ([#1644](https://github.com/Garblesnarff/infinite-realms-app/issues/1644)) ([3e40880](https://github.com/Garblesnarff/infinite-realms-app/commit/3e4088047d91668f2e01c6529e238cf3db08f97a))
+* **death:** end-screen and story cards follow the Table 11 boards ([#1431](https://github.com/Garblesnarff/infinite-realms-app/issues/1431)) ([fb11f7f](https://github.com/Garblesnarff/infinite-realms-app/commit/fb11f7f113f8609716e577e3082d3d8b408d88ad))
+* **death:** the phone live end screen follows the board ([#1431](https://github.com/Garblesnarff/infinite-realms-app/issues/1431)) ([62639b2](https://github.com/Garblesnarff/infinite-realms-app/commit/62639b2f94b91c92a99cf2d35c0c819e58566d05))
+* **explore:** chips stay inside the signed-in card ([#1672](https://github.com/Garblesnarff/infinite-realms-app/issues/1672)) ([1940e43](https://github.com/Garblesnarff/infinite-realms-app/commit/1940e43e318acf3afa0db0186f0931745362f3c4))
+* **explore:** singular session count and the level label on the board card ([4882632](https://github.com/Garblesnarff/infinite-realms-app/commit/488263292dae5450155fb5fe89d75e49dd982ab9))
+* **paladin:** choose the Lay on Hands amount in a fight; the sheet panel follows the pool ([#1670](https://github.com/Garblesnarff/infinite-realms-app/issues/1670)) ([f0b0b78](https://github.com/Garblesnarff/infinite-realms-app/commit/f0b0b78286faa7d8567e3573637188fb899ea6fa))
+* **premades:** Draconic Bloodline sorcerers speak Draconic ([#52](https://github.com/Garblesnarff/infinite-realms-app/issues/52)) ([#1627](https://github.com/Garblesnarff/infinite-realms-app/issues/1627)) ([11b9910](https://github.com/Garblesnarff/infinite-realms-app/commit/11b99106857397105b31f5bc14fa3598e079b51d))
+* **premades:** three heroes get their 2014 SRD subrace or origin ([#52](https://github.com/Garblesnarff/infinite-realms-app/issues/52)) ([#1617](https://github.com/Garblesnarff/infinite-realms-app/issues/1617)) ([5a23ed8](https://github.com/Garblesnarff/infinite-realms-app/commit/5a23ed88b0e1e52e7bee2474ef49e4ec6f04dba3))
+* **public-pages:** layout defects from the board check ([#1664](https://github.com/Garblesnarff/infinite-realms-app/issues/1664)) ([45ff69e](https://github.com/Garblesnarff/infinite-realms-app/commit/45ff69ea9c77e1b7e4be567b01d811af154c19ce))
+* **routing:** a slow or missing page chunk no longer leaves the old page ([#1671](https://github.com/Garblesnarff/infinite-realms-app/issues/1671)) ([#1686](https://github.com/Garblesnarff/infinite-realms-app/issues/1686)) ([b10eb6c](https://github.com/Garblesnarff/infinite-realms-app/commit/b10eb6cf12647084be5bc56741a5ae84828b2fee))
+* **sheet:** no status number in the Lay on Hands refusal toast ([#1643](https://github.com/Garblesnarff/infinite-realms-app/issues/1643)) ([c361653](https://github.com/Garblesnarff/infinite-realms-app/commit/c361653925817cb3037e1eb415e2ebe31cd568d1))
+* **sheet:** Second Wind is one server operation ([#1576](https://github.com/Garblesnarff/infinite-realms-app/issues/1576)) ([c1f86eb](https://github.com/Garblesnarff/infinite-realms-app/commit/c1f86eb9207700923cd3287ed60a8ccbce171344))
+* **sheet:** small follow-ups from the 11-18 reviews ([#1679](https://github.com/Garblesnarff/infinite-realms-app/issues/1679)) ([#1681](https://github.com/Garblesnarff/infinite-realms-app/issues/1681)) ([d21387e](https://github.com/Garblesnarff/infinite-realms-app/commit/d21387eba7c4f74da23974366606d8f0e584707b))
+
+
+### Refactoring
+
+* **combat:** remove the last client dice and the dev-only start-combat chain ([#621](https://github.com/Garblesnarff/infinite-realms-app/issues/621) part B2b step 4) ([f63ac4d](https://github.com/Garblesnarff/infinite-realms-app/commit/f63ac4d53329d64410e56c231fa879a044721a0b))
+* **combat:** remove the last unreachable client combat code ([#621](https://github.com/Garblesnarff/infinite-realms-app/issues/621) part B2b step 3) ([1d7a55c](https://github.com/Garblesnarff/infinite-realms-app/commit/1d7a55c61601d5c78900449672b2847802023c9a))
+
+
+### Tests
+
+* **routing:** link navigation renders the routed page without a reload ([#1671](https://github.com/Garblesnarff/infinite-realms-app/issues/1671)) ([#1680](https://github.com/Garblesnarff/infinite-realms-app/issues/1680)) ([fd02129](https://github.com/Garblesnarff/infinite-realms-app/commit/fd021297dbce1760aedadec4e7e9b0eed5939a41))
+
 ## [0.52.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.51.0...v0.52.0) (2026-11-18)
 
 
