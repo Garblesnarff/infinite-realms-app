@@ -7,7 +7,7 @@
  * - A melee attack from beyond reach is refused in words that say who, how far, and what to do.
  *
  * The production `resolveSpellAttack`, `proposeSpellAttack`, and `resolveAttack` run against the
- * database. The d20 is not seeded: the target's AC decides hit or miss, as in hex.real-db.test.ts.
+ * database. The hit and miss cases pin both advantage dice so critical rolls cannot flip the result.
  * No suite here calls the live DM. Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
 import { afterAll, beforeAll, beforeEach, expect, it } from 'bun:test';
@@ -262,6 +262,8 @@ describeWithDb('Hidden attackers and spell attacks (#1651)', () => {
         targetIds: [golemId],
         spellId: 'eldritch-blast',
         spellName: 'Eldritch Blast',
+        d20: 10,
+        d20Rolls: [10, 7],
         expectedVersion: await giveTurnToWarlock(),
       },
       userId,
@@ -285,6 +287,8 @@ describeWithDb('Hidden attackers and spell attacks (#1651)', () => {
         targetIds: [golemId],
         spellId: 'eldritch-blast',
         spellName: 'Eldritch Blast',
+        d20: 10,
+        d20Rolls: [10, 7],
         expectedVersion: await giveTurnToWarlock(),
       },
       userId,
