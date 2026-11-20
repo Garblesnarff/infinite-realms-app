@@ -2,6 +2,10 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  CUNNING_ACTOR_ID,
+  cunningActionIntentBody,
+} from '../../../../shared/test-fixtures/cunning-action-intent';
+import {
   FIGHTER_FEATURE_ACTOR_ID,
   fighterFeatureChipIntentBody,
 } from '../../../../shared/test-fixtures/fighter-feature-intent';
@@ -987,5 +991,35 @@ describe('combat-action-executor', () => {
 
       expect(intentBody()).not.toHaveProperty('playerInput');
     });
+  });
+
+  // #1635 / AGENTS §4: the Cunning Action chip's hook call posts exactly the shared wire body.
+  describe('cunning action wire body (#1635)', () => {
+    it.each(['dash', 'disengage', 'hide'] as const)(
+      'posts the %s chip body the server route test pins',
+      async (mode) => {
+        const dmStartedAt = 1_700_000_000_000;
+        const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(dmStartedAt);
+        (globalThis.fetch as any).mockResolvedValue({
+          ok: true,
+          json: async () => ({ result: {} }),
+        });
+        try {
+          // The same arguments use-combat-legal-actions.ts passes for a cunning_action chip.
+          await executeAuthoritativeCombatIntent(
+            encounterId,
+            { type: 'cunning_action', actorId: CUNNING_ACTOR_ID, mode },
+            'dm',
+            Date.now(),
+            'typed',
+          );
+          const [url, init] = (globalThis.fetch as any).mock.calls[0];
+          expect(String(url).endsWith(`/v1/combat/${encounterId}/intent`)).toBe(true);
+          expect(JSON.parse(init.body)).toEqual(cunningActionIntentBody(mode));
+        } finally {
+          nowSpy.mockRestore();
+        }
+      },
+    );
   });
 });

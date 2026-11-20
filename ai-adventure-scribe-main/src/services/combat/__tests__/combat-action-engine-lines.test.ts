@@ -74,6 +74,13 @@ const TABLE: Record<LegalActionType, Row> = {
     value: { movementGainedFeet: 30 },
   },
   dodge: { prints: true, formatAs: 'dodge', action: { actor_id: ACTOR }, value: {} },
+  // #1635: a Cunning Action Dash prints the Dash line; the client formats it as the mode it paid for.
+  cunning_action: {
+    prints: true,
+    formatAs: 'dash',
+    action: { actor_id: ACTOR },
+    value: { movementGainedFeet: 30 },
+  },
   disengage: { prints: true, formatAs: 'disengage', action: { actor_id: ACTOR }, value: {} },
   second_wind: {
     prints: true,
