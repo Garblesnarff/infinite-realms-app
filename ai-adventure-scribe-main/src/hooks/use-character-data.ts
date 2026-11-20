@@ -45,6 +45,9 @@ import {
 import { transformEquipmentForStorage } from '@/utils/characterTransformations';
 import { isValidUUID } from '@/utils/validation'; // Assuming kebab-case
 
+/** #1679: a state event or focus return waits this long, so a burst of events is one refetch. */
+const SILENT_REFRESH_DEBOUNCE_MS = 250;
+
 /**
  * #2701: builds the PUT payload for a character-sheet edit.
  *
@@ -138,6 +141,8 @@ export const useCharacterData = (characterId: string | undefined) => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { user } = useAuth();
+  // #1679: the newest fetch. A response from an older fetch is dropped, so it cannot land last.
+  const latestRequest = useRef(0);
   // Latest loaded character for the update diff; the managers hand back a new
   // object, so the diff needs the pre-edit one, not a stale closure.
   const characterRef = useRef<Character | null>(null);
@@ -182,6 +187,7 @@ export const useCharacterData = (characterId: string | undefined) => {
   const fetchCharacter = useCallback(
     async (options?: { silent?: boolean }) => {
       if (!validateCharacterId(characterId)) return;
+      const requestId = ++latestRequest.current;
 
       // Which step threw, so the toast and the log say more than "failed" (#2150).
       let stage = 'fetching the character';
@@ -268,24 +274,29 @@ export const useCharacterData = (characterId: string | undefined) => {
           });
         }
 
+        // #1679: a response older than the newest request is not the sheet's state any more.
+        if (requestId !== latestRequest.current) return;
         setUnresolvedData(unresolved);
         setEquipmentUnavailable(Boolean(equipmentResult.error));
         setCharacter(transformedCharacter);
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         logger.error(`Error ${stage}`, { characterId, stage, reason, error });
-        toast({
-          title: 'Failed to load character data',
-          description: `Error while ${stage}: ${reason}`,
-          variant: 'destructive',
-        });
+        // #1679: a silent refresh logs only; the sheet keeps its state with no toast.
+        if (!options?.silent) {
+          toast({
+            title: 'Failed to load character data',
+            description: `Error while ${stage}: ${reason}`,
+            variant: 'destructive',
+          });
+        }
         // #2701: a silent post-save refresh must not kick the user off the
         // sheet; the save already landed and the sheet keeps its current state.
         if (!options?.silent) {
           navigate('/app/characters');
         }
       } finally {
-        setLoading(false);
+        if (requestId === latestRequest.current) setLoading(false);
       }
     },
     [characterId, user, toast, navigate, validateCharacterId],
@@ -295,6 +306,52 @@ export const useCharacterData = (characterId: string | undefined) => {
   // ⚡ Bolt: Now only depends on the stable fetchCharacter callback.
   useEffect(() => {
     fetchCharacter();
+  }, [fetchCharacter]);
+
+  // #1679 / strategist FIX: HP or pool changes made in another open tab reach this sheet on the
+  // engine's state event, and a return to this tab refetches too. A burst of events is one refetch
+  // (debounce). A text field being edited defers the refetch until focus leaves it, so an unsaved
+  // edit is not replaced by the server's copy.
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let deferred = false;
+    const isTextEntry = (el: Element | null): boolean =>
+      el instanceof HTMLElement &&
+      (el.isContentEditable ||
+        el.tagName === 'INPUT' ||
+        el.tagName === 'TEXTAREA' ||
+        el.tagName === 'SELECT');
+    const runRefresh = (): void => {
+      timer = undefined;
+      void fetchCharacter({ silent: true });
+    };
+    const request = (active: Element | null): void => {
+      if (isTextEntry(active)) {
+        deferred = true;
+        return;
+      }
+      deferred = false;
+      if (timer !== undefined) clearTimeout(timer);
+      timer = setTimeout(runRefresh, SILENT_REFRESH_DEBOUNCE_MS);
+    };
+    const onStateEvent = (): void => request(document.activeElement);
+    const onFocusReturn = (): void => request(document.activeElement);
+    const onFocusOut = (event: FocusEvent): void => {
+      if (!deferred) return;
+      const next = event.relatedTarget;
+      if (next instanceof Element) request(next);
+      // Focus left for nowhere: a click on empty page flushes; a window blur keeps the edit deferred.
+      else if (document.hasFocus()) request(document.body);
+    };
+    window.addEventListener('character-state-updated', onStateEvent);
+    window.addEventListener('focus', onFocusReturn);
+    document.addEventListener('focusout', onFocusOut);
+    return () => {
+      if (timer !== undefined) clearTimeout(timer);
+      window.removeEventListener('character-state-updated', onStateEvent);
+      window.removeEventListener('focus', onFocusReturn);
+      document.removeEventListener('focusout', onFocusOut);
+    };
   }, [fetchCharacter]);
 
   /**

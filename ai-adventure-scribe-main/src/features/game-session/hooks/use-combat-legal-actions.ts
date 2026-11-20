@@ -51,7 +51,7 @@ import { getSpellById } from '@/utils/spell-lookup';
  * (#1085: the panel showed the old pool until a reload).
  */
 function publishEnginePoolUses(
-  feature: 'lay_on_hands' | 'second_wind' | 'action_surge',
+  feature: 'lay_on_hands' | 'second_wind' | 'action_surge' | 'rage',
   result: unknown,
 ): void {
   const engine = (result ?? {}) as {
@@ -451,7 +451,11 @@ export function useCombatLegalActions(input: {
             Date.now(),
             action.type === 'divine_sense' ? 'action_bar' : 'typed',
           );
-          if (action.type === 'second_wind' || action.type === 'action_surge') {
+          if (
+            action.type === 'second_wind' ||
+            action.type === 'action_surge' ||
+            action.type === 'rage'
+          ) {
             publishEnginePoolUses(action.type, result);
           }
           window.dispatchEvent(new CustomEvent('character-state-updated'));

@@ -59,7 +59,6 @@ export const useCombatActions = (_isDM: boolean = false) => {
     };
   }, [activeEncounter?.participants, activeEncounter?.currentTurnParticipantId, playerCharacterId]);
 
-  // Handle starting combat
   // Handle ending combat
   const handleEndCombat = useCallback(async () => {
     await endCombat();

@@ -49,7 +49,6 @@ export default defineConfig({
       ['src/utils/__tests__/combat-log-lines.test.ts', 'node'],
       ['src/utils/__tests__/combatDetection.test.ts', 'node'],
       ['src/utils/__tests__/condition-definitions.test.ts', 'node'],
-      ['src/utils/__tests__/conditionEffects.test.ts', 'node'],
       ['src/utils/__tests__/deathSaves.test.ts', 'node'],
       ['src/utils/__tests__/describe-caught-error.test.ts', 'node'],
       ['src/utils/__tests__/diceCommandParser.test.ts', 'node'],
