@@ -8,6 +8,7 @@
  * and the real Continue button (StepNavigation -> handleNext -> validateStep).
  * Only the save hook and toast are stubbed, as in wizard-half-elf-897.test.tsx.
  */
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
@@ -66,6 +67,7 @@ vi.mock('@/services/user-data-api', () => ({
     createCharacter: vi.fn(),
     updateCharacter: vi.fn(),
     updateCharacterStats: vi.fn(),
+    listCharacters: vi.fn(async () => []),
   },
 }));
 vi.mock('@/utils/spell-id-mapping', () => ({
@@ -101,9 +103,13 @@ function StateHarness(): React.JSX.Element {
 
 function renderWizard(): ReturnType<typeof render> {
   return render(
-    <MemoryRouter initialEntries={['/app/characters/new?step=0']}>
-      <StateHarness />
-    </MemoryRouter>,
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter initialEntries={['/app/characters/new?step=0']}>
+        <StateHarness />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -149,9 +155,7 @@ function openRollTab(): void {
 }
 
 function blockingToasts(): unknown[] {
-  return harness.toast.mock.calls.filter(
-    ([arg]) => arg?.title === 'Please Complete This Step',
-  );
+  return harness.toast.mock.calls.filter(([arg]) => arg?.title === 'Please Complete This Step');
 }
 
 describe('#692 Roll Scores through the real wizard', () => {
@@ -210,6 +214,8 @@ describe('#692 Roll Scores through the real wizard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(blockingToasts()).toHaveLength(1);
-    expect(new URLSearchParams(harness.search).get('step')).toBe(String(stepIndex('Ability Scores')));
+    expect(new URLSearchParams(harness.search).get('step')).toBe(
+      String(stepIndex('Ability Scores')),
+    );
   });
 });

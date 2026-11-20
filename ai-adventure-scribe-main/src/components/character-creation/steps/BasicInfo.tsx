@@ -7,6 +7,10 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCharacter } from '@/contexts/CharacterContext';
+import {
+  findDuplicateHeroName,
+  useOwnCharacterRoster,
+} from '@/features/character/hooks/use-own-character-names';
 import { useToast } from '@/hooks/use-toast';
 
 /**
@@ -17,6 +21,8 @@ const BasicInfo: React.FC = () => {
   const { state, dispatch } = useCharacter();
   const { toast } = useToast();
   const [nameError, setNameError] = useState<string | null>(null);
+  const roster = useOwnCharacterRoster();
+  const duplicate = findDuplicateHeroName(state.character?.name || '', roster, state.character?.id);
 
   /**
    * Updates character name in context with validation
@@ -94,7 +100,11 @@ const BasicInfo: React.FC = () => {
                   : 'focus:ring-2 focus:ring-infinite-purple focus:border-infinite-purple'
               }`}
               aria-invalid={!!nameError}
-              aria-describedby={nameError ? 'name-error' : undefined}
+              aria-describedby={
+                [nameError ? 'name-error' : null, duplicate ? 'name-duplicate-warning' : null]
+                  .filter(Boolean)
+                  .join(' ') || undefined
+              }
             />
             {nameError && (
               <div
@@ -104,6 +114,16 @@ const BasicInfo: React.FC = () => {
               >
                 <AlertCircle className="w-4 h-4" />
                 <span>{nameError}</span>
+              </div>
+            )}
+            {duplicate && (
+              <div
+                id="name-duplicate-warning"
+                role="status"
+                className="text-amber-600 text-sm flex items-center space-x-2"
+              >
+                <AlertCircle className="w-4 h-4" aria-hidden="true" />
+                <span>You already have a hero named {duplicate}.</span>
               </div>
             )}
             <p className="text-xs text-muted-foreground">
