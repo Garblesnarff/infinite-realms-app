@@ -276,7 +276,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     vi.mocked(enforceCombatActionOnAttempt).mockReset().mockResolvedValue(null);
     vi.mocked(requestPlayerInitiativeRoll).mockResolvedValue({ d20: 16 });
     vi.mocked(requestPlayerAttackRoll).mockResolvedValue({ d20: 17 });
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('confirmed');
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       response({ encounter: { id: 'encounter-1' } }) as any,
     );
@@ -297,7 +297,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     const order: string[] = [];
     vi.mocked(requestCombatEntryConfirmation).mockImplementation(async () => {
       order.push('confirmation');
-      return true;
+      return 'confirmed';
     });
     vi.mocked(requestPlayerInitiativeRoll).mockImplementation(async () => {
       order.push('initiative');
@@ -358,7 +358,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
   });
 
   it("quotes the player's words on the card when the pending carries their declared weapon attack (#877)", async () => {
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('confirmed');
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(
       response({ encounter: { id: 'encounter-1' }, npcTurns: ENTRY_NPC_TURNS }) as any,
     );
@@ -1070,8 +1070,8 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
     );
   });
 
-  it('a superseded entry card is not a decline: no notice, no seat, no attack (#1678)', async () => {
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('superseded');
+  it('a replaced entry card is not a decline: no notice, no seat, no attack (#1678)', async () => {
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('replaced');
     const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
 
     const outcome = await invoke(
@@ -1094,7 +1094,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
   });
 
   it('declines combat entry without seating an encounter or resolving the attack', async () => {
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('declined');
     const refresh = vi.fn().mockResolvedValue(NPC_TURN_ENCOUNTER);
 
     const outcome = await invoke(
@@ -1136,7 +1136,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
 
   // #2530: a roll request that never reaches the player is logged with its type, never its text.
   it('logs the type of each roll request a declined entry discards', async () => {
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('declined');
 
     await invoke({
       combat_transition: 'none',
@@ -1252,7 +1252,7 @@ describe('handleDmActionsAndTransitions — combat entry (#1907 PR2)', () => {
   });
 
   it('keeps a declined entry as a visible non-empty line', async () => {
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('declined');
     const outcome = await invoke({
       combat_transition: 'none',
       combat_entry_pending: PENDING_ENTRY,

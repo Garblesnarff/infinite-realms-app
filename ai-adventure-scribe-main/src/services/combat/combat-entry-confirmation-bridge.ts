@@ -35,6 +35,11 @@ export interface CombatEntryConfirmationSpec {
   playerMessage?: string;
 }
 
+/**
+ * How an entry card was settled, for the turn (#1678). `replaced` is neither a yes nor a decline.
+ */
+export type CombatEntryOutcome = 'confirmed' | 'declined' | 'replaced';
+
 /** The player's answer: strike (at `target`, when the card asked who) or do something else. */
 export interface CombatEntryAnswer {
   confirmed: boolean;
@@ -199,15 +204,20 @@ function supersedePendingCombatEntryConfirmation(): boolean {
 }
 
 /**
- * Wait for the player to either seat or decline a detected combat entry. Resolves `superseded`
- * (#1678) when a newer card replaced this one: that is neither a yes nor a decline.
+ * Wait for the player's answer to an entry card, as the turn needs it: `confirmed` (seat it),
+ * `declined` (the player chose "Do something else" or typed or pressed Escape), or `replaced`
+ * (a newer card took the place of this one, which is not a decline; #1678).
  */
 export function requestCombatEntryConfirmation(
   spec: CombatEntryConfirmationSpec,
-): Promise<boolean | 'superseded'> {
-  return requestCombatEntryAnswer(spec).then((answer) =>
-    answer.superseded ? 'superseded' : answer.confirmed,
-  );
+): Promise<CombatEntryOutcome> {
+  return requestCombatEntryAnswer(spec).then(combatEntryOutcomeOf);
+}
+
+/** The named outcome of a raw answer (#1678). */
+export function combatEntryOutcomeOf(answer: CombatEntryAnswer): CombatEntryOutcome {
+  if (answer.superseded) return 'replaced';
+  return answer.confirmed ? 'confirmed' : 'declined';
 }
 
 /** Like `requestCombatEntryConfirmation`, and reports which creature the player picked. */

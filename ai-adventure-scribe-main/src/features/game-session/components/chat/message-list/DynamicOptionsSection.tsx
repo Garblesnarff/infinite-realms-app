@@ -117,6 +117,11 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
     return (
       <div className="w-full mt-3">
         {error && <p role="alert">{error}</p>}
+        {fightPromptOpen && (
+          <p data-testid="fight-prompt-chip-reason" className="mb-2 text-sm text-muted-foreground">
+            Answer the fight question first.
+          </p>
+        )}
         <ActionOptions
           options={renderedOptions}
           ideaCards={!showCombatMenu}

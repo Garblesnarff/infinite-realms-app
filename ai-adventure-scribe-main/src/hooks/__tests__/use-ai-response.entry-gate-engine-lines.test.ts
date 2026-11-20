@@ -309,7 +309,7 @@ describe('useAIResponse: an entry-gate encounter shows its engine lines (#2378)'
       status: 200,
       json: async () => ({ pending }),
     } as any);
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('confirmed');
     vi.mocked(userDataApi.enterCombat).mockImplementation((async () => {
       // #2658 step 3: `/enter` runs the creatures that won initiative before it answers. Their
       // rows reach the page over the session socket (the server broadcasts each one as it is

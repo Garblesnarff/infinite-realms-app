@@ -6,6 +6,7 @@ import { ChatInput } from '../../ChatInput';
 import { MessageListContainer } from '../MessageListContainer';
 
 import {
+  type CombatEntryOutcome,
   requestCombatEntryConfirmation,
   settlePendingCombatEntryConfirmation,
 } from '@/services/combat/combat-entry-confirmation-bridge';
@@ -53,7 +54,7 @@ describe('MessageListContainer combat entry hit testing', () => {
   });
 
   it('keeps the Start the fight hit target above the composer and dice popup anchor', async () => {
-    let confirmationPromise: Promise<boolean | 'superseded'> | undefined;
+    let confirmationPromise: Promise<CombatEntryOutcome> | undefined;
 
     render(
       <div>
@@ -124,6 +125,6 @@ describe('MessageListContainer combat entry hit testing', () => {
       throw new Error('No element found at the Start the fight button coordinates');
     fireEvent.click(elementAtStart);
     if (!confirmationPromise) throw new Error('Combat entry confirmation was not requested');
-    await expect(confirmationPromise).resolves.toBe(true);
+    await expect(confirmationPromise).resolves.toBe('confirmed');
   });
 });
