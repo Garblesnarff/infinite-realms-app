@@ -6,6 +6,7 @@
  * The Seeker) are not what the January seed inserted. The Academy of Arcane Gastronomy rows
  * are copied from the production template shape because that campaign was seeded outside this
  * repository; its new equipment update is then applied like the other migration updates.
+ * The 20261117 SRD fix migration is replayed after the equipment updates.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,6 +16,7 @@ const EQUIPMENT_UPDATE_MIGRATIONS = [
   '20260117_update_eternal_feast_characters.sql',
   '20261003_update_academy_starter_character_templates_equipment.sql',
 ];
+const SRD_FIX_MIGRATION = '20261117_fix_premade_srd_subrace_and_origin_2014.sql';
 const JSON_COLUMNS = new Set(['ability_scores', 'personality', 'skills', 'languages', 'equipment']);
 
 const ACADEMY_TEMPLATES: SeededPremadeTemplate[] = [
@@ -89,6 +91,7 @@ export type SeededPremadeTemplate = {
   name: string;
   race: string;
   subrace?: string | null;
+  subclass?: string | null;
   class: string;
   background?: string | null;
   level?: number;
@@ -201,10 +204,171 @@ function applyEquipmentUpdates(rows: SeededPremadeTemplate[]): SeededPremadeTemp
   }, rows);
 }
 
+/** Parse and replay the UPDATE statements in the #52 SRD fix migration. */
+function splitTopLevelCommas(input: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  let depth = 0;
+  let inString = false;
+  for (let i = 0; i < input.length; i += 1) {
+    const ch = input[i];
+    if (ch === "'") {
+      if (inString && input[i + 1] === "'") {
+        i += 1;
+      } else {
+        inString = !inString;
+      }
+    } else if (!inString) {
+      if (ch === '(') depth += 1;
+      else if (ch === ')') depth -= 1;
+      else if (ch === ',' && depth === 0) {
+        parts.push(input.slice(start, i).trim());
+        start = i + 1;
+      }
+    }
+  }
+  const tail = input.slice(start).trim();
+  if (tail.length > 0) parts.push(tail);
+  return parts;
+}
+
+interface SrdFixStatement {
+  campaign: string;
+  key: string;
+  raceGuard?: string;
+  classGuard?: string;
+  subraceNullGuard: boolean;
+  subclassNullGuard: boolean;
+  abilityKeyGuard?: string;
+  subraceSet?: string;
+  subclassSet?: string;
+  abilityIncrement?: { key: string; n: number };
+}
+
+function parseSrdFixStatement(setClause: string, whereClause: string): SrdFixStatement {
+  const assignments = splitTopLevelCommas(setClause);
+  const stmt: SrdFixStatement = {
+    campaign: '',
+    key: '',
+    subraceNullGuard: false,
+    subclassNullGuard: false,
+  };
+  for (const assignment of assignments) {
+    let m = /^subrace\s*=\s*'([^']*)'$/i.exec(assignment);
+    if (m) {
+      if (stmt.subraceSet !== undefined) throw new Error('duplicate subrace assignment');
+      stmt.subraceSet = m[1];
+      continue;
+    }
+    m = /^subclass\s*=\s*'([^']*)'$/i.exec(assignment);
+    if (m) {
+      if (stmt.subclassSet !== undefined) throw new Error('duplicate subclass assignment');
+      stmt.subclassSet = m[1];
+      continue;
+    }
+    m =
+      /^ability_scores\s*=\s*ability_scores\s*\|\|\s*jsonb_build_object\(\s*'([^']+)'\s*,\s*\(ability_scores->>'([^']+)'\)::int\s*\+\s*(\d+)\s*\)$/i.exec(
+        assignment,
+      );
+    if (m) {
+      if (m[1] !== m[2]) throw new Error('mismatched ability key in jsonb_build_object');
+      if (stmt.abilityIncrement) throw new Error('duplicate ability_scores assignment');
+      stmt.abilityIncrement = { key: m[1], n: Number(m[3]) };
+      continue;
+    }
+    throw new Error(`unrecognized SET assignment in #52 migration: ${assignment}`);
+  }
+
+  const campaignMatch = /starter_campaign_id\s*=\s*'([^']*)'/i.exec(whereClause);
+  const keyMatch = /template_key\s*=\s*'([^']*)'/i.exec(whereClause);
+  if (!campaignMatch || !keyMatch) {
+    throw new Error('missing starter_campaign_id/template_key in #52 migration WHERE');
+  }
+  stmt.campaign = campaignMatch[1];
+  stmt.key = keyMatch[1];
+
+  const conditions = whereClause
+    .split(/\s+AND\s+/i)
+    .map((c) => c.trim())
+    .filter(Boolean);
+  for (const condition of conditions) {
+    if (/^starter_campaign_id\s*=\s*'[^']*'$/i.test(condition)) continue;
+    if (/^template_key\s*=\s*'[^']*'$/i.test(condition)) continue;
+    let m = /^race\s*=\s*'([^']*)'$/i.exec(condition);
+    if (m) {
+      stmt.raceGuard = m[1];
+      continue;
+    }
+    m = /^class\s*=\s*'([^']*)'$/i.exec(condition);
+    if (m) {
+      stmt.classGuard = m[1];
+      continue;
+    }
+    if (/^subrace\s+IS\s+NULL$/i.test(condition)) {
+      stmt.subraceNullGuard = true;
+      continue;
+    }
+    if (/^subclass\s+IS\s+NULL$/i.test(condition)) {
+      stmt.subclassNullGuard = true;
+      continue;
+    }
+    m = /^ability_scores\s*\?\s*'([^']*)'$/i.exec(condition);
+    if (m) {
+      stmt.abilityKeyGuard = m[1];
+      continue;
+    }
+    throw new Error(`unrecognized WHERE condition in #52 migration: ${condition}`);
+  }
+
+  return stmt;
+}
+
+function applySrdFixUpdates(rows: SeededPremadeTemplate[]): SeededPremadeTemplate[] {
+  const sql = readFileSync(join(MIGRATIONS, SRD_FIX_MIGRATION), 'utf8');
+  const updateRegex =
+    /UPDATE\s+public\.starter_character_templates\s+SET\s+([\s\S]+?)\s+WHERE\s+([\s\S]+?);/gi;
+  const matches = [...sql.matchAll(updateRegex)];
+  const updateOccurrences = [...sql.matchAll(/\bUPDATE\s+public\.starter_character_templates\b/gi)]
+    .length;
+  if (matches.length !== updateOccurrences) {
+    throw new Error('could not parse all UPDATE statements in #52 migration');
+  }
+  const statements = matches.map((match) => parseSrdFixStatement(match[1], match[2]));
+
+  let current = rows;
+  for (const stmt of statements) {
+    current = current.map((row) => {
+      if (row.starter_campaign_id !== stmt.campaign || row.template_key !== stmt.key) return row;
+      if (stmt.raceGuard !== undefined && row.race !== stmt.raceGuard) return row;
+      if (stmt.classGuard !== undefined && row.class !== stmt.classGuard) return row;
+      if (stmt.subraceNullGuard && (row.subrace ?? null) !== null) return row;
+      if (stmt.subclassNullGuard && (row.subclass ?? null) !== null) return row;
+      const abilityScoresField =
+        row.ability_scores !== undefined ? 'ability_scores' : 'abilityScores';
+      const currentScores = (row[abilityScoresField] as Record<string, number> | undefined) ?? {};
+      if (stmt.abilityKeyGuard !== undefined && !(stmt.abilityKeyGuard in currentScores))
+        return row;
+
+      const next: SeededPremadeTemplate = { ...row };
+      if (stmt.subraceSet !== undefined) next.subrace = stmt.subraceSet;
+      if (stmt.subclassSet !== undefined) next.subclass = stmt.subclassSet;
+      if (stmt.abilityIncrement) {
+        const { key, n } = stmt.abilityIncrement;
+        const base = (next[abilityScoresField] as Record<string, number> | undefined) ?? {};
+        next[abilityScoresField] = { ...base, [key]: (base[key] ?? 0) + n };
+      }
+      return next;
+    });
+  }
+  return current;
+}
+
 /** Every seeded premade, in migration order, with the equipment updates applied. */
 export function readSeededPremadeTemplates(): SeededPremadeTemplate[] {
   const files = readdirSync(MIGRATIONS)
     .filter((name) => /seed.*character_templates.*\.sql$/.test(name))
     .sort();
-  return applyEquipmentUpdates([...readTemplateInserts(files), ...ACADEMY_TEMPLATES]);
+  return applySrdFixUpdates(
+    applyEquipmentUpdates([...readTemplateInserts(files), ...ACADEMY_TEMPLATES]),
+  );
 }
