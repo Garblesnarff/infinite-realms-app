@@ -106,9 +106,15 @@ export async function selectOpportunityAttackers(params: {
   hasLineOfSight: (fromId: string, toId: string) => boolean;
   distanceFeet: (from: MapEntity, to: MapEntity) => number;
   conditionsOf?: (id: string) => Promise<string[]>;
+  destination?: { x: number; y: number };
 }): Promise<OpportunityAttacker[]> {
   const { state, actor, map, reachOf, hasLineOfSight, distanceFeet } = params;
-  if (actor.isDisengaged || !map) return [];
+  if (
+    actor.isDisengaged ||
+    !map ||
+    isLiveHostile(actor as unknown as Parameters<typeof isLiveHostile>[0])
+  )
+    return [];
   const from = map.entities.find((entity) => entity.id === actor.id);
   if (!from) return [];
   const inReach: OpportunityAttacker[] = [];
@@ -131,6 +137,11 @@ export async function selectOpportunityAttackers(params: {
     const weapon = await reachOf(candidate as unknown as ExitParticipant);
     // For a melee weapon `normalRange` is its reach: 5 ft, or 10 ft for a reach weapon.
     if (weapon.ranged || distance > weapon.normalRange) continue;
+    if (
+      params.destination &&
+      distanceFeet({ ...from, ...params.destination }, to) <= weapon.normalRange
+    )
+      continue;
     inReach.push({
       participant: candidate as unknown as ExitParticipant,
       weapon,
@@ -155,6 +166,75 @@ export type PlayerExitResult = {
   /** What the provoked opportunity attack did, when one was. */
   opportunityAttack: { attackerName: string; hit: boolean; finalDamage: number } | null;
 };
+
+type ReactionOutcome = {
+  hit?: boolean;
+  finalDamage?: number;
+  targetNewHp?: number;
+  targetIsConscious?: boolean;
+  targetIsDead?: boolean;
+  isCritical?: boolean;
+};
+
+export async function resolveMovementReactions(params: {
+  encounterId: string;
+  sessionId: string;
+  actorId: string;
+  actor: ExitParticipant;
+  selectAttackers: (actor: ExitParticipant) => Promise<OpportunityAttacker[]>;
+  resolveOpportunityAttack: (attacker: OpportunityAttacker) => Promise<ReactionOutcome | null>;
+  label: (id: string) => string;
+  slugOf: (id: string) => string;
+}): Promise<{ opportunityAttack: PlayerExitResult['opportunityAttack']; playerDowned: boolean }> {
+  const { encounterId, sessionId, actorId } = params;
+  const attackers = await params.selectAttackers(params.actor);
+  let opportunityAttack: PlayerExitResult['opportunityAttack'] = null;
+  let playerDowned = false;
+  for (const attacker of attackers) {
+    const attackerName = params.label(attacker.participant.id);
+    const targetName = params.label(actorId);
+    // Resolved, or nothing is said about it. A reaction the engine refused must leave NO trace
+    // in the DM's context: writing an attack line for a blow that never rolled is precisely the
+    // fabrication #2524 exists to stop, and the DM would narrate a hit out of it.
+    const outcome = await params.resolveOpportunityAttack(attacker).catch((error) => {
+      // The exit must not be lost to a failed reaction: the player is leaving either way, and
+      // a refused attack is recoverable from the log while a stranded fight is not.
+      logger.warn({
+        msg: 'PLAYER_EXIT_OPPORTUNITY_ATTACK_FAILED',
+        encounterId,
+        sessionId,
+        attackerId: attacker.participant.id,
+        actorId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    });
+    if (outcome) {
+      opportunityAttack ??= {
+        attackerName,
+        hit: outcome.hit === true,
+        finalDamage: Number(outcome.finalDamage ?? 0),
+      };
+      await recordDmTacticalFact(
+        sessionId,
+        describeResolvedAttack(attackerName, targetName, outcome, attacker.weapon.name),
+        {
+          kind: 'attack',
+          actorSlug: params.slugOf(attacker.participant.id),
+          actorIsPlayer: attacker.participant.participantType === 'player',
+          targetSlug: params.slugOf(actorId),
+          hit: outcome.hit,
+        },
+      );
+      playerDowned =
+        outcome.targetIsDead === true ||
+        outcome.targetIsConscious === false ||
+        (outcome.targetNewHp != null && outcome.targetNewHp <= 0);
+      if (playerDowned) break;
+    }
+  }
+  return { opportunityAttack, playerDowned };
+}
 
 /**
  * Record the player's exit: the provoked opportunity attack first (flee only), then the
@@ -197,54 +277,13 @@ export async function recordPlayerExit(params: {
     | undefined;
   if (!actor) throw new Error(`Player exit: unknown participant ${actorId}`);
 
-  let opportunityAttack: PlayerExitResult['opportunityAttack'] = null;
-  let playerDowned = false;
-  if (intent === 'flee') {
-    const attackers = await params.selectAttackers(actor);
-    for (const attacker of attackers) {
-      const attackerName = params.label(attacker.participant.id);
-      const targetName = params.label(actorId);
-      // Resolved, or nothing is said about it. A reaction the engine refused must leave NO trace
-      // in the DM's context: writing an attack line for a blow that never rolled is precisely the
-      // fabrication #2524 exists to stop, and the DM would narrate a hit out of it.
-      const outcome = await params.resolveOpportunityAttack(attacker).catch((error) => {
-        // The exit must not be lost to a failed reaction: the player is leaving either way, and
-        // a refused attack is recoverable from the log while a stranded fight is not.
-        logger.warn({
-          msg: 'PLAYER_EXIT_OPPORTUNITY_ATTACK_FAILED',
-          encounterId,
-          sessionId,
-          attackerId: attacker.participant.id,
-          actorId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-        return null;
-      });
-      if (outcome) {
-        opportunityAttack ??= {
-          attackerName,
-          hit: outcome.hit === true,
-          finalDamage: Number(outcome.finalDamage ?? 0),
-        };
-        await recordDmTacticalFact(
-          sessionId,
-          describeResolvedAttack(attackerName, targetName, outcome, attacker.weapon.name),
-          {
-            kind: 'attack',
-            actorSlug: params.slugOf(attacker.participant.id),
-            actorIsPlayer: false,
-            targetSlug: params.slugOf(actorId),
-            hit: outcome.hit,
-          },
-        );
-        playerDowned =
-          outcome.targetIsDead === true ||
-          outcome.targetIsConscious === false ||
-          (outcome.targetNewHp != null && outcome.targetNewHp <= 0);
-        if (playerDowned) break;
-      }
-    }
-  }
+  const { opportunityAttack, playerDowned } =
+    intent === 'flee'
+      ? await resolveMovementReactions({
+          ...params,
+          actor,
+        })
+      : { opportunityAttack: null, playerDowned: false };
 
   // A player the blow put at 0 HP is dying, not gone: they stay in the turn order for the
   // death-save flow, and the DM was just told they are UNCONSCIOUS. Recording the exit anyway
