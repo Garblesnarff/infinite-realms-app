@@ -1,9 +1,9 @@
-import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import React from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { CampaignSessionsContent } from './CampaignSessionsContent';
-import { continueOrResumeSession } from './continue-or-resume-session';
+import { continueOrResumeSession, resumeEndedSession } from './continue-or-resume-session';
 import { planHasPaidFeatures } from '../../../shared/plan-features';
 
 import type { SessionListItem } from './SessionCard';
@@ -45,6 +45,7 @@ const CampaignSessions: React.FC = () => {
     [sessionExpiryMs],
   );
   const [continuingId, setContinuingId] = React.useState<string | null>(null);
+  const [resumingId, setResumingId] = React.useState<string | null>(null);
   const [chronicleSessionId, setChronicleSessionId] = React.useState<string | null>(null);
 
   const generateChronicle = trpc.chronicles.generate.useMutation();
@@ -74,6 +75,18 @@ const CampaignSessions: React.FC = () => {
       enabled: Boolean(campaignId),
       refetchInterval: 10_000,
     });
+
+  // #1669: which of these sessions the hero can resume (the server decides; fallen and one-shot are left out).
+  const { data: resumableRows } = useQuery({
+    queryKey: ['campaign', campaignId, 'resumable-sessions'],
+    queryFn: async (): Promise<Array<{ id: string }>> =>
+      campaignId ? ((await userDataApi.listResumableSessions(campaignId)) ?? []) : [],
+    enabled: Boolean(campaignId),
+  });
+  const resumableIds = React.useMemo(
+    () => new Set((resumableRows ?? []).map((row) => row.id)),
+    [resumableRows],
+  );
 
   const sessions = React.useMemo(() => {
     const flattened = data?.pages ? data.pages.flat() : [];
@@ -123,6 +136,22 @@ const CampaignSessions: React.FC = () => {
     [campaignId, navigate, queryClient, toast, isSessionExpired],
   );
 
+  /** #1669: Resume session reopens this ended session (see resumeEndedSession). */
+  const handleResume = React.useCallback(
+    async (session: SessionListItem) => {
+      if (!campaignId) return;
+      await resumeEndedSession({
+        session,
+        campaignId,
+        navigate,
+        queryClient,
+        toast,
+        setResumingId,
+      });
+    },
+    [campaignId, navigate, queryClient, toast],
+  );
+
   return (
     <div className="mt-4 space-y-4">
       <ChronicleDialog
@@ -149,6 +178,9 @@ const CampaignSessions: React.FC = () => {
         isSessionExpired={isSessionExpired}
         handleContinue={handleContinue}
         continuingId={continuingId}
+        resumableIds={resumableIds}
+        onResume={handleResume}
+        resumingId={resumingId}
         onViewChronicle={(id) => setChronicleSessionId(id)}
         onGenerateChronicle={(id) => generateChronicle.mutate({ sessionId: id })}
         userPlan={userPlan ?? undefined}

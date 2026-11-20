@@ -21,7 +21,15 @@ export interface ExtendedGameSession extends GameSession {
 /**
  * Session state values
  */
-export type SessionState = 'active' | 'expired' | 'ending' | 'loading' | 'error' | 'idle';
+export type SessionState =
+  | 'active'
+  | 'expired'
+  | 'ending'
+  | 'loading'
+  | 'error'
+  | 'idle'
+  // #1669: the hero has sessions that can be resumed; the player chooses (see EndedSessionChoice).
+  | 'choosing';
 
 /**
  * Session state updater type for functional updates

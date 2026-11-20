@@ -26,7 +26,9 @@ export type SessionVitalGate =
   | { status: 'error'; retry: () => void }
   | { status: 'alive' }
   | { status: 'dead'; fallen: SessionFallenState }
-  | { status: 'completed'; completion: SessionCompletionState };
+  | { status: 'completed'; completion: SessionCompletionState }
+  /** #1669: an ended session opened by its link; the player picks Start new or Resume. */
+  | { status: 'ended' };
 
 export function useSessionVitalGate(sessionId: string | null | undefined): SessionVitalGate {
   const [gate, setGate] = useState<SessionVitalGate>({ status: 'unknown' });
@@ -50,7 +52,14 @@ export function useSessionVitalGate(sessionId: string | null | undefined): Sessi
         }
         const completion = await userDataApi.fetchSessionCompletionState(sessionId);
         if (cancelled) return;
-        setGate(completion ? { status: 'completed', completion } : { status: 'alive' });
+        if (completion) {
+          setGate({ status: 'completed', completion });
+          return;
+        }
+        // #1669: a completed session that is not a one-shot end is shown the choice, never the live composer.
+        const row = await userDataApi.getSession(sessionId);
+        if (cancelled) return;
+        setGate(row?.status === 'completed' ? { status: 'ended' } : { status: 'alive' });
       } catch (error) {
         if (cancelled) return;
         logger.warn('SESSION_VITAL_GATE_FAILED', { sessionId, error: String(error) });
