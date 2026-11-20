@@ -6,7 +6,10 @@ import { useAIResponse } from '../use-ai-response';
 
 import { NEUTRAL_NO_EFFECT_LINE } from '@/hooks/ai/narration-gate';
 import { AIService } from '@/services/ai-service';
-import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
+import {
+  type CombatEntryOutcome,
+  requestCombatEntryConfirmation,
+} from '@/services/combat/combat-entry-confirmation-bridge';
 import { userDataApi } from '@/services/user-data-api';
 import { createPlayerMessageFromOption, parseMessageOptions } from '@/utils/parseMessageOptions';
 
@@ -187,7 +190,7 @@ describe('a listed-option turn: only the no-effect replacement is skipped (#1048
       status: 200,
       json: async () => ({ pending: null }),
     } as any);
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('confirmed');
   });
 
   const runTurn = async (messages: any[]): Promise<any> => {
@@ -303,8 +306,8 @@ describe('a listed-option turn: only the no-effect replacement is skipped (#1048
     let answerCard: (confirmed: boolean) => void = () => {};
     vi.mocked(requestCombatEntryConfirmation).mockImplementation(
       () =>
-        new Promise<boolean>((resolve) => {
-          answerCard = resolve;
+        new Promise<CombatEntryOutcome>((resolve) => {
+          answerCard = (confirmed: boolean) => resolve(confirmed ? 'confirmed' : 'declined');
         }),
     );
     vi.mocked(AIService.chatWithDM)

@@ -5,6 +5,7 @@ import type { AIResponse } from '@/services/ai/shared/types';
 
 import logger from '@/lib/logger';
 import {
+  type CombatEntryOutcome,
   requestCombatEntryAnswer,
   requestCombatEntryConfirmation,
 } from '@/services/combat/combat-entry-confirmation-bridge';
@@ -16,15 +17,12 @@ import { parseMessageOptions } from '@/utils/parseMessageOptions';
 
 export type PendingCombatEntry = NonNullable<AIResponse['combat_entry_pending']>;
 
-/**
- * Ask the player whether to strike, naming the declared target when there is one.
- * `superseded` (#1678): a newer card replaced this one; it is neither a yes nor a decline.
- */
+/** Ask the player whether to strike, naming the declared target when there is one. */
 export function confirmCombatEntry(
   pendingEntry: PendingCombatEntry,
   player: { name: string; initiativeModifier: number },
   playerMessage?: string,
-): Promise<boolean | 'superseded'> {
+): Promise<CombatEntryOutcome> {
   // The card never names a placeholder: "Strike at Hostile Creature?" told the player nothing
   // (#2532). The server names the creature before it sends the entry; this covers a server that has
   // not restarted under a client that has.
@@ -170,7 +168,12 @@ export type HeldCombatEntry =
        */
       decision: 'confirmed' | 'unavailable';
     }
-  | { decision: 'declined'; label: string };
+  | { decision: 'declined'; label: string }
+  /**
+   * #1678: a newer card replaced the prompt this turn was holding. The held turn is dropped in
+   * favour of that card. It is not a decline, so the DM is told nothing about it.
+   */
+  | { decision: 'replaced' };
 
 /**
  * #2341: when the player's message names an attack on a creature and no encounter is open, the
@@ -192,14 +195,15 @@ export async function holdCombatEntryBeforeDm(params: {
   if (check.kind === 'refused') return { decision: 'refused', notice: check.notice };
   if (check.kind === 'choice') return holdForTargetChoice(params, check, player);
 
-  let confirmed: boolean | 'superseded';
+  let outcome: CombatEntryOutcome;
   try {
-    confirmed = await confirmCombatEntry(check.pending, player, params.message);
+    outcome = await confirmCombatEntry(check.pending, player, params.message);
   } catch (error) {
     logger.warn('[CombatEntry] held entry could not be confirmed', error);
     return { pending: check.pending, decision: 'unavailable' };
   }
-  return confirmed === true
+  if (outcome === 'replaced') return { decision: 'replaced' };
+  return outcome === 'confirmed'
     ? { pending: check.pending, decision: 'confirmed' }
     : { decision: 'declined', label: declinedAttackLabel(check.pending) };
 }
@@ -232,6 +236,7 @@ async function holdForTargetChoice(
     });
     return null;
   }
+  if (answer.superseded) return { decision: 'replaced' };
   if (!answer.confirmed || !answer.target) {
     return { decision: 'declined', label: `the spell ${check.spellName}` };
   }

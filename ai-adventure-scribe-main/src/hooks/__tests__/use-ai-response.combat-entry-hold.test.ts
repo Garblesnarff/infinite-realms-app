@@ -31,6 +31,7 @@ import {
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { AIService } from '@/services/ai-service';
 import {
+  type CombatEntryOutcome,
   consumeCombatEntryTypedAnswer,
   requestCombatEntryAnswer,
   requestCombatEntryConfirmation,
@@ -128,7 +129,7 @@ const chillTouchMessages = [
 
 describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', () => {
   let order: string[];
-  let choose: (confirmed: boolean) => void;
+  let choose: (outcome: CombatEntryOutcome) => void;
 
   const play = async (messages: unknown[] = chillTouchMessages) => {
     const { result } = renderHook(() => useAIResponse());
@@ -172,10 +173,12 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
     } as any);
     vi.mocked(requestCombatEntryConfirmation).mockImplementation(() => {
       order.push('popup opened');
-      return new Promise<boolean>((resolve) => {
-        choose = (confirmed) => {
-          order.push(`popup answered: ${confirmed ? 'strike' : 'something else'}`);
-          resolve(confirmed);
+      return new Promise<CombatEntryOutcome>((resolve) => {
+        choose = (outcome) => {
+          order.push(
+            `popup answered: ${outcome === 'confirmed' ? 'strike' : outcome === 'replaced' ? 'replaced' : 'something else'}`,
+          );
+          resolve(outcome);
         };
       });
     });
@@ -208,7 +211,7 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
       declaredAttackCheckBody,
     );
 
-    choose(true);
+    choose('confirmed');
     await turn;
 
     // The engine takes the turn from here (roll, then the DM narrates the engine lines from
@@ -223,13 +226,28 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
     );
   });
 
+  it('a replaced prompt drops the held turn: no DM call, no notice, nothing told to the DM (#1678)', async () => {
+    const turn = play();
+    await popupIsOpen();
+    await Promise.resolve();
+
+    choose('replaced');
+    const response = await turn;
+
+    expect(AIService.chatWithDM).not.toHaveBeenCalled();
+    expect(handleDmActionsAndTransitions).not.toHaveBeenCalled();
+    expect(order).toEqual(['popup opened', 'popup answered: replaced']);
+    expect(response.text).toBe('');
+    expect(response.localNotice).toBeUndefined();
+  });
+
   it('Do something else: the DM is called only after the answer, told nothing happened', async () => {
     const turn = play();
     await popupIsOpen();
     await Promise.resolve();
     expect(AIService.chatWithDM).not.toHaveBeenCalled();
 
-    choose(false);
+    choose('declined');
     const response = await turn;
 
     expect(order).toEqual([
@@ -275,7 +293,7 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
       onTextReady,
     );
     await popupIsOpen();
-    choose(false);
+    choose('declined');
     await turn;
 
     // The early render shows the prose and prompts for nothing.

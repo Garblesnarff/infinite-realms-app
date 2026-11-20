@@ -19,7 +19,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleDmActionsAndTransitions } from '../dm-actions-handler';
 
 import logger from '@/lib/logger';
-import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
+import {
+  type CombatEntryOutcome,
+  requestCombatEntryConfirmation,
+} from '@/services/combat/combat-entry-confirmation-bridge';
 import { startCombatEntryDelivery } from '@/services/combat/combat-entry-delivery';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -133,8 +136,8 @@ describe('handler joins an in-flight poll delivery (#1315)', () => {
     } as any);
     vi.mocked(requestCombatEntryConfirmation).mockImplementation(
       () =>
-        new Promise<boolean>((resolve) => {
-          choosePoll = (confirmed) => resolve(confirmed);
+        new Promise<CombatEntryOutcome>((resolve) => {
+          choosePoll = (confirmed) => resolve(confirmed ? 'confirmed' : 'declined');
         }),
     );
   });
@@ -208,7 +211,7 @@ describe('handler joins an in-flight poll delivery (#1315)', () => {
   });
 
   it('names a declined entry', async () => {
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('declined');
     await handleDmActionsAndTransitions(baseParams({ sessionId: 'session-1315-decline' }) as any);
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('entry_declined'));
     expect(userDataApi.declinePendingCombatEntry).toHaveBeenCalledWith('session-1315-decline');
