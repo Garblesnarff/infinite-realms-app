@@ -21,6 +21,7 @@ import { slotOrdinal } from '../../../../shared/slot-ordinal';
 import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
 import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
+import { dispatchMapAction } from '../../tactical/dispatch.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
@@ -61,6 +62,7 @@ import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import {
   hasLeftTheBoard,
   recordPlayerExit,
+  resolveMovementReactions,
   selectOpportunityAttacker,
   selectOpportunityAttackers,
   type OpportunityAttacker,
@@ -1191,28 +1193,27 @@ async function proposeCombatSpell(
  * Submitted before the exit is marked, which is the whole ordering rule: the blow lands while the
  * player is still in reach.
  */
-async function resolvePlayerExit(params: {
+async function movementReactionContext(params: {
   encounterId: string;
   sessionId: string;
   userId: string;
   state: CombatState;
   actorId: string;
-  intent: 'flee' | 'yield';
-}): Promise<PlayerExitResult> {
-  const { encounterId, sessionId, userId, state, actorId, intent } = params;
+  destination?: { x: number; y: number };
+}) {
+  const { encounterId, sessionId, userId, state, actorId, destination } = params;
   const map = await loadActiveTacticalMap(sessionId);
   const roster = rosterFrom(state.participants);
-  return recordPlayerExit({
+  return {
     encounterId,
     sessionId,
     userId,
     state,
     actorId,
-    intent,
-    label: (participantId) => facingName(undefined, participantId, roster),
-    slugOf: (participantId) =>
+    label: (participantId: string) => facingName(undefined, participantId, roster),
+    slugOf: (participantId: string) =>
       engineSlugForParticipant(map, participantId, facingName(undefined, participantId, roster)),
-    selectAttackers: (actor) =>
+    selectAttackers: (actor: Parameters<typeof selectOpportunityAttackers>[0]['actor']) =>
       selectOpportunityAttackers({
         state,
         actor,
@@ -1224,6 +1225,7 @@ async function resolvePlayerExit(params: {
         hasLineOfSight: (fromId, toId) => (map ? checkLineOfSight(map, fromId, toId) : false),
         distanceFeet: getDistance,
         conditionsOf: getActiveConditionNames,
+        destination,
       }),
     resolveOpportunityAttack: async (attacker: OpportunityAttacker) => {
       const attackService = await createCombatAttackService();
@@ -1250,9 +1252,21 @@ async function resolvePlayerExit(params: {
         isCritical: outcome.isCritical,
       };
     },
-    markExited: (id, participantId) =>
+    markExited: (id: string, participantId: string) =>
       CombatEncounterService.markParticipantExited(id, participantId),
-  });
+  };
+}
+
+async function resolvePlayerExit(params: {
+  encounterId: string;
+  sessionId: string;
+  userId: string;
+  state: CombatState;
+  actorId: string;
+  intent: 'flee' | 'yield';
+}): Promise<PlayerExitResult> {
+  const context = await movementReactionContext(params);
+  return recordPlayerExit({ ...context, intent: params.intent });
 }
 
 /** The single mutation gateway for player and AI-DM combat intents. */
@@ -1431,13 +1445,55 @@ export async function executeCombatIntent(
     let yieldEndedCombat = false;
     let fleeEndedCombat = false;
     if (intent.type === 'move') {
-      result = await applyTacticalMapAction(encounter.sessionId, {
-        action: 'move',
+      const mapBeforeMove = await loadActiveTacticalMap(encounter.sessionId);
+      const moveAction = {
+        action: 'move' as const,
         entityId: intent.actorId,
         x: intent.x,
         y: intent.y,
         changes: null,
-      });
+      };
+      const preview = mapBeforeMove
+        ? dispatchMapAction(structuredClone(mapBeforeMove), moveAction)
+        : null;
+      if (!preview?.applied) {
+        throw new BusinessLogicError(
+          'Movement refused',
+          preview?.refusal ?? { reason: 'no_active_map' },
+        );
+      }
+      const path = preview.path ?? [];
+      const completedPath = path.length ? [path[0]!] : [];
+      let interrupted = false;
+      for (const destination of path.slice(1)) {
+        const current = await CombatEncounterService.getCombatState(encounterId, userId);
+        const mover = current.participants.find((participant) => participant.id === intent.actorId);
+        if (!mover)
+          throw new BusinessLogicError('Movement actor missing', { actorId: intent.actorId });
+        const context = await movementReactionContext({
+          encounterId,
+          sessionId: encounter.sessionId,
+          userId,
+          state: current,
+          actorId: intent.actorId,
+          destination,
+        });
+        const reactions = await resolveMovementReactions({
+          ...context,
+          actor: mover,
+        });
+        if (reactions.playerDowned) {
+          interrupted = true;
+          break;
+        }
+        const step = await applyTacticalMapAction(encounter.sessionId, {
+          ...moveAction,
+          ...destination,
+        });
+        if (!step.applied) throw new BusinessLogicError('Movement refused', step.refusal);
+        completedPath.push(destination);
+      }
+      result = { applied: true, action: moveAction, path: completedPath, interrupted };
       if (!(result as { applied?: boolean }).applied) {
         throw new BusinessLogicError(
           'Movement refused',
@@ -1461,6 +1517,7 @@ export async function executeCombatIntent(
           .isDisengaged;
         if (
           actorDisengaged &&
+          !interrupted &&
           map &&
           hasLeftTheBoard(map, destination) &&
           (playerInput === undefined || playerTextDeclaresLeaving(playerInput))
