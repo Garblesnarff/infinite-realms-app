@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  CHUNK_RELOAD_BUILD_KEY,
   CHUNK_RELOAD_FLAG,
   chunkReloadAlreadyAttempted,
   installChunkReloadListener,
@@ -43,6 +44,22 @@ describe('chunk reload after a deploy (#822)', () => {
     expect(reloadOnceForChunkError(missing)).toBe(false);
     expect(reload).toHaveBeenCalledTimes(1);
     expect(chunkReloadAlreadyAttempted()).toBe(true);
+  });
+
+  it('reloads again after a later deploy, when the spent reload belongs to an older build (#1671)', () => {
+    // First deploy: this tab spent its reload on build "older-build". The tab stays open.
+    sessionStorage.setItem(CHUNK_RELOAD_FLAG, '1');
+    sessionStorage.setItem(CHUNK_RELOAD_BUILD_KEY, 'older-build');
+
+    const reload = vi.fn();
+    setChunkReloadForTests(reload);
+    const missing = new Error(
+      'Failed to fetch dynamically imported module: /assets/character-list-def.js',
+    );
+
+    // Second deploy: the running build differs from the one that spent the reload.
+    expect(reloadOnceForChunkError(missing)).toBe(true);
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 
   it('does not reload for an ordinary error', () => {
