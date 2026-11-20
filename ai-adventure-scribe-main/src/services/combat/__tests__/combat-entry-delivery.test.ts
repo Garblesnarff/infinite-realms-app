@@ -125,3 +125,27 @@ describe('startCombatEntryDelivery (#913)', () => {
     clearCombatEntryTurnConfirmed('session-next');
   });
 });
+
+describe('a superseded entry card is not a decline (#1678)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(userDataApi.getActiveCombat).mockResolvedValue(http(200, { combat: null }));
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(http(201, { encounter: { id: 'enc-2' } }));
+    vi.mocked(userDataApi.declinePendingCombatEntry).mockResolvedValue(
+      http(200, { cleared: true }),
+    );
+  });
+
+  it('returns superseded and leaves the server pending entry to the newer card', async () => {
+    const result = await startCombatEntryDelivery({
+      sessionId: 'session-superseded',
+      pending: PENDING,
+      player: PLAYER,
+      confirm: async () => 'superseded',
+    });
+
+    expect(result).toEqual({ kind: 'superseded' });
+    expect(userDataApi.declinePendingCombatEntry).not.toHaveBeenCalled();
+    expect(userDataApi.enterCombat).not.toHaveBeenCalled();
+  });
+});

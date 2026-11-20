@@ -5,13 +5,16 @@
  * moved, and only then did the popup mount. Both answers are covered: the DM request is not
  * sent while the popup is open, and what it is sent after depends on the answer.
  */
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   DECLARED_ATTACK_SESSION_ID,
+  DEAD_FOE_NOTICE,
   declaredAttackCharacter,
   declaredAttackCheckBody,
+  deadFoeCheckBody,
+  deadFoeRefusal,
   pickedTargetCheckBody,
   SHEET_CAST_PLAYER_INPUT,
   sheetCastCheckBody,
@@ -573,5 +576,55 @@ describe('useAIResponse: sheet-only option filter reads the owned sheet (#400)',
     // No sheet means no safe gate: the suggestion passes through rather than being
     // dropped on missing data.
     expect(response.text).toContain('Fireball');
+  });
+});
+
+/**
+ * #1595: a named dead creature is refused in words. The turn must settle, or the composer stays
+ * disabled (the preflight is 'running' from the top of the turn).
+ */
+describe('useAIResponse: a declared attack on a dead creature (#1595)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(consumeCombatEntryTypedAnswer).mockReturnValue(false);
+    vi.mocked(useCombat).mockReturnValue({
+      state: { isInCombat: false, activeEncounter: null },
+      refreshCombatState: vi.fn(async () => null),
+    } as any);
+    vi.mocked(useCharacter).mockReturnValue({ state: { character: null } } as any);
+    vi.mocked(userDataApi.getSessionContext).mockResolvedValue({
+      id: DECLARED_ATTACK_SESSION_ID,
+      campaign_id: 'camp-1',
+      character_id: declaredAttackCharacter.id,
+      campaign: { id: 'camp-1' },
+      character: declaredAttackCharacter,
+    } as any);
+    vi.mocked(userDataApi.detectDeclaredAttack).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ pending: null, refusal: deadFoeRefusal }),
+    } as any);
+    vi.mocked(AIService.chatWithDM).mockResolvedValue({ text: 'Pellam swings.' } as any);
+  });
+
+  it('shows the notice, does not call the DM, and leaves the composer enabled', async () => {
+    const { result } = renderHook(() => useAIResponse());
+    let response: any;
+    await act(async () => {
+      response = await result.current.getAIResponse(
+        [
+          {
+            text: deadFoeCheckBody.playerInput,
+            sender: 'player',
+            timestamp: new Date().toISOString(),
+          },
+        ] as any,
+        DECLARED_ATTACK_SESSION_ID,
+      );
+    });
+
+    expect(response.localNotice).toBe(DEAD_FOE_NOTICE);
+    expect(AIService.chatWithDM).not.toHaveBeenCalled();
+    expect(result.current.combatTurnUiState.preflight).not.toBe('running');
   });
 });

@@ -2,6 +2,74 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.52.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.51.0...v0.52.0) (2026-11-18)
+
+
+### Features
+
+* **dm:** report a dead NPC narrated as acting, shadow first ([#1595](https://github.com/Garblesnarff/infinite-realms-app/issues/1595)) ([3af7319](https://github.com/Garblesnarff/infinite-realms-app/commit/3af73198309e782c820db60f478b9d86710f2027))
+* **explore:** the public Explore page uses the board card ([#1610](https://github.com/Garblesnarff/infinite-realms-app/issues/1610)) ([08bd2fd](https://github.com/Garblesnarff/infinite-realms-app/commit/08bd2fd2cdfd562a269c5b841da880a613e345ce))
+* **rogue:** Sneak Attack, and advantage from a successful Hide ([#1637](https://github.com/Garblesnarff/infinite-realms-app/issues/1637)) ([48e5c85](https://github.com/Garblesnarff/infinite-realms-app/commit/48e5c85cc6171e1d7d3739b3f401a81b357cb9fe))
+
+
+### Bug Fixes
+
+* **campaign-page:** build the page title as one string ([#1605](https://github.com/Garblesnarff/infinite-realms-app/issues/1605)) ([914afa9](https://github.com/Garblesnarff/infinite-realms-app/commit/914afa9eb10307a58f985832b6ed693bb3360e0d)), closes [#1103](https://github.com/Garblesnarff/infinite-realms-app/issues/1103)
+* **chronicle:** keep the campaign card title inside the card without a cover ([#1607](https://github.com/Garblesnarff/infinite-realms-app/issues/1607)) ([529f37b](https://github.com/Garblesnarff/infinite-realms-app/commit/529f37b65cfbc4fe6af67f26e037299973d3a1f3))
+* **combat:** a rest request in a fight is refused before the model call ([#614](https://github.com/Garblesnarff/infinite-realms-app/issues/614)) ([ccf1981](https://github.com/Garblesnarff/infinite-realms-app/commit/ccf1981977f95c92786d6f478a231016d2174c2a))
+* **combat:** the unsupported-action notice is an engine line, not story text ([#1640](https://github.com/Garblesnarff/infinite-realms-app/issues/1640)) ([462d186](https://github.com/Garblesnarff/infinite-realms-app/commit/462d1866fc58ffb7ac12130edbdd7d6debb191a0))
+* **dice:** target-number setting on the remaining roll surfaces ([#157](https://github.com/Garblesnarff/infinite-realms-app/issues/157)) ([bde3846](https://github.com/Garblesnarff/infinite-realms-app/commit/bde38462fcb7e8cf96bfc91f2ba0f9cf7dddab96))
+* **landing:** download only the hero picture shown at the current width ([#1432](https://github.com/Garblesnarff/infinite-realms-app/issues/1432)) ([55f323c](https://github.com/Garblesnarff/infinite-realms-app/commit/55f323c374347c533079a283d731f74ba8ec8981))
+* **turn-bar:** keep the Unconscious badge inside its pip chip at 390 ([#1606](https://github.com/Garblesnarff/infinite-realms-app/issues/1606)) ([7077db1](https://github.com/Garblesnarff/infinite-realms-app/commit/7077db1439505ea7162bc360d7522d740b603048)), closes [#1103](https://github.com/Garblesnarff/infinite-realms-app/issues/1103)
+
+
+### Refactoring
+
+* **combat:** attack handlers use the server intents ([#621](https://github.com/Garblesnarff/infinite-realms-app/issues/621) part B2b) ([9b3843c](https://github.com/Garblesnarff/infinite-realms-app/commit/9b3843cbc65bcd675a055fda4c5c96a3533ded02))
+* **combat:** delete the dev-only DM combat tool and the client damage path ([#621](https://github.com/Garblesnarff/infinite-realms-app/issues/621) part B2b step 2) ([3558805](https://github.com/Garblesnarff/infinite-realms-app/commit/3558805ab1084f32da7554a828264cc2e9a37e0b))
+
+
+### Tests
+
+* **combat:** a round-1 melee attack 10 ft away closes the gap and rolls ([#1642](https://github.com/Garblesnarff/infinite-realms-app/issues/1642)) ([3c1fbd8](https://github.com/Garblesnarff/infinite-realms-app/commit/3c1fbd888f6f0c91c4259c5bb110a40cee404af2))
+* **combat:** the Attack control offers every living enemy ([#605](https://github.com/Garblesnarff/infinite-realms-app/issues/605)) ([0d98d5e](https://github.com/Garblesnarff/infinite-realms-app/commit/0d98d5ecffd227a37a0dd7225cffd6397d892a94))
+
+## [0.51.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.50.0...v0.51.0) (2026-11-17)
+
+
+### Features
+
+* **landing:** a real picture of the game in the hero ([#1432](https://github.com/Garblesnarff/infinite-realms-app/issues/1432)) ([a686bf0](https://github.com/Garblesnarff/infinite-realms-app/commit/a686bf02386ace9886449fd81d0ccd7b7d79cb3a))
+
+
+### Bug Fixes
+
+* **a11y:** only the chosen option card is marked selected ([#1594](https://github.com/Garblesnarff/infinite-realms-app/issues/1594)) ([b9d2e07](https://github.com/Garblesnarff/infinite-realms-app/commit/b9d2e075bf1dd3d83afc3d4bc5b1da54dcd9e2c6))
+* **combat:** an attack on a dead foe is refused in plain words ([#1595](https://github.com/Garblesnarff/infinite-realms-app/issues/1595)) ([1fc731b](https://github.com/Garblesnarff/infinite-realms-app/commit/1fc731b9c2f647f6322d7586029484526ef496fb))
+* **combat:** feature actions print their engine line ([#1618](https://github.com/Garblesnarff/infinite-realms-app/issues/1618)) ([4bbfabd](https://github.com/Garblesnarff/infinite-realms-app/commit/4bbfabddf1427c85e70136c50194f7b35c87de8e))
+* **combat:** rest and no-action notices are engine lines, not story text ([#614](https://github.com/Garblesnarff/infinite-realms-app/issues/614)) ([8358df8](https://github.com/Garblesnarff/infinite-realms-app/commit/8358df8083f51b171d93d179d79b1b79a6b9b26f))
+* **creation:** Point Buy Decrease works on a stored score above 15 ([#1596](https://github.com/Garblesnarff/infinite-realms-app/issues/1596)) ([8c19eb9](https://github.com/Garblesnarff/infinite-realms-app/commit/8c19eb900346ccce15d8e4e31637eda15775036c))
+* **creation:** say why Continue is blocked when Point Buy is overspent ([#1596](https://github.com/Garblesnarff/infinite-realms-app/issues/1596)) ([737dea0](https://github.com/Garblesnarff/infinite-realms-app/commit/737dea0c9a629f2546c443726e91c0c7db951c5e))
+* **dice:** the check roll dialog follows the target-number setting ([#157](https://github.com/Garblesnarff/infinite-realms-app/issues/157)) ([0801f48](https://github.com/Garblesnarff/infinite-realms-app/commit/0801f48caa5f7c6fa40a35a2d90d3f5f1bf06f1a))
+* **ingest:** mechanic items named with nested italics stay in a chunk ([#1612](https://github.com/Garblesnarff/infinite-realms-app/issues/1612)) ([b29132f](https://github.com/Garblesnarff/infinite-realms-app/commit/b29132f12ef43a69bc870b3c35d37ce081620193))
+* **ingest:** plain ### mechanic headings start a mechanic chunk ([#1612](https://github.com/Garblesnarff/infinite-realms-app/issues/1612)) ([f2a0f70](https://github.com/Garblesnarff/infinite-realms-app/commit/f2a0f702172e801ba0b0fcb5d2e9f606dafde796)), closes [#1101](https://github.com/Garblesnarff/infinite-realms-app/issues/1101)
+* **paladin:** typed Lay on Hands outside a fight; server-owned engine lines ([#1597](https://github.com/Garblesnarff/infinite-realms-app/issues/1597)) ([3cada9a](https://github.com/Garblesnarff/infinite-realms-app/commit/3cada9a0269f70678ded7678a622e2c937748a38))
+* **roster:** Play and Delete without hover on touch; campaign on the card ([#209](https://github.com/Garblesnarff/infinite-realms-app/issues/209)) ([a4a8979](https://github.com/Garblesnarff/infinite-realms-app/commit/a4a8979694ca407010d7f40574ad165e6fba10bb))
+* **sessions:** End session closes the open fight ([#1619](https://github.com/Garblesnarff/infinite-realms-app/issues/1619)) ([d5b693d](https://github.com/Garblesnarff/infinite-realms-app/commit/d5b693d3317d576abc21ffba2751d996caeedd1f))
+* **sessions:** one session number for the list and the chronicle ([#1592](https://github.com/Garblesnarff/infinite-realms-app/issues/1592)) ([74f7701](https://github.com/Garblesnarff/infinite-realms-app/commit/74f7701bc617cb882dd16783e62a1e6ae479a197))
+* **sheet:** one character shape — Inspiration in a session, Always prepared on the sheet ([#1593](https://github.com/Garblesnarff/infinite-realms-app/issues/1593)) ([cac1d45](https://github.com/Garblesnarff/infinite-realms-app/commit/cac1d45b2827ea6861947d10e05f68b5d22d242e))
+
+
+### Refactoring
+
+* **combat:** delete client combat functions with no caller ([#621](https://github.com/Garblesnarff/infinite-realms-app/issues/621) part B1) ([6886ce2](https://github.com/Garblesnarff/infinite-realms-app/commit/6886ce2d696e117c4582cf9fecf89aadf402d5dd))
+* **combat:** DM damage and heal controls use the server routes ([#621](https://github.com/Garblesnarff/infinite-realms-app/issues/621) part B2a) ([8df96c7](https://github.com/Garblesnarff/infinite-realms-app/commit/8df96c75447bc3b26709d4f871b5cda20657a24e))
+
+
+### Tests
+
+* **premades:** level-1 max HP matches the SRD ([#52](https://github.com/Garblesnarff/infinite-realms-app/issues/52)) ([09c9c15](https://github.com/Garblesnarff/infinite-realms-app/commit/09c9c1503abc3b706c09672f21a769641a205cd1))
+
 ## [0.50.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.49.1...v0.50.0) (2026-11-17)
 
 

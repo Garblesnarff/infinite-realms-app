@@ -14,9 +14,14 @@ const state = vi.hoisted(() => ({
 vi.mock('@/hooks/use-starter-campaigns', () => ({
   useStarterCampaigns: () => state,
 }));
-// The Table look is the only campaign card now (the boxed card); StarterCampaignCard is unreachable here.
-vi.mock('@/features/campaigns/table/BoxedCampaign', () => ({
-  BoxedCampaign: () => <div data-testid="campaign-card" />,
+// Logged out by default: the page reads auth through useAuth (#1610, sign-in branch).
+const auth = vi.hoisted(() => ({ user: null as null | { id: string }, loading: false }));
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: () => auth,
+}));
+// The public Explore page uses the board card (#1610); the boxed card is not rendered here.
+vi.mock('@/features/explore/PublicExploreCard', () => ({
+  PublicExploreCard: () => <div data-testid="campaign-card" />,
 }));
 
 describe('ExploreGalleryPage (#2343 item 16)', () => {

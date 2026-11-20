@@ -85,6 +85,18 @@ const endTurnIntents = () =>
 
 const resolutionPayload = () => JSON.parse(chatWithDM.mock.calls[0][0].message);
 
+/** #1640: the refusal line the player reads, as plain engine-block text. */
+const NOTICE_FOR: Record<string, string> = {
+  help: 'Help is not a supported action yet. Your turn is not used: choose Attack, Dodge, Dash, Disengage or Hide.',
+  ready:
+    'Ready is not a supported action yet. Your turn is not used: choose Attack, Dodge, Dash, Disengage or Hide.',
+  use_object:
+    'Use an Object is not a supported action yet. Your turn is not used: choose Attack, Dodge, Dash, Disengage or Hide.',
+};
+
+const engineLines = (result: any): string[] =>
+  (result.combatEngineBlocks ?? []).flatMap((block: any) => block.lines);
+
 const run = (combatActions: any[], overrides: Record<string, unknown> = {}) =>
   resolveDeclaredCombatActions({
     encounterId: '10444307-0000-4000-8000-000000000003',
@@ -129,11 +141,25 @@ describe('a declared action type the engine has no owner for', () => {
       });
       expect(payload.authoritativeCombatResults).toHaveLength(0);
 
-      // And the player reads it, in this layer's words rather than the model's.
-      expect(result.text).toContain('That action is not supported yet');
-      expect(result.text).toContain('still your turn');
+      // #1640: the notice is an engine line, plain text, naming the action and the choices
+      // left. It is not in the DM's prose, and the turn stays the player's.
+      expect(engineLines(result)).toEqual([NOTICE_FOR[actionType]]);
+      expect(result.text).not.toContain('not supported');
+      expect(result.text).toContain('The moment hangs.');
+      expect(result.text.trim().endsWith('what do you do?')).toBe(true);
     },
   );
+
+  // #1640: a kind the notice has no name for keeps the generic line, still an engine line.
+  it('names an unknown action kind with the generic line, as an engine line', async () => {
+    const result = await run([unsupportedAction(PLAYER_ID, 'teleport', NPC_ID)]);
+
+    expect(engineLines(result)).toEqual([
+      'That action is not supported yet. Your turn is not used: choose Attack, Dodge, Dash, Disengage or Hide.',
+    ]);
+    expect(result.text).not.toContain('not supported');
+    expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+  });
 
   it('refuses an NPC help the same way: reported, never settled, nothing advances', async () => {
     await run([unsupportedAction(NPC_ID, 'help', PLAYER_ID)]);
@@ -179,8 +205,9 @@ describe('a declared action type the engine has no owner for', () => {
       expect(repairRefusedCombatAction).not.toHaveBeenCalled();
       expect(fetchMock).not.toHaveBeenCalled();
 
-      expect(result.text).toContain('That action is not supported yet');
-      expect(result.text).toContain('still your turn');
+      // #1640: the same engine line on the player's own turn, and nothing in the prose.
+      expect(engineLines(result)).toEqual([NOTICE_FOR[actionType]]);
+      expect(result.text).not.toContain('not supported');
       expect(result.text).not.toContain('out of turn');
 
       // And the narration pass is told the same: it did not happen, still their turn.

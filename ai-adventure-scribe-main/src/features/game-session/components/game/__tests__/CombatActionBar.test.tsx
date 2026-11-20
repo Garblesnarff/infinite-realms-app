@@ -473,6 +473,15 @@ describe('CombatActionBar', () => {
         yield: yieldAction,
         use_item: useItemAction,
         death_save: { type: 'death_save', label: 'Death saving throw' },
+        // #1638: Rage, a Barbarian's bonus action, rides the More menu.
+        rage: { type: 'rage', label: 'Rage' },
+        // #1639: the off-hand attack, a bonus action, rides the More menu.
+        off_hand_attack: {
+          type: 'off_hand_attack',
+          label: 'Off-hand attack with Dagger (bonus action)',
+          weaponId: 'dagger',
+          targetIds: ['orc-1'],
+        },
       };
       expect(Object.keys(oneOfEach).sort()).toEqual(Object.keys(LEGAL_ACTION_PLACEMENT).sort());
       const user = userEvent.setup();
@@ -520,5 +529,64 @@ describe('CombatActionBar', () => {
         unmount();
       }
     });
+  });
+});
+
+/**
+ * #1670: Lay on Hands heal in More has a stepper. It opens at the engine's default, moves between
+ * 1 and the engine's cap, and sends the chosen amount on Heal.
+ */
+describe('More menu: Lay on Hands amount stepper (#1670)', () => {
+  // The engine's chip: 10 missing HP, a pool of 15, so the default and the cap are both 10.
+  const healChip: LegalAction = {
+    type: 'lay_on_hands',
+    targetId: 'pc-1',
+    amount: 10,
+    maxAmount: 10,
+    label: 'Lay on Hands — heal yourself 10 HP',
+  };
+
+  it('opens at the engine default and sends the stepped amount on Heal', async () => {
+    const onAction = vi.fn();
+    render(
+      <CombatActionBar {...defaultProps} onAction={onAction} actions={[healChip, endTurnAction]} />,
+    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
+    const user = userEvent.setup();
+    await user.click(within(toolbar).getByRole('button', { name: /^More/ }));
+
+    expect(await screen.findByText('Points to spend: 10 of up to 10')).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'More points (+1)' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+
+    await user.click(screen.getByRole('menuitem', { name: 'Fewer points (-1)' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Fewer points (-1)' }));
+    expect(screen.getByText('Points to spend: 8 of up to 10')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('menuitem', { name: 'Lay on Hands — heal yourself 8 HP' }));
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledWith({ ...healChip, amount: 8 });
+  });
+
+  it('never goes below 1 or above the engine cap', async () => {
+    const onAction = vi.fn();
+    const oneChip: LegalAction = { ...healChip, amount: 2, maxAmount: 2 };
+    render(
+      <CombatActionBar {...defaultProps} onAction={onAction} actions={[oneChip, endTurnAction]} />,
+    );
+    const toolbar = screen.getByRole('toolbar', { name: 'Your actions' });
+    const user = userEvent.setup();
+    await user.click(within(toolbar).getByRole('button', { name: /^More/ }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Fewer points (-1)' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Fewer points (-1)' }));
+    expect(screen.getByRole('menuitem', { name: 'Fewer points (-1)' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    expect(screen.getByText('Points to spend: 1 of up to 2')).toBeInTheDocument();
+    await user.click(screen.getByRole('menuitem', { name: 'Lay on Hands — heal yourself 1 HP' }));
+    expect(onAction).toHaveBeenLastCalledWith({ ...oneChip, amount: 1 });
   });
 });

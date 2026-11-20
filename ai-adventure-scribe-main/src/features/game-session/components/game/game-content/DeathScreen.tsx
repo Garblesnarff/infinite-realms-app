@@ -1,14 +1,17 @@
 import React from 'react';
 
 import { CampaignEndState } from './CampaignEndState';
+import { useShowTargetNumbers } from '../../../hooks/use-show-target-numbers';
 import { formatNarrative } from '../../chat/message-list/formatNarrative';
 import { prepareChatDisplayText } from '../../chat/message-list/prepare-chat-display-text';
+import { EngineResultCardView } from '../EngineResultCardView';
 
 import { chronicleRefetchInterval } from '@/components/chronicles/ChronicleViewer';
 import { Button } from '@/components/ui/button';
 import { useMessageContext, useOptionalMessageContext } from '@/contexts/MessageContext';
 import { trpc } from '@/infrastructure/api';
-import { combatEngineBlocksFromContext } from '@/utils/combat-engine-blocks';
+import { isEngineResultCard, type EngineResultCard } from '@/services/combat/engine-result-card';
+import { combatEngineBlocksFromContext, combatRoundFrom } from '@/utils/combat-engine-blocks';
 
 export { displayFinalLine } from './CampaignEndState';
 
@@ -62,6 +65,86 @@ export function finalEngineLines(
   return lines
     .map((line) => line.trim())
     .filter(Boolean)
+    .slice(-limit);
+}
+
+export function cleanEngineCard(card: EngineResultCard): EngineResultCard {
+  const stripEngine = (value: string): string => value.replace(/⚙\uFE0F?\s*Engine:\s*/g, '');
+  return {
+    ...card,
+    line: stripEngine(card.line),
+    ...(card.detail ? { detail: stripEngine(card.detail) } : {}),
+    ...(card.covers ? { covers: card.covers.map(stripEngine) } : {}),
+  };
+}
+
+const STRIP_ENGINE_PREFIX = /⚙\uFE0F?\s*Engine:\s*/g;
+
+function stripEnginePrefix(value: string): string {
+  return value.replace(STRIP_ENGINE_PREFIX, '').trim();
+}
+
+/**
+ * #1431: a live death carries `finalLines` from the killing round. When those
+ * lines all match the cards read back from the saved log, the cards (with their
+ * badges and HP) win; otherwise the raw lines render. Empty `lines` means a
+ * reload, where the restored cards are the only source.
+ */
+export function cardsMatchingLines(cards: EngineResultCard[], lines: string[]): EngineResultCard[] {
+  const cleanedLines = (lines ?? []).map(stripEnginePrefix).filter(Boolean);
+  if (cleanedLines.length === 0) return cards;
+  const cleanedCards = (cards ?? []).map((card) => ({
+    line: stripEnginePrefix(card.line),
+    covers: (card.covers ?? []).map(stripEnginePrefix),
+  }));
+  const allMatch = cleanedLines.every((live) =>
+    cleanedCards.some(
+      (card) => live === card.line || card.line.includes(live) || card.covers.includes(live),
+    ),
+  );
+  return allMatch ? cards : [];
+}
+
+/**
+ * #1431: the engine's final result cards of the run's last round, read back from
+ * the saved log. Same selection as `finalEngineLines` (newest round only, newest
+ * last, at most `limit`), but returns the structured cards the live chat renders,
+ * dropping initiative and refused cards.
+ */
+export function finalEngineCards(
+  messages: ReadonlyArray<{ sender?: string; context?: Record<string, unknown> }>,
+  limit = 3,
+): EngineResultCard[] {
+  const blocks: { round: number; cards: EngineResultCard[] }[] = [];
+  for (const message of messages) {
+    if (message.sender !== 'system') continue;
+    const context = message.context;
+    const engineBlocks = combatEngineBlocksFromContext(context);
+    if (engineBlocks.length) {
+      for (const block of engineBlocks) {
+        const cards = (block.cards ?? []).filter(isEngineResultCard);
+        blocks.push({ round: block.round, cards });
+      }
+    } else {
+      const cards = (Array.isArray(context?.engineCards) ? context.engineCards : []).filter(
+        isEngineResultCard,
+      );
+      blocks.push({ round: combatRoundFrom(context), cards });
+    }
+  }
+  const last = blocks[blocks.length - 1];
+  if (!last) return [];
+  const cards: EngineResultCard[] = [];
+  for (
+    let index = blocks.length - 1;
+    index >= 0 && blocks[index].round === last.round;
+    index -= 1
+  ) {
+    cards.unshift(...blocks[index].cards);
+  }
+  return cards
+    .filter((card) => card.kind !== 'initiative' && card.kind !== 'refused')
+    .map(cleanEngineCard)
     .slice(-limit);
 }
 
@@ -138,6 +221,17 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
     () => (messages ? finalEngineLines(messages) : []),
     [messages],
   );
+  const restoredCards = React.useMemo(
+    () => (messages ? finalEngineCards(messages) : []),
+    [messages],
+  );
+  const finalCards = React.useMemo(
+    () =>
+      finalLines && finalLines.length
+        ? cardsMatchingLines(restoredCards, finalLines)
+        : restoredCards,
+    [finalLines, restoredCards],
+  );
   return (
     <CampaignEndState
       mode="fallen"
@@ -145,6 +239,7 @@ export const FallenEndState: React.FC<FallenEndStateProps> = ({
       portraitUrl={portraitUrl}
       identity={identity}
       finalLines={finalLines?.length ? finalLines : restoredLines}
+      finalCards={finalCards}
       campaignName={campaignName}
       chooseHeroHref={chooseHeroHref}
       chooseHeroPending={chooseHeroPending}
@@ -277,6 +372,7 @@ export const FallenStoryLog: React.FC<{ sessionId?: string | null }> = ({ sessio
 const FallenStoryEntries: React.FC = () => {
   const { messages, historyReady, hasMore, loadMore, isLoading, isFetchingMore, messagesError } =
     useMessageContext();
+  const { showTargetNumbers } = useShowTargetNumbers();
   const requestedAtCount = React.useRef(-1);
   React.useEffect(() => {
     if (
@@ -292,9 +388,11 @@ const FallenStoryEntries: React.FC = () => {
     }
   }, [historyReady, hasMore, isLoading, isFetchingMore, messagesError, loadMore, messages.length]);
   // The chat display preparation removes engine lines and roll requests from DM prose.
+  type StoryCardEntry = { card: EngineResultCard; round: number };
   const visible = messages
     .map((message) => {
       let text = '';
+      const cards: StoryCardEntry[] = [];
       if (message.sender === 'dm') {
         text = prepareChatDisplayText(message.text ?? '').text;
       } else if (
@@ -305,55 +403,99 @@ const FallenStoryEntries: React.FC = () => {
         text = message.text ?? '';
       } else if (message.sender === 'system') {
         const blocks = combatEngineBlocksFromContext(message.context);
-        const cards = blocks.length
-          ? blocks.flatMap((block) => block.cards ?? [])
-          : (message.context?.engineCards ?? []);
-        text = cards
-          .flatMap((card) => {
-            if (card.kind === 'initiative' || card.kind === 'refused') return [];
-            if (card.kind === 'death_save') {
-              if (card.math?.kind !== 'attack') return card.detail ? [card.detail] : [];
-              const status =
-                card.status && card.hp
-                  ? `${card.hp.name} is ${card.status.toLowerCase()}`
-                  : card.status;
-              return [[card.detail, card.effect, status].filter(Boolean).join(' ')];
+        if (blocks.length) {
+          for (const block of blocks) {
+            for (const card of block.cards ?? []) {
+              if (!isEngineResultCard(card)) continue;
+              if (card.kind === 'refused') continue;
+              cards.push({ card, round: block.round });
             }
-            const outcome = card.badge ? `: ${card.badge.word.toLowerCase()}` : '';
-            const status =
-              card.status && card.hp
-                ? `${card.hp.name} is ${card.status.toLowerCase()}`
-                : card.status;
-            return [[`${card.title}${outcome}.`, card.effect, status].filter(Boolean).join(' ')];
-          })
-          .join('\n\n');
+          }
+        } else {
+          const round = combatRoundFrom(message.context);
+          const engineCards = (
+            Array.isArray(message.context?.engineCards) ? message.context.engineCards : []
+          ).filter(isEngineResultCard);
+          for (const card of engineCards) {
+            if (card.kind === 'refused') continue;
+            cards.push({ card, round });
+          }
+        }
       }
-      return { message, text };
+      return { message, text, cards };
     })
-    .filter(({ text }) => text.trim());
+    .filter(({ text, cards }) => text.trim() || cards.length > 0);
   if (visible.length === 0 && !hasMore) {
     return (
       <p className="text-sm text-muted-foreground">The story so far is still being written.</p>
     );
   }
+  let lastRenderedRound: number | undefined;
   return (
-    <div data-testid="death-screen-story-log" className="space-y-3">
-      {hasMore && (
-        <button type="button" onClick={loadMore} disabled={isLoading || isFetchingMore}>
-          {isLoading || isFetchingMore
-            ? 'Loading earlier story…'
-            : messagesError
-              ? 'Retry loading earlier story'
-              : 'Load earlier story'}
-        </button>
-      )}
-      {visible.map(({ message, text }, index) => (
-        <div key={message.id ?? index}>
-          <div className="whitespace-pre-wrap text-sm leading-relaxed text-card-foreground">
-            {formatNarrative(text).content}
+    <>
+      <div data-testid="death-screen-story-log" className="space-y-3">
+        {hasMore && (
+          <button type="button" onClick={loadMore} disabled={isLoading || isFetchingMore}>
+            {isLoading || isFetchingMore
+              ? 'Loading earlier story…'
+              : messagesError
+                ? 'Retry loading earlier story'
+                : 'Load earlier story'}
+          </button>
+        )}
+        {visible.map(({ message, text, cards }, index) => (
+          <div key={message.id ?? index}>
+            {text.trim() ? (
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-card-foreground">
+                {formatNarrative(text).content}
+              </div>
+            ) : null}
+            {cards.length > 0 && (
+              <div className="space-y-2">
+                {cards.map((entry, cardIndex) => {
+                  const showDivider =
+                    lastRenderedRound === undefined || entry.round !== lastRenderedRound;
+                  lastRenderedRound = entry.round;
+                  const card = cleanEngineCard(entry.card);
+                  return (
+                    <React.Fragment key={`${message.id ?? index}-${cardIndex}`}>
+                      {showDivider && (
+                        <div
+                          role="separator"
+                          data-testid="death-story-round-divider"
+                          className="flex items-center gap-3 py-2"
+                        >
+                          <span className="h-px flex-1 bg-infinite-gold/30" />
+                          <span className="text-[13px] font-bold uppercase tracking-[0.12em] text-infinite-gold">
+                            Round {entry.round}
+                          </span>
+                          <span className="h-px flex-1 bg-infinite-gold/30" />
+                        </div>
+                      )}
+                      <EngineResultCardView card={card} showTargetNumbers={showTargetNumbers} />
+                      {card.status &&
+                        card.hp &&
+                        card.status.trim().replace(/\.+$/, '').toLowerCase() === 'dead' && (
+                          <p
+                            data-testid="death-story-status"
+                            className="ir-display text-center text-[18px] font-bold text-[#eaeefa]"
+                          >
+                            {`${card.hp.name} is dead.`}
+                          </p>
+                        )}
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+      {!hasMore && visible.length > 0 && (
+        <p data-testid="death-story-end" className="text-center text-sm text-muted-foreground">
+          End of the saved story. Nothing more can be added.
+        </p>
+      )}
+    </>
   );
 };

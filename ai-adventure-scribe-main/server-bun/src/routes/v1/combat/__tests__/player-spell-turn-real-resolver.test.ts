@@ -111,6 +111,29 @@ const narrationCalls: Array<Record<string, unknown>> = [];
 const serverLog = (level: string) => (data: unknown, msg?: unknown) => {
   serverLogs.push({ level, data, msg });
 };
+// The Hide and Rage marks live in the session row, which this harness does not model: nothing is hidden
+// or raging. The stub keeps every export the engine imports, so the module graph still links. (A spread
+// of the real module would load the database client, which needs DATABASE_URL.)
+mock.module('../../../../services/combat/combat-turn-flags.js', () => ({
+  markHiddenAttacker: async () => {},
+  isHiddenAttacker: async () => false,
+  clearHiddenAttacker: async () => {},
+  claimSneakAttack: async () => false,
+  clearSneakAttackSpent: async () => {},
+  claimRage: async () => null,
+  isRaging: async () => false,
+  clearRage: async () => {},
+  markRageActive: async () => {},
+  endRageIfIdle: async () => {},
+  clearFightFlags: async () => {},
+  combatTurnFlagsPreservingState: (incoming: unknown) => incoming,
+  classLevelOfCharacter: async () => 0,
+  rogueLevelOf: async () => 0,
+  activeAlliesOf: async () => [],
+  RAGE_DURATION_ROUNDS: 10,
+  markLightAttack: async () => {},
+  readLightAttackMark: async () => null,
+}));
 mock.module('../../../../../../db/client', () => ({
   withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(),
   db: {},

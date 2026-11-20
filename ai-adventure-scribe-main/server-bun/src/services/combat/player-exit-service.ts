@@ -77,6 +77,7 @@ type ExitParticipant = {
   isActive: boolean;
   maxHp: number;
   isDisengaged?: boolean | null;
+  reactionUsed?: boolean | null;
   status?: { currentHp: number; isConscious: boolean } | null;
 };
 
@@ -94,7 +95,7 @@ export type OpportunityAttacker = {
  * turn — that flag is cleared every round by `resetTurnResources`, which is exactly the window SRD
  * gives.
  */
-export async function selectOpportunityAttacker(params: {
+export async function selectOpportunityAttackers(params: {
   state: CombatState;
   actor: ExitParticipant;
   map: { entities: MapEntity[] } | null;
@@ -104,15 +105,26 @@ export async function selectOpportunityAttacker(params: {
   ) => Promise<{ id: string; name: string; normalRange: number; ranged: boolean }>;
   hasLineOfSight: (fromId: string, toId: string) => boolean;
   distanceFeet: (from: MapEntity, to: MapEntity) => number;
-}): Promise<OpportunityAttacker | null> {
+  conditionsOf?: (id: string) => Promise<string[]>;
+}): Promise<OpportunityAttacker[]> {
   const { state, actor, map, reachOf, hasLineOfSight, distanceFeet } = params;
-  if (actor.isDisengaged || !map) return null;
+  if (actor.isDisengaged || !map) return [];
   const from = map.entities.find((entity) => entity.id === actor.id);
-  if (!from) return null;
+  if (!from) return [];
   const inReach: OpportunityAttacker[] = [];
   for (const candidate of state.participants) {
     if (candidate.id === actor.id) continue;
     if (!isLiveHostile(candidate as unknown as Parameters<typeof isLiveHostile>[0])) continue;
+    if ((candidate as unknown as ExitParticipant).reactionUsed) continue;
+    const conditions = (await params.conditionsOf?.(candidate.id)) ?? [];
+    if (
+      conditions.some((name) =>
+        ['blinded', 'incapacitated', 'unconscious', 'paralyzed', 'petrified', 'stunned'].includes(
+          name.toLowerCase(),
+        ),
+      )
+    )
+      continue;
     const to = map.entities.find((entity) => entity.id === candidate.id);
     if (!to || !hasLineOfSight(candidate.id, actor.id)) continue;
     const distance = distanceFeet(from, to);
@@ -125,7 +137,13 @@ export async function selectOpportunityAttacker(params: {
       distanceFeet: distance,
     });
   }
-  return inReach.sort((left, right) => left.distanceFeet - right.distanceFeet)[0] ?? null;
+  return inReach.sort((left, right) => left.distanceFeet - right.distanceFeet);
+}
+
+export async function selectOpportunityAttacker(
+  params: Parameters<typeof selectOpportunityAttackers>[0],
+): Promise<OpportunityAttacker | null> {
+  return (await selectOpportunityAttackers(params))[0] ?? null;
 }
 
 export type PlayerExitResult = {
@@ -166,7 +184,7 @@ export async function recordPlayerExit(params: {
     targetIsDead?: boolean;
     isCritical?: boolean;
   } | null>;
-  selectAttacker: (actor: ExitParticipant) => Promise<OpportunityAttacker | null>;
+  selectAttackers: (actor: ExitParticipant) => Promise<OpportunityAttacker[]>;
   markExited: (encounterId: string, participantId: string) => Promise<void>;
   label: (participantId: string) => string;
   /** The engine slug the narration contract matches actor and target on, not the display name. */
@@ -182,8 +200,8 @@ export async function recordPlayerExit(params: {
   let opportunityAttack: PlayerExitResult['opportunityAttack'] = null;
   let playerDowned = false;
   if (intent === 'flee') {
-    const attacker = await params.selectAttacker(actor);
-    if (attacker) {
+    const attackers = await params.selectAttackers(actor);
+    for (const attacker of attackers) {
       const attackerName = params.label(attacker.participant.id);
       const targetName = params.label(actorId);
       // Resolved, or nothing is said about it. A reaction the engine refused must leave NO trace
@@ -203,7 +221,7 @@ export async function recordPlayerExit(params: {
         return null;
       });
       if (outcome) {
-        opportunityAttack = {
+        opportunityAttack ??= {
           attackerName,
           hit: outcome.hit === true,
           finalDamage: Number(outcome.finalDamage ?? 0),
@@ -223,6 +241,7 @@ export async function recordPlayerExit(params: {
           outcome.targetIsDead === true ||
           outcome.targetIsConscious === false ||
           (outcome.targetNewHp != null && outcome.targetNewHp <= 0);
+        if (playerDowned) break;
       }
     }
   }

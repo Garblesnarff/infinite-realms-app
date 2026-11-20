@@ -4,11 +4,7 @@
 
 import { useCallback } from 'react';
 
-import { buildCharacterData } from './character-data';
-import { createCombatParticipant } from './participant-factory';
-
 import type { ReducerAction } from './combat-reducer';
-import type { Character } from '@/types/character';
 import type { CombatParticipant, CombatState, ReactionOpportunity } from '@/types/combat';
 
 import { processMovementAction } from '@/utils/movementUtils';
@@ -18,7 +14,6 @@ type Dispatch = (action: ReducerAction) => void;
 interface UseParticipantManagementArgs {
   state: CombatState;
   dispatch: Dispatch;
-  character: Character | null;
   addReactionOpportunity: (opportunity: ReactionOpportunity) => void;
   addParticipantReactionOpportunity: (
     participantId: string,
@@ -27,7 +22,6 @@ interface UseParticipantManagementArgs {
 }
 
 interface UseParticipantManagementReturn {
-  addParticipant: (participant: Partial<CombatParticipant>) => Promise<void>;
   removeParticipant: (participantId: string) => Promise<void>;
   updateParticipant: (participantId: string, updates: Partial<CombatParticipant>) => Promise<void>;
   moveParticipant: (
@@ -40,24 +34,9 @@ interface UseParticipantManagementReturn {
 export function useParticipantManagement({
   state,
   dispatch,
-  character,
   addReactionOpportunity,
   addParticipantReactionOpportunity,
 }: UseParticipantManagementArgs): UseParticipantManagementReturn {
-  const addParticipant = useCallback(
-    async (participant: Partial<CombatParticipant>) => {
-      const characterData = buildCharacterData(character);
-
-      const fullParticipant = createCombatParticipant(participant, {
-        rollInitiative: !participant.initiative,
-        characterData,
-      });
-
-      dispatch({ type: 'ADD_PARTICIPANT', participant: fullParticipant });
-    },
-    [character, dispatch],
-  );
-
   const removeParticipant = useCallback(
     async (participantId: string) => {
       dispatch({ type: 'REMOVE_PARTICIPANT', participantId });
@@ -100,5 +79,5 @@ export function useParticipantManagement({
     [state.activeEncounter, addReactionOpportunity, addParticipantReactionOpportunity, dispatch],
   );
 
-  return { addParticipant, removeParticipant, updateParticipant, moveParticipant };
+  return { removeParticipant, updateParticipant, moveParticipant };
 }

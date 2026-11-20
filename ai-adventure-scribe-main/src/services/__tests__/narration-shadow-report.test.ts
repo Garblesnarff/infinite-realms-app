@@ -8,6 +8,7 @@ vi.mock('@/services/auth/TokenService', () => ({
 
 import {
   FAILED_CHECK_SHADOW_REPORT_BODY,
+  NARRATED_DEAD_NPC_SHADOW_REPORT_BODY,
   NARRATED_DEATH_SHADOW_REPORT_BODY,
 } from '../../../shared/test-fixtures/narration-shadow-telemetry';
 
@@ -45,5 +46,18 @@ describe('reportNarrationShadowHit (#468)', () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body).toMatchObject(FAILED_CHECK_SHADOW_REPORT_BODY);
+  });
+
+  // #1595 shadow count: the dead-NPC report posts the shared fixture body, pattern names only.
+  it('posts the #1595 dead-NPC fixture body with pattern names only', async () => {
+    reportNarrationShadowHit('narrated_dead_npc_acting', 'sess-1595-fixture', [
+      'attack',
+      'return_or_entry',
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toMatchObject(NARRATED_DEAD_NPC_SHADOW_REPORT_BODY);
   });
 });

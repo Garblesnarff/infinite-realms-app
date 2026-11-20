@@ -488,6 +488,13 @@ export async function deriveCombatEntryFirstAction(
       refusalReason === 'movement_exhausted'
         ? 'movement ran out before you reached the required distance'
         : 'no reachable adjacent cell was available';
+    // #1642: the move spends movement and nothing else. The action and the turn stay the
+    // player's (2014 SRD: a move uses movement, not the action), so the notice says what is left.
+    const movementLeft = Math.max(0, (mapActor?.movementRemaining ?? 0) - moved);
+    const leftLine =
+      movementLeft <= 0
+        ? 'You have no movement left this turn; your action is not used (a ranged attack, Dash or Dodge).'
+        : `You have ${movementLeft} ft of movement left; your action is not used.`;
     return {
       type: 'move',
       actor: playerParticipant.id,
@@ -503,8 +510,8 @@ export async function deriveCombatEntryFirstAction(
       reach,
       notice:
         moved > 0
-          ? `You close ${moved} ft. ${targetLabel} is still ${targetDistance} ft away because ${reasonText}. Your turn is spent.`
-          : `You could not move closer to ${targetLabel}; it is still ${targetDistance} ft away because ${reasonText}. Your turn is spent.`,
+          ? `You close ${moved} ft. ${targetLabel} is still ${targetDistance} ft away because ${reasonText}. ${leftLine}`
+          : `You could not move closer to ${targetLabel}; it is still ${targetDistance} ft away because ${reasonText}. ${leftLine}`,
       combat_action: {
         actor_id: playerParticipant.id,
         action_type: 'move',

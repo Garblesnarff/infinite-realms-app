@@ -16,12 +16,15 @@ import { parseMessageOptions } from '@/utils/parseMessageOptions';
 
 export type PendingCombatEntry = NonNullable<AIResponse['combat_entry_pending']>;
 
-/** Ask the player whether to strike, naming the declared target when there is one. */
+/**
+ * Ask the player whether to strike, naming the declared target when there is one.
+ * `superseded` (#1678): a newer card replaced this one; it is neither a yes nor a decline.
+ */
 export function confirmCombatEntry(
   pendingEntry: PendingCombatEntry,
   player: { name: string; initiativeModifier: number },
   playerMessage?: string,
-): Promise<boolean> {
+): Promise<boolean | 'superseded'> {
   // The card never names a placeholder: "Strike at Hostile Creature?" told the player nothing
   // (#2532). The server names the creature before it sends the entry; this covers a server that has
   // not restarted under a client that has.
@@ -78,7 +81,8 @@ export function confirmCombatEntry(
 /** What the server made of a message that might declare an attack. */
 export type DeclaredAttackCheck =
   | { kind: 'pending'; pending: PendingCombatEntry }
-  | { kind: 'choice'; spellName: string; candidates: string[] };
+  | { kind: 'choice'; spellName: string; candidates: string[] }
+  | { kind: 'refused'; notice: string }; // #1595: a dead creature; the notice is the engine line.
 
 /** The last DM message, sent so the server can tell which creatures "him" can mean. */
 const RECENT_NARRATION_CHARS = 4_000;
@@ -137,8 +141,10 @@ export async function checkDeclaredAttack(params: {
     const body = (await response.json()) as {
       pending?: PendingCombatEntry | null;
       targetChoice?: { spellName: string; candidates: string[] };
+      refusal?: { reason: 'dead'; name: string };
     };
     if (body.pending) return { kind: 'pending', pending: body.pending };
+    if (body.refusal) return { kind: 'refused', notice: `${body.refusal.name} is dead.` };
     if (body.targetChoice?.candidates.length) {
       return { kind: 'choice', ...body.targetChoice };
     }
@@ -155,6 +161,7 @@ export async function checkDeclaredAttack(params: {
 }
 
 export type HeldCombatEntry =
+  | { decision: 'refused'; notice: string }
   | {
       pending: PendingCombatEntry;
       /**
@@ -182,16 +189,17 @@ export async function holdCombatEntryBeforeDm(params: {
   const check = await checkDeclaredAttack(params);
   if (!player || !check) return null;
 
+  if (check.kind === 'refused') return { decision: 'refused', notice: check.notice };
   if (check.kind === 'choice') return holdForTargetChoice(params, check, player);
 
-  let confirmed: boolean;
+  let confirmed: boolean | 'superseded';
   try {
     confirmed = await confirmCombatEntry(check.pending, player, params.message);
   } catch (error) {
     logger.warn('[CombatEntry] held entry could not be confirmed', error);
     return { pending: check.pending, decision: 'unavailable' };
   }
-  return confirmed
+  return confirmed === true
     ? { pending: check.pending, decision: 'confirmed' }
     : { decision: 'declined', label: declinedAttackLabel(check.pending) };
 }

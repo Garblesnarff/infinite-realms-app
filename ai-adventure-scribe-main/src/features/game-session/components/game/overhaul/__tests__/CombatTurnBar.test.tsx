@@ -858,3 +858,67 @@ describe('turn bar vital chip word (#1507)', () => {
     }
   });
 });
+
+describe('dying badge fits its fixed chip (#1606)', () => {
+  it('shows the Unconscious word in its own span in a wrapping, untruncated badge', () => {
+    const status = {
+      ...DYING_SCHOLAR_PARTICIPANT.status,
+      currentHp: 0,
+      isConscious: false,
+      deathSavesSuccesses: 0,
+      deathSavesFailures: 0,
+    };
+    const wire = (
+      overrides: Partial<AuthoritativeCombatPayload['participants'][number]>,
+    ): AuthoritativeCombatPayload['participants'][number] => ({
+      ...DYING_SCHOLAR_PARTICIPANT,
+      conditions: [...DYING_SCHOLAR_PARTICIPANT.conditions],
+      status: { ...status },
+      ...overrides,
+    });
+    const encounterState = mapAuthoritativeCombat({
+      encounter: { ...DYING_SCHOLAR_ENCOUNTER, currentRound: 4, currentTurnOrder: 0 },
+      participants: [
+        wire({ id: 'scholar', name: 'The Scholar', initiative: 15, vitalState: 'dying' }),
+        wire({
+          id: 'foe',
+          characterId: null,
+          name: 'Captain Sarah Reeves',
+          participantType: 'monster',
+          vitalState: 'standing',
+          initiative: 4,
+          status: {
+            ...status,
+            currentHp: 7,
+            isConscious: true,
+          },
+        }),
+      ],
+    });
+    const turn = summarizeCombatTurn(encounterState);
+    if (!turn) throw new Error('expected a combat turn summary');
+    document.body.classList.add('ir-table-look');
+    try {
+      render(<CombatTurnBar summary={turn} busy={null} playerDown />);
+
+      const badgeList = screen.getAllByTestId('combat-turn-dying');
+      expect(badgeList).toHaveLength(1);
+      const badge = badgeList[0];
+      expect(badge.textContent?.trim()).toBe('Unconscious');
+      const word = Array.from(badge.querySelectorAll(':scope > span')).find(
+        (el) => el.textContent === 'Unconscious',
+      );
+      expect(word).toBeDefined();
+      expect(word?.children.length).toBe(0);
+      expect(badge.classList.contains('max-w-full')).toBe(true);
+      expect(badge.classList.contains('flex-wrap')).toBe(true);
+      expect(badge.classList.contains('truncate')).toBe(false);
+      expect(badge.classList.contains('uppercase')).toBe(false);
+      expect(badge.className).not.toMatch(/text-\[(9|10|11)px\]/);
+      const chip = badge.closest('[data-testid="combat-turn-pip"]');
+      expect(chip?.className).toContain('[body.ir-table-look_&]:w-[92px]');
+    } finally {
+      document.body.classList.remove('ir-table-look');
+    }
+  });
+});

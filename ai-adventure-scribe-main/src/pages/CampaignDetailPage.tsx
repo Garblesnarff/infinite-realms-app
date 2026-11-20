@@ -50,6 +50,7 @@ import { userDataApi } from '@/services/user-data-api';
 import { previewCampaignOverview } from '@/utils/campaign/preview-campaign-overview';
 import { formatStarterCampaignLength } from '@/utils/campaign/starter-campaign-length';
 import { formatStarterLevelRange } from '@/utils/campaign/starter-level-range';
+import { isDistinctSubtitle } from '@/utils/campaign/subtitle';
 
 /** Session key for the hero a signed-out visitor picked before signing in. */
 const PENDING_HERO_KEY = 'ir-pending-starter-hero';
@@ -527,7 +528,11 @@ const CampaignDetailPage: React.FC = () => {
   }
   const sessionsLabel =
     formatStarterCampaignLength(campaign.overview) ??
-    (campaign.estimatedSessions ? `${campaign.estimatedSessions} sessions` : null);
+    (campaign.estimatedSessions === '1'
+      ? '1 session'
+      : campaign.estimatedSessions
+        ? `${campaign.estimatedSessions} sessions`
+        : null);
   if (sessionsLabel) metaSegments.push(<span key="sessions">{sessionsLabel}</span>);
   if (campaign.tone.length > 0) {
     metaSegments.push(
@@ -538,6 +543,10 @@ const CampaignDetailPage: React.FC = () => {
   }
 
   const premise = campaign.premise?.trim();
+  const pageTitle =
+    typeof campaign.title === 'string' && campaign.title.trim()
+      ? `${campaign.title.trim()} | Infinite Realms`
+      : 'Infinite Realms';
   // Collapsed: capped preview cut at a sentence end. Expanded: uncapped plain-text
   // narrative, so Read more reveals the whole stored story.
   let overviewStory = '';
@@ -551,9 +560,9 @@ const CampaignDetailPage: React.FC = () => {
   return (
     <div className="ir-app min-h-screen bg-background">
       <Helmet>
-        <title>{campaign.title} | Infinite Realms</title>
+        <title>{pageTitle}</title>
         <meta name="description" content={campaign.premise} />
-        <meta property="og:title" content={`${campaign.title} | Infinite Realms`} />
+        <meta property="og:title" content={pageTitle} />
         <meta property="og:description" content={campaign.premise} />
         {/* #355: declare the full tag set — react-helmet-async deletes managed
             (data-rh) tags a page does not redeclare, so a partial set would wipe
@@ -565,7 +574,7 @@ const CampaignDetailPage: React.FC = () => {
           content={campaign.coverImageUrl ?? 'https://infiniterealms.app/og-image.png'}
         />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={`${campaign.title} | Infinite Realms`} />
+        <meta name="twitter:title" content={pageTitle} />
         <meta name="twitter:description" content={campaign.premise} />
         <meta
           name="twitter:image"
@@ -576,7 +585,10 @@ const CampaignDetailPage: React.FC = () => {
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Back link + step hint */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <Link to="/explore" className="text-sm text-infinite-gold hover:underline">
+          <Link
+            to="/explore"
+            className="inline-flex min-h-11 items-center text-sm text-infinite-gold hover:underline"
+          >
             ← All campaigns
           </Link>
           <p className="text-[13px] text-muted-foreground">
@@ -600,7 +612,8 @@ const CampaignDetailPage: React.FC = () => {
             <h1 className="font-heading text-[34px] max-[700px]:text-[26px] leading-tight text-foreground">
               {campaign.title}
             </h1>
-            {campaign.tagline && (
+            {/* The tagline is a second line only when it says something the title does not (#1672). */}
+            {isDistinctSubtitle(campaign.title, campaign.tagline) && (
               <p className="text-muted-foreground mt-2 line-clamp-3">{campaign.tagline}</p>
             )}
             <p className="text-sm text-muted-foreground mt-3">
@@ -763,7 +776,10 @@ const CampaignDetailPage: React.FC = () => {
       <div className="border-t border-white/10 py-8">
         <div className="max-w-4xl mx-auto px-6 text-center text-muted-foreground text-sm">
           <p>
-            <Link to="/" className="hover:text-infinite-gold transition-colors">
+            <Link
+              to="/"
+              className="inline-flex min-h-11 items-center hover:text-infinite-gold transition-colors"
+            >
               Infinite Realms
             </Link>{' '}
             - Where Every Choice Shapes Destiny

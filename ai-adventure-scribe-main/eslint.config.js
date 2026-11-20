@@ -400,7 +400,6 @@ export default tseslint.config(
       // Top violators requiring refactoring (1000+ lines)
       'src/contexts/GameContext.tsx',
       'src/contexts/CombatContext.tsx',
-      'src/contexts/combat/health-handlers.ts',
       'src/contexts/combat/combat-reducer.ts',
       'src/services/ai-service.ts', // 1142 lines
       'src/services/ai/dm-response-processor.ts',
@@ -470,7 +469,6 @@ export default tseslint.config(
       'server-bun/src/services/combat/hp-mechanics.ts',
       'server-bun/src/types/combat.ts',
       'src/utils/downtimeActivities.ts',
-      'src/utils/conditionEffects.ts',
       'src/utils/condition-definitions.ts',
       'src/utils/multiclassing.ts',
       'src/utils/__tests__/multiclassing.test.ts',
@@ -479,7 +477,6 @@ export default tseslint.config(
       'src/hooks/use-combat-actions.ts',
       'src/hooks/combat/use-combat-action-handlers.ts',
       'src/hooks/use-combat-ai-integration.ts',
-      'src/hooks/combat/use-combat-detection.ts',
       'src/hooks/useAdvancedSpellcasting.ts',
       'src/hooks/use-combat-mechanics.ts',
       'src/utils/reactionTriggers.ts',
@@ -550,8 +547,6 @@ export default tseslint.config(
       'src/features/character/hooks/__tests__/use-personality-manager.test.ts',
       'src/services/blog/blog-service.ts',
       'src/hooks/blog/useBlogTaxonomy.ts',
-      'src/utils/stealthUtils.ts',
-      'src/utils/__tests__/stealthUtils.test.ts',
       'src/features/safety/SafetyCommandProcessor.ts',
       'src/components/character-sharing/ShareCharacterDialog.tsx',
       'src/components/character-sharing/SharedCharactersList.tsx',

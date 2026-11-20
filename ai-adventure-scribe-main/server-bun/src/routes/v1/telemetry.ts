@@ -46,6 +46,7 @@ const ALLOWED_CLIENT_FAILURE_KINDS = [
   'auth_refresh_check_skipped',
   'narrated_death_without_engine',
   'failed_check_harm_without_engine',
+  'narrated_dead_npc_acting',
 ] as const;
 
 /** Shadow counts: logged as CLIENT_FAILURE for the count, never paged to Slack (#468). */
@@ -53,6 +54,7 @@ const LOG_ONLY_CLIENT_KINDS: readonly string[] = [
   'auth_refresh_check_skipped',
   'narrated_death_without_engine',
   'failed_check_harm_without_engine',
+  'narrated_dead_npc_acting',
 ];
 type ClientFailureKind = (typeof ALLOWED_CLIENT_FAILURE_KINDS)[number];
 

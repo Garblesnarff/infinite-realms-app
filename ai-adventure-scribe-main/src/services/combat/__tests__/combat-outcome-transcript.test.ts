@@ -127,6 +127,64 @@ describe('combat outcome transcript', () => {
     expect(line).not.toContain('HIT');
   });
 
+  it('says no movement is left, not "could not move closer", when a melee attack has 0 ft (#1642)', () => {
+    const line = formatCombatEngineOutcome(
+      attack,
+      {
+        resolvedAs: 'movement_only',
+        actorName: 'The Seeker',
+        targetName: 'Balthazar',
+        movedFeet: 0,
+        distanceFeet: 10,
+        reachFeet: 5,
+        movementRemainingFeet: 0,
+        refusalReason: 'movement_exhausted',
+      },
+      [{ id: 'the-seeker', name: 'The Seeker', participantType: 'player' }],
+    );
+
+    expect(line).toBe(
+      '⚙️ Engine: The Seeker has no movement left this turn; Balthazar is 10 ft away (reach 5 ft); no attack was rolled. Use a ranged attack, Dash, or end the turn.',
+    );
+    expect(line).not.toContain('could not move closer');
+  });
+
+  it('keeps the moved line for a monster that spent its movement on a move (#1642)', () => {
+    const line = formatCombatEngineOutcome(
+      attack,
+      {
+        resolvedAs: 'movement_only',
+        actorName: 'The Seeker',
+        targetName: 'Balthazar',
+        movedFeet: 30,
+        distanceFeet: 10,
+        reachFeet: 5,
+        movementRemainingFeet: 0,
+        refusalReason: 'movement_exhausted',
+      },
+      [{ id: 'the-seeker', name: 'The Seeker', participantType: 'monster' }],
+    );
+
+    expect(line).toBe(
+      '⚙️ Engine: The Seeker moved 30 ft toward Balthazar; distance 10 ft (reach 5 ft); no attack was rolled.',
+    );
+  });
+
+  it('keeps the old line when the actor still has movement but cannot close (#1642)', () => {
+    const line = formatCombatEngineOutcome(attack, {
+      resolvedAs: 'movement_only',
+      actorName: 'The Seeker',
+      targetName: 'Balthazar',
+      movedFeet: 0,
+      distanceFeet: 10,
+      reachFeet: 5,
+      movementRemainingFeet: 25,
+    });
+
+    expect(line).toContain('could not move closer to Balthazar');
+    expect(line).toContain('no attack was rolled.');
+  });
+
   it('keeps engine facts before model prose', () => {
     expect(prependCombatEngineTranscript('The narration.', ['⚙️ Engine: HIT.'])).toBe(
       '⚙️ Engine: HIT.\n\nThe narration.',
@@ -477,6 +535,15 @@ describe('why a hit is critical (#2640)', () => {
 });
 
 describe('fighter feature engine lines (#975)', () => {
+  it('Rage names the uses left and the round it lasts until (#1638)', () => {
+    const parts = formatCombatActionParts(
+      { actor_id: 'ghorza', action_type: 'rage', target_ids: [] },
+      { usesRemaining: 1, expiresRound: 11 },
+      [],
+    );
+    expect(parts[0].line).toContain('rages (1 use(s) left). Rage lasts through round 10.');
+  });
+
   it('Second Wind names the healed amount and the new HP', () => {
     const parts = formatCombatActionParts(
       { actor_id: 'ghorza', action_type: 'second_wind', target_ids: [] },

@@ -624,3 +624,55 @@ test('a #### bold heading inside a mechanic still gets its own chunk (#1612)', (
   assert.ok(sub);
   assert.ok(sub.content.includes('Sub body.'));
 });
+
+test('a plain ### mechanic heading gets its own chunk (#1612)', () => {
+  const bible =
+    '## Mechanics\n\n### Scale Rules\nBig things hit hard.\n*   Huge: double dice.\n\n### Falling\nFall damage is 1d6 per 10 ft.';
+  const { chunks } = chunkCampaignFiles('test-campaign', { campaignBible: bible });
+  const mechanics = chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    mechanics.map((chunk) => chunk.entityName),
+    ['Scale Rules', 'Falling'],
+  );
+  const scale = mechanics.find((chunk) => chunk.entityName === 'Scale Rules');
+  assert.ok(scale);
+  assert.ok(scale.content.includes('Big things hit hard.'));
+  assert.ok(scale.content.includes('Huge: double dice.'));
+  const falling = mechanics.find((chunk) => chunk.entityName === 'Falling');
+  assert.ok(falling);
+  assert.ok(falling.content.includes('Fall damage is 1d6 per 10 ft.'));
+});
+
+test('a numbered plain ### heading is named without its list number (#1612)', () => {
+  const bible =
+    '## Mechanics\n\n### 1. Scale Rules\nBig things hit hard.\n\n### 2. Subsystem: Pressure\nPressure body.';
+  const { chunks } = chunkCampaignFiles('test-campaign', { campaignBible: bible });
+  const mechanics = chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    mechanics.map((chunk) => chunk.entityName),
+    ['Scale Rules', 'Subsystem: Pressure'],
+  );
+  const scale = mechanics.find((chunk) => chunk.entityName === 'Scale Rules');
+  assert.ok(scale);
+  assert.ok(scale.content.includes('Big things hit hard.'));
+  const pressure = mechanics.find((chunk) => chunk.entityName === 'Subsystem: Pressure');
+  assert.ok(pressure);
+  assert.ok(pressure.content.includes('Pressure body.'));
+});
+
+test('plain and bold ### mechanic headings mix in one section (#1612)', () => {
+  const bible =
+    '## Mechanics\n\n### **Alpha**\nAlpha body.\n1. **Inner**\nInner body.\n\n### Beta Rules\nBeta body.';
+  const { chunks } = chunkCampaignFiles('test-campaign', { campaignBible: bible });
+  const mechanics = chunks.filter((chunk) => chunk.chunkType === 'mechanic');
+  assert.deepEqual(
+    mechanics.map((chunk) => chunk.entityName),
+    ['Alpha', 'Beta Rules'],
+  );
+  const alpha = mechanics.find((chunk) => chunk.entityName === 'Alpha');
+  assert.ok(alpha);
+  assert.ok(alpha.content.includes('Inner body.'));
+  const beta = mechanics.find((chunk) => chunk.entityName === 'Beta Rules');
+  assert.ok(beta);
+  assert.ok(beta.content.includes('Beta body.'));
+});

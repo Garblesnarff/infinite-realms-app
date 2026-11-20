@@ -61,71 +61,68 @@ export type AuthoritativeCombatPayload = {
 
 export function mapAuthoritativeCombat(payload: AuthoritativeCombatPayload): CombatEncounter {
   const participants = payload.participants.map((participant) =>
-    createCombatParticipant(
-      {
-        id: participant.id,
-        position: participant.position,
-        characterId: participant.characterId ?? undefined,
-        participantType: participant.participantType === 'player' ? 'player' : 'monster',
-        healthCondition: participant.healthCondition,
-        name: participant.name,
-        displayName: participant.monsterAttack?.displayName,
-        initiative: participant.initiative,
-        initiativeBonus: participant.initiativeModifier,
-        armorClass: participant.armorClass,
-        maxHitPoints: participant.status?.maxHp ?? participant.maxHp,
-        currentHitPoints: participant.status?.currentHp ?? participant.maxHp,
-        temporaryHitPoints: participant.status?.tempHp ?? 0,
-        speed: participant.speed,
-        actionTaken: participant.actionUsed ?? false,
-        attackSwingsRemaining: participant.attackSwingsRemaining,
-        bonusActionTaken: participant.bonusActionUsed ?? false,
-        reactionTaken: participant.reactionUsed ?? false,
-        isUnconscious: participant.status ? !participant.status.isConscious : false,
-        // Death saves come off the wire the server counted them on. They used to be rebuilt at
-        // 0/0 here, so a dying character's tracker never showed the saves the engine recorded.
-        deathSaves: {
-          successes: participant.status?.deathSavesSuccesses ?? 0,
-          failures: participant.status?.deathSavesFailures ?? 0,
-        },
-        isStable: participant.vitalState === 'stabilized',
-        isDead: participant.vitalState === 'dead',
-        isActive: participant.isActive,
-        conditions: [
-          ...(participant.conditions ?? []).flatMap((entry) =>
-            entry.condition?.name
-              ? [
-                  {
-                    name: entry.condition.name.toLowerCase() as never,
-                    description: entry.condition.description ?? entry.condition.name,
-                    duration: -1,
-                    concentrationRequired: false,
-                  },
-                ]
-              : [],
-          ),
-          // Unconscious is the persisted `is_conscious = false` at 0 HP, read as the condition
-          // it is, so the tracker and the attack rules agree about a character on the floor.
-          ...(participant.participantType === 'player' &&
-          participant.status &&
-          !participant.status.isConscious &&
-          participant.status.currentHp <= 0 &&
-          !(participant.conditions ?? []).some(
-            (entry) => entry.condition?.name?.toLowerCase() === 'unconscious',
-          )
+    createCombatParticipant({
+      id: participant.id,
+      position: participant.position,
+      characterId: participant.characterId ?? undefined,
+      participantType: participant.participantType === 'player' ? 'player' : 'monster',
+      healthCondition: participant.healthCondition,
+      name: participant.name,
+      displayName: participant.monsterAttack?.displayName,
+      initiative: participant.initiative,
+      initiativeBonus: participant.initiativeModifier,
+      armorClass: participant.armorClass,
+      maxHitPoints: participant.status?.maxHp ?? participant.maxHp,
+      currentHitPoints: participant.status?.currentHp ?? participant.maxHp,
+      temporaryHitPoints: participant.status?.tempHp ?? 0,
+      speed: participant.speed,
+      actionTaken: participant.actionUsed ?? false,
+      attackSwingsRemaining: participant.attackSwingsRemaining,
+      bonusActionTaken: participant.bonusActionUsed ?? false,
+      reactionTaken: participant.reactionUsed ?? false,
+      isUnconscious: participant.status ? !participant.status.isConscious : false,
+      // Death saves come off the wire the server counted them on. They used to be rebuilt at
+      // 0/0 here, so a dying character's tracker never showed the saves the engine recorded.
+      deathSaves: {
+        successes: participant.status?.deathSavesSuccesses ?? 0,
+        failures: participant.status?.deathSavesFailures ?? 0,
+      },
+      isStable: participant.vitalState === 'stabilized',
+      isDead: participant.vitalState === 'dead',
+      isActive: participant.isActive,
+      conditions: [
+        ...(participant.conditions ?? []).flatMap((entry) =>
+          entry.condition?.name
             ? [
                 {
-                  name: 'unconscious' as never,
-                  description: 'Unconscious: cannot act; attacks within 5 ft are critical hits.',
+                  name: entry.condition.name.toLowerCase() as never,
+                  description: entry.condition.description ?? entry.condition.name,
                   duration: -1,
                   concentrationRequired: false,
                 },
               ]
-            : []),
-        ],
-      },
-      { rollInitiative: false },
-    ),
+            : [],
+        ),
+        // Unconscious is the persisted `is_conscious = false` at 0 HP, read as the condition
+        // it is, so the tracker and the attack rules agree about a character on the floor.
+        ...(participant.participantType === 'player' &&
+        participant.status &&
+        !participant.status.isConscious &&
+        participant.status.currentHp <= 0 &&
+        !(participant.conditions ?? []).some(
+          (entry) => entry.condition?.name?.toLowerCase() === 'unconscious',
+        )
+          ? [
+              {
+                name: 'unconscious' as never,
+                description: 'Unconscious: cannot act; attacks within 5 ft are critical hits.',
+                duration: -1,
+                concentrationRequired: false,
+              },
+            ]
+          : []),
+      ],
+    }),
   );
   // `currentTurnOrder` indexes the server's *active* participants — the same list
   // `CombatEncounterService.getCombatState` uses to pick `currentParticipant`. Indexing the

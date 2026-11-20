@@ -6,6 +6,10 @@ import type { ActionOption } from '@/utils/parseMessageOptions';
 import { ActionOptions } from '@/components/game/ActionOptions';
 import { useCombat } from '@/contexts/CombatContext';
 import { useCombatLegalActions } from '@/features/game-session/hooks/use-combat-legal-actions';
+import {
+  hasPendingCombatEntryConfirmation,
+  onCombatEntryConfirmationPendingChange,
+} from '@/services/combat/combat-entry-confirmation-bridge';
 import { createPlayerMessageFromOption } from '@/utils/parseMessageOptions';
 
 interface DynamicOptionsSectionProps {
@@ -54,6 +58,10 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
     const { state: combatState } = useCombat();
     const showCombatMenu = isLatest && combatState.isInCombat;
     const encounter = combatState.activeEncounter;
+    // #1678: while the fight prompt is open, the option chips are disabled. The prompt is the
+    // only way forward; typed words still decline it (#400).
+    const [fightPromptOpen, setFightPromptOpen] = React.useState(hasPendingCombatEntryConfirmation);
+    React.useEffect(() => onCombatEntryConfirmationPendingChange(setFightPromptOpen), []);
     const { actions, isPlayerTurn, isRefreshing, error, runAction } = useCombatLegalActions({
       enabled: showCombatMenu,
       onSendMessage,
@@ -95,7 +103,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
 
     const handleSelection = async (option: ActionOption): Promise<void> => {
       // An open tray owns the turn. A click must not send, and must not run an engine action.
-      if (rollTrayOpen) return;
+      if (rollTrayOpen || fightPromptOpen) return;
       if (!showCombatMenu || !encounter?.id) {
         const text = createPlayerMessageFromOption(option);
         await onOptionSelect(text);
@@ -112,7 +120,7 @@ export const DynamicOptionsSection: React.FC<DynamicOptionsSectionProps> = React
         <ActionOptions
           options={renderedOptions}
           ideaCards={!showCombatMenu}
-          disabled={!isLatest || rollTrayOpen}
+          disabled={!isLatest || rollTrayOpen || fightPromptOpen}
           onOptionSelect={handleSelection}
           resetSelectionAfterCompletion={showCombatMenu}
           delay={hasDynamicOverlay || showCombatMenu || showImmediately ? 0 : 10000}

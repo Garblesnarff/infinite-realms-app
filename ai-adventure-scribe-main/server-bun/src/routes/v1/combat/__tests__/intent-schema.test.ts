@@ -190,21 +190,21 @@ describe('the player exit intents (flee / yield)', () => {
  * would strand the declaration at "not supported yet" again.
  */
 describe('the class feature intents (second_wind / action_surge / divine_sense)', () => {
-  it.each(['second_wind', 'action_surge', 'divine_sense'] as const)(
+  it.each(['second_wind', 'action_surge', 'divine_sense', 'rage'] as const)(
     'accepts the exact %s body the clicked option posts',
     (type) => {
       expect(combatIntentRequestValidator.Check(fighterFeatureChipIntentBody(type))).toBe(true);
     },
   );
 
-  it.each(['second_wind', 'action_surge', 'divine_sense'] as const)(
+  it.each(['second_wind', 'action_surge', 'divine_sense', 'rage'] as const)(
     'accepts the player-dialect %s body with its version',
     (type) => {
       expect(combatIntentRequestValidator.Check(fighterFeaturePlayerIntentBody(type))).toBe(true);
     },
   );
 
-  it.each(['second_wind', 'action_surge', 'divine_sense'] as const)(
+  it.each(['second_wind', 'action_surge', 'divine_sense', 'rage'] as const)(
     'refuses a player-dialect %s without expectedVersion, like every versioned player intent',
     (type) => {
       const { expectedVersion: _omitted, ...intent } = fighterFeaturePlayerIntentBody(type).intent;

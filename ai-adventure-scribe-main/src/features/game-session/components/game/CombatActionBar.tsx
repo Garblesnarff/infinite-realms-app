@@ -13,6 +13,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useCombat, useOptionalCombat } from '@/contexts/CombatContext';
@@ -78,6 +79,10 @@ export const LEGAL_ACTION_PLACEMENT = {
   second_wind: 'more',
   action_surge: 'more',
   divine_sense: 'more',
+  /** #1638: Rage, a Barbarian's bonus action, sits with the other Fighter-style features. */
+  rage: 'more',
+  /** #1639: the off-hand attack, a bonus action; it rides More with the other bonus-action chips. */
+  off_hand_attack: 'more',
   // #1554: Lay on Hands is an Action, but its chips name a target and an amount, so they ride More.
   lay_on_hands: 'more',
   // #1414: Inspiration arms advantage on the next roll; it spends no Action, so it rides More
@@ -150,6 +155,58 @@ BarButton.displayName = 'BarButton';
  * #90: the one place to act in combat. Every button sends an existing authoritative intent
  * through the same legal-action pipeline the DM option buttons used; nothing here adds a rule.
  */
+/** #1670: a Lay on Hands heal the engine offered with a cap (`maxAmount`), not a cure. */
+function isLayOnHandsHeal(action: LegalAction): boolean {
+  return (
+    action.type === 'lay_on_hands' &&
+    action.cure === undefined &&
+    action.maxAmount !== undefined &&
+    action.targetId !== undefined
+  );
+}
+
+/**
+ * #1670: Lay on Hands heal with a chosen amount. It opens at the engine's default (the smaller of
+ * "to full" and the pool) and moves between 1 and the engine's cap. The - and + items keep the menu
+ * open; Heal sends the chosen amount, and the engine checks it against the pool and the missing HP.
+ */
+const LayOnHandsStepper: React.FC<{
+  action: LegalAction;
+  onHeal: (action: LegalAction) => void;
+}> = ({ action, onHeal }) => {
+  const max = Math.max(1, action.maxAmount ?? 1);
+  const [amount, setAmount] = React.useState(() =>
+    Math.min(max, Math.max(1, action.amount ?? max)),
+  );
+  const who = action.label.replace(/^Lay on Hands — heal /, '').replace(/ \d+ HP$/, '');
+  return (
+    <>
+      <DropdownMenuLabel>{`Points to spend: ${amount} of up to ${max}`}</DropdownMenuLabel>
+      <DropdownMenuItem
+        disabled={amount <= 1}
+        onSelect={(event) => {
+          event.preventDefault();
+          setAmount((current) => Math.max(1, current - 1));
+        }}
+      >
+        Fewer points (-1)
+      </DropdownMenuItem>
+      <DropdownMenuItem
+        disabled={amount >= max}
+        onSelect={(event) => {
+          event.preventDefault();
+          setAmount((current) => Math.min(max, current + 1));
+        }}
+      >
+        More points (+1)
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => onHeal({ ...action, amount })}>
+        {`Lay on Hands — heal ${who} ${amount} HP`}
+      </DropdownMenuItem>
+    </>
+  );
+};
+
 export const CombatActionBar: React.FC<CombatActionBarProps> = ({
   actions,
   enabled,
@@ -274,22 +331,30 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
             <BarButton disabled={!enabled}>More</BarButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            {more.map((action, index) => (
-              <DropdownMenuItem
-                key={`${action.type}-${index}`}
-                disabled={isEngineOnlyAction(action)}
-                onSelect={() => {
-                  if (isEngineOnlyAction(action)) return;
-                  if (action.type === 'flee' && fleeProvokerOf(action.label)) {
-                    setPendingFlee(action);
-                  } else {
-                    onAction(action);
-                  }
-                }}
-              >
-                {isEngineOnlyAction(action) ? ENGINE_ONLY_ACTION_REASON : action.label}
-              </DropdownMenuItem>
-            ))}
+            {more.map((action, index) =>
+              isLayOnHandsHeal(action) ? (
+                <LayOnHandsStepper
+                  key={`${action.type}-${index}`}
+                  action={action}
+                  onHeal={onAction}
+                />
+              ) : (
+                <DropdownMenuItem
+                  key={`${action.type}-${index}`}
+                  disabled={isEngineOnlyAction(action)}
+                  onSelect={() => {
+                    if (isEngineOnlyAction(action)) return;
+                    if (action.type === 'flee' && fleeProvokerOf(action.label)) {
+                      setPendingFlee(action);
+                    } else {
+                      onAction(action);
+                    }
+                  }}
+                >
+                  {isEngineOnlyAction(action) ? ENGINE_ONLY_ACTION_REASON : action.label}
+                </DropdownMenuItem>
+              ),
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       )}

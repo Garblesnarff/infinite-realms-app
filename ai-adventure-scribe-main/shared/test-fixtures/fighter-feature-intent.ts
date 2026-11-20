@@ -26,7 +26,7 @@ export const FIGHTER_FEATURE_ACTOR_ID = 'e7e569df-0000-4000-8000-000000000001';
 export const FIGHTER_FEATURE_ENCOUNTER_VERSION = 3;
 
 export const fighterFeatureChipIntentBody = (
-  type: 'second_wind' | 'action_surge' | 'divine_sense',
+  type: 'second_wind' | 'action_surge' | 'divine_sense' | 'rage',
 ) => ({
   intent: { type, actorId: FIGHTER_FEATURE_ACTOR_ID },
   source: 'dm' as const,
@@ -35,7 +35,7 @@ export const fighterFeatureChipIntentBody = (
 });
 
 export const fighterFeaturePlayerIntentBody = (
-  type: 'second_wind' | 'action_surge' | 'divine_sense',
+  type: 'second_wind' | 'action_surge' | 'divine_sense' | 'rage',
 ) => ({
   intent: {
     type,

@@ -9,6 +9,14 @@ export const NARRATED_DEATH_SHADOW_REPORT_BODY = {
   message: 'you_die',
 } as const;
 
+/** #1595 shadow count: the body the dead-NPC report posts (pattern names only, no text). */
+export const NARRATED_DEAD_NPC_SHADOW_REPORT_BODY = {
+  kind: 'narrated_dead_npc_acting',
+  sessionId: 'sess-1595-fixture',
+  error: 'attack,return_or_entry',
+  message: 'attack,return_or_entry',
+} as const;
+
 /** #610 shadow count: the exact body the failed-check report posts (same contract as above). */
 export const FAILED_CHECK_SHADOW_REPORT_BODY = {
   kind: 'failed_check_harm_without_engine',

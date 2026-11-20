@@ -33,25 +33,8 @@ vi.mock('@/utils/diceUtils', () => ({
   rollAttack: vi.fn(),
 }));
 
-vi.mock('@/utils/equipmentUtils', () => ({
-  createDefaultLightWeapons: vi.fn(),
-  equipMainHandWeapon: vi.fn(),
-  equipOffHandWeapon: vi.fn(),
-}));
-
 vi.mock('@/utils/character-calculations', () => ({
   calculateProficiencyBonus: vi.fn(),
-}));
-
-vi.mock('@/utils/racialTraits', () => ({
-  canUseRacialTrait: vi.fn(),
-}));
-
-vi.mock('@/utils/twoWeaponFighting', () => ({
-  canUseTwoWeaponFighting: vi.fn(),
-  makeMainHandAttack: vi.fn(),
-  canMakeOffHandAttack: vi.fn(),
-  makeOffHandAttack: vi.fn(),
 }));
 
 import {

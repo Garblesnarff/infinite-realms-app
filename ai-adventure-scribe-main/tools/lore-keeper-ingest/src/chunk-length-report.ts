@@ -1,4 +1,5 @@
 /* eslint-disable no-console */
+/* eslint-disable max-lines */
 
 import { join, resolve } from 'path';
 
@@ -21,6 +22,8 @@ export interface BibleScanResult {
   mechanicChunks: number;
   unmatched: number;
   unmatchedNames: string[];
+  duplicateNames: { entityName: string; count: number; droppedChars: number }[];
+  lostH4: { parentName: string; heading: string; bodyChars: number; lostChars: number }[];
 }
 
 function normalizeContent(content: string): string {
@@ -150,7 +153,68 @@ export function scanBible(bible: string, campaignId: string, threshold = 0.3): B
     }
   }
 
-  return { flagged, mechanicChunks: mechanicChunks.length, unmatched, unmatchedNames };
+  // Duplicate mechanic names (ingest upsert key collision).
+  const byName = new Map<string, CampaignChunk[]>();
+  for (const chunk of mechanicChunks) {
+    if (chunk.entityName == null) continue;
+    const arr = byName.get(chunk.entityName) ?? [];
+    arr.push(chunk);
+    byName.set(chunk.entityName, arr);
+  }
+  const duplicateNames: { entityName: string; count: number; droppedChars: number }[] = [];
+  for (const [name, arr] of byName) {
+    if (arr.length > 1) {
+      const droppedChars = arr.slice(1).reduce((sum, c) => sum + c.content.length, 0);
+      duplicateNames.push({ entityName: name, count: arr.length, droppedChars });
+    }
+  }
+
+  // Lost #### text inside a ### mechanic.
+  const lostH4: { parentName: string; heading: string; bodyChars: number; lostChars: number }[] =
+    [];
+  let currentParent: string | undefined;
+  for (let i = 0; i < sectionLines.length; i++) {
+    const line = sectionLines[i];
+    if (/^###\s/.test(line)) {
+      const text = line.replace(/^###\s+/, '').replace(/^\d+\.\s*/, '');
+      currentParent = text.replace(/\*\*/g, '').replace(/\*/g, '').trim();
+      continue;
+    }
+    if (!/^####\s/.test(line)) continue;
+    if (currentParent === undefined) continue;
+    const headingContent = line.replace(/^####\s+/, '').trim();
+    const heading = headingContent.replace(/^\d+\.\s*/, '').trim();
+    if (heading.startsWith('*')) continue;
+
+    let end = sectionLines.length;
+    for (let j = i + 1; j < sectionLines.length; j++) {
+      if (/^#{2,4}\s/.test(sectionLines[j])) {
+        end = j;
+        break;
+      }
+    }
+    const bodyLines = sectionLines.slice(i + 1, end);
+    let bodyChars = 0;
+    let lostChars = 0;
+    for (const bodyLine of bodyLines) {
+      const trimmed = bodyLine.trim();
+      if (!trimmed) continue;
+      if (trimmed === '---') continue;
+      bodyChars += trimmed.length;
+      const found = chunks.some((c) => c.content.includes(trimmed));
+      if (!found) lostChars += trimmed.length;
+    }
+    lostH4.push({ parentName: currentParent, heading, bodyChars, lostChars });
+  }
+
+  return {
+    flagged,
+    mechanicChunks: mechanicChunks.length,
+    unmatched,
+    unmatchedNames,
+    duplicateNames,
+    lostH4,
+  };
 }
 
 export function findShortMechanicChunks(
@@ -181,6 +245,18 @@ async function main(): Promise<void> {
   let unmatched = 0;
   const flaggedAll: ShortChunk[] = [];
   const unmatchedAll: { slug: string; name: string }[] = [];
+  const duplicateAll: { slug: string; name: string; count: number }[] = [];
+  const lostH4All: {
+    slug: string;
+    parentName: string;
+    heading: string;
+    lostChars: number;
+    bodyChars: number;
+  }[] = [];
+  let duplicateNamesCount = 0;
+  let droppedChunksCount = 0;
+  let lostH4Count = 0;
+  let lostH4Chars = 0;
 
   for (const dir of dirs) {
     const files = readCampaignFiles(join(repoPath, 'campaign-ideas', dir));
@@ -192,6 +268,22 @@ async function main(): Promise<void> {
     flaggedAll.push(...result.flagged);
     for (const name of result.unmatchedNames) {
       unmatchedAll.push({ slug: dirToSlug(dir), name });
+    }
+    duplicateNamesCount += result.duplicateNames.length;
+    for (const d of result.duplicateNames) {
+      droppedChunksCount += d.count - 1;
+      duplicateAll.push({ slug: dirToSlug(dir), name: d.entityName, count: d.count });
+    }
+    lostH4Count += result.lostH4.length;
+    for (const l of result.lostH4) {
+      lostH4Chars += l.lostChars;
+      lostH4All.push({
+        slug: dirToSlug(dir),
+        parentName: l.parentName,
+        heading: l.heading,
+        lostChars: l.lostChars,
+        bodyChars: l.bodyChars,
+      });
     }
   }
 
@@ -206,6 +298,12 @@ async function main(): Promise<void> {
   console.log(`Unmatched: ${unmatched}`);
   console.log(`Flagged: ${flaggedAll.length}`);
   console.log(`Source chars in no mechanic chunk: ${totalLost}`);
+  console.log(
+    `Duplicate mechanic names: ${duplicateNamesCount} (chunks dropped on ingest: ${droppedChunksCount})`,
+  );
+  console.log(
+    `Plain #### headings inside a ### mechanic: ${lostH4Count} (chars in no chunk: ${lostH4Chars})`,
+  );
   console.log('');
   console.log('| campaign | mechanic | chunk chars | source chars | drop | chars in no chunk |');
   console.log('|---|---|---|---|---|---|');
@@ -221,6 +319,29 @@ async function main(): Promise<void> {
   } else {
     for (const item of unmatchedAll) {
       console.log(`- ${item.slug}: ${item.name}`);
+    }
+  }
+
+  console.log('');
+  console.log('Duplicate mechanic names');
+  if (duplicateAll.length === 0) {
+    console.log('none');
+  } else {
+    for (const item of duplicateAll) {
+      console.log(`- ${item.slug}: ${item.name} x${item.count}`);
+    }
+  }
+
+  console.log('');
+  console.log('Lost #### text');
+  const lostLines = lostH4All.filter((item) => item.lostChars > 0);
+  if (lostLines.length === 0) {
+    console.log('none');
+  } else {
+    for (const item of lostLines) {
+      console.log(
+        `- ${item.slug}: ${item.parentName} > ${item.heading}: ${item.lostChars} of ${item.bodyChars} chars in no chunk`,
+      );
     }
   }
 

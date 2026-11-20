@@ -3,13 +3,24 @@
 import { renderHook, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import {
+  B2B_ENCOUNTER_ID,
+  B2B_ENEMY_ID,
+  B2B_PLAYER_ID,
+  dashClientIntent,
+  dodgeClientIntent,
+  enemyAttackClientIntent,
+  grappleClientIntent,
+  hideClientIntent,
+  shoveClientIntent,
+} from '../../../../shared/test-fixtures/combat-b2b-intent-bodies';
 import { useCombatActionHandlers } from '../use-combat-action-handlers';
 
 import type { MonsterAttack } from '@/types/combat';
 
 import logger from '@/lib/logger';
+import { executeAuthoritativeCombatIntent } from '@/services/combat/combat-action-executor';
 import { userDataApi } from '@/services/user-data-api';
-import { processReactionResponse } from '@/utils/reactionSystem';
 
 vi.mock('@/lib/logger', () => ({
   default: {
@@ -20,8 +31,8 @@ vi.mock('@/lib/logger', () => ({
   },
 }));
 
-vi.mock('@/utils/reactionSystem', () => ({
-  processReactionResponse: vi.fn(),
+vi.mock('@/services/combat/combat-action-executor', () => ({
+  executeAuthoritativeCombatIntent: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/services/user-data-api', () => ({
@@ -107,56 +118,20 @@ describe('useCombatActionHandlers', () => {
       });
       expect(mockValidateCombatAction).not.toHaveBeenCalled();
     });
-
-    it('should execute action if validation passes', async () => {
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'e1');
-      });
-
-      expect(mockValidateCombatAction).toHaveBeenCalled();
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          participantId: 'p1',
-          targetParticipantId: 'e1',
-          actionType: 'attack',
-        }),
-      );
-      expect(result.current.actionValidation).toBeNull(); // Reset after success
-    });
-
-    it('should not execute action if validation fails', async () => {
-      mockValidateCombatAction.mockResolvedValueOnce({
-        isValid: false,
-        suggestions: ['Try something else'],
-        errors: ['Too far away'],
-      });
-
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'e1');
-      });
-
-      expect(mockValidateCombatAction).toHaveBeenCalled();
-      expect(mockTakeAction).not.toHaveBeenCalled();
-      expect(result.current.actionValidation?.isValid).toBe(false);
-      expect(logger.warn).toHaveBeenCalled();
-    });
-
-    it('should proceed with action if validation throws', async () => {
-      mockValidateCombatAction.mockRejectedValueOnce(new Error('Validation failed'));
-
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleCombatAction('attack', 'p1', 'e1');
-      });
-
-      expect(logger.error).toHaveBeenCalled();
-      expect(mockTakeAction).toHaveBeenCalled();
-    });
   });
 
   describe('handleEnemyAttack', () => {
+    // The encounter the #621 B2b bodies name, so the client tests assert the shared fixture.
+    const b2bEncounter = {
+      id: B2B_ENCOUNTER_ID,
+      participants: [
+        { id: B2B_PLAYER_ID, name: 'Hero', conditions: [] },
+        { id: B2B_ENEMY_ID, name: 'Orc', conditions: [] },
+      ],
+      currentTurnParticipantId: B2B_PLAYER_ID,
+    };
+    const b2bProps = { ...defaultProps, activeEncounter: b2bEncounter as any };
+
     it('should do nothing if no enemy selected', async () => {
       const { result } = setupHook();
       await act(async () => {
@@ -189,12 +164,7 @@ describe('useCombatActionHandlers', () => {
 
     it('should execute attack and advance turn', async () => {
       vi.useFakeTimers();
-      const encounterWithoutTurn = { ...mockEncounter, currentTurnParticipantId: null };
-      const { result } = setupHook({
-        ...defaultProps,
-        selectedEnemy: 'e1',
-        activeEncounter: encounterWithoutTurn as any,
-      });
+      const { result } = setupHook({ ...b2bProps, selectedEnemy: B2B_ENEMY_ID });
       const attack: MonsterAttack = {
         name: 'Greataxe',
         attackBonus: 5,
@@ -208,13 +178,15 @@ describe('useCombatActionHandlers', () => {
         await result.current.handleEnemyAttack(attack);
       });
 
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          participantId: 'e1',
-          actionType: 'attack',
-          damageType: 'slashing',
-        }),
+      // #621 B2b: the server rolls the enemy's attack and its damage. The browser sends the intent.
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        B2B_ENCOUNTER_ID,
+        enemyAttackClientIntent,
+        'dm',
+        expect.any(Number),
+        'typed',
       );
+      expect(mockTakeAction).not.toHaveBeenCalled();
 
       // Verify turn advancement
       expect(mockNextTurn).not.toHaveBeenCalled();
@@ -225,8 +197,8 @@ describe('useCombatActionHandlers', () => {
       vi.useRealTimers();
     });
 
-    it('should handle attack without damage roll', async () => {
-      const { result } = setupHook({ ...defaultProps, selectedEnemy: 'e1' });
+    it('should send the same server attack when the menu attack has no damage roll', async () => {
+      const { result } = setupHook({ ...b2bProps, selectedEnemy: B2B_ENEMY_ID });
       const attack: MonsterAttack = {
         name: 'Gaze',
         attackBonus: 0,
@@ -240,56 +212,130 @@ describe('useCombatActionHandlers', () => {
         await result.current.handleEnemyAttack(attack);
       });
 
-      expect(mockTakeAction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          damageRolls: [],
-        }),
+      expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+        B2B_ENCOUNTER_ID,
+        enemyAttackClientIntent,
+        'dm',
+        expect.any(Number),
+        'typed',
       );
     });
-  });
 
-  describe('handleReactionOpportunity', () => {
-    it('should do nothing if no active encounter', async () => {
-      const { result } = setupHook({ ...defaultProps, activeEncounter: null });
-      await act(async () => {
-        await result.current.handleReactionOpportunity({ id: 'opp-1' } as any, 'attack');
+    it('sends no attack when the turn has no participant to target', async () => {
+      const noTurn = { ...mockEncounter, currentTurnParticipantId: null };
+      const { result } = setupHook({
+        ...defaultProps,
+        selectedEnemy: 'e1',
+        activeEncounter: noTurn as any,
       });
-      expect(mockTakeAction).not.toHaveBeenCalled();
+
+      await act(async () => {
+        await result.current.handleEnemyAttack({
+          name: 'Gaze',
+          attackBonus: 0,
+          damageRoll: '',
+          damageType: 'psychic',
+          reach: 30,
+          description: 'Gaze',
+        });
+      });
+
+      expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
     });
 
-    it('should process reaction and update participant', async () => {
-      const opportunity = { id: 'opp-1', participantId: 'p1', trigger: 'Opportunity Attack' };
-      const reactionAction = { actionType: 'attack', participantId: 'p1' };
-      (processReactionResponse as any).mockReturnValue(reactionAction);
-
-      const { result } = setupHook();
-
-      // Manually add opportunity to state for testing removal
-      act(() => {
-        result.current.setReactionOpportunities([opportunity as any]);
-      });
-
+    it('rolls no dice in the browser: the enemy attack carries no roll', async () => {
+      const { result } = setupHook({ ...b2bProps, selectedEnemy: B2B_ENEMY_ID });
       await act(async () => {
-        await result.current.handleReactionOpportunity(opportunity as any, 'attack');
+        await result.current.handleEnemyAttack({
+          name: 'Greataxe',
+          attackBonus: 5,
+          damageRoll: '1d12+3',
+          damageType: 'slashing',
+          reach: 5,
+          description: 'Greataxe',
+        });
       });
-
-      expect(processReactionResponse).toHaveBeenCalled();
-      expect(mockTakeAction).toHaveBeenCalledWith(reactionAction);
-      expect(mockUpdateParticipant).toHaveBeenCalledWith('p1', { reactionTaken: true });
-      expect(result.current.reactionOpportunities).toEqual([]);
+      const [, intent] = vi.mocked(executeAuthoritativeCombatIntent).mock.calls[0];
+      expect(intent).not.toHaveProperty('d20');
+      expect(intent).not.toHaveProperty('attackRoll');
     });
 
-    it('should handle errors in reaction processing', async () => {
-      (processReactionResponse as any).mockImplementation(() => {
-        throw new Error('Processing failed');
+    describe('handleCombatAction server routing (#621 B2b)', () => {
+      it('sends dash to the server intent, not the local engine', async () => {
+        const { result } = setupHook(b2bProps);
+        await act(async () => {
+          await result.current.handleCombatAction('dash', B2B_PLAYER_ID);
+        });
+        expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+          B2B_ENCOUNTER_ID,
+          dashClientIntent,
+          'player',
+          undefined,
+          'action_bar',
+        );
+        expect(mockTakeAction).not.toHaveBeenCalled();
       });
 
-      const { result } = setupHook();
-      await act(async () => {
-        await result.current.handleReactionOpportunity({ id: 'opp-1' } as any, 'attack');
+      it('sends dodge to the server intent', async () => {
+        const { result } = setupHook(b2bProps);
+        await act(async () => {
+          await result.current.handleCombatAction('dodge', B2B_PLAYER_ID);
+        });
+        expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+          B2B_ENCOUNTER_ID,
+          dodgeClientIntent,
+          'player',
+          undefined,
+          'action_bar',
+        );
       });
 
-      expect(logger.error).toHaveBeenCalled();
+      it('sends hide as a check with no target', async () => {
+        const { result } = setupHook(b2bProps);
+        await act(async () => {
+          await result.current.handleCombatAction('hide', B2B_PLAYER_ID);
+        });
+        expect(executeAuthoritativeCombatIntent).toHaveBeenCalledWith(
+          B2B_ENCOUNTER_ID,
+          hideClientIntent,
+          'player',
+          undefined,
+          'action_bar',
+        );
+      });
+
+      it('sends grapple and shove as checks against the target, with no local roll', async () => {
+        const { result } = setupHook(b2bProps);
+        await act(async () => {
+          await result.current.handleCombatAction('grapple', B2B_PLAYER_ID, B2B_ENEMY_ID);
+          await result.current.handleCombatAction('shove', B2B_PLAYER_ID, B2B_ENEMY_ID);
+        });
+        expect(executeAuthoritativeCombatIntent).toHaveBeenNthCalledWith(
+          1,
+          B2B_ENCOUNTER_ID,
+          grappleClientIntent,
+          'player',
+          undefined,
+          'action_bar',
+        );
+        expect(executeAuthoritativeCombatIntent).toHaveBeenNthCalledWith(
+          2,
+          B2B_ENCOUNTER_ID,
+          shoveClientIntent,
+          'player',
+          undefined,
+          'action_bar',
+        );
+        expect(mockUpdateParticipant).not.toHaveBeenCalled();
+      });
+
+      it('sends nothing to the server for grapple with no target', async () => {
+        const { result } = setupHook(b2bProps);
+        await act(async () => {
+          await result.current.handleCombatAction('grapple', B2B_PLAYER_ID);
+        });
+        expect(executeAuthoritativeCombatIntent).not.toHaveBeenCalled();
+      });
     });
   });
 

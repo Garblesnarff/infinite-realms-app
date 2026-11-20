@@ -12,11 +12,20 @@ import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Z_INDEX } from '@/constants/z-index';
+import { useAuth } from '@/contexts/AuthContext';
 import { BoxedCampaign } from '@/features/campaigns/table/BoxedCampaign';
+import { PublicExploreCard } from '@/features/explore/PublicExploreCard';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 
+/**
+ * Logged out: the PublicExplore board (navy card). Signed in: the Campaigns board (boxed card, #1484).
+ * Nothing renders as a campaign list until auth has resolved, so the wrong layout never flashes.
+ */
 export const ExploreGalleryPage: React.FC = () => {
   const { campaigns, isLoading, error } = useStarterCampaigns();
+  const { user, loading: authLoading } = useAuth();
+  const ready = !isLoading && !authLoading;
+  const signedIn = Boolean(user);
 
   return (
     <>
@@ -65,9 +74,13 @@ export const ExploreGalleryPage: React.FC = () => {
               <ArrowLeft className="h-[18px] w-[18px] text-[#d5b070]" aria-hidden="true" />
               Back to home
             </Link>
-            <Link to="/" aria-label="Infinite Realms, home" className="flex items-center gap-3">
+            <Link
+              to="/"
+              aria-label="Infinite Realms, home"
+              className="flex min-h-11 items-center gap-3"
+            >
               <Sparkles className="w-5 h-5 text-[#4fb6c4]" aria-hidden="true" />
-              <span className="font-heading text-xl tracking-[0.2em] text-[#eaeefa]">
+              <span className="font-heading text-base tracking-[0.08em] text-[#eaeefa] sm:text-xl sm:tracking-[0.2em]">
                 INFINITE <span className="text-[#d5b070]">REALMS</span>
               </span>
             </Link>
@@ -88,7 +101,7 @@ export const ExploreGalleryPage: React.FC = () => {
           </div>
 
           {/* Loading State */}
-          {isLoading && (
+          {!ready && (
             <div role="status" aria-label="Loading campaigns">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-[18px]">
                 {[1, 2, 3].map((n) => (
@@ -122,7 +135,7 @@ export const ExploreGalleryPage: React.FC = () => {
           )}
 
           {/* Empty State */}
-          {!isLoading && !error && campaigns.length === 0 && (
+          {ready && !error && campaigns.length === 0 && (
             <div className="text-center py-16">
               <p className="text-muted-foreground text-lg mb-4">
                 No campaigns available yet. Check back soon!
@@ -144,15 +157,19 @@ export const ExploreGalleryPage: React.FC = () => {
           )}
 
           {/* Campaigns Grid */}
-          {!isLoading && !error && campaigns.length > 0 && (
+          {ready && !error && campaigns.length > 0 && (
             <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-3 lg:gap-10">
-              {campaigns.map((campaign, index) => (
-                <BoxedCampaign key={campaign.id} campaign={campaign} isFirst={index === 0} />
-              ))}
+              {campaigns.map((campaign, index) =>
+                signedIn ? (
+                  <BoxedCampaign key={campaign.id} campaign={campaign} isFirst={index === 0} />
+                ) : (
+                  <PublicExploreCard key={campaign.id} campaign={campaign} isFirst={index === 0} />
+                ),
+              )}
             </div>
           )}
 
-          {!isLoading && !error && campaigns.length > 0 && (
+          {ready && !error && campaigns.length > 0 && (
             <p className="mt-10 text-center text-base text-muted-foreground">
               More adventures are on the way.
             </p>

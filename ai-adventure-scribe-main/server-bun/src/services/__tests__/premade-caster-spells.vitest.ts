@@ -11,6 +11,28 @@ const loadActiveTacticalMap = vi.fn();
 const markPlayerDamageProvocation = vi.fn();
 const random = vi.spyOn(Math, 'random');
 
+// The Hide and Rage marks live in the session row, which this file does not model: nothing is hidden or
+// raging. The stub keeps every export the engine imports; a real read would load the database client.
+vi.mock('../combat/combat-turn-flags.js', () => ({
+  markHiddenAttacker: vi.fn(async () => {}),
+  isHiddenAttacker: vi.fn(async () => false),
+  clearHiddenAttacker: vi.fn(async () => {}),
+  claimSneakAttack: vi.fn(async () => false),
+  clearSneakAttackSpent: vi.fn(async () => {}),
+  claimRage: vi.fn(async () => null),
+  isRaging: vi.fn(async () => false),
+  clearRage: vi.fn(async () => {}),
+  markRageActive: vi.fn(async () => {}),
+  endRageIfIdle: vi.fn(async () => {}),
+  clearFightFlags: vi.fn(async () => {}),
+  combatTurnFlagsPreservingState: (incoming: unknown) => incoming,
+  classLevelOfCharacter: vi.fn(async () => 0),
+  rogueLevelOf: vi.fn(async () => 0),
+  activeAlliesOf: vi.fn(async () => []),
+  RAGE_DURATION_ROUNDS: 10,
+  markLightAttack: vi.fn(async () => {}),
+  readLightAttackMark: vi.fn(async () => null),
+}));
 vi.mock('../combat/data-access.js', () => ({
   remainingSpellSlots: vi.fn(async () => null),
   listHealingConsumables: vi.fn(async () => []),

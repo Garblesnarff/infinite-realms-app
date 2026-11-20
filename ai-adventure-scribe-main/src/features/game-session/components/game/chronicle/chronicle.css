@@ -389,10 +389,16 @@ body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-image::after {
   background: linear-gradient(180deg, transparent 40%, #0c1220);
 }
 body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-body {
-  padding: 0 26px 26px;
-  margin-top: -30px;
+  margin-top: 0;
+  padding: 26px 26px 26px;
   position: relative;
   box-sizing: border-box;
+}
+body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-image + .ir-chronicle-aside-body {
+  /* #1607: overlap the cover's fade only when there is a cover; without one
+     the title would sit above the card top and be clipped. */
+  margin-top: -30px;
+  padding-top: 0;
 }
 body.ir-table-look .ir-chronicle-page .ir-chronicle-aside-title {
   margin: 0;

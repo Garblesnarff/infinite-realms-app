@@ -12,6 +12,7 @@ import {
   stillYourTurnNotice,
   turnNotice,
   unresolvedTargetNotice,
+  unsupportedActionNotice,
 } from './combat-notice';
 import { enforceNarrationGate, gateInventedExtraStrike } from './narration-gate';
 import { SILENT_PLAYER_TURN_SETUP, silentPlayerTurnPayload } from './silent-player-turn';
@@ -1689,46 +1690,65 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     `[CombatRepair] player_action_refused actor=${refusedPlayerActions[0].actor} ` +
       `turn=${String(refusedPlayerActions[0].currentTurn ?? 'unknown')}`,
   );
+  // #1640: a Help, Ready or Use an Object declaration is an engine line, not story text. The
+  // turn is not used, so no prose notice is needed and the engine block says what to do.
+  const unsupportedRefusal =
+    !refusedPlayerActions.some(
+      (refusal) => refusal.refusalReason === COMBAT_INTENT_UNRESOLVED_TARGET,
+    ) && unrepairablePlayerRefusal?.refusalReason === ACTION_NOT_SUPPORTED_REASON
+      ? unrepairablePlayerRefusal
+      : undefined;
   // Said whoever holds the turn: after NPC pre-flight `turnHolder` is already the player, which
   // would otherwise read as "declared out of turn" for a target that simply is not here.
-  const notice = refusedPlayerActions.some(
-    (refusal) => refusal.refusalReason === COMBAT_INTENT_UNRESOLVED_TARGET,
-  )
-    ? unresolvedTargetNotice(
-        // List the names the player has actually seen — the ones on the result cards —
-        // not the seating labels only the engine knows (#876).
-        standingHostiles(participants ?? []).flatMap((participant) => {
-          const label = participant.displayName ?? participant.name;
-          return label ? [label] : [];
-        }),
-        { holder: turnHolder, holderIsPlayer: playerTurn },
-        resolvedActions.length > 0,
-      )
-    : unrepairablePlayerRefusal
-      ? // Named in every case: an unrepairable declaration was never "declared out of
-        // turn", and when another action in the batch settled the turn it must not claim
-        // the turn is still the player's either.
-        playerKeepsTurn
-        ? stillYourTurnNotice(String(unrepairablePlayerRefusal.playerFacingReason ?? ''))
-        : unrepairablePlayerRefusal.refusalReason === ACTION_NOT_SUPPORTED_REASON
-          ? '*(That action is not supported yet, so it was not resolved.)*'
+  const notice: string | null = unsupportedRefusal
+    ? null
+    : refusedPlayerActions.some(
+          (refusal) => refusal.refusalReason === COMBAT_INTENT_UNRESOLVED_TARGET,
+        )
+      ? unresolvedTargetNotice(
+          // List the names the player has actually seen — the ones on the result cards —
+          // not the seating labels only the engine knows (#876).
+          standingHostiles(participants ?? []).flatMap((participant) => {
+            const label = participant.displayName ?? participant.name;
+            return label ? [label] : [];
+          }),
+          { holder: turnHolder, holderIsPlayer: playerTurn },
+          resolvedActions.length > 0,
+        )
+      : unrepairablePlayerRefusal
+        ? // Named in every case: an unrepairable declaration was never "declared out of
+          // turn", and when another action in the batch settled the turn it must not claim
+          // the turn is still the player's either.
+          playerKeepsTurn
+          ? stillYourTurnNotice(String(unrepairablePlayerRefusal.playerFacingReason ?? ''))
           : `*(That action was not resolved: ${String(
               unrepairablePlayerRefusal.playerFacingReason ?? 'the game could not resolve it',
             )})*`
-      : playerKeepsTurn
-        ? stillYourTurnNotice(
-            String(
-              refusedPlayerActions[0].playerFacingReason ??
-                refusedPlayerActions[0].engineRefusal ??
-                '',
-            ),
-          )
-        : turnNotice(
-            turnHolder,
-            isPlayerActor(turnHolder?.id ?? '', participants),
-            String(refusedPlayerActions[0].refusalReason ?? ''),
-          );
-  const refusedText = `${narratedText}\n\n${notice}`.trim();
+        : playerKeepsTurn
+          ? stillYourTurnNotice(
+              String(
+                refusedPlayerActions[0].playerFacingReason ??
+                  refusedPlayerActions[0].engineRefusal ??
+                  '',
+              ),
+            )
+          : turnNotice(
+              turnHolder,
+              isPlayerActor(turnHolder?.id ?? '', participants),
+              String(refusedPlayerActions[0].refusalReason ?? ''),
+            );
+  const refusedText = notice === null ? narratedText : `${narratedText}\n\n${notice}`.trim();
+  // #1640: the unsupported-action line travels as an engine block, plain text, saved with the
+  // message (#614). It names the refused action and the choices the player still has.
+  const unsupportedBlock: CombatEngineBlock | null = unsupportedRefusal
+    ? {
+        sequence: (orderedEngineBlocks.at(-1)?.sequence ?? -1) + 1,
+        round: combatRound ?? 1,
+        source: 'player',
+        actor: playerName,
+        lines: [unsupportedActionNotice(String(unsupportedRefusal.action))],
+      }
+    : null;
   // #975 (strategist check): a refused fighter feature otherwise exists only
   // inside this reply text, and the in-combat reply is not persisted — a
   // player who reloads sees nothing, and nothing on screen says the feature
@@ -1742,7 +1762,9 @@ export async function resolveDeclaredCombatActions(params: CombatResolutionParam
     }));
   return {
     ...narration,
-    combatEngineBlocks: orderedEngineBlocks,
+    combatEngineBlocks: unsupportedBlock
+      ? [...orderedEngineBlocks, unsupportedBlock]
+      : orderedEngineBlocks,
     ...(refusedFighterFeatures.length ? { refusedFighterFeatures } : {}),
     text:
       playerTurn && !encounterAlreadyConcluded

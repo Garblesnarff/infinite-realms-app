@@ -62,24 +62,18 @@ describe('GameCombatSheet: campaign trackers out of combat (#1095)', () => {
       selectedEnemy: null,
       setSelectedEnemy: vi.fn(),
       showCombatMode: false,
-      isStartingCombat: false,
       actionValidation: null,
       reactionOpportunities: [],
       setReactionOpportunities: vi.fn(),
       localShowInitiativeTracker: false,
       setLocalShowInitiativeTracker: vi.fn(),
-      handleStartCombat: vi.fn(),
       handleEndCombat: vi.fn(),
       handleCombatAction: vi.fn(),
       handleEnemyAttack: vi.fn(),
-      addEnemy: vi.fn(),
       handleEnhancedAttack: vi.fn(),
-      handleRacialTraitUse: vi.fn(),
       handleClassFeature: vi.fn(),
-      handleReactionOpportunity: vi.fn(),
       handleDeathSave: vi.fn(),
       handleConcentrationSave: vi.fn(),
-      handleTwoWeaponAttack: vi.fn(),
       handleApplyDamage: vi.fn(),
       handleHealing: vi.fn(),
       nextTurn: vi.fn(),
@@ -114,12 +108,7 @@ describe('GameCombatSheet: campaign trackers out of combat (#1095)', () => {
   it("shows the campaign trackers, not the 'Combat Ready' panel, out of combat", async () => {
     render(
       <TooltipProvider>
-        <GameCombatSheet
-          showTracker
-          setShowTracker={vi.fn()}
-          isDM={false}
-          sessionId={sessionId}
-        />
+        <GameCombatSheet showTracker setShowTracker={vi.fn()} isDM={false} sessionId={sessionId} />
       </TooltipProvider>,
     );
     expect(await screen.findByText('Wall Clock: 2/6')).toBeInTheDocument();
@@ -135,12 +124,7 @@ describe('GameCombatSheet: campaign trackers out of combat (#1095)', () => {
     vi.mocked(useOptionalCombat).mockReturnValue(undefined as never);
     render(
       <TooltipProvider>
-        <GameCombatSheet
-          showTracker
-          setShowTracker={vi.fn()}
-          isDM={false}
-          sessionId={sessionId}
-        />
+        <GameCombatSheet showTracker setShowTracker={vi.fn()} isDM={false} sessionId={sessionId} />
       </TooltipProvider>,
     );
     expect(await screen.findByText('Wall Clock: 2/6')).toBeInTheDocument();
@@ -151,12 +135,7 @@ describe('GameCombatSheet: campaign trackers out of combat (#1095)', () => {
     fetchStub.mockImplementation(async () => ({ ok: false }));
     render(
       <TooltipProvider>
-        <GameCombatSheet
-          showTracker
-          setShowTracker={vi.fn()}
-          isDM={false}
-          sessionId={sessionId}
-        />
+        <GameCombatSheet showTracker setShowTracker={vi.fn()} isDM={false} sessionId={sessionId} />
       </TooltipProvider>,
     );
     expect(await screen.findByText(/Couldn't load campaign trackers/)).toBeInTheDocument();
@@ -188,12 +167,7 @@ describe('GameCombatSheet: campaign trackers out of combat (#1095)', () => {
     });
     render(
       <TooltipProvider>
-        <GameCombatSheet
-          showTracker
-          setShowTracker={vi.fn()}
-          isDM={false}
-          sessionId={sessionId}
-        />
+        <GameCombatSheet showTracker setShowTracker={vi.fn()} isDM={false} sessionId={sessionId} />
       </TooltipProvider>,
     );
     expect(await screen.findByText(/Couldn't load campaign trackers/)).toBeInTheDocument();
@@ -209,12 +183,7 @@ describe('GameCombatSheet: campaign trackers out of combat (#1095)', () => {
     });
     render(
       <TooltipProvider>
-        <GameCombatSheet
-          showTracker
-          setShowTracker={vi.fn()}
-          isDM={false}
-          sessionId={sessionId}
-        />
+        <GameCombatSheet showTracker setShowTracker={vi.fn()} isDM={false} sessionId={sessionId} />
       </TooltipProvider>,
     );
     expect(await screen.findByText(/No campaign trackers/)).toBeInTheDocument();

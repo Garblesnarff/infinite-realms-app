@@ -3,42 +3,50 @@ import { useState, useCallback } from 'react';
 import type {
   ActionType,
   ReactionOpportunity,
-  CombatParticipant,
   CombatEncounter,
-  CombatAction,
   DamageType,
   MonsterAttack,
 } from '@/types/combat';
 
 import logger from '@/lib/logger';
+import {
+  executeAuthoritativeCombatIntent,
+  type ClientCombatIntent,
+} from '@/services/combat/combat-action-executor';
 import { userDataApi } from '@/services/user-data-api';
-import { createGrappledCondition, rollGrappleCheck, rollShoveCheck } from '@/utils/grappleUtils';
-import { processReactionResponse } from '@/utils/reactionSystem';
+
+/**
+ * The server intent for a player action that has one (#621 B2b). The server rolls the check and
+ * applies its result. Returns null for an action with no server intent.
+ */
+export const serverIntentForAction = (
+  actionType: ActionType,
+  actorId: string,
+  targetId?: string,
+): ClientCombatIntent | null => {
+  if (actionType === 'dash' || actionType === 'dodge') return { type: actionType, actorId };
+  if (actionType === 'hide') return { type: 'check', actorId, checkKind: 'hide' };
+  if ((actionType === 'grapple' || actionType === 'shove') && targetId) {
+    return { type: 'check', actorId, targetId, checkKind: actionType };
+  }
+  return null;
+};
 
 interface UseCombatActionHandlersProps {
   activeEncounter: CombatEncounter | null;
-  takeAction: (action: Partial<CombatAction>) => Promise<void>;
   /** Re-reads the encounter after a server HP write, so the tracker shows the new HP (#621). */
   refreshCombatState?: (signal?: AbortSignal) => Promise<unknown>;
-  updateParticipant: (participantId: string, updates: Partial<CombatParticipant>) => Promise<void>;
   nextTurn: () => Promise<void>;
-  validateCombatAction: (
-    action: Partial<CombatAction>,
-    participant: CombatParticipant,
-  ) => Promise<{ isValid: boolean; suggestions: string[]; errors: string[] }>;
   selectedEnemy: string | null;
 }
 
 /**
  * Hook to manage combat action handlers, extracted from useCombatActions.
- * Handles the execution and validation of various combat actions.
+ * Every player action here goes to the server intent it names (#621 B2b, B2b step 2).
  */
 export const useCombatActionHandlers = ({
   activeEncounter,
-  takeAction,
-  updateParticipant,
   nextTurn,
-  validateCombatAction,
   selectedEnemy,
   refreshCombatState,
 }: UseCombatActionHandlersProps) => {
@@ -49,17 +57,10 @@ export const useCombatActionHandlers = ({
   } | null>(null);
   const [reactionOpportunities, setReactionOpportunities] = useState<ReactionOpportunity[]>([]);
 
-  // Validate and execute combat action
+  // Dash, dodge, hide, and grapple or shove with a target go to the server. The server rolls the
+  // check and applies the result. Any other action type has no server intent and does nothing.
   const handleCombatAction = useCallback(
-    async (
-      actionType: ActionType,
-      participantId: string,
-      targetId?: string,
-      // Genuinely heterogeneous per-actionType payload, spread (...additionalData)
-      // into the action object below - see the matching note in use-combat-mechanics.ts.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      additionalData?: any,
-    ) => {
+    async (actionType: ActionType, participantId: string, targetId?: string) => {
       if (!activeEncounter) {
         return;
       }
@@ -69,71 +70,25 @@ export const useCombatActionHandlers = ({
         return;
       }
 
-      // Create action for validation
-      const action: Partial<CombatAction> = {
-        participantId,
-        targetParticipantId: targetId,
-        actionType,
-        description: `${participant.name} attempts to ${actionType}`,
-        ...additionalData,
-      };
-
-      if ((actionType === 'grapple' || actionType === 'shove') && targetId) {
-        const target = activeEncounter.participants.find((entry) => entry.id === targetId);
-        if (!target) return;
-        const check =
-          actionType === 'grapple'
-            ? rollGrappleCheck(participant, target)
-            : rollShoveCheck(participant, target);
-        action.attackRoll = check.roll;
-        action.hit = check.success;
-        action.description = `${participant.name} ${check.success ? 'succeeds' : 'fails'} to ${actionType} ${target.name} (${check.roll.total} vs ${check.opposingRoll.total})`;
-
-        if (check.success) {
-          const condition =
-            actionType === 'grapple'
-              ? createGrappledCondition(participantId, check.dc)
-              : {
-                  name: 'prone' as const,
-                  description: 'The creature is prone and must stand to end this condition.',
-                  duration: -1,
-                  concentrationRequired: false,
-                };
-          await updateParticipant(targetId, {
-            conditions: [
-              ...target.conditions.filter((entry) => entry.name !== condition.name),
-              condition,
-            ],
-          });
-        }
+      const serverIntent = serverIntentForAction(actionType, participantId, targetId);
+      if (!serverIntent) {
+        return;
       }
-
-      // Validate action with AI rules interpreter
-      try {
-        const validation = await validateCombatAction(action, participant);
-        setActionValidation(validation);
-
-        if (!validation.isValid) {
-          // Show validation errors to user
-          logger.warn('Invalid combat action:', validation.errors);
-          return;
-        }
-
-        // Execute valid action
-        await takeAction(action);
-        setActionValidation(null);
-      } catch (error) {
-        logger.error('Error validating combat action:', error);
-        // Proceed with action if validation fails
-        await takeAction(action);
-      }
+      await executeAuthoritativeCombatIntent(
+        activeEncounter.id,
+        serverIntent,
+        'player',
+        undefined,
+        'action_bar',
+      );
     },
-    [activeEncounter, takeAction, updateParticipant, validateCombatAction],
+    [activeEncounter],
   );
 
-  // Handle enemy attack with AI integration
+  // Handle enemy attack. The server rolls the enemy's attack and its damage (#621 B2b). The
+  // attack picked in the menu is not sent: the server resolves the enemy's own attack.
   const handleEnemyAttack = useCallback(
-    async (attack: MonsterAttack) => {
+    async (_attack: MonsterAttack) => {
       if (!selectedEnemy || !activeEncounter) {
         return;
       }
@@ -143,68 +98,23 @@ export const useCombatActionHandlers = ({
         return;
       }
 
-      await handleCombatAction(
-        'attack',
-        selectedEnemy,
-        activeEncounter.currentTurnParticipantId || '',
-        {
-          attackRoll: {
-            total: Math.floor(Math.random() * 20) + 1 + (attack.attackBonus || 0),
-            rolls: [Math.floor(Math.random() * 20) + 1],
-            modifier: attack.attackBonus || 0,
-          },
-          damageRolls: attack.damageRoll
-            ? [
-                {
-                  total: 0, // Will be calculated
-                  rolls: [],
-                  modifier: 0,
-                },
-              ]
-            : [],
-          damageType: attack.damageType,
-          description: `${enemy.name} uses ${attack.name}`,
-        },
-      );
+      const targetId = activeEncounter.currentTurnParticipantId;
+      if (targetId) {
+        await executeAuthoritativeCombatIntent(
+          activeEncounter.id,
+          { type: 'attack', actorId: selectedEnemy, targetId },
+          'dm',
+          Date.now(),
+          'typed',
+        );
+      }
 
       // Auto-advance turn after enemy action
       setTimeout(() => {
         nextTurn();
       }, 1500);
     },
-    [selectedEnemy, activeEncounter, handleCombatAction, nextTurn],
-  );
-
-  // Handle reaction opportunities
-  const handleReactionOpportunity = useCallback(
-    async (opportunity: ReactionOpportunity, selectedReaction: ActionType) => {
-      if (!activeEncounter) {
-        return;
-      }
-
-      try {
-        const reactionAction = processReactionResponse(
-          opportunity,
-          selectedReaction,
-          activeEncounter,
-        );
-        await takeAction(reactionAction);
-
-        // Mark participant as having used their reaction
-        const participant = activeEncounter.participants.find(
-          (p) => p.id === opportunity.participantId,
-        );
-        if (participant) {
-          updateParticipant(opportunity.participantId, { reactionTaken: true });
-        }
-
-        // Remove the opportunity after use
-        setReactionOpportunities((prev) => prev.filter((opp) => opp.id !== opportunity.id));
-      } catch (error) {
-        logger.error('Error processing reaction:', error);
-      }
-    },
-    [activeEncounter, takeAction, updateParticipant],
+    [selectedEnemy, activeEncounter, nextTurn],
   );
 
   // Handle applying direct damage. The server applies it (#621 Part B2a). Only player characters
@@ -253,7 +163,6 @@ export const useCombatActionHandlers = ({
     setReactionOpportunities,
     handleCombatAction,
     handleEnemyAttack,
-    handleReactionOpportunity,
     handleApplyDamage,
     handleHealing,
   };

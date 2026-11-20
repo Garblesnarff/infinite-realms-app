@@ -1,5 +1,5 @@
 import { Star, Zap } from 'lucide-react';
-import React from 'react';
+import React, { useId } from 'react';
 
 import type { Character } from '@/types/character';
 import type { ClassFeature } from '@/types/combat';
@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { useIsInCombatOptional } from '@/contexts/in-combat-flag';
+import { useSheetHitPointsOptional } from '@/contexts/sheet-hit-points';
 
 interface FeatureSectionProps {
   character: Character;
@@ -23,6 +25,17 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({
   classFeatures,
   onUseResource,
 }) => {
+  // #1679: Second Wind is refused at full HP and in a fight, so its button says why (as Heal self
+  // does, #1658). The reason is the button's description.
+  const inCombat = useIsInCombatOptional();
+  const hitPoints = useSheetHitPointsOptional();
+  const secondWindHintId = useId();
+  const secondWindRefusal = inCombat
+    ? 'In combat, use Second Wind from the combat actions.'
+    : hitPoints !== null && hitPoints.current >= hitPoints.maximum
+      ? 'You are already at full health.'
+      : null;
+
   if (classFeatures.length === 0) return null;
 
   return (
@@ -66,15 +79,29 @@ export const FeatureSection: React.FC<FeatureSectionProps> = ({
                 />
               </div>
             )}
-            {feature.currentUses !== undefined && feature.currentUses > 0 && (
-              <Button
-                size="sm"
-                className="mt-2"
-                onClick={() => onUseResource(feature)}
-              >
-                <Zap className="w-4 h-4 mr-2" />
-                Use Feature
-              </Button>
+            {/* #1618: Lay on Hands spends through its own control (LayOnHandsControl), not the generic button. */}
+            {feature.name !== 'lay_on_hands' &&
+              feature.currentUses !== undefined &&
+              feature.currentUses > 0 && (
+                <Button
+                  size="sm"
+                  className="mt-2"
+                  disabled={feature.name === 'second_wind' && secondWindRefusal !== null}
+                  aria-describedby={
+                    feature.name === 'second_wind' && secondWindRefusal !== null
+                      ? secondWindHintId
+                      : undefined
+                  }
+                  onClick={() => onUseResource(feature)}
+                >
+                  <Zap className="w-4 h-4 mr-2" />
+                  Use Feature
+                </Button>
+              )}
+            {feature.name === 'second_wind' && secondWindRefusal !== null && (
+              <p id={secondWindHintId} className="mt-1 text-xs text-muted-foreground">
+                {secondWindRefusal}
+              </p>
             )}
           </div>
         ))}

@@ -221,24 +221,6 @@ describe('browser combat state follows server truth', () => {
     expect(result.current.state.activeEncounter).toBeNull();
   });
 
-  it('keeps the manual combat path local without issuing persistence POSTs', async () => {
-    const { result } = renderHook(() => useCombat(), { wrapper });
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
-
-    await act(async () => {
-      await result.current.startCombat('current-session', [{ name: 'Rook' }]);
-    });
-    expect(result.current.state.isInCombat).toBe(true);
-    expect(fetchCalls.some(({ init }) => init?.method === 'POST')).toBe(false);
-
-    // The server has never heard of a client-minted encounter, so its silence must not end it.
-    await act(async () => {
-      await result.current.refreshCombatState();
-    });
-    expect(result.current.state.isInCombat).toBe(true);
-    expect(result.current.state.activeEncounter?.origin).toBe('local');
-  });
-
   it('keeps combat running when the server is unreachable', async () => {
     activeResponse = { status: 'active' };
     const { result } = renderHook(() => useCombat(), { wrapper });
@@ -303,7 +285,7 @@ describe('the DM turn reads server combat truth', () => {
     );
   });
 
-  it('carries the fight\'s ending facts into the first post-combat turn (#919)', async () => {
+  it("carries the fight's ending facts into the first post-combat turn (#919)", async () => {
     activeResponse = { status: 'active' };
     const { result } = renderHook(() => ({ combat: useCombat(), ai: useAIResponse() }), {
       wrapper,
@@ -420,14 +402,14 @@ describe('the DM turn reads server combat truth', () => {
     vi.mocked(AIService.chatWithDM).mockClear();
     await act(async () => {
       await result.current.ai.getAIResponse(
-        [{ text: 'I search the room', sender: 'player', timestamp: new Date().toISOString() }] as any,
+        [
+          { text: 'I search the room', sender: 'player', timestamp: new Date().toISOString() },
+        ] as any,
         SESSION_ID,
       );
     });
     expect(
-      vi
-        .mocked(userDataApi.getTacticalMapContext)
-        .mock.calls.filter((call) => call[1] === '-'),
+      vi.mocked(userDataApi.getTacticalMapContext).mock.calls.filter((call) => call[1] === '-'),
     ).toHaveLength(2);
     expect(AIService.chatWithDM).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -465,7 +447,9 @@ describe('the DM turn reads server combat truth', () => {
     });
     await act(async () => {
       await second.result.current.ai.getAIResponse(
-        [{ text: 'I search the room', sender: 'player', timestamp: new Date().toISOString() }] as any,
+        [
+          { text: 'I search the room', sender: 'player', timestamp: new Date().toISOString() },
+        ] as any,
         SESSION_ID,
       );
     });

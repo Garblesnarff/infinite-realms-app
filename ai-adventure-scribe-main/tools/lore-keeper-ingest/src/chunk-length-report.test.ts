@@ -116,3 +116,68 @@ Kind acts earn a token.
   assert.deepEqual(result.unmatchedNames, []);
   assert.equal(result.flagged.length, 0);
 });
+
+test('duplicate mechanic names: two Tides headings -> duplicateNames entry', () => {
+  const bible = `## Mechanics
+
+### **Tides**
+First body.
+
+### **Tides**
+Second body.
+`;
+  const { chunks } = chunkCampaignFiles('test-campaign', { campaignBible: bible });
+  const tidesChunks = chunks.filter((c) => c.chunkType === 'mechanic' && c.entityName === 'Tides');
+  assert.equal(tidesChunks.length, 2);
+
+  const result = scanBible(bible, 'test-campaign');
+  assert.deepEqual(result.duplicateNames, [
+    { entityName: 'Tides', count: 2, droppedChars: tidesChunks[1].content.length },
+  ]);
+});
+
+test('duplicate mechanic names: distinct names -> empty', () => {
+  const bible = `## Mechanics
+
+### **Alpha**
+Alpha body.
+
+### **Beta**
+Beta body.
+`;
+  const result = scanBible(bible, 'test-campaign');
+  assert.deepEqual(result.duplicateNames, []);
+});
+
+test('lost #### text: plain heading body is lost', () => {
+  const bible =
+    '## Mechanics\n\n### **Alpha**\nAlpha body.\n#### Sub Rule\nSub body line.\n\n### **Beta**\nBeta body.';
+  const { chunks } = chunkCampaignFiles('test-campaign', { campaignBible: bible });
+  assert.ok(!chunks.some((c) => c.content.includes('Sub body line.')));
+
+  const result = scanBible(bible, 'test-campaign');
+  assert.deepEqual(result.lostH4, [
+    {
+      parentName: 'Alpha',
+      heading: 'Sub Rule',
+      bodyChars: 'Sub body line.'.length,
+      lostChars: 'Sub body line.'.length,
+    },
+  ]);
+});
+
+test('lost #### text: bold heading is not counted', () => {
+  const bible = `## Mechanics
+
+### **Alpha**
+Intro.
+
+#### **Sub**
+Sub body.
+`;
+  const { chunks } = chunkCampaignFiles('test-campaign', { campaignBible: bible });
+  assert.ok(chunks.some((c) => c.chunkType === 'mechanic' && c.entityName === 'Sub'));
+
+  const result = scanBible(bible, 'test-campaign');
+  assert.deepEqual(result.lostH4, []);
+});

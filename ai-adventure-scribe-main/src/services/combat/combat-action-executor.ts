@@ -50,7 +50,8 @@ export interface StructuredCombatAction {
      */
     | 'second_wind'
     | 'action_surge'
-    | 'divine_sense';
+    | 'divine_sense'
+    | 'rage';
   target_ids: string[];
   weapon_id: string | null;
   spell_id: string | null;
@@ -58,6 +59,8 @@ export interface StructuredCombatAction {
   movement_feet: number;
   /** #1362: for an attack, the Paladin's Divine Smite slot level, spent only if the attack hits. */
   divine_smite_slot_level?: number;
+  /** #1639: the off-hand attack, a bonus action after the Attack action with a light melee weapon. */
+  off_hand?: boolean;
   /** #1233: a Metamagic option armed for this cast; the server checks it and spends the points. */
   metamagic?: string;
   x?: number;
@@ -100,6 +103,8 @@ export type ClientCombatIntent =
       d20Rolls?: [number, number];
       /** #1362: the slot a Paladin spends on Divine Smite if this melee attack hits. */
       divineSmiteSlotLevel?: number;
+      /** #1639: the off-hand attack, a bonus action. */
+      offHand?: boolean;
     }
   | {
       type: 'spell';
@@ -119,7 +124,7 @@ export type ClientCombatIntent =
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion?: number }
   /** #975: the Fighter's short-rest features; the server spends the tracked use. */
   | {
-      type: 'second_wind' | 'action_surge' | 'divine_sense';
+      type: 'second_wind' | 'action_surge' | 'divine_sense' | 'rage';
       actorId: string;
       expectedVersion?: number;
     }
@@ -189,6 +194,7 @@ const INTENT_TYPES_REQUIRING_VERSION = new Set([
   'second_wind',
   'action_surge',
   'divine_sense',
+  'rage',
   'use_item',
   'flexible_casting',
   'lay_on_hands',
@@ -418,6 +424,7 @@ export async function executeStructuredCombatActionWithBoundary(
         ...(typeof action.divine_smite_slot_level === 'number'
           ? { divineSmiteSlotLevel: action.divine_smite_slot_level }
           : {}),
+        ...(action.off_hand === true ? { offHand: true } : {}),
       },
       'dm',
       dmStartedAt,
@@ -459,7 +466,7 @@ export async function executeStructuredCombatActionWithBoundary(
       playerInput,
     );
   } else if (
-    ['dash', 'dodge', 'disengage', 'second_wind', 'action_surge', 'divine_sense'].includes(
+    ['dash', 'dodge', 'disengage', 'second_wind', 'action_surge', 'divine_sense', 'rage'].includes(
       action.action_type,
     )
   ) {
@@ -474,7 +481,8 @@ export async function executeStructuredCombatActionWithBoundary(
           | 'disengage'
           | 'second_wind'
           | 'action_surge'
-          | 'divine_sense',
+          | 'divine_sense'
+          | 'rage',
         actorId: action.actor_id,
       },
       'dm',

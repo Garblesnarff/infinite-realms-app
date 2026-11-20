@@ -12,6 +12,9 @@ import {
   abyssalRoster,
   DECLARED_ATTACK_SESSION_ID,
   declaredAttackCheckBody,
+  deadFoeCheckBody,
+  deadFoeRefusal,
+  deadFoeRoster,
   pickedTargetCheckBody,
   RUN19_RECENT_NARRATION,
   run19Roster,
@@ -36,6 +39,7 @@ const { createDeclaredAttackRoutes } = await import('../entry.js');
 let authenticated = true;
 let liveEncounter: unknown;
 let roster: Array<{ name: string; source?: 'ledger' | 'map' | 'campaign' }> = [];
+let deadNames: string[] = [];
 const defaultRoster = [{ name: 'Valerius' }, { name: 'Professor Darkwater' }];
 const rosterCalls: Array<{ sessionId: string; userId: string }> = [];
 const authenticateRequest = async () =>
@@ -49,9 +53,9 @@ const authenticateRequest = async () =>
 const app = createRequestPipelineApp().use(
   createDeclaredAttackRoutes({
     authenticateRequest: authenticateRequest as never,
-    loadCombatIntentActorRoster: (async (sessionId: string, userId: string) => {
+    loadCombatIntentRoster: (async (sessionId: string, userId: string) => {
       rosterCalls.push({ sessionId, userId });
-      return roster;
+      return { actors: roster, deadNames, deadExcludedCount: deadNames.length };
     }) as never,
     getActiveEncounter: async () => liveEncounter,
   }),
@@ -71,7 +75,49 @@ describe('POST /v1/combat/sessions/:sessionId/declared-attack', () => {
     authenticated = true;
     liveEncounter = undefined;
     roster = defaultRoster;
+    deadNames = [];
     rosterCalls.splice(0);
+  });
+
+  /**
+   * #1595: Run M16. The DM brought Dutch Pellam back after the ledger marked him dead. The route
+   * must answer with a named refusal, not a silent `pending: null`.
+   */
+  describe('a declared attack on a creature the ledger marks dead (#1595)', () => {
+    it('answers with the dead refusal and offers no entry', async () => {
+      roster = deadFoeRoster.actors;
+      deadNames = deadFoeRoster.deadNames;
+      const response = await post(deadFoeCheckBody);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ pending: null, refusal: deadFoeRefusal });
+    });
+
+    it('stays silent when the same words name no dead creature', async () => {
+      roster = deadFoeRoster.actors;
+      deadNames = [];
+      const response = await post(deadFoeCheckBody);
+      expect(await response.json()).toEqual({ pending: null });
+    });
+
+    it('does not refuse a pronoun whose last narration names the dead creature (#1595)', async () => {
+      roster = deadFoeRoster.actors;
+      deadNames = deadFoeRoster.deadNames;
+      const response = await post({
+        ...deadFoeCheckBody,
+        playerInput: 'I hit him with my sword',
+        recentNarration: 'Dutch Pellam grins at you across the sand.',
+      });
+      expect(await response.json()).toEqual({ pending: null });
+    });
+
+    it('offers entry, not a refusal, when a live creature of that name is present', async () => {
+      roster = [{ name: 'Dutch Pellam', source: 'map' }];
+      deadNames = ['Dutch Pellam'];
+      const response = await post(deadFoeCheckBody);
+      expect(await response.json()).toMatchObject({
+        pending: { declaredAttack: { actorName: 'Dutch Pellam' } },
+      });
+    });
   });
 
   it.each([

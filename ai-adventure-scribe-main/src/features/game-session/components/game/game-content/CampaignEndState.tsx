@@ -4,6 +4,10 @@ import { useNavigate } from 'react-router-dom';
 
 import { planHasPaidFeatures } from '../../../../../../shared/plan-features';
 import './campaign-end-state.css';
+import { useShowTargetNumbers } from '../../../hooks/use-show-target-numbers';
+import { EngineResultCardView } from '../EngineResultCardView';
+
+import type { EngineResultCard } from '@/services/combat/engine-result-card';
 
 import { Button } from '@/components/ui/button';
 import { useOptionalAuth } from '@/contexts/AuthContext';
@@ -27,6 +31,7 @@ export interface CampaignEndStateProps {
   chooseHeroHref: string | null;
   chooseHeroPending?: boolean;
   finalLines?: string[];
+  finalCards?: EngineResultCard[];
   summary?: string | null;
   storyContent?: React.ReactNode;
   portraitUrl?: string | null;
@@ -180,6 +185,7 @@ export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
   const navigate = useNavigate();
   const headingRef = React.useRef<HTMLHeadingElement>(null);
   const [view, setView] = React.useState<'end' | 'story'>('end');
+  const { showTargetNumbers } = useShowTargetNumbers();
 
   const name = props.characterName?.trim() || 'Your character';
   const campaignName = props.campaignName?.trim() || 'this campaign';
@@ -190,8 +196,10 @@ export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
   // How they fell and the run stay empty until the caller has real lines or a
   // run summary. A reload has neither; the screen does not invent a stand-in.
   const finalLines = props.finalLines?.filter((line) => line.trim()) ?? [];
+  const finalCards = props.finalCards?.filter(Boolean) ?? [];
   const narration = props.narration?.trim() || '';
-  const showHowTheyFell = isFallen && (narration.length > 0 || finalLines.length > 0);
+  const showHowTheyFell =
+    isFallen && (narration.length > 0 || finalLines.length > 0 || finalCards.length > 0);
   const hasSummary = Boolean(props.summary?.trim());
   const experience = typeof props.experience === 'number' ? props.experience : null;
   const runSummary = isKnownRunSummary(props.runSummary) ? props.runSummary : null;
@@ -226,7 +234,7 @@ export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
             </Button>
             <h1
               tabIndex={-1}
-              className="ir-display ir-end-title m-0 min-w-0 flex-1 break-words text-base text-infinite-gold-light"
+              className="ir-display ir-end-title m-0 min-w-0 flex-1 break-words text-base text-infinite-gold-light !outline-none"
             >
               {name} — {isFallen ? 'fallen' : 'adventure complete'}
             </h1>
@@ -259,7 +267,7 @@ export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
             <h1
               ref={headingRef}
               tabIndex={-1}
-              className="ir-display ir-end-title mt-5 break-words text-4xl font-bold leading-tight text-foreground outline-none"
+              className="ir-display ir-end-title mt-5 break-words text-4xl font-bold leading-tight text-foreground !outline-none"
             >
               {screenLabel}
             </h1>
@@ -299,17 +307,29 @@ export const CampaignEndState: React.FC<CampaignEndStateProps> = (props) => {
                   {narration}
                 </p>
               )}
-              {finalLines.length > 0 && (
-                <div data-testid="death-screen-final-lines" className="space-y-2.5">
-                  {finalLines.map((line, index) => (
-                    <p
-                      key={`${line}-${index}`}
-                      className="ir-end-card rounded-xl bg-black/20 px-3.5 py-3 text-[15px] leading-relaxed text-white/75"
-                    >
-                      {displayFinalLine(line)}
-                    </p>
+              {finalCards.length > 0 ? (
+                <div data-testid="death-screen-final-cards" className="space-y-2.5">
+                  {finalCards.map((card, index) => (
+                    <EngineResultCardView
+                      key={index}
+                      card={card}
+                      showTargetNumbers={showTargetNumbers}
+                    />
                   ))}
                 </div>
+              ) : (
+                finalLines.length > 0 && (
+                  <div data-testid="death-screen-final-lines" className="space-y-2.5">
+                    {finalLines.map((line, index) => (
+                      <p
+                        key={`${line}-${index}`}
+                        className="ir-end-card rounded-xl bg-black/20 px-3.5 py-3 text-[15px] leading-relaxed text-white/75"
+                      >
+                        {displayFinalLine(line)}
+                      </p>
+                    ))}
+                  </div>
+                )
               )}
             </section>
           )}

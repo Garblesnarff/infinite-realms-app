@@ -19,4 +19,12 @@ describe('LandingMemory', () => {
       screen.getByText('A torn page: “Day 9. The ropes were cut from below.”'),
     ).toBeInTheDocument();
   });
+
+  // #1679: the "Example" label is 12 px (text-xs), per #1664.
+  it('sets the Example label at 12 px', () => {
+    render(<LandingMemory />);
+
+    expect(screen.getByText('Example')).toHaveClass('text-xs');
+    expect(screen.getByText('Example')).not.toHaveClass('text-[11px]');
+  });
 });

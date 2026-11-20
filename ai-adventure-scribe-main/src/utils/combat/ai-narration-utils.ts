@@ -26,55 +26,6 @@ export interface CombatMessageData {
   description: string;
 }
 
-// Get damage roll parameters for a weapon
-export const getDamageRollForWeapon = (
-  weapon: string,
-): { dice: number; count: number; modifier: number } => {
-  const weaponMap: Record<string, { dice: number; count: number; modifier: number }> = {
-    sword: { dice: 8, count: 1, modifier: 3 },
-    crossbow: { dice: 8, count: 1, modifier: 3 },
-    bow: { dice: 6, count: 1, modifier: 3 },
-    dagger: { dice: 4, count: 1, modifier: 3 },
-    mace: { dice: 6, count: 1, modifier: 3 },
-    claw: { dice: 4, count: 1, modifier: 2 },
-    bite: { dice: 6, count: 1, modifier: 2 },
-  };
-
-  return weaponMap[weapon.toLowerCase()] || { dice: 6, count: 1, modifier: 2 };
-};
-
-// Create descriptive text for combat actions
-export const createActionDescription = (
-  action: DetectedCombatAction,
-  _roll: DiceRoll,
-  success?: boolean,
-  critical?: boolean,
-): string => {
-  const actor = action.actor;
-  const target = action.target ? ` against ${action.target}` : '';
-  const weapon = action.weapon ? ` with ${action.weapon}` : '';
-
-  switch (action.rollType) {
-    case 'attack':
-      if (critical) {
-        return `${actor} scores a critical hit${target}${weapon}!`;
-      }
-      return `${actor} ${success ? 'hits' : 'misses'}${target}${weapon}`;
-
-    case 'damage':
-      return `${actor} deals damage${target}${weapon}`;
-
-    case 'save':
-      return `${actor} makes a saving throw`;
-
-    case 'skill':
-      return `${actor} attempts a skill check`;
-
-    default:
-      return `${actor} performs ${action.action}${target}`;
-  }
-};
-
 export function shouldTriggerDMNarration(event: CombatEvent, _encounter: unknown): boolean {
   const narrativeEvents = [
     'COMBAT_START',

@@ -18,13 +18,25 @@
 import { logAttackResolution, participantSlug } from './attack-telemetry.js';
 import { appliesBlessDie } from './bless-rider.js';
 import { mookGroupAttackBonus } from './boss-moves.js';
-import { resolveAttackRules } from './combat-rules.js';
+import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
+import {
+  activeAlliesOf,
+  claimSneakAttack,
+  clearHiddenAttacker,
+  clearSneakAttackSpent,
+  markLightAttack,
+  isHiddenAttacker,
+  rogueLevelOf,
+  classLevelOfCharacter,
+  isRaging,
+  markRageActive,
+} from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
   claimTurnReactionAndResolve,
 } from './combat-turn-resources.js';
-import { calculateDamage, resolveCriticalHit } from './damage-calculator.js';
+import { calculateDamage, resolveCriticalHit, rollDamageDice } from './damage-calculator.js';
 import {
   getParticipantWithStats,
   getParticipantsWithStatsBatch,
@@ -50,12 +62,23 @@ import { appliesHexRider, hexRiderDice } from './hex-rider.js';
 import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { markPlayerDamageProvocation } from './npc-provocation.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
-import { aggregateResistances } from './resistance-resolver.js';
+import {
+  aggregateResistances,
+  RAGE_RESISTANCES,
+  withRageResistances,
+} from './resistance-resolver.js';
 import {
   metamagicOptionsLedger,
   sorceryPointsLedger,
   spendMetamagicPoints,
 } from './resource-ledger.js';
+import {
+  appliesSneakAttackRider,
+  SNEAK_ATTACK_ALLY_REACH_FEET,
+  sneakAttackDice,
+  sneakAttackWeaponQualifies,
+  splitResistedSneakTotal,
+} from './sneak-attack-rider.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import {
@@ -63,6 +86,7 @@ import {
   rerollGreatWeaponFace,
 } from '../../../../shared/fighting-style';
 import {
+  rageDamageBonusAt,
   METAMAGIC_COSTS,
   METAMAGIC_OPTION_LABELS,
 } from '../../../../shared/limited-feature-counts';
@@ -446,6 +470,84 @@ export class CombatAttackService {
   }
 
   /**
+   * Sneak Attack on a hit (#1637, 2014 SRD 5.1). Returns the rider's part of the hit, or null when it
+   * does not apply: a Rogue's finesse or ranged weapon, with advantage from an engine source or a
+   * non-incapacitated ally within 5 ft of the target (the ally clause needs a tactical map). It never
+   * applies with any disadvantage source, and it is once per turn. The turn is claimed in one guarded
+   * UPDATE before any damage; a claim error means no rider, and the attack goes on.
+   */
+  private async sneakAttackRiderDamage(input: {
+    encounterId: string;
+    attackerId: string;
+    targetId: string;
+    characterId: string | null | undefined;
+    weapon: WeaponRuleProfile;
+    rules: {
+      advantage: boolean;
+      advantageSources: string[];
+      disadvantageSources: string[];
+    };
+    tacticalMap: Awaited<ReturnType<typeof loadActiveTacticalMap>>;
+    defenses: ReturnType<typeof aggregateResistances>;
+    isCritical: boolean;
+    weaponCalc: { damageBeforeResistances: number };
+  }): Promise<{ damage: number; dice: string } | null> {
+    if (!input.characterId || !sneakAttackWeaponQualifies(input.weapon)) return null;
+    const dice = sneakAttackDice(await rogueLevelOf(input.characterId), input.isCritical);
+    if (!dice) return null;
+
+    let allyWithinReachOfTarget = false;
+    const map = input.tacticalMap;
+    const target = map?.entities.find((entity) => entity.id === input.targetId);
+    if (map && target) {
+      for (const ally of await activeAlliesOf(
+        input.encounterId,
+        input.attackerId,
+        input.targetId,
+      )) {
+        const entity = map.entities.find((candidate) => candidate.id === ally.id);
+        if (entity && getDistance(entity, target) <= SNEAK_ATTACK_ALLY_REACH_FEET) {
+          allyWithinReachOfTarget = true;
+          break;
+        }
+      }
+    }
+    const applies = appliesSneakAttackRider({
+      advantage: input.rules.advantage,
+      disadvantage: input.rules.disadvantageSources.length > 0,
+      advantageSources: input.rules.advantageSources,
+      allyWithinReachOfTarget,
+      alreadyUsedThisTurn: false,
+    });
+    if (!applies) return null;
+
+    try {
+      const claimed = await claimSneakAttack(input.encounterId, input.attackerId);
+      if (!claimed) return null;
+    } catch (error) {
+      logger.warn({
+        msg: 'COMBAT_SNEAK_ATTACK_CLAIM_FAILED',
+        encounterId: input.encounterId,
+        participantId: input.attackerId,
+        error,
+      });
+      return null;
+    }
+
+    // Weapon and rider share the weapon's damage type, so resistance applies once to the total. The
+    // weapon's own part was resisted alone in damageCalc; the rider's part is what the total adds.
+    const split = splitResistedSneakTotal({
+      weaponRaw: input.weaponCalc.damageBeforeResistances,
+      riderRaw: rollDamageDice(dice, false),
+      damageType: input.weapon.damageType,
+      resistances: input.defenses.resistances,
+      vulnerabilities: input.defenses.vulnerabilities,
+      immunities: input.defenses.immunities,
+    });
+    return { damage: split.rider, dice };
+  }
+
+  /**
    * Divine Smite on a hit (#1362, 2014 PHB p.85): spend the declared slot, then roll the Smite
    * dice (see divine-smite-rider.ts) radiant, resisted on its own the way the Hex rider's
    * necrotic damage is. The slot was checked up front, so a spend that still fails here is a
@@ -567,14 +669,32 @@ export class CombatAttackService {
     if (!targetData) throw new NotFoundError('Target participant', targetId);
     if (!attackerData) throw new NotFoundError('Attacker participant', attackerId);
 
-    const [weapon, attackerProfile, attackerConditions, targetConditions, tacticalMap] =
-      await Promise.all([
-        getEquippedWeaponProfile(attackerData.participant, weaponId),
-        getParticipantAbilityProfile(attackerData.participant),
-        getActiveConditionNames(attackerId),
-        getActiveConditionNames(targetId),
-        loadActiveTacticalMap(attackerData.participant.encounter.sessionId),
-      ]);
+    const attackerCharacterId = attackerData.participant.characterId ?? null;
+    const [
+      weapon,
+      attackerProfile,
+      attackerConditions,
+      targetConditions,
+      tacticalMap,
+      attackerHidden,
+      attackerRaging,
+      targetRaging,
+    ] = await Promise.all([
+      getEquippedWeaponProfile(attackerData.participant, weaponId),
+      getParticipantAbilityProfile(attackerData.participant),
+      getActiveConditionNames(attackerId),
+      getActiveConditionNames(targetId),
+      loadActiveTacticalMap(attackerData.participant.encounter.sessionId),
+      isHiddenAttacker(encounterId, attackerId),
+      // Rage belongs to a character, so a participant with no character skips the two reads.
+      attackerCharacterId ? isRaging(encounterId, attackerId) : false,
+      targetData.participant.characterId ? isRaging(encounterId, targetId) : false,
+    ]);
+    // #1638: Rage's damage follows the attacker's Barbarian level (+2, +3 at 9, +4 at 16; #1654).
+    const ragingDamageBonus =
+      attackerRaging && attackerCharacterId
+        ? rageDamageBonusAt(await classLevelOfCharacter(attackerCharacterId, 'Barbarian'))
+        : 0;
     const { participant: targetParticipant, stats: targetStats } = targetData;
     const baseTargetAc = resolveParticipantArmorClass(targetParticipant.armorClass, {
       participantId: targetParticipant.id,
@@ -600,9 +720,12 @@ export class CombatAttackService {
       requestedAdvantage: advantage,
       requestedDisadvantage: disadvantage,
       targetDodging: targetParticipant.isDodging,
+      attackerHidden,
       attackerConditions,
       targetConditions,
       fightingStyles: attackerProfile.fightingStyles,
+      ragingDamageBonus,
+      offHand: input.offHand === true,
     });
     // #728 (house rule): a mook attacking with its pack gets +1 to hit for each extra standing
     // mook, to a maximum of +3. Applied here, inside prepareAttack, so the proposal popup and
@@ -629,6 +752,8 @@ export class CombatAttackService {
       rules,
       mookGroupBonus,
       fightingStyles: attackerProfile.fightingStyles,
+      targetRaging,
+      attackerRaging,
     };
   }
 
@@ -698,9 +823,21 @@ export class CombatAttackService {
       rules,
       mookGroupBonus,
       fightingStyles,
+      targetRaging,
+      attackerRaging,
     } = await this.prepareAttack(encounterId, input, userId);
 
     if (!rules.legal) {
+      if (rules.refusal === 'out_of_range') {
+        // #1651: say who is too far, how far it is, and the reach, in the same words the spell path uses.
+        const reach = weapon.longRange ?? weapon.normalRange;
+        const targetName = targetParticipant.name ?? 'the target';
+        const feet = geometry?.distanceFeet ?? reach;
+        throw new BusinessLogicError(
+          `Attack refused: ${targetName} is ${feet} feet away, out of your ${reach}-foot reach — move closer and attack again`,
+          { refusal: rules.refusal, reason: rules.refusal, reachFeet: reach, distanceFeet: feet },
+        );
+      }
       throw new BusinessLogicError(`Attack refused: ${rules.refusal}`, { refusal: rules.refusal });
     }
 
@@ -748,6 +885,23 @@ export class CombatAttackService {
     // fleer's turn, so claiming a turn action for the attacker would spend a second creature's
     // Action for a blow provoked by the first one.
     const resolveAttackRoll = async () => {
+      // #1637: the attack spends a Hide's advantage, hit or miss, once it is actually resolving.
+      if (rules.advantageSources.includes('hidden')) {
+        await clearHiddenAttacker(encounterId, attackerId);
+      }
+      // #1654: a raging Barbarian who attacks a hostile creature keeps Rage through the next turn start.
+      if (attackerRaging && targetParticipant.participantType !== 'player') {
+        await markRageActive(encounterId, attackerId);
+      }
+      // #1639: an Attack action with a light melee weapon marks this turn for an off-hand attack. The
+      // mark is written only once the attack has resolved (a hit after its damage, or a miss), so a
+      // damage failure that releases the claim leaves no mark. A reaction and an off-hand swing are not
+      // the Attack action.
+      const markLightAttackAction = async (): Promise<void> => {
+        if (!isReaction && !input.offHand && weapon.light === true && weapon.meleeWeapon === true) {
+          await markLightAttack(encounterId, attackerId, weapon.id);
+        }
+      };
       // The player's own die when they rolled one, and only then. `rollD20Pair` already applied
       // advantage when it rolled; a provided die was rolled in the popup, which was told the
       // advantage state by `proposeAttack` and submits the die it kept. Rolling a second die
@@ -841,6 +995,7 @@ export class CombatAttackService {
           targetHpAfter: null,
         });
         // Miss - no damage
+        await markLightAttackAction();
         return {
           hit: false,
           d20: attackRoll,
@@ -876,8 +1031,11 @@ export class CombatAttackService {
       // When the die is not a natural 20 the line says what made the hit critical (#2640).
       const critReason = autoCritReason(targetConditions, attackRoll, isCrit);
 
-      // Aggregate resistances using the extracted module
-      const defenses = aggregateResistances(targetParticipant, targetStats);
+      // Aggregate resistances using the extracted module; Rage adds its three types (#1638).
+      const defenses = withRageResistances(
+        aggregateResistances(targetParticipant, targetStats),
+        targetRaging,
+      );
 
       const rerollGreatWeapon =
         weapon.fixedDamageBonus === undefined &&
@@ -902,6 +1060,21 @@ export class CombatAttackService {
           : {}),
       });
 
+      // #1638: Rage's flat +2 is listed as its own part. It takes the weapon's resistances, so the
+      // weapon part and the Rage part are one resisted total split in two; the parts sum to finalDamage.
+      const ragePart =
+        rules.ragingDamage > 0
+          ? calculateDamage({
+              damageDice: '0',
+              damageBonus: 0,
+              damageType: weapon.damageType as DamageType,
+              damageRoll: rules.ragingDamage,
+              resistances: defenses.resistances,
+              vulnerabilities: defenses.vulnerabilities,
+              immunities: defenses.immunities,
+            }).finalDamage
+          : 0;
+
       // #754: Hex adds 1d6 necrotic to a hit on its cursed target, resisted separately.
       const hexDamage = await this.hexRiderDamage(
         attackerData.participant.characterId,
@@ -924,9 +1097,26 @@ export class CombatAttackService {
               defenses,
             });
       const smiteApplied = smite?.applied ? smite : null;
-      const totalDamage = damageCalc.finalDamage + hexDamage + (smiteApplied?.damage ?? 0);
+      // #1637: Sneak Attack, once per turn. The turn is claimed here, before any damage is applied.
+      const sneak = await this.sneakAttackRiderDamage({
+        encounterId,
+        attackerId,
+        targetId,
+        characterId: attackerData.participant.characterId,
+        weapon,
+        rules,
+        tacticalMap,
+        defenses,
+        isCritical: isCrit,
+        weaponCalc: damageCalc,
+      });
+      const totalDamage =
+        damageCalc.finalDamage + hexDamage + (smiteApplied?.damage ?? 0) + (sneak?.damage ?? 0);
 
       // Apply damage to target HP
+      // #1651: set once the HP write has landed. A failure after it is not a reason to give the
+      // Sneak Attack back, because the damage was applied.
+      let damageApplied = false;
       try {
         // 🛡️ Sentinel: Pass userId to applyDamage to maintain atomic ownership verification chain.
         const hpResult = await CombatHPService.applyDamage(
@@ -951,6 +1141,7 @@ export class CombatAttackService {
         // The applied figure is what the HP layer actually took, which is not always what the
         // dice said: the per-hit cap can rewrite it. Reporting the rolled number here would
         // put a damage figure in the telemetry that the target's HP never reflects.
+        damageApplied = true;
         const appliedDamage = hpResult.damageDealt ?? totalDamage;
 
         // Logged after the HP write, with the post-write HP included: damage that is
@@ -982,12 +1173,19 @@ export class CombatAttackService {
           },
         );
         transcriptLines.push(...concentrationLines);
+        // #1654: a blow that drops a raging creature to 0 HP ends its Rage, and the engine says so.
+        if (hpResult.rageEnded) transcriptLines.push(`${targetParticipant.name}'s rage ends.`);
         if (smiteApplied) {
           transcriptLines.push(
             `Divine Smite: ${smiteApplied.diceCount}d8 radiant, ${smiteApplied.damage} damage (level ${input.divineSmiteSlotLevel} slot).`,
           );
         } else if (smite && !smite.applied) {
           transcriptLines.push(divineSmiteNotAppliedLine(smite.slotLevel));
+        }
+        if (sneak) {
+          transcriptLines.push(
+            `Sneak Attack: ${sneak.dice} ${weapon.damageType}, ${sneak.damage} damage.`,
+          );
         }
 
         const attackResult: HexAttackResult = {
@@ -1009,21 +1207,39 @@ export class CombatAttackService {
           finalDamage: appliedDamage,
           ...(hexDamage > 0 ? { hexDamage } : {}),
           ...(smiteApplied ? { divineSmiteDamage: smiteApplied.damage } : {}),
+          ...(sneak ? { sneakAttackDamage: sneak.damage, sneakAttackDice: sneak.dice } : {}),
           // #1522: the weapon part and the radiant part, each resisted on its own type. The
           // rolled parts are reported as rolled; the per-hit cap can lower finalDamage below them.
-          ...(smiteApplied
+          ...(smiteApplied || sneak || ragePart > 0
             ? {
                 damageParts: [
-                  { damageType: weapon.damageType, amount: damageCalc.finalDamage },
+                  { damageType: weapon.damageType, amount: damageCalc.finalDamage - ragePart },
+                  ...(ragePart > 0
+                    ? [{ damageType: weapon.damageType, amount: ragePart, source: 'Rage' }]
+                    : []),
                   ...(hexDamage > 0
                     ? [{ damageType: 'necrotic', amount: hexDamage, source: 'Hex' }]
                     : []),
-                  {
-                    damageType: 'radiant',
-                    amount: smiteApplied.damage,
-                    source: 'Divine Smite',
-                    dice: `${smiteApplied.diceCount}d8`,
-                  },
+                  ...(sneak
+                    ? [
+                        {
+                          damageType: weapon.damageType,
+                          amount: sneak.damage,
+                          source: 'Sneak Attack',
+                          dice: sneak.dice,
+                        },
+                      ]
+                    : []),
+                  ...(smiteApplied
+                    ? [
+                        {
+                          damageType: 'radiant',
+                          amount: smiteApplied.damage,
+                          source: 'Divine Smite',
+                          dice: `${smiteApplied.diceCount}d8`,
+                        },
+                      ]
+                    : []),
                 ],
               }
             : {}),
@@ -1048,6 +1264,7 @@ export class CombatAttackService {
           ...(concentration ? { concentration } : {}),
           ...(transcriptLines.length ? { transcriptLines } : {}),
         };
+        await markLightAttackAction();
         return attackResult;
       } catch (error) {
         logger.error({ msg: 'Failed to apply damage to HP', error });
@@ -1057,9 +1274,26 @@ export class CombatAttackService {
             logger.error({ msg: 'COMBAT_SMITE_SLOT_REFUND_FAILED', refundError }),
           );
         }
+        // #1637: a Sneak Attack claimed for a turn whose damage never landed is released, so the turn
+        // is not spent on damage that was never applied.
+        if (sneak && !damageApplied) {
+          await clearSneakAttackSpent(encounterId, attackerId).catch((releaseError) =>
+            logger.error({ msg: 'COMBAT_SNEAK_CLAIM_RELEASE_FAILED', releaseError }),
+          );
+        }
         throw new InternalServerError('Attack succeeded but damage application failed', { error });
       }
     };
+    // #1639: an off-hand attack is the bonus action, so it claims that and never the Attack action.
+    // It takes no Extra Attack swing either.
+    if (input.offHand) {
+      return claimTurnBonusActionAndResolve(
+        attackerId,
+        encounterId,
+        expectedVersion,
+        resolveAttackRoll,
+      );
+    }
     if (isReaction) return claimTurnReactionAndResolve(attackerId, encounterId, resolveAttackRoll);
     if (attackerData.participant.participantType === 'player') {
       const { claimAttackSwing } = await import('./attack-budget-service.js');
@@ -1142,6 +1376,10 @@ export class CombatAttackService {
     const spellRange = spellReachFeet(spell);
     const casterConditions = await getActiveConditionNames(casterId);
     const spellRules = new Map<string, ReturnType<typeof resolveAttackRules>>();
+    // #1651: a hidden caster's attack spell gets the unseen-attacker advantage; a save-only spell
+    // gets none. Either kind of spell clears the mark when it is committed (hit or miss).
+    const casterHidden =
+      spell.attackType || spell.saveAbility ? await isHiddenAttacker(encounterId, casterId) : false;
     const seatedAcByTarget = new Map<
       string,
       { seated: number; effective: number; cover: 0 | 1 | 2 | 3 | null }
@@ -1183,6 +1421,7 @@ export class CombatAttackService {
         geometry,
         attackerConditions: casterConditions,
         targetConditions,
+        attackerHidden: Boolean(spell.attackType) && casterHidden,
       });
       if (!rules.legal) {
         const targetName = targetData.participant.name ?? 'the target';
@@ -1219,6 +1458,7 @@ export class CombatAttackService {
       seatedAcByTarget,
       spellModifier,
       spellAttackBonus,
+      casterHidden,
     };
   }
 
@@ -1311,6 +1551,7 @@ export class CombatAttackService {
       spellModifier,
       spellAttackBonus,
       slotLevel,
+      casterHidden,
     } = await this.prepareSpellCast(encounterId, input, userId);
     // #754: Hex curses one creature; refuse a multi-target cast before anything is spent.
     if (spell.id === 'hex' && targetIds.length !== 1) {
@@ -1457,6 +1698,10 @@ export class CombatAttackService {
       }
 
       spellCommitted = true;
+      // #1651: the cast spends a hidden caster's position, hit or miss, once it is committed.
+      if (casterHidden) {
+        await clearHiddenAttacker(encounterId, casterId);
+      }
       // Parallelize spell resolution for all targets using the pre-fetched data map.
       const resolutionPromises = targetIds.map(async (targetId) => {
         const targetData = allParticipantDataMap.get(targetId);
@@ -1512,8 +1757,17 @@ export class CombatAttackService {
           cover: seatedAc?.cover ?? null,
         };
 
-        // Aggregate resistances using the extracted module
-        const defenses = aggregateResistances(targetParticipant, targetStats);
+        // Aggregate resistances using the extracted module. #1654: a raging target resists the three
+        // physical types from a spell too (the merge is once per type, so a racial one is kept). Rage
+        // only changes physical damage, so only a physical spell reads the Rage mark.
+        const targetIsRaging =
+          damageType && RAGE_RESISTANCES.includes(damageType) && targetParticipant.characterId
+            ? await isRaging(encounterId, targetId)
+            : false;
+        const defenses = withRageResistances(
+          aggregateResistances(targetParticipant, targetStats),
+          targetIsRaging,
+        );
 
         // #754: Hex is a no-damage bonus-action curse. The engine acknowledges the cast here;
         // the shared path below spends the slot and claims the bonus action (castingTime is

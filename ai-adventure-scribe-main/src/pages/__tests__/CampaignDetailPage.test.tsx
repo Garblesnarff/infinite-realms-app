@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { HelmetProvider } from 'react-helmet-async';
 import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -527,6 +527,15 @@ describe('CampaignDetailPage heroes (#89)', () => {
     expect(navTarget.search).toContain('new=true');
   });
 
+  it('says "1 session" for a single estimated session', () => {
+    state.campaign = campaign({ levelRange: '1', estimatedSessions: '1', overview: null });
+    state.templates = [];
+    renderPage();
+
+    expect(screen.getByText('1 session')).toBeInTheDocument();
+    expect(screen.queryByText('1 sessions')).not.toBeInTheDocument();
+  });
+
   it('omits the level segment when the campaign declares no range', () => {
     state.campaign = campaign({ levelRange: null, estimatedSessions: '8-12', tone: [] });
     state.templates = [];
@@ -909,5 +918,73 @@ describe('CampaignDetailPage heroes (#89)', () => {
 
     expect(screen.getByRole('heading', { name: 'Choose your hero' })).toBeInTheDocument();
     expect(screen.queryByText(/Play as/)).not.toBeInTheDocument();
+  });
+});
+
+describe('CampaignDetailPage document title (#1605)', () => {
+  it('renders without throwing when title is null', async () => {
+    state.campaign = campaign({ title: null as unknown as string });
+    renderPage();
+    expect(screen.getByText('A banquet that never ends.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.title).toBe('Infinite Realms');
+    });
+  });
+
+  it('renders without throwing when title is undefined', async () => {
+    state.campaign = campaign({ title: undefined as unknown as string });
+    renderPage();
+    expect(screen.getByText('A banquet that never ends.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.title).toBe('Infinite Realms');
+    });
+  });
+
+  it('renders without throwing when title is not a string', async () => {
+    state.campaign = campaign({ title: 42 as unknown as string });
+    renderPage();
+    expect(screen.getByText('A banquet that never ends.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(document.title).toBe('Infinite Realms');
+    });
+  });
+
+  it('sets document.title with the normal title', async () => {
+    state.campaign = campaign({ title: 'The Eternal Feast' });
+    renderPage();
+    await waitFor(() => {
+      expect(document.title).toBe('The Eternal Feast | Infinite Realms');
+    });
+  });
+
+  describe('CampaignDetailPage public layout (#1664, #1679)', () => {
+    it('shows the tagline as a second line only when it differs from the title', () => {
+      state.campaign = campaign({ title: 'The Eternal Feast', tagline: 'The Eternal Feast' });
+      const { container } = renderPage();
+
+      expect(screen.getByRole('heading', { name: 'The Eternal Feast' })).toBeInTheDocument();
+      expect(container.querySelector('p.line-clamp-3')).toBeNull();
+    });
+
+    it('keeps a tagline that says something the title does not', () => {
+      state.campaign = campaign({
+        title: 'The Eternal Feast',
+        tagline: 'A feast that never ends.',
+      });
+      const { container } = renderPage();
+
+      expect(container.querySelector('p.line-clamp-3')).toHaveTextContent(
+        'A feast that never ends.',
+      );
+    });
+
+    it('gives the back link and the footer link 44 px tap targets', () => {
+      state.campaign = campaign({});
+      renderPage();
+
+      expect(screen.getByText('← All campaigns')).toHaveClass('min-h-11');
+      const footerText = screen.getByText(/Where Every Choice Shapes Destiny/);
+      expect(footerText.querySelector('a')).toHaveClass('min-h-11');
+    });
   });
 });

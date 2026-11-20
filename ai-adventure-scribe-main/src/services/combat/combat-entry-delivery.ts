@@ -26,6 +26,8 @@ export type DeliverableCombatEntry = NonNullable<AIResponse['combat_entry_pendin
 
 export type CombatEntryDeliveryResult =
   | { kind: 'declined' }
+  /** #1678: a newer entry card replaced this one. Not a decline; the newer card owns the entry. */
+  | { kind: 'superseded' }
   | { kind: 'seated'; entryPayload: unknown; encounterId: string }
   | { kind: 'already-seated'; encounterId: string };
 
@@ -39,7 +41,7 @@ type DeliveryArgs = {
   /** The player already chose Strike before the DM was called. */
   entryConfirmed?: boolean;
   signal?: AbortSignal;
-  confirm?: () => Promise<boolean>;
+  confirm?: () => Promise<boolean | 'superseded'>;
   rollInitiative?: () => Promise<{ d20: number | null }>;
 };
 
@@ -162,12 +164,15 @@ async function runDelivery(args: DeliveryArgs): Promise<CombatEntryDeliveryResul
   // joins the remembered poll result above and never gets here.
   const alreadySeated = await encounterIdFromActive(args.sessionId);
   if (alreadySeated) return { kind: 'already-seated', encounterId: alreadySeated };
-  const confirmed =
+  const answer =
     args.entryConfirmed === true ||
     (await (
       args.confirm ?? (() => confirmCombatEntry(args.pending, args.player, args.playerMessage))
     )());
-  if (!confirmed) {
+  // #1678: a superseded card is not a decline. Declining here would clear the server's pending
+  // entry, which is now the newer card's, and record a decline for its actor.
+  if (answer === 'superseded') return { kind: 'superseded' };
+  if (!answer) {
     await userDataApi.declinePendingCombatEntry?.(args.sessionId);
     return { kind: 'declined' };
   }

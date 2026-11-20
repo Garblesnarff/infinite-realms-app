@@ -15,15 +15,15 @@ export const COMBAT_LOG_LIMIT = 20;
  */
 function engineLinesOfMessage(message: ChatMessage, showTargetNumbers: boolean): string[] {
   // With the setting off a line loses the target's AC and the save DC where a card says which
-  // phrases they are; a line saved before cards existed has no card and keeps its text.
-  const hide = (lines: string[], cards: unknown): string[] =>
-    showTargetNumbers || !Array.isArray(cards)
-      ? lines
-      : lines.map((line) =>
-          cards
-            .filter(isEngineResultCard)
-            .reduce((text, card) => hideTargetNumbers(text, card), line),
-        );
+  // phrases they are; a line saved before cards existed keeps its text (#2417). A check notice
+  // never has a card, so its "vs DC N" is taken out by text here (#157).
+  const hide = (lines: string[], cards: unknown): string[] => {
+    if (showTargetNumbers) return lines;
+    if (!Array.isArray(cards)) return lines.map((line) => line.replace(/ vs DC \d+/g, ''));
+    return lines.map((line) =>
+      cards.filter(isEngineResultCard).reduce((text, card) => hideTargetNumbers(text, card), line),
+    );
+  };
   const blocks = combatEngineBlocksFromContext(message.context);
   if (blocks.length) return blocks.flatMap((block) => hide(block.lines, block.cards));
   const { lines } = extractEngineGeneratedLines(removeRollRequestsFromMessage(message.text ?? ''));

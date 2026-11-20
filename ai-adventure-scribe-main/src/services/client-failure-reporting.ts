@@ -130,7 +130,10 @@ export function installGlobalClientFailureReporting(): () => void {
  * the session id and the pattern names only, never the reply text (#468 strategist FIX).
  */
 export function reportNarrationShadowHit(
-  kind: 'narrated_death_without_engine' | 'failed_check_harm_without_engine',
+  kind:
+    | 'narrated_death_without_engine'
+    | 'failed_check_harm_without_engine'
+    | 'narrated_dead_npc_acting',
   sessionId: string | undefined,
   patterns: string[],
 ): void {

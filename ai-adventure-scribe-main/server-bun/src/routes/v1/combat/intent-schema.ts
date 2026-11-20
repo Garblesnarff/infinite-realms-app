@@ -58,6 +58,8 @@ const attackFields = {
   // #1362: Divine Smite's slot level, spent only if the attack hits. Bounded to the spell slot
   // levels a character can hold.
   divineSmiteSlotLevel: t.Optional(t.Number({ minimum: 1, maximum: 9 })),
+  // #1639: the off-hand attack, a bonus action. The engine refuses it unless the Attack action came first.
+  offHand: t.Optional(t.Boolean()),
 };
 
 const spellFields = {
@@ -134,7 +136,13 @@ const checkFields = {
  * they are versioned like the other mutating intents.
  */
 const fighterFeatureFields = {
-  type: t.Union([t.Literal('second_wind'), t.Literal('action_surge'), t.Literal('divine_sense')]),
+  type: t.Union([
+    t.Literal('second_wind'),
+    t.Literal('action_surge'),
+    t.Literal('divine_sense'),
+    /** #1638: Rage, a Barbarian's bonus action. */
+    t.Literal('rage'),
+  ]),
   actorId: participantId,
   actionId,
 };

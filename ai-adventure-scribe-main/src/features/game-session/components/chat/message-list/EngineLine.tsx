@@ -1,10 +1,13 @@
 import React, { useId, useState } from 'react';
 
+import { hideCheckTargetNumbers } from '../../../../../../shared/show-target-numbers';
+
 import type { EngineLineModel, EngineLineOutcome } from './engine-line-model';
 import type { ResultSealTone } from '@/components/game/result-seal';
 
 import { ResultWaxSeal } from '@/components/game/ResultWaxSeal';
 import { useTableLookActive } from '@/features/campaigns/table/useTableLookActive';
+import { useShowTargetNumbers } from '@/features/game-session/hooks/use-show-target-numbers';
 import { cn } from '@/lib/utils';
 
 /** One pill style per outcome, written from the player's side (#87). */
@@ -63,9 +66,29 @@ interface EngineLineProps {
  * A rules-engine result row (#87): full width, no bubble. The row is a disclosure button; the
  * engine sentence sits in the region it controls, `hidden` until expanded.
  */
-export const EngineLine: React.FC<EngineLineProps> = ({ model, showLabel = true }) => {
+/**
+ * The model as the player may read it. With "Show target numbers" off (#157) the AC or DC clause
+ * is taken out of the text shown here. The model itself, and the DM's copy of the engine text, are
+ * not changed.
+ */
+function withTargetNumbersSetting(
+  model: EngineLineModel,
+  showTargetNumbers: boolean,
+): EngineLineModel {
+  if (showTargetNumbers) return model;
+  return {
+    ...model,
+    math: model.math === null ? null : hideCheckTargetNumbers(model.math),
+    detail: model.detail === null ? null : hideCheckTargetNumbers(model.detail),
+    sentence: hideCheckTargetNumbers(model.sentence),
+  };
+}
+
+export const EngineLine: React.FC<EngineLineProps> = ({ model: rawModel, showLabel = true }) => {
   const [expanded, setExpanded] = useState(false);
   const tableLook = useTableLookActive();
+  const { showTargetNumbers } = useShowTargetNumbers();
+  const model = withTargetNumbersSetting(rawModel, showTargetNumbers);
   const regionId = useId();
   // A line without math already shows its whole sentence; there is nothing more to expand.
   const hasMore = model.math !== null && model.sentence !== model.detail;

@@ -54,3 +54,21 @@ export function aggregateResistances(
 
   return { resistances, vulnerabilities, immunities };
 }
+
+/** The three damage types Rage resists (2014 SRD 5.1). */
+export const RAGE_RESISTANCES: DamageType[] = ['bludgeoning', 'piercing', 'slashing'];
+
+/**
+ * Adds Rage's resistances to a target's own. The types are merged, not replaced, so a racial
+ * resistance survives; a type named twice is listed once, so the damage calculator halves it once.
+ */
+export function withRageResistances(
+  defenses: AggregatedDefenses,
+  raging: boolean,
+): AggregatedDefenses {
+  if (!raging) return defenses;
+  return {
+    ...defenses,
+    resistances: [...new Set([...defenses.resistances, ...RAGE_RESISTANCES])],
+  };
+}

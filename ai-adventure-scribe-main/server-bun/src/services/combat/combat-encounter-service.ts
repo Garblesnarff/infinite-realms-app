@@ -13,6 +13,7 @@ import { findBibleNameInProse } from './campaign-monster-index.js';
 import { loadCampaignMonsterIndex } from './campaign-monster-resolution.js';
 import { verifyCharactersAccessBatch, verifyNPCsAccessBatch } from './combat-authorization.js';
 import { abilityModifier } from './combat-rules.js';
+import { clearFightFlags } from './combat-turn-flags.js';
 import {
   assignBestiaryDisplayNames,
   bestiaryDisplayName,
@@ -880,6 +881,8 @@ export class CombatEncounterService {
       return null;
     }
 
+    // #1637: a fight's Hide marks end with the fight, in the same transaction as the claim.
+    await clearFightFlags(executor, encounterId);
     return updated;
   }
 

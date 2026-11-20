@@ -20,6 +20,8 @@ import { userDataApi } from '@/services/user-data-api';
 vi.mock('@/services/user-data-api', () => ({
   userDataApi: {
     getSession: vi.fn(),
+    // #1669: no resumable sessions by default, so a hero continues silently as before.
+    listResumableSessions: vi.fn().mockResolvedValue([]),
     listSessions: vi.fn(),
     createSession: vi.fn(),
     fetchSessionFallenState: vi.fn(),
@@ -213,12 +215,9 @@ describe('useSessionInitialization', () => {
     });
   });
 
-  it('should handle error when loading specific session and fall back to searching', async () => {
+  it('should show an error, and not start or search for another session, when the named session cannot be loaded (#1669)', async () => {
     // Return error for specific session load
     vi.mocked(userDataApi.getSession).mockRejectedValueOnce(new Error('Not found'));
-
-    // Fall back to fetching recent sessions
-    vi.mocked(userDataApi.listSessions).mockResolvedValueOnce([]);
 
     mockCreateGameSession.mockResolvedValue('new-id');
 
@@ -230,8 +229,10 @@ describe('useSessionInitialization', () => {
     );
 
     await waitFor(() => {
-      expect(mockCreateGameSession).toHaveBeenCalled();
+      expect(mockSetSessionState).toHaveBeenCalledWith('error');
     });
+    expect(mockCreateGameSession).not.toHaveBeenCalled();
+    expect(userDataApi.listSessions).not.toHaveBeenCalled();
   });
 
   it('should resume an active, non-expired session', async () => {
@@ -297,6 +298,41 @@ describe('useSessionInitialization', () => {
       expect(mockSetSessionData).toHaveBeenCalledWith(newSession);
       expect(mockSetSessionState).toHaveBeenCalledWith('active');
     });
+  });
+
+  // #1669: a hero with sessions that can be resumed is offered the choice; nothing is created.
+  it('offers the session choice instead of a silent continuation when the hero has resumable sessions (#1669)', async () => {
+    vi.mocked(userDataApi.listSessions).mockResolvedValueOnce([
+      sessionListRow({ id: 'sess-old', status: 'completed', session_number: 1 }),
+    ]);
+    vi.mocked(userDataApi.listResumableSessions).mockResolvedValueOnce([
+      { id: 'sess-old', session_number: 1 },
+    ]);
+
+    renderHook(() => useSessionInitialization(defaultProps));
+
+    await waitFor(() => {
+      expect(mockSetSessionState).toHaveBeenCalledWith('choosing');
+    });
+    expect(userDataApi.createSession).not.toHaveBeenCalled();
+  });
+
+  // #1669: "Start new session" comes back with continueNew, which skips the choice and creates
+  // the continuation exactly as before.
+  it('continueNew skips the choice and creates the continuation (#1669)', async () => {
+    vi.mocked(userDataApi.listSessions).mockResolvedValueOnce([
+      sessionListRow({ id: 'sess-old', status: 'completed', session_number: 1 }),
+    ]);
+    const newSession = { id: 'sess-new', status: 'active', session_number: 2 };
+    vi.mocked(userDataApi.createSession).mockResolvedValueOnce(newSession);
+
+    renderHook(() => useSessionInitialization({ ...defaultProps, continueNew: true }));
+
+    await waitFor(() => {
+      expect(mockSetSessionData).toHaveBeenCalledWith(newSession);
+      expect(mockSetSessionState).toHaveBeenCalledWith('active');
+    });
+    expect(userDataApi.listResumableSessions).not.toHaveBeenCalled();
   });
 
   // #2517: since the death fix, the session a character dies in is completed

@@ -761,7 +761,7 @@ describe('deriveCombatEntryFirstAction', () => {
     ]);
   });
 
-  it('previews a melee approach without mutating the map and spends the opening turn on movement', async () => {
+  it('previews a melee approach without mutating the map and spends only movement, keeping the action (#1642)', async () => {
     const map = openMap(9);
     const firstAction = await deriveCombatEntryFirstAction(
       {
@@ -777,7 +777,7 @@ describe('deriveCombatEntryFirstAction', () => {
       type: 'move',
       reach: { inReach: false, distanceFeet: 10, movedFeetIfApproached: 30 },
       notice:
-        'You close 30 ft. Professor Emil Darkwater is still 10 ft away because movement ran out before you reached the required distance. Your turn is spent.',
+        'You close 30 ft. Professor Emil Darkwater is still 10 ft away because movement ran out before you reached the required distance. You have no movement left this turn; your action is not used (a ranged attack, Dash or Dodge).',
       combat_action: { action_type: 'move', x: 7, y: 0, movement_feet: 30 },
     });
     expect(firstAction?.roll_request).toBeUndefined();

@@ -44,6 +44,10 @@ export type WeaponRuleProfile = {
   meleeWeapon?: boolean;
   /** The weapon has the two-handed property. */
   twoHanded?: boolean;
+  /** The weapon has the light property (#1639). Unarmed strikes and monster attacks leave it unset. */
+  light?: boolean;
+  /** The copies the row holds (#1639). Absent for a monster attack, which is one attack. */
+  quantity?: number;
   /** Another weapon is wielded besides this one. A shield is not a weapon. */
   otherWeaponWielded?: boolean;
 };
@@ -64,6 +68,11 @@ export type AttackRuleInput = {
   requestedAdvantage?: boolean;
   requestedDisadvantage?: boolean;
   /**
+   * The attacker won a Hide check and has not attacked or taken damage since (#1637). The
+   * advantage source is "hidden"; the attack clears the mark, not this resolver.
+   */
+  attackerHidden?: boolean;
+  /**
    * The target took the Dodge action. Dodge imposes disadvantage on attacks against it, and
    * it is its own player-facing reason rather than a second "requested" source (#603).
    */
@@ -72,12 +81,23 @@ export type AttackRuleInput = {
   targetConditions?: string[];
   /** The attacker's stored fighting styles. Absent for a monster, whose bonus is already fixed. */
   fightingStyles?: unknown;
+  /** Rage's damage bonus while the attacker rages (#1638), from its Barbarian level. 0 or absent when not raging. */
+  ragingDamageBonus?: number;
+  /**
+   * The off-hand attack of Two-Weapon Fighting (#1639): a bonus-action attack whose damage takes no
+   * ability modifier unless it is negative. The attack roll keeps its modifier.
+   */
+  offHand?: boolean;
 };
+
+type AttackResolutionAbility = 'strength' | 'dexterity';
 
 export type AttackRuleResolution = {
   legal: boolean;
+  /** Rage's flat damage in this attack's damage bonus (0 when none). Shown as its own part (#1638). */
+  ragingDamage: number;
   refusal?: 'no_line_of_sight' | 'out_of_range' | 'total_cover';
-  ability: 'strength' | 'dexterity';
+  ability: AttackResolutionAbility;
   abilityModifier: number;
   proficiencyBonus: number;
   attackBonus: number;
@@ -136,6 +156,7 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
   const disadvantageSources: string[] = [];
   if (input.requestedAdvantage) advantageSources.push('requested');
   if (input.requestedDisadvantage) disadvantageSources.push('requested');
+  if (input.attackerHidden) advantageSources.push('hidden');
   if (input.targetDodging) disadvantageSources.push('target is dodging');
   if (geometry && geometry.distanceFeet > weapon.normalRange)
     disadvantageSources.push('long range');
@@ -154,9 +175,15 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
   const advantage = hasAdvantage && !hasDisadvantage;
   const disadvantage = hasDisadvantage && !hasAdvantage;
   const coverBonus = geometry?.cover === 1 ? 2 : geometry?.cover === 2 ? 5 : 0;
-  const { attackBonus, damageBonus } = styleBonuses(input, modifier, proficiency);
+  const { attackBonus, damageBonus, ragingDamage } = styleBonuses(
+    input,
+    modifier,
+    proficiency,
+    ability,
+  );
 
   return {
+    ragingDamage,
     legal: true,
     ability,
     abilityModifier: modifier,
@@ -179,8 +206,18 @@ function styleBonuses(
   input: AttackRuleInput,
   modifier: number,
   proficiency: number,
-): { attackBonus: number; damageBonus: number } {
+  ability: AttackResolutionAbility,
+): { attackBonus: number; damageBonus: number; ragingDamage: number } {
   const weapon = input.weapon;
+  // Rage: +2 to a melee weapon attack that uses Strength (#1638). Unarmed strikes and monster
+  // attacks leave `meleeWeapon` unset, so they get none.
+  const ragingBonus =
+    (input.ragingDamageBonus ?? 0) > 0 &&
+    weapon.meleeWeapon === true &&
+    !weapon.ranged &&
+    ability === 'strength'
+      ? (input.ragingDamageBonus ?? 0)
+      : 0;
   return {
     attackBonus:
       weapon.fixedAttackBonus ??
@@ -190,13 +227,16 @@ function styleBonuses(
         archeryAttackBonus(input.fightingStyles, weapon.rangedWeapon === true),
     damageBonus:
       weapon.fixedDamageBonus ??
-      modifier +
+      // #1639: an off-hand attack adds the ability modifier to its damage only when it is negative.
+      (input.offHand ? Math.min(modifier, 0) : modifier) +
         weapon.magicBonus +
         duelingDamageBonus(input.fightingStyles, {
           meleeWeapon: weapon.meleeWeapon === true,
           twoHanded: weapon.twoHanded === true,
           otherWeaponWielded: weapon.otherWeaponWielded === true,
-        }),
+        }) +
+        ragingBonus,
+    ragingDamage: ragingBonus,
   };
 }
 
@@ -207,8 +247,14 @@ function illegal(
   proficiency: number,
   input: AttackRuleInput,
 ): AttackRuleResolution {
-  const { attackBonus, damageBonus } = styleBonuses(input, modifier, proficiency);
+  const { attackBonus, damageBonus, ragingDamage } = styleBonuses(
+    input,
+    modifier,
+    proficiency,
+    ability,
+  );
   return {
+    ragingDamage,
     legal: false,
     refusal,
     ability,

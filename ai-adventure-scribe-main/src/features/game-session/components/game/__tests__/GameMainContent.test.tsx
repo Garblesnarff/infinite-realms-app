@@ -145,15 +145,20 @@ vi.mock('../../chat/MessageList', () => ({
 vi.mock('../../tactical/TacticalMapProvider', () => ({
   useTacticalMapContext: () => (state.tacticalMap ? { map: state.tacticalMap } : null),
 }));
+// #1431: the live end screen reads the hero's portrait and identity from this record.
+let mockCharacterRecord: Record<string, unknown> = {
+  id: 'test-char-id',
+  name: 'Test Character',
+};
 vi.mock('@/contexts/CharacterContext', () => ({
   useCharacter: () => ({
     state: {
-      character: { id: 'test-char-id', name: 'Test Character' },
+      character: mockCharacterRecord,
     },
   }),
   useOptionalCharacter: () => ({
     state: {
-      character: { id: 'test-char-id', name: 'Test Character' },
+      character: mockCharacterRecord,
     },
   }),
 }));
@@ -814,6 +819,33 @@ describe('GameMainContent overhaul behavior contract', () => {
     };
     render(<GameMainContent {...baseProps} />);
     expect(screen.getByTestId('death-screen')).toBeInTheDocument();
+  });
+
+  it('#1431: the live death screen shows the portrait and identity, and fades in', () => {
+    mockCharacterRecord = {
+      id: 'test-char-id',
+      name: 'The Scholar',
+      image_url: 'https://example.test/scholar.png',
+      race: { name: 'Human' },
+      class: { name: 'Wizard' },
+      level: 1,
+    };
+    mockTerminalDeathState = {
+      state: 'party_defeated',
+      encounterId: 'encounter-789',
+      receivedAt: Date.now(),
+    };
+    try {
+      render(<GameMainContent {...baseProps} />);
+      expect(screen.getByRole('img', { name: 'The Scholar' })).toHaveAttribute(
+        'src',
+        'https://example.test/scholar.png',
+      );
+      expect(screen.getByText('Human · Wizard · Level 1')).toBeInTheDocument();
+      expect(screen.getByTestId('death-screen')).toHaveClass('ir-end-fade-in');
+    } finally {
+      mockCharacterRecord = { id: 'test-char-id', name: 'Test Character' };
+    }
   });
 
   it("#1215 session path: the fallen hero pick is enabled and opens this campaign's hero choice", () => {

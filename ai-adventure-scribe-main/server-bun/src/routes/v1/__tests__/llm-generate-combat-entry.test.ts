@@ -83,6 +83,7 @@ mock.module('../../../services/llm-provider-service.js', () => ({
 }));
 mock.module('../../../services/combat/combat-intent-roster.js', () => ({
   loadCombatIntentActorRoster: async () => intentActors,
+  loadCombatIntentRoster: async () => ({ actors: [], deadNames: [], deadExcludedCount: 0 }),
 }));
 // #2514: encounter sizing context. Default is "no difficulty" (pre-#2514
 // behaviour); the prompt-contract test below flips it to Hard. The index is

@@ -101,6 +101,15 @@ export const rageUsesAt = byLevel([
   [17, 6],
   [20, 'unlimited'],
 ]);
+/**
+ * Rage's damage on a melee Strength attack while raging (2014 SRD 5.1): +2 at Barbarian levels 1
+ * to 8, +3 at 9th to 15th, +4 at 16th and up. 0 below level 1.
+ */
+export function rageDamageBonusAt(barbarianLevel: number): number {
+  if (barbarianLevel >= 16) return 4;
+  if (barbarianLevel >= 9) return 3;
+  return barbarianLevel >= 1 ? 2 : 0;
+}
 /** Cleric Channel Divinity: 1 at 2nd, 2 at 6th, 3 at 18th (PHB p.58). */
 export const clericChannelDivinityUsesAt = byLevel([
   [2, 1],

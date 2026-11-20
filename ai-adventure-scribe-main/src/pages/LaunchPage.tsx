@@ -17,6 +17,9 @@ import { LandingVoiceSample } from '@/components/launch/LandingVoiceSample';
 import { LaunchHeader } from '@/components/launch/LaunchHeader';
 import { launchPageContent } from '@/data/launchPageContent';
 
+// #1432: a 1x1 inline GIF; a hidden hero picture selects it, so its file is never fetched.
+const EMPTY_IMAGE = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+
 const VOICE_SAMPLE_SRC = '/audio/landing-voice-sample.mp3';
 const VOICE_SAMPLE_TRANSCRIPT =
   'The rope is slick with cold water. The next ledge is thirty feet down, and the wall is too smooth for your boots.';
@@ -151,6 +154,50 @@ const LaunchPage: React.FC = () => {
                   See the adventures
                 </Link>
               </div>
+              {/* #1432: a real capture of the Table game screen (desktop, Landing board). Below sm it selects EMPTY_IMAGE, so phones do not download it. */}
+              <figure
+                className="mt-12 hidden w-full max-w-[920px] sm:block"
+                data-testid="landing-hero-picture"
+              >
+                <div className="rounded-2xl bg-gradient-to-br from-[#f6e3b8] via-[#d5b070] to-[#6e5226] p-2.5 shadow-[0_34px_70px_rgba(0,0,0,0.65)]">
+                  <picture className="contents">
+                    <source media="(max-width: 639.98px)" srcSet={EMPTY_IMAGE} />
+                    <img
+                      src="/landing/table-game-1280.webp"
+                      width={900}
+                      height={561}
+                      loading="eager"
+                      fetchPriority="high"
+                      decoding="async"
+                      alt="The Table game screen: the Dungeon Master's three-paragraph narration on parchment with Listen and Illustrate controls, two numbered option cards below it, the character sheet and a map sketch on the left, a roll tray and the scene picture on the right, and the message box at the bottom."
+                      className="block h-auto w-full rounded-lg object-cover"
+                    />
+                  </picture>
+                </div>
+                <figcaption className="mt-4 text-center text-base text-[#aab3cc]">
+                  Story, roll tray, sheet and map in one view.
+                </figcaption>
+              </figure>
+              {/* #1432: the phone picture (LandingPhone board). From sm up it selects EMPTY_IMAGE. */}
+              <figure
+                className="mt-10 w-[270px] sm:hidden"
+                data-testid="landing-hero-picture-phone"
+              >
+                <div className="rounded-[22px] bg-gradient-to-br from-[#f6e3b8] via-[#d5b070] to-[#6e5226] p-2 shadow-[0_26px_50px_rgba(0,0,0,0.65)]">
+                  <picture className="contents">
+                    <source media="(min-width: 640px)" srcSet={EMPTY_IMAGE} />
+                    <img
+                      src="/landing/table-game-390.webp"
+                      width={254}
+                      height={549}
+                      loading="eager"
+                      decoding="async"
+                      alt="The game on a phone: the Dungeon Master's narration on parchment with a Listen button, the start of the option cards cut off at the bottom, a scene chip, and the message box at the bottom."
+                      className="block h-auto w-[254px] max-w-full rounded-[14px] object-cover"
+                    />
+                  </picture>
+                </div>
+              </figure>
             </div>
           </section>
 
@@ -192,7 +239,7 @@ const LaunchPage: React.FC = () => {
           >
             <h2
               id="landing-join"
-              className="font-heading text-3xl font-bold text-[#f3deb0] sm:text-[40px]"
+              className="font-heading text-3xl font-bold leading-[1.12] text-[#f3deb0] sm:text-[40px]"
             >
               Be a founding adventurer
             </h2>
@@ -220,31 +267,31 @@ const LaunchPage: React.FC = () => {
             <span>© {new Date().getFullYear()} InfiniteRealms. All rights reserved.</span>
             <Link
               to="/pricing"
-              className="inline-flex min-h-11 items-center text-[#d5b070] hover:text-[#f3deb0]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#d5b070] hover:text-[#f3deb0]"
             >
               Pricing
             </Link>
             <Link
               to="/pricing#faq"
-              className="inline-flex min-h-11 items-center text-[#d5b070] hover:text-[#f3deb0]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#d5b070] hover:text-[#f3deb0]"
             >
               FAQ
             </Link>
             <Link
               to="/explore"
-              className="inline-flex min-h-11 items-center text-[#d5b070] hover:text-[#f3deb0]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#d5b070] hover:text-[#f3deb0]"
             >
               Explore
             </Link>
             <Link
               to="/privacy"
-              className="inline-flex min-h-11 items-center text-[#d5b070] hover:text-[#f3deb0]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#d5b070] hover:text-[#f3deb0]"
             >
               Privacy Policy
             </Link>
             <Link
               to="/terms"
-              className="inline-flex min-h-11 items-center text-[#d5b070] hover:text-[#f3deb0]"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center text-[#d5b070] hover:text-[#f3deb0]"
             >
               Terms of Service
             </Link>

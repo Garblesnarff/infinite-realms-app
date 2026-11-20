@@ -15,3 +15,16 @@ export function showTargetNumbersByDefault(difficulty: string | null | undefined
   if (name.includes('medium')) return true;
   return !name.includes('hard') && !name.includes('deadly');
 }
+
+/**
+ * Engine text with the target's AC or DC taken out, for the player to read when the player has
+ * target numbers off (#157). Drops "vs DC 15", "vs AC 12 (+2 half cover = 14)", and a clause at
+ * the start of a sentence ("vs DC 13. PASS"). Nothing is replaced with a placeholder. Only the
+ * client's display calls this; the DM's copy of the engine text is not passed through here.
+ */
+export function hideCheckTargetNumbers(line: string): string {
+  return line
+    .replace(/(^|\s)vs (?:your )?(?:DC|AC) \d+(?: \([^)]*\))?\.?/g, '$1')
+    .replace(/ {2,}/g, ' ')
+    .trim();
+}

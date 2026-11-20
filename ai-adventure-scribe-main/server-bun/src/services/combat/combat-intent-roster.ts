@@ -76,6 +76,15 @@ function actorsFromFacts(facts: unknown[]): CombatIntentActor[] {
   return actors;
 }
 
+export interface CombatIntentRoster {
+  /** Creatures a declared attack may name. */
+  actors: CombatIntentActor[];
+  /** Display names the ledger dead filter removed from `actors` (#1595). */
+  deadNames: string[];
+  /** How many names `deadNames` holds. Logged without any player text. */
+  deadExcludedCount: number;
+}
+
 /**
  * Build the actor roster for one request. Every source is read per request so a stale prompt or
  * global roster cannot authorize an attack against an actor who is not in this session.
@@ -83,11 +92,12 @@ function actorsFromFacts(facts: unknown[]): CombatIntentActor[] {
  * Database imports stay inside the function on purpose. The pure intent detector and route
  * contract tests can load this module without opening the application database.
  */
-export async function loadCombatIntentActorRoster(
+export async function loadCombatIntentRoster(
   sessionId: string,
   userId: string,
-): Promise<CombatIntentActor[]> {
+): Promise<CombatIntentRoster> {
   const actors = new Map<string, CombatIntentActor>();
+  const deadNames: string[] = [];
 
   try {
     const [{ SessionService }, { NarrativeLedgerService }, { loadActiveTacticalMap }] =
@@ -199,7 +209,11 @@ export async function loadCombatIntentActorRoster(
     // #1086 (g): a creature the ledger records as dead is not a target, whichever source
     // named it, unless it stands on the active board (present now).
     for (const key of deadSet) {
-      if (!mapKeys.has(key)) actors.delete(key);
+      if (mapKeys.has(key)) continue;
+      const removed = actors.get(key);
+      if (!removed) continue;
+      deadNames.push(removed.name);
+      actors.delete(key);
     }
   } catch (error) {
     // The gate fails closed when the roster cannot be loaded. The turn itself still reaches the
@@ -207,5 +221,13 @@ export async function loadCombatIntentActorRoster(
     logger.warn({ msg: 'COMBAT_INTENT_ACTOR_ROSTER_UNAVAILABLE', sessionId, error });
   }
 
-  return [...actors.values()];
+  return { actors: [...actors.values()], deadNames, deadExcludedCount: deadNames.length };
+}
+
+/** The live creatures only: the roster the pre-DM detector and the DM-side detector both use. */
+export async function loadCombatIntentActorRoster(
+  sessionId: string,
+  userId: string,
+): Promise<CombatIntentActor[]> {
+  return (await loadCombatIntentRoster(sessionId, userId)).actors;
 }

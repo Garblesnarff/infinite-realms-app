@@ -4,7 +4,11 @@
  * index.html is fetched. The session flag stops a broken chunk from looping.
  */
 
+import { APP_BUILD_VERSION } from '@/services/app-version';
+
 export const CHUNK_RELOAD_FLAG = 'ir-chunk-reload';
+/** The build that spent the reload. A later deploy has a different build, so it may reload again (#1671). */
+export const CHUNK_RELOAD_BUILD_KEY = 'ir-chunk-reload-build';
 
 const CHUNK_LOAD_MESSAGES = [
   'Failed to fetch dynamically imported module',
@@ -25,9 +29,17 @@ function readFlag(): string | null {
   }
 }
 
-/** True when this tab already reloaded for a missing chunk. */
+function readRecordedBuild(): string | null {
+  try {
+    return sessionStorage.getItem(CHUNK_RELOAD_BUILD_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** True when this tab already reloaded for a missing chunk on the running build. */
 export function chunkReloadAlreadyAttempted(): boolean {
-  return readFlag() === '1';
+  return readFlag() === '1' && readRecordedBuild() === APP_BUILD_VERSION;
 }
 
 let reloadPage = (): void => {
@@ -40,9 +52,10 @@ export function setChunkReloadForTests(reload: (() => void) | undefined): void {
 }
 
 function reloadOnce(): boolean {
-  if (readFlag() !== null) return false;
+  if (readFlag() === 'unavailable' || chunkReloadAlreadyAttempted()) return false;
   try {
     sessionStorage.setItem(CHUNK_RELOAD_FLAG, '1');
+    sessionStorage.setItem(CHUNK_RELOAD_BUILD_KEY, APP_BUILD_VERSION);
   } catch {
     return false;
   }

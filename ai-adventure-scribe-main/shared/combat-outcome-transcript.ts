@@ -62,6 +62,10 @@ export interface CombatEngineResult {
   actorName?: string;
   targetName?: string;
   movedFeet?: number;
+  /** Movement left after the approach. Zero means the attack was refused for want of movement (#1642). */
+  movementRemainingFeet?: number;
+  /** Why an attack was not rolled, from the approach (#1642). `movement_exhausted` with no feet moved is the refusal the no-movement line names. */
+  refusalReason?: string;
   distanceFeet?: number;
   reachFeet?: number;
   d20?: number;
@@ -252,6 +256,28 @@ export function formatCombatEngineParts(
       isFiniteNumber(result.distanceFeet) && isFiniteNumber(result.reachFeet)
         ? `; distance ${result.distanceFeet} ft (reach ${result.reachFeet} ft)`
         : '';
+    // #1642: a refused attack with no feet moved and no movement left says so, not "could not move
+    // closer". A move that spent its movement keeps its "moves N ft" line. The sentence after the
+    // classifier phrase keeps the move chip.
+    if (
+      result.movedFeet === 0 &&
+      result.refusalReason === 'movement_exhausted' &&
+      isFiniteNumber(result.distanceFeet) &&
+      isFiniteNumber(result.reachFeet)
+    ) {
+      const advice = side === 'party' ? ' Use a ranged attack, Dash, or end the turn.' : '';
+      const noMovementLine = `⚙️ Engine: ${actor} has no movement left this turn; ${target} is ${result.distanceFeet} ft away (reach ${result.reachFeet} ft); no attack was rolled.${advice}`;
+      parts.push({
+        line: noMovementLine,
+        card: {
+          kind: 'move',
+          side,
+          line: noMovementLine,
+          title: `${actor} has no movement left this turn. No attack this turn.`,
+        },
+      });
+      return parts;
+    }
     const line = `⚙️ Engine: ${actor} ${movement}${spacing}; no attack was rolled.`;
     parts.push({
       line,
@@ -468,6 +494,27 @@ export function formatCombatActionParts(
     }
   }
 
+  // #1638: Rage names the uses left and the round it ends at, both engine numbers.
+  if (action.action_type === 'rage' && isFiniteNumber(value.expiresRound)) {
+    const actor = facingName(undefined, action.actor_id, roster);
+    const usesLeft = isFiniteNumber(value.usesRemaining)
+      ? ` (${value.usesRemaining} use(s) left)`
+      : '';
+    // The mark expires at the start of its round, so the last raging round is one before it.
+    const line = `⚙️ Engine: ${actor} rages${usesLeft}. Rage lasts through round ${value.expiresRound - 1}.`;
+    return [
+      {
+        line,
+        card: {
+          kind: 'move',
+          side: engineCardSide(action.actor_id, roster, false),
+          line,
+          title: `${actor} rages`,
+        },
+      },
+    ];
+  }
+
   // #975: the Fighter features carry their numbers in the result, so their engine
   // lines name them (the heal and the new HP; the extra action) instead of the bare
   // verb the map below gives the resource-free actions.
@@ -521,6 +568,33 @@ export function formatCombatActionParts(
           side: engineCardSide(action.actor_id, roster, false),
           line,
           title: `${actor} uses ${itemName}`,
+        },
+      },
+    ];
+  }
+
+  // #1618: Lay on Hands, Divine Sense and Flexible Casting resolve in the engine, which
+  // returns its own message with the numbers (the HP healed, the pool left, the uses left).
+  // The line quotes that message, so the timeline shows what the engine did.
+  const featureName =
+    action.action_type === 'lay_on_hands'
+      ? 'Lay on Hands'
+      : action.action_type === 'divine_sense'
+        ? 'Divine Sense'
+        : action.action_type === 'flexible_casting'
+          ? 'Flexible Casting'
+          : null;
+  if (featureName && typeof value.message === 'string' && value.message.length > 0) {
+    const actor = facingName(undefined, action.actor_id, roster);
+    const line = `⚙️ Engine: ${actor} used ${featureName} — ${value.message}`;
+    return [
+      {
+        line,
+        card: {
+          kind: 'move',
+          side: engineCardSide(action.actor_id, roster, false),
+          line,
+          title: `${actor} uses ${featureName}`,
         },
       },
     ];

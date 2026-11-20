@@ -4,22 +4,16 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 /**
- * #621 Part A guard. Damage and heals go to the server only. The client keeps a dev-only
- * combat engine (local HP and death-save maths) until Part B deletes it. Nothing in production
- * code may call it.
+ * #621 Part A guard. Damage and heals go to the server only. The client local combat engine (local
+ * HP and death-save maths) was deleted in #621 Part B2b step 2. Nothing in production code may
+ * reference it.
  *
- * The files below are the dev-only engine and the wiring that reaches it. They may keep
- * referencing it. Any other non-test production file that references `dealDamage`,
- * `healDamage` or `rollDeathSave` fails this test. Part B removes entries from this list.
+ * The allowlist is empty: no production file may reference `dealDamage`, `healDamage` or
+ * `rollDeathSave`. Any entry added here would need a reviewed reason.
  */
 const SRC_ROOT = join(process.cwd(), 'src');
 
-const LOCAL_ENGINE_ALLOWLIST = [
-  'types/combat-encounter.ts',
-  'contexts/combat/use-take-action.ts',
-  'contexts/combat/health-handlers.ts',
-  'contexts/CombatContext.tsx',
-];
+const LOCAL_ENGINE_ALLOWLIST: string[] = [];
 
 const LOCAL_ENGINE_REFERENCE = /\b(dealDamage|healDamage|rollDeathSave)\b/;
 

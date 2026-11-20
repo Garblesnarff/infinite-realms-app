@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
+
+import { refusalToastText } from './refusal-toast-text';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useIsInCombatOptional } from '@/contexts/in-combat-flag';
+import { useSheetHitPointsOptional } from '@/contexts/sheet-hit-points';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
@@ -21,8 +24,12 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
   const { toast } = useToast();
   const [amount, setAmount] = useState('1');
   const [busy, setBusy] = useState(false);
+  const fullHealthHintId = useId();
   // In combat the Lay on Hands is an Action: the sheet control steps aside for the combat chips.
   const inCombat = useIsInCombatOptional();
+  // #1643: at full HP a heal is refused, so Heal self is disabled with the reason beside it.
+  const hitPoints = useSheetHitPointsOptional();
+  const atFullHealth = hitPoints !== null && hitPoints.current >= hitPoints.maximum;
   const parsed = Math.trunc(Number(amount));
   const validAmount = Number.isInteger(parsed) && parsed >= 1 && parsed <= pool;
 
@@ -36,7 +43,7 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
       logger.error('Lay on Hands failed', error);
       toast({
         title: 'Lay on Hands',
-        description: error instanceof Error ? error.message : 'Nothing was spent.',
+        description: refusalToastText(error),
         variant: 'destructive',
       });
     } finally {
@@ -64,10 +71,20 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
           aria-label="Lay on Hands points to spend"
           className="h-8 w-24"
         />
-        <Button size="sm" disabled={busy || !validAmount} onClick={() => run({ amount: parsed })}>
+        <Button
+          size="sm"
+          disabled={busy || !validAmount || atFullHealth}
+          aria-describedby={atFullHealth ? fullHealthHintId : undefined}
+          onClick={() => run({ amount: parsed })}
+        >
           Heal self
         </Button>
       </div>
+      {atFullHealth && (
+        <p id={fullHealthHintId} className="text-xs text-muted-foreground">
+          You are already at full health.
+        </p>
+      )}
       <div className="flex gap-2">
         <Button
           size="sm"

@@ -6,6 +6,14 @@ import type { WeaponRuleProfile } from '../combat-rules.js';
 
 process.env.DATABASE_URL ??= 'postgres://test.invalid/unused';
 
+// #1639: the off-hand chip reads the turn's light-attack mark from the session. This file has no
+// database, so the read is answered here (no mark), and every other export stays the real one.
+const realTurnFlags = await import('../combat-turn-flags.js');
+mock.module('../combat-turn-flags.js', () => ({
+  ...realTurnFlags,
+  readLightAttackMark: async () => null,
+}));
+
 let remainingSwing = false;
 mock.module('../attack-budget-service.js', () => ({
   attackBudgetPlan: async () => ({ plan: remainingSwing ? { payment: 'remaining' } : null }),
@@ -240,6 +248,14 @@ mock.module('../../character-service.js', () => ({
       if (inspirationReadThrows) throw new Error('db.query is not available');
       return hasInspiration;
     },
+  },
+}));
+/** #1638: whether the Rage chip is offered. The sheet read is stubbed at its module boundary. */
+let rageOffered = false;
+mock.module('../barbarian-rage-service.js', () => ({
+  rageIsOffered: async () => rageOffered,
+  resolveRage: async () => {
+    throw new Error('resolveRage is not under test in this suite');
   },
 }));
 mock.module('../fighter-features-service.js', () => ({
@@ -746,6 +762,28 @@ describe('getLegalCombatActions', () => {
   // while it can resolve (a use remains, the bonus action is free, the fighter
   // is hurt — at full health the resolver refuses, so the chip is not shown);
   // Action Surge is offered while a use remains, spent Action or not.
+  // #1638: Rage rides the same list. It is offered while the sheet has a use and no Rage is live.
+  test('offers Rage only to a Barbarian with a use and no live Rage (#1638)', async () => {
+    const paladin = {
+      characterClass: player.characterClass,
+      characterLevel: player.characterLevel,
+      characterClassLevels: player.characterClassLevels,
+    };
+    player.characterClass = 'Barbarian';
+    player.characterLevel = 3;
+    player.characterClassLevels = [{ className: 'Barbarian', level: 3 }];
+    try {
+      rageOffered = true;
+      const offered = await getLegalCombatActions('encounter-1', 'user-1');
+      expect(offered.actions).toContainEqual({ type: 'rage', label: 'Rage' });
+      rageOffered = false;
+      const spent = await getLegalCombatActions('encounter-1', 'user-1');
+      expect(spent.actions.some((action) => action.type === 'rage')).toBe(false);
+    } finally {
+      Object.assign(player, paladin);
+    }
+  });
+
   test('offers Second Wind only when hurt with the bonus action free; Action Surge while a use remains (#975)', async () => {
     featureUses = { secondWind: 1, actionSurge: 1 };
     player.status.currentHp = 9;

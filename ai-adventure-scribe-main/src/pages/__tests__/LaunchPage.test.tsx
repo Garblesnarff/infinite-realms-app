@@ -266,3 +266,45 @@ describe('LaunchPage', () => {
     expect(container.textContent).toContain(`Legend costs ${ACCOUNT_UPGRADE_PRICE.label}`);
   });
 });
+
+describe('LaunchPage hero pictures load only at their width (#1432)', () => {
+  it('desktop hero picture', () => {
+    renderPage();
+    const figure = screen.getByTestId('landing-hero-picture');
+    const img = figure.querySelector('img') as HTMLImageElement;
+    expect(img).toHaveAttribute('loading', 'eager');
+    expect(img).toHaveAttribute('src', '/landing/table-game-1280.webp');
+    const picture = img.parentElement as HTMLElement;
+    expect(picture.tagName).toBe('PICTURE');
+    const source = picture.querySelector('source') as HTMLSourceElement;
+    expect(source).toHaveAttribute('media', '(max-width: 639.98px)');
+    expect(source.getAttribute('srcset')).toMatch(/^data:image\/gif;base64,/);
+  });
+
+  it('phone hero picture', () => {
+    renderPage();
+    const figure = screen.getByTestId('landing-hero-picture-phone');
+    const img = figure.querySelector('img') as HTMLImageElement;
+    expect(img).toHaveAttribute('loading', 'eager');
+    expect(img).toHaveAttribute('src', '/landing/table-game-390.webp');
+    const picture = img.parentElement as HTMLElement;
+    expect(picture.tagName).toBe('PICTURE');
+    const source = picture.querySelector('source') as HTMLSourceElement;
+    expect(source).toHaveAttribute('media', '(min-width: 640px)');
+    expect(source.getAttribute('srcset')).toMatch(/^data:image\/gif;base64,/);
+  });
+
+  it('media queries do not overlap and cover every width', () => {
+    renderPage();
+    const desktopSource = screen
+      .getByTestId('landing-hero-picture')
+      .querySelector('source') as HTMLSourceElement;
+    const phoneSource = screen
+      .getByTestId('landing-hero-picture-phone')
+      .querySelector('source') as HTMLSourceElement;
+    const desktopMax = parseFloat(desktopSource.media.match(/([\d.]+)/)?.[1] ?? '');
+    const phoneMin = parseFloat(phoneSource.media.match(/([\d.]+)/)?.[1] ?? '');
+    expect(desktopMax).toBeLessThan(phoneMin);
+    expect(phoneMin - desktopMax).toBeLessThan(1);
+  });
+});

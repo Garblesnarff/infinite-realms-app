@@ -38,9 +38,7 @@ mock.module('../../session-service.js', () => ({
 }));
 mock.module('../../narrative/narrative-ledger-service.js', () => ({
   NarrativeLedgerService: {
-    currentFacts: async () => [
-      { subjectName: 'professor emil darkwater', value: { state: 'watching' } },
-    ],
+    currentFacts: async () => ledgerFacts,
   },
 }));
 mock.module('../tactical-map-store.js', () => ({
@@ -56,7 +54,12 @@ mock.module('../tactical-map-store.js', () => ({
   }),
 }));
 
-const { loadCombatIntentActorRoster } = await import('../combat-intent-roster.js');
+let ledgerFacts: unknown[] = [
+  { subjectName: 'professor emil darkwater', value: { state: 'watching' } },
+];
+
+const { loadCombatIntentActorRoster, loadCombatIntentRoster } =
+  await import('../combat-intent-roster.js');
 
 describe('loadCombatIntentActorRoster', () => {
   it('combines ledger NPC facts, campaign assets, and tactical entities per request', async () => {
@@ -81,6 +84,26 @@ describe('loadCombatIntentActorRoster', () => {
       expect(await loadCombatIntentActorRoster('session-1', 'user-1')).toEqual([]);
     } finally {
       sessionLoadFails = false;
+    }
+  });
+
+  /**
+   * #1595: the dead filter removes a ledger-dead creature from the live roster, and the loader
+   * returns that name so a declared attack on it can be refused in words.
+   */
+  it('returns the names the dead filter removed, and leaves them off the live roster', async () => {
+    ledgerFacts = [
+      { subjectName: 'professor emil darkwater', value: { state: 'watching' } },
+      { subjectName: 'dutch pellam', predicate: 'status', value: { state: 'dead' } },
+    ];
+    try {
+      const roster = await loadCombatIntentRoster('session-1', 'user-1');
+      expect(roster.deadNames).toEqual(['Dutch Pellam']);
+      expect(roster.deadExcludedCount).toBe(1);
+      expect(roster.actors.map((actor) => actor.name)).not.toContain('Dutch Pellam');
+      expect(roster.actors.map((actor) => actor.name)).toContain('Professor Emil Darkwater');
+    } finally {
+      ledgerFacts = [{ subjectName: 'professor emil darkwater', value: { state: 'watching' } }];
     }
   });
 });

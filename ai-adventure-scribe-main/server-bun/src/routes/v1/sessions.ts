@@ -13,7 +13,7 @@
  */
 
 import { Elysia, t } from 'elysia';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { planHasPaidFeatures } from '../../../../shared/plan-features.js';
 import { logger } from '../../lib/logger.js';
@@ -22,14 +22,61 @@ import { NotFoundError } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { loadStoredStoryTrackers } from '../../services/dm/story-tracker.js';
-import { SessionService } from '../../services/session-service.js';
+import { SessionService, type ResumeRefusal } from '../../services/session-service.js';
+import { getOwnershipCondition } from '../../services/session/session-authorization.js';
 import { db } from '../../../../db/client';
-import { sessionChronicles } from '../../../../db/schema/index';
+import { combatEncounters, gameSessions, sessionChronicles } from '../../../../db/schema/index';
 import { chronicleGenerator, persistChronicleFailure } from '../../services/chronicle-generator.js';
 import { getSessionContextRouteResult } from './session-context-handler.js';
 import { getSessionListRouteResult } from './session-list-handler.js';
 
 import type { GameSession } from '../../../../db/schema/index';
+
+/**
+ * #1619: End session closes the session's open fight. Without this the encounter stays `active`
+ * until the 24-hour idle sweeper, and the sheet refuses Lay on Hands as "in combat" in that window.
+ * `concludeEncounter` with reason 'abandoned' is the same function the idle sweeper calls (with
+ * 'ended_idle'): it claims the ending once, tears down the tactical map and tells the DM the party broke off. It
+ * writes no XP (XP is only for last_hostile_defeated) and no chronicle (the chronicle is written by
+ * the route below, unchanged). Owner-filtered through the session's campaign or character.
+ * Never fails End session: each failure is logged and the session is still completed.
+ */
+async function closeOpenEncountersOnEnd(sessionId: string, userId: string): Promise<void> {
+  try {
+    // Loaded here, not at the top of the file, as story-xp.js is: the route-contract tests mock the
+    // logger without `combatLogger`, and combat-ending.js needs it at import time.
+    const { concludeEncounter } = await import('../../services/combat/combat-ending.js');
+    const openEncounters = await db
+      .select({ id: combatEncounters.id })
+      .from(combatEncounters)
+      .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+      .where(
+        and(
+          eq(combatEncounters.sessionId, sessionId),
+          eq(combatEncounters.status, 'active'),
+          getOwnershipCondition(userId),
+        ),
+      );
+    for (const encounter of openEncounters) {
+      try {
+        await concludeEncounter(encounter.id, sessionId, userId, 'abandoned');
+      } catch (error) {
+        logger.warn({
+          msg: 'SESSION_END_ENCOUNTER_CLOSE_FAILED',
+          sessionId,
+          encounterId: encounter.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  } catch (error) {
+    logger.warn({
+      msg: 'SESSION_END_ENCOUNTER_LOOKUP_FAILED',
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 
 /**
  * Helper to map camelCase Session to snake_case for API compatibility
@@ -101,6 +148,20 @@ const listSessionsQuery = t.Object({
 const completeSessionSchema = t.Object({
   summary: t.Optional(t.String({ maxLength: 100_000 })),
 });
+
+const resumableSessionsQuery = t.Object({
+  campaign_id: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  character_id: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+});
+
+/** #1669: the words the client shows for each refusal of Resume session (409). */
+const RESUME_REFUSAL_MESSAGES: Record<ResumeRefusal, string> = {
+  not_completed: 'Only an ended session can be resumed.',
+  not_resumable: 'This session is missing its campaign or character and cannot be resumed.',
+  fallen: 'This hero has fallen. Start a new session instead.',
+  one_shot: 'This adventure is a one-shot and has no more sessions to resume.',
+  already_active: 'This hero already has an active session in this adventure.',
+};
 
 export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
   .use(requireAuth)
@@ -178,6 +239,23 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
         SessionService.listSessions,
       ),
     { query: listSessionsQuery },
+  )
+
+  /**
+   * GET /v1/sessions/resumable
+   * #1669: the completed sessions this user can resume, optionally for one campaign.
+   */
+  .get(
+    '/resumable',
+    async ({ query, user }) => {
+      const rows = await SessionService.listResumableSessions(
+        (user as { userId: string }).userId,
+        query.campaign_id,
+        query.character_id,
+      );
+      return rows.map(mapSessionToApi);
+    },
+    { query: resumableSessionsQuery },
   )
 
   /**
@@ -275,6 +353,37 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
   )
 
   /**
+   * POST /v1/sessions/:id/resume
+   * #1669: Resume session. The ended session becomes active again with its messages and trackers.
+   * The ownership guard above 404s sessions the user does not own; refusals answer 409.
+   */
+  .post(
+    '/:id/resume',
+    async ({ params, set, user }) => {
+      try {
+        const result = await SessionService.resumeSession(
+          params.id,
+          (user as { userId: string }).userId,
+        );
+        if (!result.ok) {
+          set.status = 409;
+          return { error: RESUME_REFUSAL_MESSAGES[result.reason], reason: result.reason };
+        }
+        return mapSessionToApi(result.session);
+      } catch (error) {
+        if (error instanceof NotFoundError) {
+          set.status = 404;
+          return { error: 'Not found' };
+        }
+        logger.error({ msg: 'SESSION_RESUME error', sessionId: params.id, error });
+        set.status = 500;
+        return { error: 'Failed to resume session' };
+      }
+    },
+    { params: sessionIdParams },
+  )
+
+  /**
    * POST /v1/sessions/:id/complete
    * Mark a session as complete
    */
@@ -324,6 +433,8 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
           (user as { userId: string }).userId,
           summary,
         );
+        // #1619: the ended session's open fight closes with it (never fails this response).
+        await closeOpenEncountersOnEnd(id, (user as { userId: string }).userId);
 
         // Auto-generate chronicle for Pro/Enterprise users (fire-and-forget, never blocks response)
         // #1344: the plan on the request is lenient (authenticateRequest fails open to

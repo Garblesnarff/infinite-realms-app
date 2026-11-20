@@ -17,7 +17,6 @@ import { CombatReadyCard } from './CombatReadyCard';
 import EnemyCard from './EnemyCard';
 import HPTracker from './HPTracker';
 import InitiativeTracker from './InitiativeTracker';
-import ReactionOpportunityPanel from './ReactionOpportunityPanel';
 
 import type { SpellCastHandlerRef } from '@/features/game-session/components/game/spell-cast-handler';
 
@@ -67,28 +66,18 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
     selectedEnemy,
     setSelectedEnemy,
     showCombatMode,
-    isStartingCombat,
     actionValidation,
-    reactionOpportunities,
-    setReactionOpportunities,
     localShowInitiativeTracker,
     setLocalShowInitiativeTracker,
-    handleStartCombat,
     handleEndCombat,
     handleCombatAction,
     handleEnemyAttack,
-    addEnemy,
     handleEnhancedAttack,
-    handleRacialTraitUse,
     handleClassFeature,
-    handleReactionOpportunity,
     handleDeathSave,
-    handleConcentrationSave: _handleConcentrationSave,
-    handleTwoWeaponAttack,
     handleApplyDamage,
     handleHealing,
     nextTurn,
-    rollInitiative,
     showAdvantageModal: _showAdvantageModal,
     setShowAdvantageModal: _setShowAdvantageModal,
     pendingAttack: _pendingAttack,
@@ -116,12 +105,8 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
   if (!isInCombat && !showCombatMode) {
     return (
       <CombatReadyCard
-        isDM={isDM}
         playerParticipants={playerParticipants}
         enemyParticipants={enemyParticipants}
-        isStartingCombat={isStartingCombat}
-        onAddEnemy={addEnemy}
-        onStartCombat={handleStartCombat}
         activeCharacterName={activeCharacterName}
       />
     );
@@ -229,28 +214,12 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
                   onCombatAction={handleCombatAction}
                   onNextTurn={nextTurn}
                   onOpenSpellPicker={() => setSpellPickerOpen(true)}
-                  onRollInitiative={rollInitiative}
-                  onTwoWeaponAttack={handleTwoWeaponAttack}
                   onEnhancedAttack={handleEnhancedAttack}
                   onClassFeatureUse={handleClassFeature}
-                  onRacialTraitUse={handleRacialTraitUse}
                   onDeathSave={handleDeathSave}
                   showNextTurnButton={isDM}
-                  showInitiativeRoll={isDM}
                   showControls={isDM}
                   isPlayersTurn={isPlayersTurn}
-                />
-              )}
-
-              {isDM && (
-                <ReactionOpportunityPanel
-                  opportunities={reactionOpportunities}
-                  onReactionSelected={handleReactionOpportunity}
-                  onOpportunityDismissed={(opportunityId) =>
-                    setReactionOpportunities((prev) =>
-                      prev.filter((opp) => opp.id !== opportunityId),
-                    )
-                  }
                 />
               )}
 
@@ -311,25 +280,6 @@ const CombatInterface: React.FC<CombatInterfaceProps> = ({
                       <div className="text-center py-8 text-muted-foreground">
                         <Users className="w-12 h-12 mx-auto mb-4 text-gray-400" />
                         <p>No enemies in combat</p>
-                        {isDM && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={addEnemy}
-                                className="mt-2"
-                                aria-label="Add a new enemy to the encounter"
-                              >
-                                Add Enemy
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Add a new enemy to the encounter</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
                       </div>
                     )}
                   </div>
