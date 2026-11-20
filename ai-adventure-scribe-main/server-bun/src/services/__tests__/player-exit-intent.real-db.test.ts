@@ -616,6 +616,40 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
       'action_bar',
     );
 
+  test('a hostile mover leaving the hero reach does not spend the hero reaction', async () => {
+    await db
+      .update(combatEncounters)
+      .set({ currentTurnOrder: 1 })
+      .where(eq(combatEncounters.id, encounterId));
+    randomSpy(0.01);
+    await executeCombatIntent(
+      encounterId,
+      { type: 'move', actorId: swarmId, x: 7, y: 4 },
+      userId,
+      'dm',
+      Date.now(),
+      'action_bar',
+    );
+    const map = await loadActiveTacticalMap(sessionId);
+    expect(map?.entities.find((entity) => entity.id === swarmId)).toMatchObject({ x: 7, y: 4 });
+    const [hero] = await db
+      .select({ reactionUsed: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, heroId));
+    expect(hero.reactionUsed).toBe(false);
+    const facts = await consumeDmTacticalFacts(sessionId);
+    expect(facts.filter((fact) => fact.includes('attacked'))).toHaveLength(0);
+  });
+
+  test('a board step that stays within the same hostile reach provokes no reaction', async () => {
+    await boardMove(4, 3);
+    const map = await loadActiveTacticalMap(sessionId);
+    expect(map?.entities.find((entity) => entity.id === heroId)).toMatchObject({ x: 4, y: 3 });
+    expect(await swarmRow()).toMatchObject({ reactionUsed: false });
+    const facts = await consumeDmTacticalFacts(sessionId);
+    expect(facts.filter((fact) => fact.includes('attacked The Scholar'))).toHaveLength(0);
+  });
+
   test('moving out of the reach of two hostiles provokes both reactions', async () => {
     const other = await addAdjacentHostile();
     randomSpy(0.01);

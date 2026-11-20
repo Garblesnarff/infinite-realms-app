@@ -109,24 +109,18 @@ export async function selectOpportunityAttackers(params: {
   destination?: { x: number; y: number };
 }): Promise<OpportunityAttacker[]> {
   const { state, actor, map, reachOf, hasLineOfSight, distanceFeet } = params;
-  if (actor.isDisengaged || !map) return [];
+  if (
+    actor.isDisengaged ||
+    !map ||
+    isLiveHostile(actor as unknown as Parameters<typeof isLiveHostile>[0])
+  )
+    return [];
   const from = map.entities.find((entity) => entity.id === actor.id);
   if (!from) return [];
   const inReach: OpportunityAttacker[] = [];
   for (const candidate of state.participants) {
     if (candidate.id === actor.id) continue;
-    const moverHostile = isLiveHostile(actor as unknown as Parameters<typeof isLiveHostile>[0]);
-    const target = candidate as unknown as ExitParticipant;
-    const candidateHostile = isLiveHostile(
-      candidate as unknown as Parameters<typeof isLiveHostile>[0],
-    );
-    if (
-      moverHostile === candidateHostile ||
-      !candidate.isActive ||
-      (target.status?.currentHp ?? target.maxHp ?? 0) <= 0 ||
-      target.status?.isConscious === false
-    )
-      continue;
+    if (!isLiveHostile(candidate as unknown as Parameters<typeof isLiveHostile>[0])) continue;
     if ((candidate as unknown as ExitParticipant).reactionUsed) continue;
     const conditions = (await params.conditionsOf?.(candidate.id)) ?? [];
     if (
