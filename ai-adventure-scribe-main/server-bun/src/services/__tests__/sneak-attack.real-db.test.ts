@@ -9,7 +9,7 @@
  * The target's AC of 1 makes almost every attack a hit. Advantage comes from the hidden mark (an
  * engine source) or from the explicit disadvantage input; the client "requested" flag is covered too.
  */
-import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, spyOn } from 'bun:test';
 import { and, eq, sql } from 'drizzle-orm';
 
 import {
@@ -54,6 +54,8 @@ const {
   markHiddenAttacker,
 } = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
 const { SessionService } = await importWithRealDb(() => import('../session-service.js'));
+const { logger } = await importWithRealDb(() => import('../../lib/logger.js'));
+const combatTurnFlags = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
 
 if (!hasRealDb) {
   console.warn('[sneak-attack] SKIPPED: set TEST_DATABASE_URL to a scratch Postgres to run these.');
@@ -763,5 +765,26 @@ describeWithDb('Sneak Attack and the hidden attacker (#1637)', () => {
     await clearHiddenAttacker(encounterId, rogueId);
     await update({ hiddenParticipants: { [rogueId]: { encounterId } } });
     expect(await isHiddenAttacker(encounterId, rogueId)).toBe(false);
+  });
+
+  it('a failed Sneak Attack claim gives no rider, logs a warning, and the attack still resolves (#1651)', async () => {
+    const warn = spyOn(logger, 'warn');
+    // The claim's own write fails (not a refusal): the engine takes the error path.
+    const claim = spyOn(combatTurnFlags, 'claimSneakAttack').mockRejectedValueOnce(
+      new Error('claim write failed'),
+    );
+    try {
+      // The hidden mark is an engine advantage source, so the rider is due and the claim is attempted.
+      const outcome = await attackUntilHit({ hidden: true });
+      expect(outcome.hit).toBe(true);
+      expect(outcome.sneakAttackDamage).toBeUndefined();
+      expect(claim).toHaveBeenCalled();
+      expect(
+        warn.mock.calls.some((call) => JSON.stringify(call).includes('COMBAT_SNEAK_ATTACK_CLAIM_FAILED')),
+      ).toBe(true);
+    } finally {
+      warn.mockRestore();
+      claim.mockRestore();
+    }
   });
 });
