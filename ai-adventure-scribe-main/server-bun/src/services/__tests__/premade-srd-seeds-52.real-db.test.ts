@@ -4,6 +4,8 @@
  * The migration file ships unapplied, so this proves the data mapping,
  * re-runnability, the guards, and the loud failure.
  *
+ * The companion Draconic language migration is also exercised here.
+ *
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
 import { readFileSync } from 'node:fs';
@@ -17,6 +19,16 @@ const MIGRATION_SQL = hasRealDb
   ? readFileSync(
       new URL(
         '../../../../supabase/migrations/20261117_fix_premade_srd_subrace_and_origin_2014.sql',
+        import.meta.url,
+      ),
+      'utf8',
+    )
+  : '';
+
+const NEW_MIGRATION_SQL = hasRealDb
+  ? readFileSync(
+      new URL(
+        '../../../../supabase/migrations/20261117_fix_premade_srd_subrace_and_origin_2014_draconic_language.sql',
         import.meta.url,
       ),
       'utf8',
@@ -90,6 +102,7 @@ async function upsertBaseRows(): Promise<void> {
         cls: 'Fighter',
         subclass: null,
         scores: { STR: 16, DEX: 12, CON: 16, INT: 8, WIS: 10, CHA: 10 },
+        languages: [],
       },
       {
         campaign: ACADEMY_CAMPAIGN_ID,
@@ -100,6 +113,7 @@ async function upsertBaseRows(): Promise<void> {
         cls: 'Sorcerer',
         subclass: null,
         scores: { STR: 8, DEX: 12, CON: 14, INT: 10, WIS: 10, CHA: 16 },
+        languages: [],
       },
       {
         campaign: MIDSUMMER_CAMPAIGN_ID,
@@ -117,6 +131,7 @@ async function upsertBaseRows(): Promise<void> {
           wisdom: 10,
           charisma: 16,
         },
+        languages: ['Common', 'Elvish', 'Sylvan'],
       },
       {
         campaign: ACADEMY_CAMPAIGN_ID,
@@ -127,13 +142,14 @@ async function upsertBaseRows(): Promise<void> {
         cls: 'Druid',
         subclass: null,
         scores: { STR: 10, DEX: 12, CON: 12, INT: 12, WIS: 16, CHA: 12 },
+        languages: [],
       },
     ];
     for (const r of rows) {
       await client.query(
         `INSERT INTO public.starter_character_templates
-           (starter_campaign_id, template_key, name, race, subrace, class, subclass, ability_scores)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
+           (starter_campaign_id, template_key, name, race, subrace, class, subclass, ability_scores, languages)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
          ON CONFLICT (starter_campaign_id, template_key) DO UPDATE SET
            name = EXCLUDED.name,
            race = EXCLUDED.race,
@@ -141,8 +157,19 @@ async function upsertBaseRows(): Promise<void> {
            class = EXCLUDED.class,
            subclass = EXCLUDED.subclass,
            ability_scores = EXCLUDED.ability_scores,
+           languages = EXCLUDED.languages,
            updated_at = now()`,
-        [r.campaign, r.key, r.name, r.race, r.subrace, r.cls, r.subclass, JSON.stringify(r.scores)],
+        [
+          r.campaign,
+          r.key,
+          r.name,
+          r.race,
+          r.subrace,
+          r.cls,
+          r.subclass,
+          JSON.stringify(r.scores),
+          JSON.stringify(r.languages),
+        ],
       );
     }
   } finally {
@@ -155,6 +182,16 @@ async function runMigration(): Promise<void> {
   await client.connect();
   try {
     await client.query(MIGRATION_SQL);
+  } finally {
+    await client.end();
+  }
+}
+
+async function runNewMigration(): Promise<void> {
+  const client = new Client({ connectionString: realDbUrl });
+  await client.connect();
+  try {
+    await client.query(NEW_MIGRATION_SQL);
   } finally {
     await client.end();
   }
@@ -342,5 +379,81 @@ describeWithDb('premade SRD seeds #52', () => {
     expect(sc.subclass).toBeNull();
     const ls = await fetchRow(MIDSUMMER_CAMPAIGN_ID, 'the-lovesick');
     expect(ls.subclass).toBeNull();
+  });
+
+  it('draconic language: first migration then new one appends Draconic', async () => {
+    await runMigration();
+    await runNewMigration();
+    const sc = await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-sous-chef');
+    expect(sc.languages).toEqual(['Draconic']);
+    const ls = await fetchRow(MIDSUMMER_CAMPAIGN_ID, 'the-lovesick');
+    expect(ls.languages).toEqual(['Common', 'Elvish', 'Sylvan', 'Draconic']);
+
+    const snapSc = stripUpdatedAt(await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-sous-chef'));
+    const snapLs = stripUpdatedAt(await fetchRow(MIDSUMMER_CAMPAIGN_ID, 'the-lovesick'));
+    const snapG = stripUpdatedAt(await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-gourmand'));
+    const snapH = stripUpdatedAt(await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-herbalist'));
+
+    await runNewMigration();
+
+    expect(stripUpdatedAt(await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-sous-chef'))).toEqual(snapSc);
+    expect(stripUpdatedAt(await fetchRow(MIDSUMMER_CAMPAIGN_ID, 'the-lovesick'))).toEqual(snapLs);
+    expect(stripUpdatedAt(await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-gourmand'))).toEqual(snapG);
+    expect(stripUpdatedAt(await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-herbalist'))).toEqual(snapH);
+  });
+
+  it('draconic language: lowercase draconic gets no second entry', async () => {
+    await runMigration();
+    await updateRow(ACADEMY_CAMPAIGN_ID, 'the-sous-chef', 'languages = $3::jsonb', [
+      JSON.stringify(['draconic']),
+    ]);
+    await runNewMigration();
+    const sc = await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-sous-chef');
+    expect(sc.languages).toEqual(['draconic']);
+  });
+
+  it('draconic language: new migration alone before first migration changes nothing', async () => {
+    const scBefore = (await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-sous-chef')).languages;
+    const lsBefore = (await fetchRow(MIDSUMMER_CAMPAIGN_ID, 'the-lovesick')).languages;
+    await runNewMigration();
+    const scAfter = (await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-sous-chef')).languages;
+    const lsAfter = (await fetchRow(MIDSUMMER_CAMPAIGN_ID, 'the-lovesick')).languages;
+    expect(scAfter).toEqual(scBefore);
+    expect(lsAfter).toEqual(lsBefore);
+  });
+
+  it('draconic language: Wild Magic sorcerer is not given Draconic', async () => {
+    await updateRow(
+      ACADEMY_CAMPAIGN_ID,
+      'the-sous-chef',
+      "subclass = 'Wild Magic', languages = $3::jsonb",
+      [JSON.stringify([])],
+    );
+    await runNewMigration();
+    const sc = await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-sous-chef');
+    expect(sc.languages).toEqual([]);
+  });
+
+  it('draconic language: JSON string languages rejects and rolls back', async () => {
+    await runMigration();
+    const scBefore = (await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-sous-chef')).languages;
+    await updateRow(MIDSUMMER_CAMPAIGN_ID, 'the-lovesick', 'languages = $3::jsonb', [
+      JSON.stringify('Common'),
+    ]);
+    await expect(runNewMigration()).rejects.toThrow(
+      '#52: the-lovesick languages is not a JSON array of strings',
+    );
+    const scAfter = (await fetchRow(ACADEMY_CAMPAIGN_ID, 'the-sous-chef')).languages;
+    expect(scAfter).toEqual(scBefore);
+  });
+
+  it('draconic language: non-string element rejects', async () => {
+    await runMigration();
+    await updateRow(MIDSUMMER_CAMPAIGN_ID, 'the-lovesick', 'languages = $3::jsonb', [
+      JSON.stringify(['Common', 7]),
+    ]);
+    await expect(runNewMigration()).rejects.toThrow(
+      '#52: the-lovesick languages is not a JSON array of strings',
+    );
   });
 });
