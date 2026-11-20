@@ -64,6 +64,7 @@ import {
   hasLeftTheBoard,
   recordPlayerExit,
   selectOpportunityAttacker,
+  selectOpportunityAttackers,
   type OpportunityAttacker,
   type PlayerExitResult,
 } from './player-exit-service.js';
@@ -1233,8 +1234,8 @@ async function resolvePlayerExit(params: {
     label: (participantId) => facingName(undefined, participantId, roster),
     slugOf: (participantId) =>
       engineSlugForParticipant(map, participantId, facingName(undefined, participantId, roster)),
-    selectAttacker: (actor) =>
-      selectOpportunityAttacker({
+    selectAttackers: (actor) =>
+      selectOpportunityAttackers({
         state,
         actor,
         map,
@@ -1244,6 +1245,7 @@ async function resolvePlayerExit(params: {
         },
         hasLineOfSight: (fromId, toId) => (map ? checkLineOfSight(map, fromId, toId) : false),
         distanceFeet: getDistance,
+        conditionsOf: getActiveConditionNames,
       }),
     resolveOpportunityAttack: async (attacker: OpportunityAttacker) => {
       const attackService = await createCombatAttackService();
