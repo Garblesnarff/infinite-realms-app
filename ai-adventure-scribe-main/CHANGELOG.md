@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.53.1](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.53.0...v0.53.1) (2026-11-20)
+
+
+### Bug Fixes
+
+* **creation:** warn when a hero name is already used ([#213](https://github.com/Garblesnarff/infinite-realms-app/issues/213)) ([8580b39](https://github.com/Garblesnarff/infinite-realms-app/commit/8580b394058a8508db9c6d0041085e3a12798b94))
+* **sessions:** Resume list focus, long list and loading state ([#1691](https://github.com/Garblesnarff/infinite-realms-app/issues/1691)) ([5878930](https://github.com/Garblesnarff/infinite-realms-app/commit/5878930617d56f6d20c1796fc0b26ee478a86075))
+
+
+### Tests
+
+* **combat:** pin the d20 in the hidden spell attack cases ([#1688](https://github.com/Garblesnarff/infinite-realms-app/issues/1688)) ([1aa787d](https://github.com/Garblesnarff/infinite-realms-app/commit/1aa787d6a45a50af6a8a7d440e928385c711b40a))
+
 ## [0.53.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.52.0...v0.53.0) (2026-11-20)
 
 
