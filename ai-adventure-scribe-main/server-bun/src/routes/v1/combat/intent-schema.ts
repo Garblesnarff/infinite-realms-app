@@ -162,6 +162,17 @@ const flexibleCastingFields = {
 };
 
 /**
+ * #1635: Cunning Action, a Rogue's bonus action (level 2+). `mode` names the Dash, Disengage or
+ * Hide the bonus action pays for. Versioned like the other mutating intents.
+ */
+const cunningActionFields = {
+  type: t.Literal('cunning_action'),
+  actorId: participantId,
+  actionId,
+  mode: t.Union([t.Literal('dash'), t.Literal('disengage'), t.Literal('hide')]),
+};
+
+/**
  * Drinking a healing consumable (#1147): the item spent, like the feature fields above
  * versioned because it mutates the sheet (quantity) and the board (HP).
  */
@@ -195,6 +206,7 @@ const playerCombatIntentSchema = t.Union([
   t.Object({ ...fighterFeatureFields, expectedVersion }),
   t.Object({ ...itemFields, expectedVersion }),
   t.Object({ ...flexibleCastingFields, expectedVersion }),
+  t.Object({ ...cunningActionFields, expectedVersion }),
   t.Object({ ...layOnHandsFields, expectedVersion }),
 ]);
 
@@ -215,6 +227,7 @@ const dmCombatIntentSchema = t.Union([
   t.Object({ ...fighterFeatureFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...itemFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...flexibleCastingFields, expectedVersion: t.Optional(expectedVersion) }),
+  t.Object({ ...cunningActionFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...layOnHandsFields, expectedVersion: t.Optional(expectedVersion) }),
 ]);
 

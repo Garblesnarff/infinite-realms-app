@@ -214,6 +214,16 @@ export type CombatIntent =
       expectedVersion: number;
     }
   /**
+   * #1635: Cunning Action, a Rogue's bonus action (level 2+). `mode` names the Dash, Disengage or
+   * Hide it pays for; each runs the same resolution as the Action version of that intent.
+   */
+  | {
+      type: 'cunning_action';
+      actorId: string;
+      mode: 'dash' | 'disengage' | 'hide';
+      expectedVersion: number;
+    }
+  /**
    * #1554: Lay on Hands, an Action. `targetId` is the actor (self) or an adjacent player-side
    * ally. `amount` heals that many HP from the pool; `cure` (5 points) cures a disease or
    * poison instead and takes no amount. The engine draws the pool in resolveLayOnHands.
@@ -268,6 +278,8 @@ const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
   // #1147: an item spend is the player's own resource, same as a feature spend.
   'use_item',
   'flexible_casting',
+  // #1635: Cunning Action is the player's own bonus action, same as a feature spend.
+  'cunning_action',
   // #1554: a Lay on Hands is the player's own pool, same as a feature spend.
   'lay_on_hands',
 ]);
@@ -340,6 +352,8 @@ export const VERSIONED_INTENT_TYPES = new Set([
   'action_surge',
   'divine_sense',
   'rage',
+  // #1635: Cunning Action claims the bonus action under the encounter version.
+  'cunning_action',
   // #1362: a divine_smite legal option submits an 'attack' intent (divineSmiteSlotLevel), so it
   // is claim-based too. Listed so the legal-action version test holds; no intent carries this type.
   'divine_smite',
@@ -2030,6 +2044,67 @@ export async function executeCombatIntent(
           });
         },
       );
+    } else if (intent.type === 'cunning_action') {
+      // #1635: Cunning Action is a bonus action for a Rogue of level 2+. The level and a spent bonus
+      // action are refused before anything is claimed, so a refusal costs nothing. Dash and Disengage
+      // claim the bonus action through the same wrapper as Second Wind; Hide goes through the check
+      // service, which claims the bonus action (not the Action) and then settles the same hidden mark.
+      // The class fields are loaded only on request (includeCharacterClass), so read them here
+      // rather than trusting the dispatch's own state, which omits them.
+      const classState = await CombatEncounterService.getCombatState(encounterId, userId, {
+        includeCharacterClass: true,
+      });
+      const rogueActor = (classState.participants.find(
+        (participant) => participant.id === intent.actorId,
+      ) ?? actor) as unknown as {
+        characterClass?: string | null;
+        characterLevel?: number | null;
+        characterClassLevels?: unknown;
+        bonusActionUsed?: boolean | null;
+      };
+      const rogueLevel = classLevelOf(
+        {
+          class: rogueActor.characterClass ?? null,
+          level: rogueActor.characterLevel ?? null,
+          classLevels: rogueActor.characterClassLevels,
+        },
+        'Rogue',
+      );
+      if (rogueLevel < 2) {
+        throw new BusinessLogicError('Cunning Action needs a Rogue of level 2 or higher.', {
+          reason: 'cunning_action_level',
+          featureName: 'Cunning Action',
+        });
+      }
+      if (rogueActor.bonusActionUsed) {
+        throw new BusinessLogicError(
+          'Cunning Action needs the bonus action, and it is already spent this turn.',
+          { reason: 'bonus_action_spent', featureName: 'Cunning Action' },
+        );
+      }
+      if (intent.mode === 'hide') {
+        result = await executeCombatCheck({
+          encounterId,
+          actorId: intent.actorId,
+          intent: { kind: 'hide', verb: 'hide' },
+          expectedVersion: intent.expectedVersion,
+          userId,
+          costsBonusAction: true,
+        });
+      } else {
+        const mode = intent.mode;
+        result = await claimTurnBonusActionAndResolve(
+          intent.actorId,
+          encounterId,
+          intent.expectedVersion,
+          async () => {
+            if (mode === 'dash') return grantTacticalDash(encounter.sessionId, intent.actorId);
+            await setDefensiveAction(intent.actorId, 'disengage');
+            return { applied: true, action: 'disengage' };
+          },
+        );
+        await recordDiscreteActionFact(encounter.sessionId, state, intent.actorId, mode);
+      }
     } else if (intent.type === 'flexible_casting') {
       // #1233: Flexible Casting is a bonus action. The claim wraps the spend, so a refusal (no
       // feature, no points, no slot, a created level above 5th) refunds the bonus action.
@@ -2875,6 +2950,26 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       }))
     ) {
       actions.push({ type: 'rage', label: 'Rage' });
+    }
+    // #1635: Cunning Action, a Rogue's bonus action from level 2: Dash, Disengage or Hide. Offered
+    // only while the bonus action is free, so no chip is a trap; the level is read the way Rage reads it.
+    const rogueLevel = classLevelOf(
+      {
+        class: actor.characterClass ?? null,
+        level: actor.characterLevel ?? null,
+        classLevels: actor.characterClassLevels,
+      },
+      'Rogue',
+    );
+    if (rogueLevel >= 2 && !actor.bonusActionUsed) {
+      for (const mode of ['dash', 'disengage', 'hide'] as const) {
+        const modeLabel = { dash: 'Dash', disengage: 'Disengage', hide: 'Hide' }[mode];
+        actions.push({
+          type: 'cunning_action',
+          mode,
+          label: `${modeLabel} (Cunning Action)`,
+        });
+      }
     }
     // Divine Sense belongs only to Paladins. Keep the pooled-feature lookup behind the
     // class gate so every non-paladin legal-actions request stays database-free in unit

@@ -84,6 +84,8 @@ export type LegalAction = {
     | 'inspiration'
     | 'metamagic'
     | 'off_hand_attack';
+  /** #1635: a `cunning_action` chip's mode: the bonus action pays for this Dash, Disengage or Hide. */
+  mode?: 'dash' | 'disengage' | 'hide';
   /** #1233: a `metamagic` option: the Metamagic id the chip arms for the next cast. */
   option?: string;
   /** #1233: the casting time the option changes ('bonus action' for Quickened). */
@@ -412,6 +414,29 @@ export function useCombatLegalActions(input: {
               actionId: crypto.randomUUID(),
             });
           }
+          await refreshCombatState();
+        } else if (action.type === 'cunning_action' && action.mode) {
+          // #1635: Cunning Action, a bonus action. The server spends it and runs the Dash, Disengage
+          // or Hide; the turn stays open, as it does for Dash.
+          const result = await executeAuthoritativeCombatIntent(
+            encounter.id,
+            { type: 'cunning_action', actorId, mode: action.mode },
+            'dm',
+            Date.now(),
+            'typed',
+          );
+          const parts = [
+            ...formatCombatActionParts(
+              { actor_id: actorId, action_type: action.mode },
+              result,
+              roster,
+            ),
+            ...formatWakeParts(result),
+          ];
+          await sendEngineNotice(input.onSendMessage, {
+            text: parts.map((part) => part.line).join('\n\n'),
+            cards: parts.map((part) => part.card),
+          });
           await refreshCombatState();
         } else if (action.type === 'dash' || action.type === 'disengage') {
           const result = await executeAuthoritativeCombatIntent(

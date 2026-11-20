@@ -31,7 +31,10 @@ import {
 } from './combat-check-rules.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { markHiddenAttacker } from './combat-turn-flags.js';
-import { claimTurnActionAndResolve } from './combat-turn-resources.js';
+import {
+  claimTurnActionAndResolve,
+  claimTurnBonusActionAndResolve,
+} from './combat-turn-resources.js';
 import { getParticipantAbilityProfile } from './data-access.js';
 import { CHECK_CONDITION_SOURCE, grappleOf, grappleSource } from './grapple-source.js';
 import { isProvoked, nonHostileDisposition } from './npc-turn-runner.js';
@@ -74,6 +77,11 @@ export interface CombatCheckIntentRequest {
   d20?: number;
   /** Which way a successful shove lands, chosen by the player in the confirm. */
   shoveOutcome?: ShoveOutcome;
+  /**
+   * #1635: a Cunning Action Hide costs the bonus action instead of the Action. The claim is the
+   * bonus-action wrapper; the resolution, and the hidden mark it sets, are the same.
+   */
+  costsBonusAction?: boolean;
 }
 
 /** The engine's answer: the numbers, the line, and what changed. */
@@ -536,7 +544,10 @@ export async function executeCombatCheck(
   // Refused before the action is claimed, so a refusal costs the player nothing.
   await refuseOversizedTarget(state, checkRequest);
 
-  return claimTurnActionAndResolve(actorId, encounterId, request.expectedVersion, async () => {
+  const claim = request.costsBonusAction
+    ? claimTurnBonusActionAndResolve
+    : claimTurnActionAndResolve;
+  return claim(actorId, encounterId, request.expectedVersion, async () => {
     const fresh = await CombatEncounterService.getCombatState(encounterId, userId);
     const actorProfile = await checkProfileOf(
       fresh.participants.find((participant) => participant.id === actorId),
