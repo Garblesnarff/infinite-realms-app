@@ -507,6 +507,33 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     expect(reactions.every((row) => row.used)).toBe(true);
   });
 
+  test('a first opportunity attack that drops the hero prevents the second and records no exit', async () => {
+    const other = await addAdjacentHostile();
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 1 })
+      .where(eq(combatParticipantStatus.participantId, heroId));
+    randomSpy(0.99);
+    await flee();
+    expect(await heroHp()).toBe(0);
+    expect(await heroRow()).toMatchObject({ isActive: true });
+    const facts = await consumeDmTacticalFacts(sessionId);
+    const attacks = facts.filter((fact) => fact.includes('attacked The Scholar'));
+    expect(attacks).toHaveLength(1);
+    expect(facts.some((fact) => fact.includes('flees the fight'))).toBe(false);
+    expect(await partyLedgerState()).toBeUndefined();
+    expect(await encounterRow()).toMatchObject({ status: 'active', endedReason: null });
+    const reactions = await db
+      .select({ id: combatParticipants.id, used: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(inArray(combatParticipants.id, [swarmId, other]));
+    expect(reactions).toHaveLength(2);
+    expect(reactions.filter((row) => row.used)).toHaveLength(1);
+    const unusedId = reactions.find((row) => !row.used)!.id;
+    const unusedName = unusedId === swarmId ? 'Light-Eater Swarm 1' : 'Light-Eater Swarm 2';
+    expect(attacks[0]).not.toContain(unusedName);
+  });
+
   test('a hostile with a spent reaction does not prevent another hostile attacking', async () => {
     const other = await addAdjacentHostile();
     await db
@@ -527,7 +554,7 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     expect(row.used).toBe(true);
   });
 
-  for (const condition of ['Incapacitated', 'Blinded']) {
+  for (const condition of ['Incapacitated', 'Blinded', 'Paralyzed']) {
     test(`a ${condition.toLowerCase()} hostile cannot make an opportunity attack`, async () => {
       const other = await addAdjacentHostile();
       await db
