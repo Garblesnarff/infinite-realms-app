@@ -15,6 +15,7 @@ import {
   verifyParticipantOwnership,
 } from './combat/combat-authorization.js';
 import { settleCheckConditionsForTurn } from './combat/combat-check-conditions.js';
+import { endRageIfIdle } from './combat/combat-turn-flags.js';
 import { InitiativeMechanics, rollD20 } from './combat/initiative-mechanics.js';
 import { db } from '../../../db/client';
 import {
@@ -299,6 +300,15 @@ export class CombatInitiativeService {
       });
     }
 
+    // #1654: the turn has ended, and the order has moved. A raging Barbarian whose turn ended with no
+    // attack on a hostile and no damage since their last turn loses Rage now (2014 SRD 5.1). The check
+    // runs after the advance is written, so a refused advance (turn conflict) ends nothing.
+    const engineLines: string[] = [];
+    if (previousParticipant?.characterId) {
+      const rage = await endRageIfIdle(encounterId, previousParticipant.id);
+      if (rage === 'ended') engineLines.push(`${previousParticipant.name}'s rage ends.`);
+    }
+
     // Get new current participant from memory
     const currentParticipant = participants[nextTurnOrder];
 
@@ -322,6 +332,7 @@ export class CombatInitiativeService {
       currentParticipant,
       newRound,
       roundNumber: newRoundNumber,
+      engineLines,
     };
   }
 

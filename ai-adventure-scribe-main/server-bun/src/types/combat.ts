@@ -477,6 +477,8 @@ export interface AdvanceTurnResult {
   currentParticipant: CombatParticipant;
   newRound: boolean;
   roundNumber: number;
+  /** Engine facts from the turn that just ended, in order (e.g. a Rage that ended with it). */
+  engineLines?: string[];
 }
 
 // ==========================================
@@ -1114,6 +1116,8 @@ export interface DamageResult {
   massiveDamage: boolean;
   /** Damage left over after the target reached 0 HP on this hit; 0 when it did not drop. */
   overflow?: number;
+  /** True when this damage ended a live Rage (the Barbarian fell to 0 HP or unconscious). */
+  rageEnded?: boolean;
   /** The target's hit point maximum when the hit landed (the number `overflow` is judged against). */
   hpMaximum?: number;
   deathSaveFailuresAdded: number;

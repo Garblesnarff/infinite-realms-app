@@ -473,14 +473,24 @@ export class CombatHPService {
     if (result.modifiedDamage > 0 && (await isHiddenAttacker(encounterId, participantId))) {
       await clearHiddenAttacker(encounterId, participantId);
     }
-    // #1654: a character's Rage. Damage taken is activity for the turn (it keeps Rage through the
-    // next turn start), and a fall to 0 HP or unconscious ends Rage at once (2014 SRD 5.1).
+    // #1654: a character's Rage, written after the HP commit. Damage taken (HP or temp HP lost, after
+    // resistance) is activity for the turn: it keeps Rage through the turn end. A fall to 0 HP or
+    // unconscious ends Rage at once (2014 SRD 5.1). A failed write is logged; the damage already landed.
+    let rageEnded = false;
     if (participant.characterId) {
-      if (result.modifiedDamage > 0) {
-        await markRageActive(encounterId, participantId);
+      if (result.modifiedDamage + result.tempHpLost > 0) {
+        try {
+          await markRageActive(encounterId, participantId);
+        } catch (error) {
+          logger.error({ msg: 'RAGE_ACTIVITY_MARK_FAILED', encounterId, participantId, error });
+        }
       }
       if (result.newCurrentHp <= 0 || !result.isConscious) {
-        await clearRage(encounterId, participantId);
+        try {
+          rageEnded = await clearRage(encounterId, participantId);
+        } catch (error) {
+          logger.error({ msg: 'RAGE_CLEAR_ON_FALL_FAILED', encounterId, participantId, error });
+        }
       }
     }
 
@@ -514,7 +524,7 @@ export class CombatHPService {
       }
     }
 
-    return result;
+    return { ...result, rageEnded };
   }
 
   /**

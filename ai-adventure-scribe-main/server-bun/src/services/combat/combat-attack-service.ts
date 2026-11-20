@@ -1159,6 +1159,8 @@ export class CombatAttackService {
           },
         );
         transcriptLines.push(...concentrationLines);
+        // #1654: a blow that drops a raging creature to 0 HP ends its Rage, and the engine says so.
+        if (hpResult.rageEnded) transcriptLines.push(`${targetParticipant.name}'s rage ends.`);
         if (smiteApplied) {
           transcriptLines.push(
             `Divine Smite: ${smiteApplied.diceCount}d8 radiant, ${smiteApplied.damage} damage (level ${input.divineSmiteSlotLevel} slot).`,

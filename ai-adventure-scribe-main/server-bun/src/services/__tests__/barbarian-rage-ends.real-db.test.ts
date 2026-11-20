@@ -2,13 +2,13 @@
  * When Rage ends and what it resists (#1654), against a real Postgres.
  *
  * - Rage ends the moment the Barbarian drops to 0 HP (and so falls unconscious).
- * - Rage ends at the Barbarian's turn start when they neither attacked a hostile creature nor took
- *   damage since their last turn (2014 SRD 5.1). Damage or a hostile attack keeps it one more turn.
+ * - Rage ends at the END of the Barbarian's turn, before the order advances, when they neither attacked a
+ *   hostile creature nor took damage since their last turn (2014 SRD 5.1). The engine says so in one line.
  * - A raging Barbarian resists bludgeoning, piercing and slashing from non-attack damage (hazards).
  *
- * The HP path is the production `CombatHPService.applyDamage`; the turn start is the production
- * `resetTurnResources`. No suite here calls the live DM. Requires TEST_DATABASE_URL or DATABASE_URL --
- * see fixtures/real-db.ts.
+ * The HP path is the production `CombatHPService.applyDamage`; the turn end is the production
+ * `CombatInitiativeService.advanceTurn`. No suite here calls the live DM. Requires TEST_DATABASE_URL or
+ * DATABASE_URL -- see fixtures/real-db.ts.
  */
 import { afterAll, beforeAll, expect, it } from 'bun:test';
 import { eq } from 'drizzle-orm';
@@ -30,25 +30,28 @@ import {
   combatParticipants,
   gameSessions,
 } from '../../../../db/schema/index';
+import { setRngSeed } from '../../lib/rng.js';
 
 const { CombatHPService } = await importWithRealDb(() => import('../combat-hp-service.js'));
-const { claimRage, isRaging } = await importWithRealDb(
-  () => import('../combat/combat-turn-flags.js'),
+const { CombatInitiativeService } = await importWithRealDb(
+  () => import('../combat-initiative-service.js'),
 );
-const { resetTurnResources } = await importWithRealDb(
-  () => import('../combat/combat-turn-resources.js'),
+const { claimRage, clearRage, isRaging } = await importWithRealDb(
+  () => import('../combat/combat-turn-flags.js'),
 );
 const { combatAttackService } = await importWithRealDb(
   () => import('../combat/combat-attack-service.js'),
 );
-const { setRngSeed } = await importWithRealDb(() => import('../../lib/rng.js'));
-
-/** A seed on which the first attack hits an armour class of 1 (only a natural 1 misses). */
-const SEED = 4242;
+const { applyNonAttackDamage } = await importWithRealDb(
+  () => import('../combat/non-attack-damage.js'),
+);
 
 if (!hasRealDb) {
   console.warn('[barbarian-rage-ends] SKIPPED: set TEST_DATABASE_URL to run these.');
 }
+
+/** A seed on which the first attack hits an armour class of 1 (only a natural 1 misses). */
+const SEED = 4242;
 
 describeWithDb('When Rage ends and what it resists (#1654)', () => {
   const db = hasRealDb ? realDb() : (null as never);
@@ -121,7 +124,7 @@ describeWithDb('When Rage ends and what it resists (#1654)', () => {
       isConscious: true,
     });
 
-    // A hostile creature (not a player) for the attack that keeps Rage through a turn start.
+    // A hostile creature (not a player): the attack target, and the next turn in the order.
     [{ id: goblinId }] = await db
       .insert(combatParticipants)
       .values({
@@ -154,7 +157,7 @@ describeWithDb('When Rage ends and what it resists (#1654)', () => {
     await closeRealDb();
   });
 
-  /** Back to round 1, no marks, full hit points. */
+  /** Back to round 1, the Barbarian's turn, no marks, full hit points, a fresh action economy. */
   const resetFight = async (): Promise<void> => {
     await db
       .update(combatEncounters)
@@ -162,18 +165,29 @@ describeWithDb('When Rage ends and what it resists (#1654)', () => {
       .where(eq(combatEncounters.id, encounterId));
     await db.update(gameSessions).set({ sessionState: {} }).where(eq(gameSessions.id, sessionId));
     await db
+      .update(combatParticipants)
+      .set({ actionUsed: false, bonusActionUsed: false })
+      .where(eq(combatParticipants.encounterId, encounterId));
+    await db
       .update(combatParticipantStatus)
-      .set({ currentHp: 30, isConscious: true })
+      .set({ currentHp: 30, isConscious: true, tempHp: 0 })
       .where(eq(combatParticipantStatus.participantId, barbarianId));
     await db
       .update(combatParticipantStatus)
       .set({ currentHp: 500, isConscious: true })
       .where(eq(combatParticipantStatus.participantId, goblinId));
-    await db
-      .update(combatParticipants)
-      .set({ actionUsed: false, bonusActionUsed: false })
-      .where(eq(combatParticipants.encounterId, encounterId));
   };
+
+  /** Points the order back at the Barbarian, so the next advance ends the Barbarian's turn. */
+  const barbarianTurnNow = async (): Promise<void> => {
+    await db
+      .update(combatEncounters)
+      .set({ currentTurnOrder: 0, updatedAt: new Date() })
+      .where(eq(combatEncounters.id, encounterId));
+  };
+
+  /** The Barbarian's turn ends: the order advances (to the goblin), through the production advance. */
+  const endBarbarianTurn = () => CombatInitiativeService!.advanceTurn(encounterId);
 
   const damage = (amount: number, damageType: string) =>
     CombatHPService.applyDamage(
@@ -183,16 +197,101 @@ describeWithDb('When Rage ends and what it resists (#1654)', () => {
       userId,
     );
 
-  it('Rage ends when the Barbarian drops to 0 HP and falls unconscious', async () => {
+  /** One attack on the goblin, with a fixed seed. The Barbarian's turn must be current. */
+  const attackGoblin = async () => {
+    setRngSeed(SEED);
+    await barbarianTurnNow();
+    const [encounter] = await db
+      .select({ version: combatEncounters.version })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    return combatAttackService!.resolveAttack(
+      encounterId,
+      {
+        attackerId: barbarianId,
+        targetId: goblinId,
+        expectedVersion: encounter.version,
+        attackType: 'melee',
+      },
+      userId,
+    );
+  };
+
+  it('a turn that ends with no attack and no damage ends Rage, and the engine says so', async () => {
     await resetFight();
-    expect(await claimRage(encounterId, barbarianId)).not.toBeNull();
+    await claimRage(encounterId, barbarianId);
     expect(await isRaging(encounterId, barbarianId)).toBe(true);
+
+    const turn = await endBarbarianTurn();
+
+    expect(await isRaging(encounterId, barbarianId)).toBe(false);
+    expect(turn.engineLines).toEqual(["The Barbarian's rage ends."]);
+  });
+
+  it('a turn that ends after an attack on a hostile creature keeps Rage; the next idle turn ends it', async () => {
+    await resetFight();
+    await claimRage(encounterId, barbarianId);
+    expect((await attackGoblin()).hit).toBe(true);
+
+    const kept = await endBarbarianTurn();
+    expect(await isRaging(encounterId, barbarianId)).toBe(true);
+    expect(kept.engineLines).toEqual([]);
+
+    await barbarianTurnNow();
+    const ended = await endBarbarianTurn();
+    expect(await isRaging(encounterId, barbarianId)).toBe(false);
+    expect(ended.engineLines).toEqual(["The Barbarian's rage ends."]);
+  });
+
+  it('damage taken during the turn keeps Rage through its end', async () => {
+    await resetFight();
+    await claimRage(encounterId, barbarianId);
+    await damage(3, 'fire');
+
+    const turn = await endBarbarianTurn();
+
+    expect(await isRaging(encounterId, barbarianId)).toBe(true);
+    expect(turn.engineLines).toEqual([]);
+  });
+
+  it('damage absorbed by temporary HP counts as damage taken and keeps Rage', async () => {
+    await resetFight();
+    await db
+      .update(combatParticipantStatus)
+      .set({ tempHp: 5 })
+      .where(eq(combatParticipantStatus.participantId, barbarianId));
+    await claimRage(encounterId, barbarianId);
+    const hit = await damage(3, 'fire');
+    expect(hit.modifiedDamage).toBe(0);
+    expect(hit.tempHpLost).toBe(3);
+
+    await endBarbarianTurn();
+
+    expect(await isRaging(encounterId, barbarianId)).toBe(true);
+  });
+
+  it('a refused turn advance (the turn has moved on) ends no Rage', async () => {
+    await resetFight();
+    await claimRage(encounterId, barbarianId);
+
+    await expect(
+      CombatInitiativeService!.advanceTurn(encounterId, undefined, { round: 9, turnOrder: 9 }),
+    ).rejects.toThrow('The turn has already moved on');
+
+    expect(await isRaging(encounterId, barbarianId)).toBe(true);
+  });
+
+  it('a fall to 0 HP ends Rage at once, and the damage result says so', async () => {
+    await resetFight();
+    await claimRage(encounterId, barbarianId);
 
     // Fire, not slashing: Rage halves the physical types. Two hits of 15, because a player's single
     // hit is capped at half of max HP (hp-mechanics.ts), so one 30-point hit would stop at 15.
-    await damage(15, 'fire');
-    await damage(15, 'fire');
+    const first = await damage(15, 'fire');
+    expect(first.rageEnded).toBe(false);
+    const second = await damage(15, 'fire');
 
+    expect(second.rageEnded).toBe(true);
     const [status] = await db
       .select({
         currentHp: combatParticipantStatus.currentHp,
@@ -205,65 +304,18 @@ describeWithDb('When Rage ends and what it resists (#1654)', () => {
     expect(await isRaging(encounterId, barbarianId)).toBe(false);
   });
 
-  it('damage that leaves the Barbarian standing does not end Rage', async () => {
+  it('a fall by a creature that is not raging ends nothing, and clearing an absent Rage writes nothing', async () => {
     await resetFight();
-    await claimRage(encounterId, barbarianId);
 
-    await damage(5, 'slashing');
+    await damage(15, 'fire');
+    const fall = await damage(15, 'fire');
 
-    expect(await isRaging(encounterId, barbarianId)).toBe(true);
-  });
-
-  it('Rage ends at the Barbarian turn start when there was no attack on a hostile and no damage', async () => {
-    await resetFight();
-    await claimRage(encounterId, barbarianId);
-
-    await resetTurnResources(barbarianId, 2);
-
+    expect(fall.rageEnded).toBe(false);
+    expect(await clearRage(encounterId, barbarianId)).toBe(false);
     expect(await isRaging(encounterId, barbarianId)).toBe(false);
   });
 
-  it('an attack on a hostile creature keeps Rage through one turn start, then the next idle turn ends it', async () => {
-    await resetFight();
-    await claimRage(encounterId, barbarianId);
-    setRngSeed(SEED);
-    const [encounter] = await db
-      .update(combatEncounters)
-      .set({ currentTurnOrder: 0, updatedAt: new Date() })
-      .where(eq(combatEncounters.id, encounterId))
-      .returning({ version: combatEncounters.version });
-    const attack = await combatAttackService!.resolveAttack(
-      encounterId,
-      {
-        attackerId: barbarianId,
-        targetId: goblinId,
-        expectedVersion: encounter.version,
-        attackType: 'melee',
-      },
-      userId,
-    );
-    expect(attack.hit).toBe(true);
-
-    await resetTurnResources(barbarianId, 2);
-    expect(await isRaging(encounterId, barbarianId)).toBe(true);
-
-    await resetTurnResources(barbarianId, 3);
-    expect(await isRaging(encounterId, barbarianId)).toBe(false);
-  });
-
-  it('damage taken in the turn keeps Rage through one turn start, then the next idle turn ends it', async () => {
-    await resetFight();
-    await claimRage(encounterId, barbarianId);
-    await damage(3, 'slashing');
-
-    await resetTurnResources(barbarianId, 2);
-    expect(await isRaging(encounterId, barbarianId)).toBe(true);
-
-    await resetTurnResources(barbarianId, 3);
-    expect(await isRaging(encounterId, barbarianId)).toBe(false);
-  });
-
-  it('a raging Barbarian takes half of bludgeoning, piercing and slashing from a hazard, and all of fire', async () => {
+  it('hazard damage is halved for bludgeoning, piercing and slashing, and fire is not', async () => {
     await resetFight();
     const unraged = await damage(10, 'bludgeoning');
     expect(unraged.modifiedDamage).toBe(10);
@@ -279,5 +331,17 @@ describeWithDb('When Rage ends and what it resists (#1654)', () => {
     await claimRage(encounterId, barbarianId);
     const fire = await damage(10, 'fire');
     expect(fire.modifiedDamage).toBe(10);
+  });
+
+  it('a hazard that drops a raging Barbarian to 0 HP ends Rage, and the player and the DM are told', async () => {
+    await resetFight();
+    await claimRage(encounterId, barbarianId);
+
+    const result = await applyNonAttackDamage(barbarianCharacterId, userId, 30, 'a rockfall', {
+      damageType: 'fire',
+    });
+
+    expect(await isRaging(encounterId, barbarianId)).toBe(false);
+    expect(result.engineLines).toContain("The Barbarian's rage ends.");
   });
 });

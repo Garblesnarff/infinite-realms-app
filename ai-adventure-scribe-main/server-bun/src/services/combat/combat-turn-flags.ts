@@ -291,16 +291,27 @@ export async function isRaging(encounterId: string, participantId: string): Prom
   );
 }
 
-/** Drop one participant's Rage mark: the activation failed after its claim, so nothing was spent. */
-export async function clearRage(encounterId: string, participantId: string): Promise<void> {
+/**
+ * Drop one participant's Rage mark. Writes only when this encounter's entry exists, so a drop to 0 HP
+ * by a creature that is not raging costs no write. Returns true when a live Rage was ended.
+ */
+export async function clearRage(encounterId: string, participantId: string): Promise<boolean> {
   const db = await database();
-  await db
+  const entry = sql`(${gameSessions.sessionState} -> ${RAGE_KEY} -> ${participantId})`;
+  const cleared = await db
     .update(gameSessions)
     .set({
       sessionState: sql`COALESCE(${gameSessions.sessionState}, '{}'::jsonb) #- ARRAY[${RAGE_KEY}, ${participantId}]::text[]`,
       updatedAt: new Date(),
     })
-    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
+    .where(
+      and(
+        eq(gameSessions.id, sessionOfEncounter(encounterId)),
+        sql`(${entry} ->> 'encounterId') = ${encounterId}::text`,
+      ),
+    )
+    .returning({ id: gameSessions.id });
+  return cleared.length > 0;
 }
 
 /**
@@ -326,12 +337,18 @@ export async function markRageActive(encounterId: string, participantId: string)
 }
 
 /**
- * At the start of a raging participant's turn (#1654, 2014 SRD 5.1): Rage ends early when the
- * Barbarian neither attacked a hostile creature nor took damage since their last turn. Either way
- * the activity mark is reset for the turn that starts now. A live Rage for this encounter only.
+ * At the END of a raging participant's turn, before the order advances (#1654, 2014 SRD 5.1): Rage ends
+ * when the Barbarian neither attacked a hostile creature nor took damage since their last turn. A turn
+ * that kept Rage resets the activity mark for the next turn. Returns 'ended', 'kept', or 'none' (no live
+ * Rage for this encounter).
  */
-export async function endRageIfIdle(encounterId: string, participantId: string): Promise<void> {
+export async function endRageIfIdle(
+  encounterId: string,
+  participantId: string,
+): Promise<'ended' | 'kept' | 'none'> {
   const db = await database();
+  const before = flagEntry(await readSessionState(encounterId), RAGE_KEY, participantId);
+  if (before?.encounterId !== encounterId) return 'none';
   const entry = sql`(${gameSessions.sessionState} -> ${RAGE_KEY} -> ${participantId})`;
   await db
     .update(gameSessions)
@@ -347,6 +364,7 @@ export async function endRageIfIdle(encounterId: string, participantId: string):
         sql`(${entry} ->> 'encounterId') = ${encounterId}::text`,
       ),
     );
+  return before.active === true ? 'kept' : 'ended';
 }
 
 /**

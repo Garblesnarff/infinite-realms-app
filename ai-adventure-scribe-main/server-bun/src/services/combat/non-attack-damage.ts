@@ -193,6 +193,8 @@ export async function applyNonAttackDamage(
     overflow: result.overflow,
     hpMax: result.hpMaximum,
   });
+  // #1654: a fall that ended a live Rage is an engine fact the player and the DM both read.
+  if (result.rageEnded) engineLines.push(`${name}'s rage ends.`);
   for (const line of engineLines) await recordDmTacticalFact(live.sessionId, line);
 
   const vitals = await CharacterVitalsService.getVitals(characterId, userId);

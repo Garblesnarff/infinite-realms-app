@@ -35,7 +35,9 @@ import { setRngSeed } from '../../lib/rng.js';
 const { combatAttackService } = await importWithRealDb(
   () => import('../combat/combat-attack-service.js'),
 );
-const { claimRage } = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
+const { claimRage, isRaging } = await importWithRealDb(
+  () => import('../combat/combat-turn-flags.js'),
+);
 
 if (!hasRealDb) {
   console.warn('[barbarian-rage-attack] SKIPPED: set TEST_DATABASE_URL to run these.');
@@ -311,5 +313,20 @@ describeWithDb('Rage on a real attack (#1638)', () => {
         .set({ damageResistances: ['fire'] })
         .where(eq(combatParticipants.id, allyId));
     }
+  });
+
+  it('a blow that drops a raging target to 0 HP ends its Rage, and the transcript says so', async () => {
+    await resetFight();
+    expect(await claimRage(encounterId, allyId)).not.toBeNull();
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 1 })
+      .where(eq(combatParticipantStatus.participantId, allyId));
+
+    const hit = await attackWithSeed(SEED);
+
+    expect(hit.hit).toBe(true);
+    expect(hit.transcriptLines).toContain("The Ally's rage ends.");
+    expect(await isRaging(encounterId, allyId)).toBe(false);
   });
 });
