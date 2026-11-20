@@ -412,4 +412,120 @@ describe('useCharacterData', () => {
 
     await waitFor(() => expect(userDataApi.getCharacter).toHaveBeenCalledTimes(2));
   });
+
+  // #1679 / strategist FIX: the quiet refresh is debounced, drops stale responses, logs (no toast)
+  // on failure, and waits while a text field is being edited.
+  describe('quiet refresh guards (#1679)', () => {
+    const sheetRow = (name: string): any => ({
+      id: mockCharacterId,
+      user_id: mockUserId,
+      name,
+      character_stats: {},
+    });
+    const pause = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+    const deferredValue = <T>(): { promise: Promise<T>; resolve: (value: T) => void } => {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((res) => {
+        resolve = res;
+      });
+      return { promise, resolve };
+    };
+
+    it('a burst of state events is one refetch', async () => {
+      vi.mocked(userDataApi.getCharacter).mockResolvedValue(sheetRow('Test Hero'));
+      const { result } = renderHook(() => useCharacterData(mockCharacterId));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('character-state-updated'));
+        window.dispatchEvent(new CustomEvent('character-state-updated'));
+        window.dispatchEvent(new CustomEvent('character-state-updated'));
+      });
+      await waitFor(() => expect(userDataApi.getCharacter).toHaveBeenCalledTimes(2));
+      await act(async () => {
+        await pause(350);
+      });
+      expect(userDataApi.getCharacter).toHaveBeenCalledTimes(2);
+    });
+
+    it('a response older than the newest refetch does not overwrite it', async () => {
+      const older = deferredValue<any>();
+      const newer = deferredValue<any>();
+      vi.mocked(userDataApi.getCharacter)
+        .mockResolvedValueOnce(sheetRow('Test Hero'))
+        .mockReturnValueOnce(older.promise)
+        .mockReturnValueOnce(newer.promise);
+      const { result } = renderHook(() => useCharacterData(mockCharacterId));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('character-state-updated'));
+        await pause(350);
+      });
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('character-state-updated'));
+        await pause(350);
+      });
+      expect(userDataApi.getCharacter).toHaveBeenCalledTimes(3);
+
+      await act(async () => {
+        newer.resolve(sheetRow('Newer Hero'));
+      });
+      await waitFor(() => expect(result.current.character?.name).toBe('Newer Hero'));
+      await act(async () => {
+        older.resolve(sheetRow('Older Hero'));
+        await pause(10);
+      });
+      expect(result.current.character?.name).toBe('Newer Hero');
+    });
+
+    it('a failed quiet refresh logs and shows no toast, and keeps the sheet', async () => {
+      vi.mocked(userDataApi.getCharacter)
+        .mockResolvedValueOnce(sheetRow('Test Hero'))
+        .mockRejectedValueOnce(new Error('network down'));
+      const { result } = renderHook(() => useCharacterData(mockCharacterId));
+      await waitFor(() => expect(result.current.loading).toBe(false));
+      mockToast.mockClear();
+
+      act(() => {
+        window.dispatchEvent(new CustomEvent('character-state-updated'));
+      });
+      await waitFor(() => expect(userDataApi.getCharacter).toHaveBeenCalledTimes(2));
+      await act(async () => {
+        await pause(10);
+      });
+      expect(mockToast).not.toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Failed to load character data' }),
+      );
+      expect(result.current.character?.name).toBe('Test Hero');
+    });
+
+    it('a refresh waits while a text field is being edited, then runs when focus leaves it', async () => {
+      vi.mocked(userDataApi.getCharacter).mockResolvedValue(sheetRow('Test Hero'));
+      const field = document.createElement('input');
+      const other = document.createElement('button');
+      document.body.append(field, other);
+      try {
+        const { result } = renderHook(() => useCharacterData(mockCharacterId));
+        await waitFor(() => expect(result.current.loading).toBe(false));
+
+        act(() => {
+          field.focus();
+          window.dispatchEvent(new CustomEvent('character-state-updated'));
+        });
+        await act(async () => {
+          await pause(350);
+        });
+        expect(userDataApi.getCharacter).toHaveBeenCalledTimes(1);
+
+        act(() => {
+          other.focus();
+        });
+        await waitFor(() => expect(userDataApi.getCharacter).toHaveBeenCalledTimes(2));
+      } finally {
+        field.remove();
+        other.remove();
+      }
+    });
+  });
 });
