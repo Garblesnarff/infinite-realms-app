@@ -315,6 +315,45 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
     );
   });
 
+  it('the DM row with its roll request is saved before the roll prompt opens (#1678)', async () => {
+    const rollRequest = { type: 'skill', formula: '1d20+3', purpose: 'Perception' };
+    vi.mocked(AIService.chatWithDM).mockImplementation((async (params: any) => {
+      const modelReply = {
+        text: 'You hear a faint scrape behind the door.',
+        combat_transition: 'none',
+        roll_requests: [rollRequest],
+      };
+      await params.onTextReady?.(modelReply);
+      return modelReply;
+    }) as any);
+    vi.mocked(userDataApi.detectDeclaredAttack).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ pending: null }),
+    } as any);
+    const onTextReady = vi.fn(async () => {
+      order.push('DM row saved with roll request');
+    });
+    const { result } = renderHook(() => useAIResponse());
+
+    await result.current.getAIResponse(
+      [{ ...chillTouchMessages[0], text: 'I study the fold.' }] as any,
+      DECLARED_ATTACK_SESSION_ID,
+      undefined,
+      undefined,
+      onTextReady,
+    );
+
+    // The row is written with the roll request on it.
+    expect(onTextReady).toHaveBeenCalledWith(
+      expect.objectContaining({ rollRequests: [expect.objectContaining({ type: 'skill' })] }),
+      expect.anything(),
+    );
+    // The prompt is opened by the handler, which runs only after the row is saved.
+    expect(order.indexOf('DM row saved with roll request')).toBeGreaterThanOrEqual(0);
+    expect(order.indexOf('DM row saved with roll request')).toBeLessThan(order.indexOf('handler'));
+  });
+
   it('sends the last DM message with the check, so "him" can be told from the narration', async () => {
     vi.mocked(userDataApi.detectDeclaredAttack).mockResolvedValue({
       ok: true,
