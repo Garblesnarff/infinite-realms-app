@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -47,6 +48,10 @@ vi.mock('@/hooks/use-character-save', () => ({
 
 vi.mock('@/hooks/use-auto-scroll', () => ({ useAutoScroll: () => ({ scrollToTop: () => {} }) }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: harness.toast }) }));
+
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: { listCharacters: vi.fn(async () => []) },
+}));
 
 vi.mock('@/infrastructure/api', async (importOriginal) => {
   const original = (await importOriginal()) as {
@@ -98,10 +103,14 @@ function namelessRogue(): Character {
 
 function renderAtFinalStep(seed: Character): ReturnType<typeof render> {
   return render(
-    <MemoryRouter initialEntries={['/app/characters/new?step=12']}>
-      <LocationProbe />
-      <StateHarness seed={seed} />
-    </MemoryRouter>,
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter initialEntries={['/app/characters/new?step=12']}>
+        <LocationProbe />
+        <StateHarness seed={seed} />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

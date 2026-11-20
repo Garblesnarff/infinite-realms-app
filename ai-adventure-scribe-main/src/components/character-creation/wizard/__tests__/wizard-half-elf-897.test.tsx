@@ -93,6 +93,7 @@ vi.mock('@/services/user-data-api', () => ({
     createCharacter: vi.fn(),
     updateCharacter: vi.fn(),
     updateCharacterStats: vi.fn(),
+    listCharacters: vi.fn(async () => []),
   },
 }));
 vi.mock('@/utils/spell-id-mapping', () => ({
@@ -127,9 +128,13 @@ function StateHarness(): React.JSX.Element {
 
 function renderWizard(): ReturnType<typeof render> {
   return render(
-    <MemoryRouter initialEntries={['/app/characters/new?step=0']}>
-      <StateHarness />
-    </MemoryRouter>,
+    <QueryClientProvider
+      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+    >
+      <MemoryRouter initialEntries={['/app/characters/new?step=0']}>
+        <StateHarness />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
