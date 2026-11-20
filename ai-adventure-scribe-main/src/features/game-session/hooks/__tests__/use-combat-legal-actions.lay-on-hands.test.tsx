@@ -201,3 +201,169 @@ describe('useCombatLegalActions lay_on_hands (#1618)', () => {
     expect(message.text).toContain('Pool: 10 of 15 HP remaining.');
   });
 });
+
+/**
+ * #1670: the engine's pool number reaches the in-game sheet panel at once, and a heal can carry the
+ * amount the player chose in the More stepper.
+ */
+describe('useCombatLegalActions pool numbers (#1670)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+    movementHolder.remaining.mockResolvedValue(5);
+  });
+
+  const routeFetchFor = (action: Record<string, unknown>, result: unknown) =>
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: unknown) => {
+      const href = String(url);
+      if (href.includes('/legal-actions')) {
+        return { ok: true, json: async () => ({ actorId: 'pc-1', actions: [action] }) } as Response;
+      }
+      if (href.includes('/status')) {
+        return { ok: true, json: async () => ({ encounter: { version: 7 } }) } as Response;
+      }
+      if (href.includes('/intent')) {
+        return { ok: true, json: async () => ({ accepted: true, result }) } as Response;
+      }
+      return { ok: false, status: 404 } as Response;
+    });
+
+  it('a heal publishes the engine pool to the sheet panel with its maximum', async () => {
+    routeFetchFor(
+      { type: 'lay_on_hands', label: 'Lay on Hands', targetId: 'pc-1', amount: 3 },
+      {
+        ok: true,
+        healed: 3,
+        poolRemaining: 12,
+        poolMax: 15,
+        message: 'Pool: 12 of 15 HP remaining.',
+      },
+    );
+    const published: unknown[] = [];
+    const listener = (event: Event) => published.push((event as CustomEvent).detail);
+    window.addEventListener('character-pool-updated', listener);
+    try {
+      const { result } = renderHook(() =>
+        useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+      );
+      await waitFor(() => expect(result.current.actions).toHaveLength(1));
+      await act(async () => {
+        await result.current.runAction({
+          type: 'lay_on_hands',
+          label: 'Lay on Hands',
+          targetId: 'pc-1',
+          amount: 3,
+        } as never);
+      });
+      expect(published).toEqual([{ feature: 'lay_on_hands', currentUses: 12, maxUses: 15 }]);
+    } finally {
+      window.removeEventListener('character-pool-updated', listener);
+    }
+  });
+
+  it('a heal with a chosen amount sends that amount, not the chip default', async () => {
+    const fetchSpy = routeFetchFor(
+      { type: 'lay_on_hands', label: 'Lay on Hands', targetId: 'pc-1', amount: 5, maxAmount: 5 },
+      {
+        ok: true,
+        healed: 3,
+        poolRemaining: 12,
+        poolMax: 15,
+        message: 'Pool: 12 of 15 HP remaining.',
+      },
+    );
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+    );
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+    await act(async () => {
+      await result.current.runAction({
+        type: 'lay_on_hands',
+        label: 'Lay on Hands',
+        targetId: 'pc-1',
+        amount: 3,
+        maxAmount: 5,
+      } as never);
+    });
+    const intentCall = fetchSpy.mock.calls.find(([url]) => String(url).includes('/intent'));
+    const body = JSON.parse(String((intentCall?.[1] as { body?: string }).body ?? '{}'));
+    expect(body.intent).toMatchObject({ type: 'lay_on_hands', targetId: 'pc-1', amount: 3 });
+  });
+
+  it('Second Wind publishes the engine use count', async () => {
+    routeFetchFor(
+      { type: 'second_wind', label: 'Second Wind' },
+      {
+        applied: true,
+        action: 'second_wind',
+        roll: 6,
+        healed: 8,
+        newHp: 15,
+        maxHp: 15,
+        usesRemaining: 0,
+      },
+    );
+    const published: unknown[] = [];
+    const listener = (event: Event) => published.push((event as CustomEvent).detail);
+    window.addEventListener('character-pool-updated', listener);
+    try {
+      const { result } = renderHook(() =>
+        useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+      );
+      await waitFor(() => expect(result.current.actions).toHaveLength(1));
+      await act(async () => {
+        await result.current.runAction({ type: 'second_wind', label: 'Second Wind' } as never);
+      });
+      expect(published).toEqual([{ feature: 'second_wind', currentUses: 0 }]);
+    } finally {
+      window.removeEventListener('character-pool-updated', listener);
+    }
+  });
+
+  // #1679: Action Surge publishes its engine use count, as Second Wind does.
+  it('Action Surge publishes the engine use count', async () => {
+    routeFetchFor(
+      { type: 'action_surge', label: 'Action Surge' },
+      { applied: true, action: 'action_surge', usesRemaining: 0 },
+    );
+    const published: unknown[] = [];
+    const listener = (event: Event): void => {
+      published.push((event as CustomEvent).detail);
+    };
+    window.addEventListener('character-pool-updated', listener);
+    try {
+      const { result } = renderHook(() =>
+        useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+      );
+      await waitFor(() => expect(result.current.actions).toHaveLength(1));
+      await act(async () => {
+        await result.current.runAction({ type: 'action_surge', label: 'Action Surge' } as never);
+      });
+      expect(published).toEqual([{ feature: 'action_surge', currentUses: 0 }]);
+    } finally {
+      window.removeEventListener('character-pool-updated', listener);
+    }
+  });
+
+  // #1679: Rage publishes the engine's remaining rage uses from the rage result, like the others.
+  it('Rage publishes the engine use count from the rage result', async () => {
+    routeFetchFor({ type: 'rage', label: 'Rage' }, { usesRemaining: 2, expiresRound: 4 });
+    const published: unknown[] = [];
+    const listener = (event: Event): void => {
+      published.push((event as CustomEvent).detail);
+    };
+    window.addEventListener('character-pool-updated', listener);
+    try {
+      const { result } = renderHook(() =>
+        useCombatLegalActions({ enabled: true, onSendMessage: vi.fn(), onSendText: vi.fn() }),
+      );
+      await waitFor(() => expect(result.current.actions).toHaveLength(1));
+      await act(async () => {
+        await result.current.runAction({ type: 'rage', label: 'Rage' } as never);
+      });
+      expect(published).toEqual([{ feature: 'rage', currentUses: 2 }]);
+    } finally {
+      window.removeEventListener('character-pool-updated', listener);
+    }
+  });
+});

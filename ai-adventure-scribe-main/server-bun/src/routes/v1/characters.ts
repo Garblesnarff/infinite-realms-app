@@ -998,6 +998,62 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
   )
 
   /**
+   * POST /v1/characters/:id/second-wind
+   *
+   * #1576: Second Wind out of combat, on the sheet. The engine rolls 1d10 plus the fighter level,
+   * spends the tracked use, heals and mirrors the sheet in one transaction (resolveSheetSecondWind),
+   * and returns the numbers the sheet shows. A refusal is a 422 with nothing spent. Like Lay on
+   * Hands, a character in an active fight is refused: the bonus action is spent from the combat
+   * actions there.
+   */
+  .post(
+    '/:id/second-wind',
+    async ({ params, user, set }) => {
+      const { resolveSheetSecondWind } =
+        await import('../../services/combat/fighter-features-service.js');
+      const userId = user!.userId;
+      try {
+        // Ownership first (RLS is off): only a character the caller owns is looked at further.
+        const [owned] = await db
+          .select({ id: characters.id })
+          .from(characters)
+          .where(
+            and(
+              eq(characters.id, params.id),
+              or(eq(characters.userId, userId), eq(characters.ownerId, userId)),
+            ),
+          )
+          .limit(1);
+        if (!owned) throw new NotFoundError('Character', params.id);
+        const [inFight] = await db
+          .select({ encounterId: combatParticipants.encounterId })
+          .from(combatParticipants)
+          .innerJoin(combatEncounters, eq(combatParticipants.encounterId, combatEncounters.id))
+          .where(
+            and(
+              eq(combatParticipants.characterId, owned.id),
+              eq(combatEncounters.status, 'active'),
+            ),
+          )
+          .limit(1);
+        if (inFight) {
+          throw new BusinessLogicError('Use Second Wind from the combat actions', {
+            reason: 'in_combat',
+          });
+        }
+        return await resolveSheetSecondWind({ characterId: params.id, userId });
+      } catch (error) {
+        if (error instanceof BusinessLogicError) {
+          set.status = 422;
+          return { error: error.message, code: 'BUSINESS_LOGIC_ERROR', details: error.details };
+        }
+        throw error;
+      }
+    },
+    { body: t.Object({}) },
+  )
+
+  /**
    * POST /v1/characters/:id/lay-on-hands
    *
    * #1554: Lay on Hands out of combat, on the sheet's resource row. The engine draws the pool

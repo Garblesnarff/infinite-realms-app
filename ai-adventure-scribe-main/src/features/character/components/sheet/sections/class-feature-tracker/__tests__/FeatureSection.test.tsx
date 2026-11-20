@@ -6,6 +6,9 @@ import { FeatureSection } from '../FeatureSection';
 import type { Character } from '@/types/character';
 import type { ClassFeature } from '@/types/combat';
 
+import { InCombatFlagContext } from '@/contexts/in-combat-flag';
+import { SheetHitPointsContext } from '@/contexts/sheet-hit-points';
+
 const paladin = { class: { name: 'Paladin' } } as unknown as Character;
 
 const layOnHands = {
@@ -57,5 +60,52 @@ describe('FeatureSection Lay on Hands row (#1618)', () => {
     const row = screen.getByText('Second Wind').closest('div.border-l-4') as HTMLElement;
     expect(within(row).getByRole('button', { name: /use feature/i })).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /use feature/i })).toHaveLength(1);
+  });
+});
+
+// #1679: Second Wind is refused at full HP and in a fight, so its button is disabled with the
+// reason as its description, as Heal self is (#1658). Hurt out of combat it stays enabled.
+describe('FeatureSection Second Wind refusals (#1679)', () => {
+  it('disables Use Feature at full HP and says why', () => {
+    render(
+      <SheetHitPointsContext.Provider value={{ current: 12, maximum: 12 }}>
+        <FeatureSection character={paladin} classFeatures={[secondWind]} onUseResource={vi.fn()} />
+      </SheetHitPointsContext.Provider>,
+    );
+
+    const button = screen.getByRole('button', { name: /use feature/i });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription('You are already at full health.');
+  });
+
+  it('disables Use Feature in a fight and points to the combat actions', () => {
+    render(
+      <InCombatFlagContext.Provider value={true}>
+        <FeatureSection character={paladin} classFeatures={[secondWind]} onUseResource={vi.fn()} />
+      </InCombatFlagContext.Provider>,
+    );
+
+    const button = screen.getByRole('button', { name: /use feature/i });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleDescription(
+      'In combat, use Second Wind from the combat actions.',
+    );
+  });
+
+  it('leaves Use Feature enabled when the hero is hurt out of combat', () => {
+    const onUseResource = vi.fn();
+    render(
+      <SheetHitPointsContext.Provider value={{ current: 7, maximum: 12 }}>
+        <FeatureSection
+          character={paladin}
+          classFeatures={[secondWind]}
+          onUseResource={onUseResource}
+        />
+      </SheetHitPointsContext.Provider>,
+    );
+
+    const button = screen.getByRole('button', { name: /use feature/i });
+    expect(button).toBeEnabled();
+    expect(button).not.toHaveAccessibleDescription();
   });
 });

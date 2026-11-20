@@ -242,4 +242,14 @@ describeWithDb('POST /v1/characters/:id/lay-on-hands (#1554)', () => {
     expect(await pool()).toBe(5);
     expect(await usageRows()).toBe(0);
   });
+
+  // #1679: an amount above the missing HP is clamped to the missing HP; the pool keeps the rest.
+  it('an amount above the missing HP heals only the missing HP and spends only that (#1679)', async () => {
+    await setHp(9);
+    const response = await post({ amount: 5 });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await hpNow()).toBe(12);
+    expect(await pool()).toBe(2);
+    expect(await usageRows()).toBe(1);
+  });
 });

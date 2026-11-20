@@ -1,29 +1,31 @@
-import { lazy } from 'react';
 import { Navigate, useLocation, useParams, type RouteObject } from 'react-router-dom';
 
 import AppNotFound from './AppNotFound';
+import { lazyPage } from './route-chunk-progress';
 import { withRouteSuspense } from './route-suspense';
 
 import { isCustomCampaignsEnabled } from '@/config/featureFlags';
 import { CAMPAIGN_HUB_TABS } from '@/pages/campaigns/CampaignHubTabsList';
 
 // Lazy load route page components for code splitting
-const Index = lazy(() => import('@/pages/Index'));
-const CharacterSheet = lazy(() => import('@/features/character/components/sheet/character-sheet'));
-const CharacterList = lazy(() => import('@/features/character/components/list/character-list'));
-const CampaignWizard = lazy(
+const Index = lazyPage(() => import('@/pages/Index'));
+const CharacterSheet = lazyPage(
+  () => import('@/features/character/components/sheet/character-sheet'),
+);
+const CharacterList = lazyPage(() => import('@/features/character/components/list/character-list'));
+const CampaignWizard = lazyPage(
   () => import('@/features/campaign/components/creation/campaign-wizard'),
 );
-const GameContentWithErrorBoundary = lazy(
+const GameContentWithErrorBoundary = lazyPage(
   () => import('@/features/game-session/components/game/GameContentWithErrorBoundary'),
 );
-const CharacterCreateEntry = lazy(() => import('@/pages/CharacterCreateEntry'));
-const CampaignHubWithErrorBoundary = lazy(
+const CharacterCreateEntry = lazyPage(() => import('@/pages/CharacterCreateEntry'));
+const CampaignHubWithErrorBoundary = lazyPage(
   () => import('@/pages/campaigns/CampaignHubWithErrorBoundary'),
 );
-const BlogAdmin = lazy(() => import('@/pages/BlogAdmin'));
-const BlogEditor = lazy(() => import('@/pages/BlogEditor'));
-const AccountPage = lazy(() => import('@/pages/AccountPage'));
+const BlogAdmin = lazyPage(() => import('@/pages/BlogAdmin'));
+const BlogEditor = lazyPage(() => import('@/pages/BlogEditor'));
+const AccountPage = lazyPage(() => import('@/pages/AccountPage'));
 
 // TODO [legacy-character-deprecation]: Feature flag for legacy character entry. When disabling legacy character creation, set to false and then remove this flag following docs/cleanup/campaign-character-migration.md
 const ENABLE_LEGACY_CHARACTER_ENTRY = true;

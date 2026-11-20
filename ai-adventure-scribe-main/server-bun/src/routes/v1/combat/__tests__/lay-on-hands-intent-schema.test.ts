@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 
 import {
+  LAY_ON_HANDS_CHOSEN_AMOUNT_INTENT_BODY,
   LAY_ON_HANDS_CURE_INTENT_BODY,
   LAY_ON_HANDS_HEAL_INTENT_BODY,
 } from '../../../../../../shared/test-fixtures/lay-on-hands-intent';
@@ -10,6 +11,11 @@ import { combatIntentRequestValidator } from '../intent-schema.js';
 describe('lay_on_hands intent schema (#1554)', () => {
   it('accepts the heal body the client sends', () => {
     expect(combatIntentRequestValidator.Check(LAY_ON_HANDS_HEAL_INTENT_BODY)).toBe(true);
+  });
+
+  // #1670: a heal the player stepped down from the default is the same shape with another amount.
+  it('accepts the chosen-amount heal body the client sends', () => {
+    expect(combatIntentRequestValidator.Check(LAY_ON_HANDS_CHOSEN_AMOUNT_INTENT_BODY)).toBe(true);
   });
 
   it('accepts the cure body the client sends', () => {

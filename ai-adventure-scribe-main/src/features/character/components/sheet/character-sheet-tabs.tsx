@@ -32,6 +32,8 @@ interface CharacterSheetTabsProps {
   onCharacterUpdate: CharacterSheetUpdateFn;
   // #1402: the equipment request failed; the Equipment tab must not offer a starting package.
   equipmentUnavailable?: boolean;
+  // #1576: reloads the saved character after a server-side Second Wind (no write).
+  onServerStateChanged?: () => Promise<void> | void;
 }
 
 const FOCUSABLE_DESCENDANT =
@@ -97,6 +99,7 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
   character,
   onCharacterUpdate,
   equipmentUnavailable,
+  onServerStateChanged,
 }) => {
   const [activeTab, setActiveTab] = useState('main');
 
@@ -232,7 +235,11 @@ const CharacterSheetTabs: React.FC<CharacterSheetTabsProps> = ({
           </SheetTabsContent>
 
           <SheetTabsContent value="features" className="space-y-4">
-            <FeaturesTab character={character} onUpdate={onCharacterUpdate} />
+            <FeaturesTab
+              character={character}
+              onUpdate={onCharacterUpdate}
+              onServerStateChanged={onServerStateChanged}
+            />
           </SheetTabsContent>
 
           <SheetTabsContent value="notes" className="space-y-4">

@@ -343,6 +343,21 @@ export async function handleDmActionsAndTransitions(
             map_actions: [],
             roll_requests: [],
           };
+        } else if (delivered.kind === 'superseded') {
+          // #1678: a newer entry card replaced this one. That is not a decline, so there is no
+          // "No encounter was seated" notice. The combat machinery is stripped as for a decline,
+          // and the newer card keeps the server's pending entry.
+          narrationSegments = undefined;
+          logger.info('[CombatEntry] entry_superseded: a newer entry card replaced this one');
+          logClearedRollRequests('entry_superseded');
+          result = {
+            ...result,
+            combat_transition: 'none',
+            combat_entry_pending: undefined,
+            combat_actions: [],
+            map_actions: [],
+            roll_requests: [],
+          };
         } else if (delivered.kind === 'already-seated') {
           // The open tab already seated this proposal while generate was still
           // in flight. Refresh the board and do not roll the opening attack twice.

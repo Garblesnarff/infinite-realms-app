@@ -16,12 +16,15 @@ import { parseMessageOptions } from '@/utils/parseMessageOptions';
 
 export type PendingCombatEntry = NonNullable<AIResponse['combat_entry_pending']>;
 
-/** Ask the player whether to strike, naming the declared target when there is one. */
+/**
+ * Ask the player whether to strike, naming the declared target when there is one.
+ * `superseded` (#1678): a newer card replaced this one; it is neither a yes nor a decline.
+ */
 export function confirmCombatEntry(
   pendingEntry: PendingCombatEntry,
   player: { name: string; initiativeModifier: number },
   playerMessage?: string,
-): Promise<boolean> {
+): Promise<boolean | 'superseded'> {
   // The card never names a placeholder: "Strike at Hostile Creature?" told the player nothing
   // (#2532). The server names the creature before it sends the entry; this covers a server that has
   // not restarted under a client that has.
@@ -189,14 +192,14 @@ export async function holdCombatEntryBeforeDm(params: {
   if (check.kind === 'refused') return { decision: 'refused', notice: check.notice };
   if (check.kind === 'choice') return holdForTargetChoice(params, check, player);
 
-  let confirmed: boolean;
+  let confirmed: boolean | 'superseded';
   try {
     confirmed = await confirmCombatEntry(check.pending, player, params.message);
   } catch (error) {
     logger.warn('[CombatEntry] held entry could not be confirmed', error);
     return { pending: check.pending, decision: 'unavailable' };
   }
-  return confirmed
+  return confirmed === true
     ? { pending: check.pending, decision: 'confirmed' }
     : { decision: 'declined', label: declinedAttackLabel(check.pending) };
 }

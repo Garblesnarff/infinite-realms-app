@@ -50,6 +50,7 @@ import { userDataApi } from '@/services/user-data-api';
 import { previewCampaignOverview } from '@/utils/campaign/preview-campaign-overview';
 import { formatStarterCampaignLength } from '@/utils/campaign/starter-campaign-length';
 import { formatStarterLevelRange } from '@/utils/campaign/starter-level-range';
+import { isDistinctSubtitle } from '@/utils/campaign/subtitle';
 
 /** Session key for the hero a signed-out visitor picked before signing in. */
 const PENDING_HERO_KEY = 'ir-pending-starter-hero';
@@ -584,7 +585,10 @@ const CampaignDetailPage: React.FC = () => {
       <div className="max-w-4xl mx-auto px-6 py-8">
         {/* Back link + step hint */}
         <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <Link to="/explore" className="text-sm text-infinite-gold hover:underline">
+          <Link
+            to="/explore"
+            className="inline-flex min-h-11 items-center text-sm text-infinite-gold hover:underline"
+          >
             ← All campaigns
           </Link>
           <p className="text-[13px] text-muted-foreground">
@@ -608,7 +612,8 @@ const CampaignDetailPage: React.FC = () => {
             <h1 className="font-heading text-[34px] max-[700px]:text-[26px] leading-tight text-foreground">
               {campaign.title}
             </h1>
-            {campaign.tagline && (
+            {/* The tagline is a second line only when it says something the title does not (#1672). */}
+            {isDistinctSubtitle(campaign.title, campaign.tagline) && (
               <p className="text-muted-foreground mt-2 line-clamp-3">{campaign.tagline}</p>
             )}
             <p className="text-sm text-muted-foreground mt-3">
@@ -771,7 +776,10 @@ const CampaignDetailPage: React.FC = () => {
       <div className="border-t border-white/10 py-8">
         <div className="max-w-4xl mx-auto px-6 text-center text-muted-foreground text-sm">
           <p>
-            <Link to="/" className="hover:text-infinite-gold transition-colors">
+            <Link
+              to="/"
+              className="inline-flex min-h-11 items-center hover:text-infinite-gold transition-colors"
+            >
               Infinite Realms
             </Link>{' '}
             - Where Every Choice Shapes Destiny

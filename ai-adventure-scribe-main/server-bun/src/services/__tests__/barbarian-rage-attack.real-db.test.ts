@@ -8,7 +8,7 @@
  * calls the live DM. Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
 import { afterAll, beforeAll, expect, it } from 'bun:test';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import {
   closeRealDb,
@@ -23,8 +23,10 @@ import {
   characterStats,
   characters,
   combatEncounters,
+  combatParticipantConditions,
   combatParticipantStatus,
   combatParticipants,
+  conditionsLibrary,
   gameSessions,
   inventoryItems,
 } from '../../../../db/schema/index';
@@ -33,7 +35,9 @@ import { setRngSeed } from '../../lib/rng.js';
 const { combatAttackService } = await importWithRealDb(
   () => import('../combat/combat-attack-service.js'),
 );
-const { claimRage } = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
+const { claimRage, isRaging } = await importWithRealDb(
+  () => import('../combat/combat-turn-flags.js'),
+);
 
 if (!hasRealDb) {
   console.warn('[barbarian-rage-attack] SKIPPED: set TEST_DATABASE_URL to run these.');
@@ -241,5 +245,88 @@ describeWithDb('Rage on a real attack (#1638)', () => {
       .from(combatParticipants)
       .where(eq(combatParticipants.id, allyId));
     expect(ally.resistances).toEqual(['fire']);
+  });
+
+  /** Gives the ally the Paralyzed condition: a melee hit within 5 ft is then a critical (2014 SRD 5.1). */
+  const paralyseAlly = async (): Promise<void> => {
+    await db
+      .insert(conditionsLibrary)
+      .values({ name: 'Paralyzed', description: 'Paralyzed', mechanicalEffects: '{}' })
+      .onConflictDoNothing();
+    const [condition] = await db
+      .select({ id: conditionsLibrary.id })
+      .from(conditionsLibrary)
+      .where(sql`lower(${conditionsLibrary.name}) = 'paralyzed'`)
+      .limit(1);
+    await db.insert(combatParticipantConditions).values({
+      participantId: allyId,
+      conditionId: condition.id,
+      durationType: 'permanent',
+      appliedAtRound: 1,
+      isActive: true,
+    });
+  };
+
+  it('Rage on a critical hit: the weapon dice double and the +2 is added once, not doubled', async () => {
+    await paralyseAlly();
+    try {
+      await resetFight();
+      const plain = await attackWithSeed(SEED);
+      expect(plain.hit).toBe(true);
+      expect(plain.autoCritReason).toBe('paralyzed');
+
+      await resetFight();
+      expect(await claimRage(encounterId, barbarianId)).not.toBeNull();
+      const raging = await attackWithSeed(SEED);
+      expect(raging.hit).toBe(true);
+      expect(raging.autoCritReason).toBe('paralyzed');
+
+      expect(raging.finalDamage).toBe(plain.finalDamage + 2);
+      const parts = (raging as { damageParts?: Array<Record<string, unknown>> }).damageParts!;
+      expect(parts.find((part) => part.source === 'Rage')).toMatchObject({ amount: 2 });
+    } finally {
+      await db
+        .delete(combatParticipantConditions)
+        .where(eq(combatParticipantConditions.participantId, allyId));
+    }
+  });
+
+  it('a raging target whose racial resistance is the attack type takes half, once, not a quarter', async () => {
+    await resetFight();
+    const unresisted = await attackWithSeed(SEED);
+    expect(unresisted.hit).toBe(true);
+
+    await db
+      .update(combatParticipants)
+      .set({ damageResistances: ['slashing'] })
+      .where(eq(combatParticipants.id, allyId));
+    try {
+      await resetFight();
+      expect(await claimRage(encounterId, allyId)).not.toBeNull();
+      const halved = await attackWithSeed(SEED);
+      expect(halved.hit).toBe(true);
+
+      expect(halved.finalDamage).toBe(Math.floor(unresisted.finalDamage / 2));
+    } finally {
+      await db
+        .update(combatParticipants)
+        .set({ damageResistances: ['fire'] })
+        .where(eq(combatParticipants.id, allyId));
+    }
+  });
+
+  it('a blow that drops a raging target to 0 HP ends its Rage, and the transcript says so', async () => {
+    await resetFight();
+    expect(await claimRage(encounterId, allyId)).not.toBeNull();
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 1 })
+      .where(eq(combatParticipantStatus.participantId, allyId));
+
+    const hit = await attackWithSeed(SEED);
+
+    expect(hit.hit).toBe(true);
+    expect(hit.transcriptLines).toContain("The Ally's rage ends.");
+    expect(await isRaging(encounterId, allyId)).toBe(false);
   });
 });

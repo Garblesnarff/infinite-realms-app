@@ -53,7 +53,7 @@ describe('MessageListContainer combat entry hit testing', () => {
   });
 
   it('keeps the Start the fight hit target above the composer and dice popup anchor', async () => {
-    let confirmationPromise: Promise<boolean> | undefined;
+    let confirmationPromise: Promise<boolean | 'superseded'> | undefined;
 
     render(
       <div>

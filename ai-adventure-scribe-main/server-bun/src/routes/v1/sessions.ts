@@ -22,7 +22,7 @@ import { NotFoundError } from '../../lib/errors.js';
 import { requireAuth } from '../../middleware/auth.js';
 import { planRateLimit } from '../../middleware/rate-limit.js';
 import { loadStoredStoryTrackers } from '../../services/dm/story-tracker.js';
-import { SessionService } from '../../services/session-service.js';
+import { SessionService, type ResumeRefusal } from '../../services/session-service.js';
 import { getOwnershipCondition } from '../../services/session/session-authorization.js';
 import { db } from '../../../../db/client';
 import { combatEncounters, gameSessions, sessionChronicles } from '../../../../db/schema/index';
@@ -149,6 +149,20 @@ const completeSessionSchema = t.Object({
   summary: t.Optional(t.String({ maxLength: 100_000 })),
 });
 
+const resumableSessionsQuery = t.Object({
+  campaign_id: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+  character_id: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+});
+
+/** #1669: the words the client shows for each refusal of Resume session (409). */
+const RESUME_REFUSAL_MESSAGES: Record<ResumeRefusal, string> = {
+  not_completed: 'Only an ended session can be resumed.',
+  not_resumable: 'This session is missing its campaign or character and cannot be resumed.',
+  fallen: 'This hero has fallen. Start a new session instead.',
+  one_shot: 'This adventure is a one-shot and has no more sessions to resume.',
+  already_active: 'This hero already has an active session in this adventure.',
+};
+
 export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
   .use(requireAuth)
   .resolve({ as: 'scoped' }, async ({ user, params }) => {
@@ -225,6 +239,23 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
         SessionService.listSessions,
       ),
     { query: listSessionsQuery },
+  )
+
+  /**
+   * GET /v1/sessions/resumable
+   * #1669: the completed sessions this user can resume, optionally for one campaign.
+   */
+  .get(
+    '/resumable',
+    async ({ query, user }) => {
+      const rows = await SessionService.listResumableSessions(
+        (user as { userId: string }).userId,
+        query.campaign_id,
+        query.character_id,
+      );
+      return rows.map(mapSessionToApi);
+    },
+    { query: resumableSessionsQuery },
   )
 
   /**
@@ -319,6 +350,37 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       }
     },
     { params: sessionIdParams, body: updateSessionSchema },
+  )
+
+  /**
+   * POST /v1/sessions/:id/resume
+   * #1669: Resume session. The ended session becomes active again with its messages and trackers.
+   * The ownership guard above 404s sessions the user does not own; refusals answer 409.
+   */
+  .post(
+    '/:id/resume',
+    async ({ params, set, user }) => {
+      try {
+        const result = await SessionService.resumeSession(
+          params.id,
+          (user as { userId: string }).userId,
+        );
+        if (!result.ok) {
+          set.status = 409;
+          return { error: RESUME_REFUSAL_MESSAGES[result.reason], reason: result.reason };
+        }
+        return mapSessionToApi(result.session);
+      } catch (error) {
+        if (error instanceof NotFoundError) {
+          set.status = 404;
+          return { error: 'Not found' };
+        }
+        logger.error({ msg: 'SESSION_RESUME error', sessionId: params.id, error });
+        set.status = 500;
+        return { error: 'Failed to resume session' };
+      }
+    },
+    { params: sessionIdParams },
   )
 
   /**

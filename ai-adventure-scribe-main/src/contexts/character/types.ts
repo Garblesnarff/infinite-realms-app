@@ -19,6 +19,14 @@ export interface CharacterState {
 export type CharacterAction =
   | { type: 'SET_CHARACTER'; payload: Character }
   | { type: 'UPDATE_CHARACTER'; payload: Partial<Character> }
+  /**
+   * #1670: the engine's remaining uses for a limited-feature pool, from an intent result. Not a user
+   * edit: it does not mark the character dirty, so the next sheet save cannot write it back stale.
+   */
+  | {
+      type: 'SET_TRACKED_USES';
+      payload: { feature: string; currentUses: number; maxUses?: number };
+    }
   | { type: 'SET_GENDER'; payload: 'male' | 'female' }
   | { type: 'SET_AGE'; payload: number }
   | { type: 'SET_HEIGHT'; payload: number }

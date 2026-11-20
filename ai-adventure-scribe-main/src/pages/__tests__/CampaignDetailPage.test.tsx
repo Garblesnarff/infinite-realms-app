@@ -956,4 +956,35 @@ describe('CampaignDetailPage document title (#1605)', () => {
       expect(document.title).toBe('The Eternal Feast | Infinite Realms');
     });
   });
+
+  describe('CampaignDetailPage public layout (#1664, #1679)', () => {
+    it('shows the tagline as a second line only when it differs from the title', () => {
+      state.campaign = campaign({ title: 'The Eternal Feast', tagline: 'The Eternal Feast' });
+      const { container } = renderPage();
+
+      expect(screen.getByRole('heading', { name: 'The Eternal Feast' })).toBeInTheDocument();
+      expect(container.querySelector('p.line-clamp-3')).toBeNull();
+    });
+
+    it('keeps a tagline that says something the title does not', () => {
+      state.campaign = campaign({
+        title: 'The Eternal Feast',
+        tagline: 'A feast that never ends.',
+      });
+      const { container } = renderPage();
+
+      expect(container.querySelector('p.line-clamp-3')).toHaveTextContent(
+        'A feast that never ends.',
+      );
+    });
+
+    it('gives the back link and the footer link 44 px tap targets', () => {
+      state.campaign = campaign({});
+      renderPage();
+
+      expect(screen.getByText('← All campaigns')).toHaveClass('min-h-11');
+      const footerText = screen.getByText(/Where Every Choice Shapes Destiny/);
+      expect(footerText.querySelector('a')).toHaveClass('min-h-11');
+    });
+  });
 });

@@ -274,6 +274,15 @@ export const useMessageHandlerLogic = ({
   const [retryInFlight, setRetryInFlight] = React.useState(false);
   const handleSendMessage = React.useCallback(
     (input: string, context?: MessageSendContext): Promise<void> => {
+      const saved = [...messagesRef.current]
+        .reverse()
+        .find((message) => message.sender === 'player');
+      // #1668: a roll answer is not an answer to the fight card. The save roll and the card
+      // can be up together; only typed words (or the card's own buttons) answer the card.
+      // The roll stays queued behind the parked turn until the card is answered.
+      const answersRoll =
+        context?.intent === 'dice_roll' ||
+        (context?.intent === 'resume_unanswered' && saved?.context?.intent === 'dice_roll');
       // #400: typing (or a sheet pick) while the entry card is up answers the card — dismiss
       // it first so the suspended turn can finish. Without the settle, the queued send would
       // wait forever on a turn parked at the confirmation. The message then runs as a new
@@ -281,13 +290,10 @@ export const useMessageHandlerLogic = ({
       // The typed answer also arms the skip for the next hold, so the new turn is not
       // re-prompted with another card. The input text is stored so a send that never
       // becomes a turn cannot leak the skip to an unrelated later message.
-      if (hasPendingCombatEntryConfirmation()) {
+      if (!answersRoll && hasPendingCombatEntryConfirmation()) {
         settlePendingCombatEntryConfirmation(false);
         markCombatEntryTypedAnswer(input);
       }
-      const saved = [...messagesRef.current]
-        .reverse()
-        .find((message) => message.sender === 'player');
       const rollRequestId =
         context?.intent === 'dice_roll'
           ? context.rollRequestId

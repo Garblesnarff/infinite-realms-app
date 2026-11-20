@@ -130,8 +130,14 @@ const CharacterSheet: React.FC = () => {
   // #2701: sheet edits save through persistCharacterUpdate (write, then a
   // silent refresh that keeps the tabs mounted). refetch stays for callers
   // that need a full reload with the skeleton.
-  const { character, unresolvedData, equipmentUnavailable, loading, persistCharacterUpdate } =
-    useCharacterData(id);
+  const {
+    character,
+    unresolvedData,
+    equipmentUnavailable,
+    loading,
+    persistCharacterUpdate,
+    refetch,
+  } = useCharacterData(id);
 
   // Show loading state while fetching data
   if (loading) {
@@ -182,6 +188,7 @@ const CharacterSheet: React.FC = () => {
             character={character}
             onCharacterUpdate={persistCharacterUpdate}
             equipmentUnavailable={equipmentUnavailable}
+            onServerStateChanged={() => refetch({ silent: true })}
           />
         </SheetHitPointsContext.Provider>
       </IRPanel>

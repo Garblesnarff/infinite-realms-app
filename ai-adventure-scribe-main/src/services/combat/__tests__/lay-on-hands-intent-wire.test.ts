@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  LAY_ON_HANDS_CHOSEN_AMOUNT_INTENT_BODY,
   LAY_ON_HANDS_CURE_INTENT_BODY,
   LAY_ON_HANDS_HEAL_INTENT_BODY,
   LAY_ON_HANDS_SHEET_CURE_BODY,
@@ -86,5 +87,28 @@ describe('Lay on Hands wire (#1554)', () => {
     await userDataApi.layOnHands('char-1', LAY_ON_HANDS_SHEET_CURE_BODY);
     const [, init] = fetchSpy.mock.calls.at(-1) as [string, RequestInit];
     expect(JSON.parse(init.body as string)).toEqual(LAY_ON_HANDS_SHEET_CURE_BODY);
+  });
+});
+
+describe('Lay on Hands wire with a chosen amount (#1670)', () => {
+  it('a heal the player stepped to 3 sends the exact shared intent body', async () => {
+    fetchSpy.mockResolvedValue(okResponse({ encounter: { version: 7 } }));
+    const { intent } = LAY_ON_HANDS_CHOSEN_AMOUNT_INTENT_BODY;
+    await executeAuthoritativeCombatIntent(
+      'enc-1',
+      {
+        type: 'lay_on_hands',
+        actorId: intent.actorId,
+        targetId: intent.targetId,
+        amount: intent.amount,
+        expectedVersion: intent.expectedVersion,
+      },
+      'player',
+      undefined,
+      'action_bar',
+    );
+    const [url, init] = fetchSpy.mock.calls.at(-1) as [string, RequestInit];
+    expect(url).toContain('/v1/combat/enc-1/intent');
+    expect(JSON.parse(init.body as string)).toEqual(LAY_ON_HANDS_CHOSEN_AMOUNT_INTENT_BODY);
   });
 });

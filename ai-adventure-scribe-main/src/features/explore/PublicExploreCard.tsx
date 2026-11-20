@@ -49,6 +49,14 @@ export const metaLineFor = (
   return [level ? `Level ${level}` : null, sessionsLabel].filter(Boolean).join(' · ');
 };
 
+/** Genre pills shown on the card. The rest are counted ("+1") so the tags stay on one row. */
+export const VISIBLE_GENRE_PILLS = 2;
+
+export const genrePillsFor = (genres: string[]): { shown: string[]; hidden: number } => ({
+  shown: genres.slice(0, VISIBLE_GENRE_PILLS),
+  hidden: Math.max(0, genres.length - VISIBLE_GENRE_PILLS),
+});
+
 export const PublicExploreCard: React.FC<{
   campaign: StarterCampaign;
   isFirst?: boolean;
@@ -58,6 +66,7 @@ export const PublicExploreCard: React.FC<{
   const hard = difficultyLabel === 'Hard' || difficultyLabel === 'Deadly';
   const difficultyColour = hard ? PUBLIC_EXPLORE_COLOURS.hard : PUBLIC_EXPLORE_COLOURS.medium;
   const meta = metaLineFor(campaign);
+  const genres = genrePillsFor(campaign.genre);
 
   return (
     <article className="flex min-w-0 flex-col">
@@ -92,15 +101,20 @@ export const PublicExploreCard: React.FC<{
           }}
         />
 
-        <div className="absolute left-4 top-4 flex max-w-[calc(100%-8rem)] flex-wrap gap-1.5 overflow-hidden">
-          {campaign.genre.map((genre) => (
+        <div className="absolute left-4 top-4 flex max-w-[calc(100%-8rem)] flex-nowrap items-center gap-1.5 overflow-hidden">
+          {genres.shown.map((genre) => (
             <span
               key={genre}
-              className="rounded-full border border-[rgba(234,238,250,0.4)] bg-[#070b14] px-2.5 py-1 text-xs font-bold uppercase tracking-[0.06em] text-[#eaeefa]"
+              className="shrink-0 rounded-full border border-[rgba(234,238,250,0.4)] bg-[#070b14] px-2.5 py-1 text-xs font-bold uppercase tracking-[0.06em] text-[#eaeefa]"
             >
               {genre}
             </span>
           ))}
+          {genres.hidden > 0 && (
+            <span className="shrink-0 rounded-full border border-[rgba(234,238,250,0.4)] bg-[#070b14] px-2.5 py-1 text-xs font-bold tracking-[0.06em] text-[#eaeefa]">
+              +{genres.hidden}
+            </span>
+          )}
         </div>
         <span
           className="absolute right-4 top-4 rounded-full bg-[#070b14] px-2.5 py-1 text-xs font-bold uppercase tracking-[0.06em]"

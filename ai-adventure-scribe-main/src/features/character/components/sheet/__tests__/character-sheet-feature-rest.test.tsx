@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+import { SECOND_WIND_SHEET_BODY } from '../../../../../../shared/test-fixtures/second-wind-sheet';
 import CharacterSheet from '../character-sheet';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -79,6 +80,13 @@ const putBodies: Array<Record<string, unknown>> = [];
 const statsBodies: Array<Record<string, unknown>> = [];
 const healBodies: Array<Record<string, unknown>> = [];
 const restBodies: Array<{ restType: 'short' | 'long'; body: unknown }> = [];
+// #1576: Second Wind is one server call. The stub plays the server: it rolls with `secondWindRoll`,
+// spends the use, heals capped at max HP, and records the response the sheet must show.
+const secondWindBodies: Array<Record<string, unknown>> = [];
+const secondWindResponses: Array<Record<string, number>> = [];
+const secondWindRoll = { value: 4 };
+// When on, the stub refuses Second Wind with the route's 422 body (a refusal the server explained).
+const secondWindRefusal = { on: false };
 
 const json = (data: unknown, status = 200): Response =>
   new Response(JSON.stringify(data), {
@@ -136,6 +144,10 @@ describe('CharacterSheet feature use and rests (#224)', () => {
     statsBodies.length = 0;
     healBodies.length = 0;
     restBodies.length = 0;
+    secondWindBodies.length = 0;
+    secondWindResponses.length = 0;
+    secondWindRoll.value = 4;
+    secondWindRefusal.on = false;
     resetRow();
     markAuthReady();
     vi.stubGlobal(
@@ -179,6 +191,55 @@ describe('CharacterSheet feature use and rests (#224)', () => {
           }
           return json({ ...serverRow });
         }
+        if (url === `${API}/v1/characters/${CID}/second-wind` && method === 'POST') {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+          secondWindBodies.push(body);
+          if (secondWindRefusal.on) {
+            return json(
+              {
+                error: 'Second Wind has no uses remaining — it refreshes on a short rest',
+                code: 'BUSINESS_LOGIC_ERROR',
+                details: { reason: 'feature_uses_exhausted' },
+              },
+              422,
+            );
+          }
+          const features = { ...(serverRow.class_features ?? {}) };
+          const feature = features.second_wind ?? {
+            name: 'second_wind',
+            currentUses: 1,
+            maxUses: 1,
+            usesPerRest: 'short' as const,
+          };
+          if (feature.currentUses <= 0) {
+            return json(
+              {
+                error: 'Second Wind has no uses remaining',
+                code: 'BUSINESS_LOGIC_ERROR',
+                details: { reason: 'feature_uses_exhausted' },
+              },
+              422,
+            );
+          }
+          const before = serverRow.stats.current_hit_points;
+          const healed = Math.min(
+            secondWindRoll.value + 1,
+            serverRow.stats.max_hit_points - before,
+          );
+          serverRow.stats.current_hit_points = before + healed;
+          features.second_wind = { ...feature, currentUses: feature.currentUses - 1 };
+          serverRow.class_features = features;
+          const result = {
+            roll: secondWindRoll.value,
+            fighterLevel: 1,
+            healed,
+            newHp: serverRow.stats.current_hit_points,
+            maxHp: serverRow.stats.max_hit_points,
+            usesRemaining: features.second_wind.currentUses,
+          };
+          secondWindResponses.push(result);
+          return json(result);
+        }
         const shortUrl = `${API}/v1/rest/characters/${CID}/short`;
         const longUrl = `${API}/v1/rest/characters/${CID}/long`;
         if ((url === shortUrl || url === longUrl) && method === 'POST') {
@@ -216,22 +277,26 @@ describe('CharacterSheet feature use and rests (#224)', () => {
     expect(screen.getAllByText('1 / 1').length).toBeGreaterThan(0);
     await user.click(screen.getByRole('button', { name: /use feature/i }));
 
+    // #1576: one server call with the shared wire body. The sheet no longer saves the use itself:
+    // no heal write and no class-features PUT.
     await waitFor(() => {
-      expect(putBodies.some((body) => body.class_features)).toBe(true);
+      expect(secondWindBodies).toHaveLength(1);
     });
-    const saved = putBodies.find((body) => body.class_features)!.class_features as Record<
-      string,
-      FeatureUse
-    >;
-    expect(saved.second_wind.currentUses).toBe(0);
-    expect(saved.second_wind.maxUses).toBe(1);
-    expect(saved.second_wind.usesPerRest).toBe('short');
+    expect(secondWindBodies[0]).toEqual(SECOND_WIND_SHEET_BODY);
+    expect(healBodies).toHaveLength(0);
+    expect(putBodies.some((body) => body.class_features)).toBe(false);
+    expect(secondWindResponses[0].usesRemaining).toBe(0);
 
     await waitFor(() => {
       expect(screen.getAllByText('0 / 1').length).toBeGreaterThan(0);
     });
     expect(screen.queryByRole('button', { name: /use feature/i })).not.toBeInTheDocument();
-    expect(mockToast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Feature used' }));
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Feature used',
+        description: expect.stringContaining('second wind: 0 / 1'),
+      }),
+    );
     expect(featuresTab().getAttribute('data-state')).toBe('active');
 
     view.unmount();
@@ -309,8 +374,10 @@ describe('CharacterSheet feature use and rests (#224)', () => {
   });
 
   it('Second Wind heals 1d10 + level and never above max HP', async () => {
-    const random = vi.spyOn(Math, 'random');
-    random.mockReturnValue(0);
+    // #1576: the server rolls 1d10 + level and caps at max HP. That range and the cap are proven
+    // by the real-route suite (fighter-second-wind-route.real-db.test.ts). This case proves the
+    // sheet sends the one fixture, makes no heal write, and shows exactly the server's numbers.
+    secondWindRoll.value = 1;
     const view = renderSheet();
     const user = userEvent.setup();
     await screen.findByText('5/10');
@@ -320,17 +387,23 @@ describe('CharacterSheet feature use and rests (#224)', () => {
     await waitFor(() => {
       expect(screen.getByText('7/10')).toBeInTheDocument();
     });
-    const healed = healBodies[0]?.amount as number;
-    const level = 1;
-    expect(healed).toBeGreaterThanOrEqual(1 + level);
-    expect(healed).toBeLessThanOrEqual(10 + level);
-    expect(healBodies[0]).toEqual({ amount: 2 });
+    expect(secondWindBodies).toEqual([SECOND_WIND_SHEET_BODY]);
+    expect(healBodies).toHaveLength(0);
+    expect(secondWindResponses[0]).toMatchObject({ healed: 2, newHp: 7, maxHp: 10 });
+    expect(mockToast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining('Healed 2 HP (now 7 of 10)'),
+      }),
+    );
     view.unmount();
 
-    random.mockReturnValue(0.999);
+    // The server caps at max HP: 9 of 10 with a roll of 10 (+ level 1) heals 1, and the sheet
+    // shows 10/10 with no overflow.
+    secondWindRoll.value = 10;
     resetRow();
     serverRow.stats.current_hit_points = 9;
-    statsBodies.length = 0;
+    secondWindBodies.length = 0;
+    secondWindResponses.length = 0;
     healBodies.length = 0;
     renderSheet();
     await screen.findByText('9/10');
@@ -339,10 +412,36 @@ describe('CharacterSheet feature use and rests (#224)', () => {
     await waitFor(() => {
       expect(screen.getByText('10/10')).toBeInTheDocument();
     });
-    // 1d10 -> 10 + level 1 = 11 sent; the server clamps 9 + 11 to max 10.
-    expect(healBodies[0]?.amount).toBe(11);
+    expect(secondWindResponses[0]).toMatchObject({ healed: 1, newHp: 10, maxHp: 10 });
+    expect(secondWindBodies).toEqual([SECOND_WIND_SHEET_BODY]);
+    expect(healBodies).toHaveLength(0);
     expect(screen.queryByText('20/10')).not.toBeInTheDocument();
-    random.mockRestore();
+  });
+
+  it('a refused Second Wind toasts the server reason, with no HTTP status number', async () => {
+    secondWindRefusal.on = true;
+    renderSheet();
+    const user = userEvent.setup();
+    await openFeatures();
+    await user.click(screen.getByRole('button', { name: /use feature/i }));
+
+    await waitFor(() => {
+      expect(secondWindBodies).toHaveLength(1);
+    });
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Second Wind', variant: 'destructive' }),
+      );
+    });
+    const refusal = mockToast.mock.calls.find(
+      ([call]) => (call as { variant?: string }).variant === 'destructive',
+    )![0] as { description: string };
+    expect(refusal.description).toBe(
+      'Second Wind has no uses remaining — it refreshes on a short rest',
+    );
+    expect(refusal.description).not.toContain('422');
+    // A refusal spends nothing and heals nothing: the sheet is not reloaded for it.
+    expect(healBodies).toHaveLength(0);
   });
 
   it('#214: the Main tab vitals also offer Short Rest and Long Rest', async () => {
