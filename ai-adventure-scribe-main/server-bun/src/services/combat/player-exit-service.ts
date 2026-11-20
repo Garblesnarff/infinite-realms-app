@@ -116,14 +116,15 @@ export async function selectOpportunityAttackers(params: {
   for (const candidate of state.participants) {
     if (candidate.id === actor.id) continue;
     const moverHostile = isLiveHostile(actor as unknown as Parameters<typeof isLiveHostile>[0]);
+    const target = candidate as unknown as ExitParticipant;
     const candidateHostile = isLiveHostile(
       candidate as unknown as Parameters<typeof isLiveHostile>[0],
     );
     if (
       moverHostile === candidateHostile ||
       !candidate.isActive ||
-      (candidate.status?.currentHp ?? candidate.maxHp ?? 0) <= 0 ||
-      candidate.status?.isConscious === false
+      (target.status?.currentHp ?? target.maxHp ?? 0) <= 0 ||
+      target.status?.isConscious === false
     )
       continue;
     if ((candidate as unknown as ExitParticipant).reactionUsed) continue;
@@ -286,7 +287,7 @@ export async function recordPlayerExit(params: {
     intent === 'flee'
       ? await resolveMovementReactions({
           ...params,
-          attackers: await params.selectAttackers(actor),
+          actor,
         })
       : { opportunityAttack: null, playerDowned: false };
 

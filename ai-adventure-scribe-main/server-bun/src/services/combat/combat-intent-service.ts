@@ -16,11 +16,6 @@ import { trackCombatEvent } from './combat-events.js';
 import { resolveCombatIntentRefsWithRetry } from './combat-intent-refs.js';
 import { assertActorTurn } from './combat-intent-turn.js';
 import { resolveUseItem, type ResolveUseItemResult } from './combat-item-service.js';
-import { resolveWeaponName } from '../../../../shared/equipment-weapon-resolver';
-import { slotOrdinal } from '../../../../shared/slot-ordinal';
-import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
-import { logger } from '../../lib/logger.js';
-import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { dispatchMapAction } from '../../tactical/dispatch.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
@@ -95,6 +90,7 @@ import {
   playerFacingWeaponName,
   type EngineRosterEntry,
 } from '../../../../shared/engine-display-name';
+import { resolveWeaponName } from '../../../../shared/equipment-weapon-resolver';
 import {
   divineSmiteDice,
   FLEXIBLE_CASTING_CREATE_COSTS,
@@ -105,9 +101,13 @@ import {
   playerTextDeclares,
   playerTextDeclaresLeaving,
 } from '../../../../shared/player-exit-wording';
+import { slotOrdinal } from '../../../../shared/slot-ordinal';
+import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
 import { isPlayerCombatSpell, resolveCatalogSpell, twinnedAllowed } from '../../data/spellData.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
+import { logger } from '../../lib/logger.js';
 import { planApproach } from '../../tactical/approach.js';
+import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { entitySlug, resolveEntityRef, slugify } from '../../tactical/identity.js';
 import { classLevelOf } from '../progression/limited-feature-uses.js';
 import { paladinLevelOf } from '../progression/paladin-features-service.js';
