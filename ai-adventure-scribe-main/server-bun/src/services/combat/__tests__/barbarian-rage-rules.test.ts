@@ -71,7 +71,11 @@ describe('Rage damage (+2 on a melee Strength weapon attack)', () => {
     expect(rageDamageBonusAt(0)).toBe(0);
     expect(rageDamageBonusAt(1)).toBe(2);
     expect(rageDamageBonusAt(8)).toBe(2);
-    expect(rageDamageBonusAt(9)).toBe(0);
+    // Was 0 while the +3 and +4 tiers were out of scope (#1654 item 5). The SRD value is +3 at 9th.
+    expect(rageDamageBonusAt(9)).toBe(3);
+    expect(rageDamageBonusAt(15)).toBe(3);
+    expect(rageDamageBonusAt(16)).toBe(4);
+    expect(rageDamageBonusAt(20)).toBe(4);
   });
 });
 

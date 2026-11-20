@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useId, useState } from 'react';
+
+import { refusalToastText } from './refusal-toast-text';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,19 +17,6 @@ interface LayOnHandsControlProps {
 }
 
 /**
- * #1643: a refusal the server explained (a 4xx with its reason) shows that reason alone, with no
- * HTTP status number. Anything else keeps the error's message.
- */
-function refusalToastText(error: unknown): string {
-  const status = (error as { status?: unknown } | null)?.status;
-  const reason = (error as { payload?: { error?: unknown } } | null)?.payload?.error;
-  if (typeof status === 'number' && status >= 400 && status < 500 && reason) {
-    return String(reason);
-  }
-  return error instanceof Error ? error.message : 'Nothing was spent.';
-}
-
-/**
  * #1554: Lay on Hands out of combat. Heal the paladin from the pool, or cure a poison or disease
  * for 5 points. The engine draws the pool; this control only names the amount.
  */
@@ -35,6 +24,7 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
   const { toast } = useToast();
   const [amount, setAmount] = useState('1');
   const [busy, setBusy] = useState(false);
+  const fullHealthHintId = useId();
   // In combat the Lay on Hands is an Action: the sheet control steps aside for the combat chips.
   const inCombat = useIsInCombatOptional();
   // #1643: at full HP a heal is refused, so Heal self is disabled with the reason beside it.
@@ -84,13 +74,16 @@ export const LayOnHandsControl: React.FC<LayOnHandsControlProps> = ({ characterI
         <Button
           size="sm"
           disabled={busy || !validAmount || atFullHealth}
+          aria-describedby={atFullHealth ? fullHealthHintId : undefined}
           onClick={() => run({ amount: parsed })}
         >
           Heal self
         </Button>
       </div>
       {atFullHealth && (
-        <p className="text-xs text-muted-foreground">You are already at full health.</p>
+        <p id={fullHealthHintId} className="text-xs text-muted-foreground">
+          You are already at full health.
+        </p>
       )}
       <div className="flex gap-2">
         <Button

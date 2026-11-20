@@ -25,6 +25,18 @@ describe('LayOnHandsControl at full health (#1643)', () => {
     expect(screen.getByText('You are already at full health.')).toBeInTheDocument();
   });
 
+  // #1679: the hint is the Heal self button's description, not a loose paragraph.
+  it('describes the disabled Heal self button with the full-health hint', () => {
+    render(
+      <SheetHitPointsContext.Provider value={{ current: 12, maximum: 12 }}>
+        <LayOnHandsControl characterId="char-1" pool={5} />
+      </SheetHitPointsContext.Provider>,
+    );
+    expect(screen.getByRole('button', { name: 'Heal self' })).toHaveAccessibleDescription(
+      'You are already at full health.',
+    );
+  });
+
   it('leaves Heal self enabled and shows no hint when the hero is hurt', () => {
     render(
       <SheetHitPointsContext.Provider value={{ current: 7, maximum: 12 }}>

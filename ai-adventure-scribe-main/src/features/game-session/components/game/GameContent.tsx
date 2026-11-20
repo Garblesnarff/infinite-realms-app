@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { GameLoadingOverlay, GameLayout } from './game-content';
 import { CampaignCompleteEndState } from './game-content/CompletionScreen';
 import { buildChooseHeroHref, FallenEndState, FallenStoryLog } from './game-content/DeathScreen';
+import { EndedSessionChoice } from './game-content/EndedSessionChoice';
 import { SessionRestPrompt } from './game-content/SessionRestPrompt';
 import { useGameRails } from './game-content/use-game-rails';
 import { useSessionRestGate } from './game-content/use-session-rest-gate';
@@ -51,6 +52,8 @@ const GameContent: React.FC = () => {
   const forceNew = searchParams.get('new') === 'true';
   const specificSessionId = searchParams.get('session') || undefined;
   const starterCampaignIdFromParams = searchParams.get('starterCampaign') || undefined;
+  // #1669: "Start new session" was chosen on the choice screen; the game load creates the continuation.
+  const continueNew = searchParams.get('continue') === '1';
   const { state: campaignState } = useCampaign();
 
   // BUG FIX: page refresh was creating a new session instead of resuming.
@@ -66,6 +69,7 @@ const GameContent: React.FC = () => {
       (prev) => {
         const next = new URLSearchParams(prev);
         next.delete('new');
+        next.delete('continue');
         return next;
       },
       { replace: true },
@@ -80,6 +84,7 @@ const GameContent: React.FC = () => {
     specificSessionId,
     starterCampaignIdFromParams,
     clearForceNewParam,
+    continueNew,
   );
 
   useEffect(() => {
@@ -180,6 +185,17 @@ const GameContent: React.FC = () => {
     );
   }
 
+  if (sessionState === 'choosing') {
+    // #1669: the hero has sessions that can be resumed; nothing is created until the player chooses.
+    return (
+      <EndedSessionChoice
+        campaignId={campaignIdFromParams ?? null}
+        characterId={characterIdFromParams}
+        starterCampaignId={starterCampaignIdFromParams ?? null}
+      />
+    );
+  }
+
   if (!sessionId || !sessionData) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -254,6 +270,23 @@ const GameContent: React.FC = () => {
           Try again
         </Button>
       </div>
+    );
+  }
+
+  if (vitalGate.status === 'ended') {
+    // #1669: opened by the link of an ended session. Nothing is created or resumed until the player picks.
+    return (
+      <GameProviders
+        sessionId={sessionId}
+        starterCampaignId={effectiveStarterCampaignId}
+        characterId={characterIdFromParams}
+      >
+        <EndedSessionChoice
+          campaignId={sessionData.campaign_id ?? null}
+          characterId={characterIdFromParams}
+          starterCampaignId={effectiveStarterCampaignId}
+        />
+      </GameProviders>
     );
   }
 

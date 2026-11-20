@@ -32,6 +32,8 @@ vi.mock('@/services/user-data-api', () => ({
     reportClientFailure: vi.fn(),
     fetchSessionFallenState: vi.fn(async () => null),
     fetchSessionCompletionState: vi.fn(async () => null),
+    // #1669: the vital gate reads the session status for a live session.
+    getSession: vi.fn(async () => ({ id: 'sess-1', status: 'active' })),
   },
 }));
 vi.mock('@/lib/logger', () => ({

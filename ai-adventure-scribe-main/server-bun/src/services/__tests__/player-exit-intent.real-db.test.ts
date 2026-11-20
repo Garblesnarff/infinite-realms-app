@@ -37,6 +37,8 @@ import {
   characters,
   combatEncounters,
   combatParticipantStatus,
+  combatParticipantConditions,
+  conditionsLibrary,
   combatParticipants,
   gameSessions,
   narrativeFacts,
@@ -448,6 +450,331 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
       .from(combatParticipants)
       .where(eq(combatParticipants.id, swarmId));
     expect(swarm).toMatchObject({ actionUsed: false, reactionUsed: true });
+  });
+
+  const addAdjacentHostile = async (): Promise<string> => {
+    const [hostile] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId,
+        name: 'Light-Eater Swarm 2',
+        participantType: 'monster',
+        turnOrder: 2,
+        initiative: 6,
+        armorClass: 12,
+        maxHp: 4,
+        speed: 30,
+      })
+      .returning({ id: combatParticipants.id });
+    await db.insert(combatParticipantStatus).values({
+      participantId: hostile.id,
+      currentHp: 4,
+      maxHp: 4,
+      isConscious: true,
+    });
+    const map = await loadActiveTacticalMap(sessionId);
+    if (!map) throw new Error('fixture board missing');
+    map.entities.push({
+      id: hostile.id,
+      slug: 'light-eater-swarm-2',
+      x: 3,
+      y: 4,
+      size: 'medium',
+      type: 'monster',
+      speedFeet: 30,
+      movementRemaining: 30,
+    });
+    await saveTacticalMap(map);
+    return hostile.id;
+  };
+
+  test('each adjacent hostile gets its own opportunity reaction before a flee', async () => {
+    const other = await addAdjacentHostile();
+    randomSpy(0.01);
+    await flee();
+    const facts = await consumeDmTacticalFacts(sessionId);
+    const attacks = facts.filter((fact) => fact.includes('attacked The Scholar'));
+    expect(attacks).toHaveLength(2);
+    expect(attacks.some((fact) => fact.includes('Light-Eater Swarm 1'))).toBe(true);
+    expect(attacks.some((fact) => fact.includes('Light-Eater Swarm 2'))).toBe(true);
+    expect(facts.indexOf(attacks[0])).toBeLessThan(facts.indexOf('The Scholar flees the fight.'));
+    expect(facts.indexOf(attacks[1])).toBeLessThan(facts.indexOf('The Scholar flees the fight.'));
+    const reactions = await db
+      .select({ id: combatParticipants.id, used: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(inArray(combatParticipants.id, [swarmId, other]));
+    expect(reactions).toHaveLength(2);
+    expect(reactions.every((row) => row.used)).toBe(true);
+  });
+
+  test('a first opportunity attack that drops the hero prevents the second and records no exit', async () => {
+    const other = await addAdjacentHostile();
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 1 })
+      .where(eq(combatParticipantStatus.participantId, heroId));
+    randomSpy(0.99);
+    await flee();
+    expect(await heroHp()).toBe(0);
+    expect(await heroRow()).toMatchObject({ isActive: true });
+    const facts = await consumeDmTacticalFacts(sessionId);
+    const attacks = facts.filter((fact) => fact.includes('attacked The Scholar'));
+    expect(attacks).toHaveLength(1);
+    expect(facts.some((fact) => fact.includes('flees the fight'))).toBe(false);
+    expect(await partyLedgerState()).toBeUndefined();
+    expect(await encounterRow()).toMatchObject({ status: 'active', endedReason: null });
+    const reactions = await db
+      .select({ id: combatParticipants.id, used: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(inArray(combatParticipants.id, [swarmId, other]));
+    expect(reactions).toHaveLength(2);
+    expect(reactions.filter((row) => row.used)).toHaveLength(1);
+    const unusedId = reactions.find((row) => !row.used)!.id;
+    const unusedName = unusedId === swarmId ? 'Light-Eater Swarm 1' : 'Light-Eater Swarm 2';
+    expect(attacks[0]).not.toContain(unusedName);
+  });
+
+  test('a hostile with a spent reaction does not prevent another hostile attacking', async () => {
+    const other = await addAdjacentHostile();
+    await db
+      .update(combatParticipants)
+      .set({ reactionUsed: true })
+      .where(eq(combatParticipants.id, swarmId));
+    randomSpy(0.01);
+    await flee();
+    const attacks = (await consumeDmTacticalFacts(sessionId)).filter((fact) =>
+      fact.includes('attacked The Scholar'),
+    );
+    expect(attacks).toHaveLength(1);
+    expect(attacks[0]).toContain('Light-Eater Swarm 2');
+    const [row] = await db
+      .select({ used: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, other));
+    expect(row.used).toBe(true);
+  });
+
+  for (const condition of ['Incapacitated', 'Blinded', 'Paralyzed']) {
+    test(`a ${condition.toLowerCase()} hostile cannot make an opportunity attack`, async () => {
+      const other = await addAdjacentHostile();
+      await db
+        .insert(conditionsLibrary)
+        .values({ name: condition, description: condition, mechanicalEffects: condition })
+        .onConflictDoNothing();
+      const [library] = await db
+        .select({ id: conditionsLibrary.id })
+        .from(conditionsLibrary)
+        .where(eq(conditionsLibrary.name, condition));
+      await db.insert(combatParticipantConditions).values({
+        participantId: swarmId,
+        conditionId: library.id,
+        durationType: 'permanent',
+        appliedAtRound: 2,
+      });
+      randomSpy(0.01);
+      await flee();
+      const attacks = (await consumeDmTacticalFacts(sessionId)).filter((fact) =>
+        fact.includes('attacked The Scholar'),
+      );
+      expect(attacks).toHaveLength(1);
+      expect(attacks[0]).toContain('Light-Eater Swarm 2');
+      expect(await swarmRow()).toMatchObject({ reactionUsed: false });
+      const [row] = await db
+        .select({ used: combatParticipants.reactionUsed })
+        .from(combatParticipants)
+        .where(eq(combatParticipants.id, other));
+      expect(row.used).toBe(true);
+    });
+  }
+
+  test('Disengage suppresses both adjacent hostiles on a flee', async () => {
+    const other = await addAdjacentHostile();
+    await db
+      .update(combatParticipants)
+      .set({ isDisengaged: true })
+      .where(eq(combatParticipants.id, heroId));
+    await flee();
+    const attacks = (await consumeDmTacticalFacts(sessionId)).filter((fact) =>
+      fact.includes('attacked The Scholar'),
+    );
+    expect(attacks).toHaveLength(0);
+    const reactions = await db
+      .select({ used: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(inArray(combatParticipants.id, [swarmId, other]));
+    expect(reactions).toHaveLength(2);
+    expect(reactions.every((row) => !row.used)).toBe(true);
+  });
+
+  const boardMove = (x: number, y: number) =>
+    executeCombatIntent(
+      encounterId,
+      { type: 'move', actorId: heroId, x, y },
+      userId,
+      'player',
+      Date.now(),
+      'action_bar',
+    );
+
+  test('a hostile mover leaving the hero reach does not spend the hero reaction', async () => {
+    await db
+      .update(combatEncounters)
+      .set({ currentTurnOrder: 1 })
+      .where(eq(combatEncounters.id, encounterId));
+    randomSpy(0.01);
+    await executeCombatIntent(
+      encounterId,
+      { type: 'move', actorId: swarmId, x: 7, y: 4 },
+      userId,
+      'dm',
+      Date.now(),
+      'action_bar',
+    );
+    const map = await loadActiveTacticalMap(sessionId);
+    expect(map?.entities.find((entity) => entity.id === swarmId)).toMatchObject({ x: 7, y: 4 });
+    const [hero] = await db
+      .select({ reactionUsed: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, heroId));
+    expect(hero.reactionUsed).toBe(false);
+    const facts = await consumeDmTacticalFacts(sessionId);
+    expect(facts.filter((fact) => fact.includes('attacked'))).toHaveLength(0);
+  });
+
+  test('a board step that stays within the same hostile reach provokes no reaction', async () => {
+    await boardMove(4, 3);
+    const map = await loadActiveTacticalMap(sessionId);
+    expect(map?.entities.find((entity) => entity.id === heroId)).toMatchObject({ x: 4, y: 3 });
+    expect(await swarmRow()).toMatchObject({ reactionUsed: false });
+    const facts = await consumeDmTacticalFacts(sessionId);
+    expect(facts.filter((fact) => fact.includes('attacked The Scholar'))).toHaveLength(0);
+  });
+
+  test('moving out of the reach of two hostiles provokes both reactions', async () => {
+    const other = await addAdjacentHostile();
+    randomSpy(0.01);
+    await boardMove(4, 1);
+    const attacks = (await consumeDmTacticalFacts(sessionId)).filter((fact) =>
+      fact.includes('attacked The Scholar'),
+    );
+    expect(attacks).toHaveLength(2);
+    expect(attacks.some((fact) => fact.includes('Light-Eater Swarm 1'))).toBe(true);
+    expect(attacks.some((fact) => fact.includes('Light-Eater Swarm 2'))).toBe(true);
+    const reactions = await db
+      .select({ used: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(inArray(combatParticipants.id, [swarmId, other]));
+    expect(reactions).toHaveLength(2);
+    expect(reactions.every((row) => row.used)).toBe(true);
+    const map = await loadActiveTacticalMap(sessionId);
+    expect(map?.entities.find((entity) => entity.id === heroId)).toMatchObject({ x: 4, y: 1 });
+  });
+
+  test('a spent reaction does not prevent another hostile reacting to board movement', async () => {
+    const other = await addAdjacentHostile();
+    await db
+      .update(combatParticipants)
+      .set({ reactionUsed: true })
+      .where(eq(combatParticipants.id, swarmId));
+    randomSpy(0.01);
+    await boardMove(4, 1);
+    const attacks = (await consumeDmTacticalFacts(sessionId)).filter((fact) =>
+      fact.includes('attacked The Scholar'),
+    );
+    expect(attacks).toHaveLength(1);
+    expect(attacks[0]).toContain('Light-Eater Swarm 2');
+    const [row] = await db
+      .select({ used: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, other));
+    expect(row.used).toBe(true);
+  });
+
+  test('Disengage prevents opportunity attacks during board movement', async () => {
+    const other = await addAdjacentHostile();
+    await db
+      .update(combatParticipants)
+      .set({ isDisengaged: true })
+      .where(eq(combatParticipants.id, heroId));
+    await boardMove(4, 1);
+    const attacks = (await consumeDmTacticalFacts(sessionId)).filter((fact) =>
+      fact.includes('attacked The Scholar'),
+    );
+    expect(attacks).toHaveLength(0);
+    const reactions = await db
+      .select({ used: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(inArray(combatParticipants.id, [swarmId, other]));
+    expect(reactions).toHaveLength(2);
+    expect(reactions.every((row) => !row.used)).toBe(true);
+  });
+
+  test('forced board movement provokes no opportunity attack', async () => {
+    const other = await addAdjacentHostile();
+    const { applyTacticalMapAction } = await import('../combat/tactical-action-service.js');
+    const moved = await applyTacticalMapAction(sessionId, {
+      action: 'forced_move',
+      target: heroId,
+      mode: 'shove',
+      origin: { x: 4, y: 5 },
+      distance: 10,
+      destination: null,
+    });
+    expect(moved.applied).toBe(true);
+    const map = await loadActiveTacticalMap(sessionId);
+    expect(map?.entities.find((entity) => entity.id === heroId)).toMatchObject({ x: 4, y: 2 });
+    const attacks = (await consumeDmTacticalFacts(sessionId)).filter((fact) =>
+      fact.includes('attacked The Scholar'),
+    );
+    expect(attacks).toHaveLength(0);
+    const reactions = await db
+      .select({ used: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(inArray(combatParticipants.id, [swarmId, other]));
+    expect(reactions).toHaveLength(2);
+    expect(reactions.every((row) => !row.used)).toBe(true);
+  });
+
+  test('a knockout stops movement on the last square inside the first hostile reach', async () => {
+    const other = await addAdjacentHostile();
+    const map = await loadActiveTacticalMap(sessionId);
+    if (!map) throw new Error('fixture board missing');
+    const { findPath, getDistance } = await import('../../tactical/engine.js');
+    const planned = findPath(map, heroId, 4, 1);
+    if (!planned) throw new Error('fixture path missing');
+    const hero = map.entities.find((entity) => entity.id === heroId)!;
+    const enemies = map.entities.filter((entity) => [swarmId, other].includes(entity.id));
+    const crossing = planned.path.findIndex(
+      (point, index) =>
+        index > 0 &&
+        enemies.some(
+          (enemy) =>
+            getDistance({ ...hero, ...planned.path[index - 1]! }, enemy) <= 5 &&
+            getDistance({ ...hero, ...point }, enemy) > 5,
+        ),
+    );
+    expect(crossing).toBeGreaterThan(0);
+    const stoppedAt = planned.path[crossing - 1]!;
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 1 })
+      .where(eq(combatParticipantStatus.participantId, heroId));
+    randomSpy(0.99);
+    await boardMove(4, 1);
+    expect(await heroHp()).toBe(0);
+    expect(await heroRow()).toMatchObject({ isActive: true });
+    const after = await loadActiveTacticalMap(sessionId);
+    expect(after?.entities.find((entity) => entity.id === heroId)).toMatchObject(stoppedAt);
+    expect(stoppedAt).not.toEqual({ x: 4, y: 1 });
+    const attacks = (await consumeDmTacticalFacts(sessionId)).filter((fact) =>
+      fact.includes('attacked The Scholar'),
+    );
+    expect(attacks).toHaveLength(1);
+    const reactions = await db
+      .select({ used: combatParticipants.reactionUsed })
+      .from(combatParticipants)
+      .where(inArray(combatParticipants.id, [swarmId, other]));
+    expect(reactions.filter((row) => row.used)).toHaveLength(1);
   });
 
   test('yielding records the surrender and provokes no attack', async () => {

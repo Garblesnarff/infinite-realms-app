@@ -51,7 +51,7 @@ import { getSpellById } from '@/utils/spell-lookup';
  * (#1085: the panel showed the old pool until a reload).
  */
 function publishEnginePoolUses(
-  feature: 'lay_on_hands' | 'second_wind' | 'action_surge',
+  feature: 'lay_on_hands' | 'second_wind' | 'action_surge' | 'rage',
   result: unknown,
 ): void {
   const engine = (result ?? {}) as {
@@ -77,7 +77,13 @@ export function fleeProvokerOf(label: string): string | null {
 export type LegalAction = {
   /** `divine_smite` (#1362) is a melee attack chip that declares the slot, sent as an attack. */
   /** `inspiration` (#1414) arms advantage on the next roll; it spends nothing itself. */
-  type: ClientCombatIntent['type'] | 'divine_smite' | 'inspiration' | 'metamagic';
+  /** `off_hand_attack` (#1639) is a melee attack chip, a bonus action, that declares the off-hand swing. */
+  type:
+    | ClientCombatIntent['type']
+    | 'divine_smite'
+    | 'inspiration'
+    | 'metamagic'
+    | 'off_hand_attack';
   /** #1233: a `metamagic` option: the Metamagic id the chip arms for the next cast. */
   option?: string;
   /** #1233: the casting time the option changes ('bonus action' for Quickened). */
@@ -445,7 +451,11 @@ export function useCombatLegalActions(input: {
             Date.now(),
             action.type === 'divine_sense' ? 'action_bar' : 'typed',
           );
-          if (action.type === 'second_wind' || action.type === 'action_surge') {
+          if (
+            action.type === 'second_wind' ||
+            action.type === 'action_surge' ||
+            action.type === 'rage'
+          ) {
             publishEnginePoolUses(action.type, result);
           }
           window.dispatchEvent(new CustomEvent('character-state-updated'));
@@ -570,7 +580,9 @@ export function useCombatLegalActions(input: {
           }
           await refreshCombatState();
         } else if (
-          (action.type === 'attack' || action.type === 'divine_smite') &&
+          (action.type === 'attack' ||
+            action.type === 'divine_smite' ||
+            action.type === 'off_hand_attack') &&
           action.targetIds?.[0]
         ) {
           // #1059: an 'Equip and attack' choice readies the weapon first —
@@ -611,6 +623,8 @@ export function useCombatLegalActions(input: {
             ...(action.type === 'divine_smite' && action.slotLevel !== undefined
               ? { divine_smite_slot_level: action.slotLevel }
               : {}),
+            // #1639: the off-hand chip sends the attack as the bonus-action swing.
+            ...(action.type === 'off_hand_attack' ? { off_hand: true } : {}),
           };
           const actor = encounter.participants.find((participant) => participant.id === actorId);
           const die = await askPlayerForAttackDie({

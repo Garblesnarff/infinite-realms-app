@@ -61,6 +61,8 @@ type EquippedWeaponCandidate = {
   itemType: string | null | undefined;
   magicBonus: number;
   properties: Record<string, unknown>;
+  /** How many of this item the row holds. A premade's two shortswords are one row of two (#1639). */
+  quantity: number;
 };
 
 /** The stored character columns that decide weapon proficiency. */
@@ -141,6 +143,8 @@ function candidateToProfile(
     rangedWeapon,
     meleeWeapon: Boolean(catalog) && !rangedWeapon,
     twoHanded: Boolean(catalog?.weaponProperties?.twoHanded),
+    light: Boolean(catalog?.weaponProperties?.light),
+    quantity: candidate.quantity,
   };
 }
 
@@ -193,6 +197,7 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
           itemType: item.itemType,
           magicBonus: Number(parseInventoryProperties(item.properties).magicBonus ?? 0),
           properties: parseInventoryProperties(item.properties),
+          quantity: Number(item.quantity ?? 1),
         })),
       ...legacy.map((item) => ({
         id: item.id,
@@ -200,6 +205,7 @@ export async function listEquippedWeaponProfiles(participant: any): Promise<Weap
         itemType: item.itemType,
         magicBonus: item.magicBonus ?? 0,
         properties: parseEquipmentProperties(item.magicProperties),
+        quantity: Number(item.quantity ?? 1),
       })),
     ];
     return noteOtherWeapons(
@@ -335,6 +341,7 @@ export async function listCarriedWeaponProfiles(participant: any): Promise<Weapo
         itemType: item.itemType,
         magicBonus: Number(parseInventoryProperties(item.properties).magicBonus ?? 0),
         properties: parseInventoryProperties(item.properties),
+        quantity: Number(item.quantity ?? 1),
       })),
     ...legacy.map((item) => ({
       id: item.id,
@@ -342,6 +349,7 @@ export async function listCarriedWeaponProfiles(participant: any): Promise<Weapo
       itemType: item.itemType,
       magicBonus: item.magicBonus ?? 0,
       properties: parseEquipmentProperties(item.magicProperties),
+      quantity: Number(item.quantity ?? 1),
     })),
   ];
   return noteOtherWeapons(

@@ -24,6 +24,7 @@ import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.j
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
+import { readLightAttackMark } from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
@@ -57,11 +58,14 @@ import {
   type SecondWindResult,
 } from './fighter-features-service.js';
 import { resolveFlexibleCasting, type FlexibleCastingResult } from './flexible-casting-resolver.js';
+import { assertOffHandAttackAllowed, isOffHandCandidate } from './off-hand-attack-service.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import {
   hasLeftTheBoard,
   recordPlayerExit,
+  resolveMovementReactions,
   selectOpportunityAttacker,
+  selectOpportunityAttackers,
   type OpportunityAttacker,
   type PlayerExitResult,
 } from './player-exit-service.js';
@@ -141,6 +145,8 @@ export type CombatIntent =
       d20Rolls?: [number, number];
       /** #1362: the slot a Paladin spends on Divine Smite if this melee attack hits. */
       divineSmiteSlotLevel?: number;
+      /** #1639: the off-hand attack, a bonus action after the Attack action with a light melee weapon. */
+      offHand?: boolean;
     }
   | {
       type: 'spell';
@@ -337,6 +343,9 @@ export const VERSIONED_INTENT_TYPES = new Set([
   // #1362: a divine_smite legal option submits an 'attack' intent (divineSmiteSlotLevel), so it
   // is claim-based too. Listed so the legal-action version test holds; no intent carries this type.
   'divine_smite',
+  // #1639: an off_hand_attack legal option submits an 'attack' intent with offHand, so it is
+  // claim-based too. Listed so the legal-action version test holds; no intent carries this type.
+  'off_hand_attack',
   'use_item',
   // #1233: a Flexible Casting intent spends the player's sorcery points and slot ledger.
   'flexible_casting',
@@ -1067,20 +1076,34 @@ export async function proposeCombatAttack(
   const groundedWeaponId = isUnarmedWeaponClaim(resolvedAttack.weaponId)
     ? UNARMED_STRIKE.id
     : grounding.weaponId;
-  if ((actor as unknown as TurnResourceView).actionUsed) {
+  // #1639: an off-hand proposal is the bonus action, so the Action check does not apply to it. It is
+  // checked read-only here (mark, weapon, copies), so a refused off-hand swing never reaches the popup.
+  const offHand = resolvedAttack.offHand === true;
+  if (offHand) {
+    await assertOffHandAttackAllowed({
+      encounterId,
+      actorId: resolvedAttack.actorId,
+      weaponId: groundedWeaponId,
+      equipped,
+    });
+  }
+  if (!offHand && (actor as unknown as TurnResourceView).actionUsed) {
     const available = await attackBudgetPlan(encounterId, actor.id);
     if (!available.plan) {
       throw new BusinessLogicError('Action already used this turn', { participantId: actor.id });
     }
   }
-  const approach = await decideAttackApproach({
-    sessionId: encounter.sessionId,
-    actorId: resolvedAttack.actorId,
-    actorLabel,
-    targetId: resolvedAttack.targetId,
-    targetLabel,
-    weapon: grounding.weapon,
-  });
+  // An off-hand swing is melee in place: it never moves the actor (as in the executed branch).
+  const approach = offHand
+    ? ({ movementOnly: false, attackType: 'melee' } as const)
+    : await decideAttackApproach({
+        sessionId: encounter.sessionId,
+        actorId: resolvedAttack.actorId,
+        actorLabel,
+        targetId: resolvedAttack.targetId,
+        targetLabel,
+        weapon: grounding.weapon,
+      });
   if (approach.movementOnly) return { movementOnly: true, result: approach.result };
   const attackService = await createCombatAttackService();
   const proposal = await attackService.proposeAttack(
@@ -1094,6 +1117,7 @@ export async function proposeCombatAttack(
       expectedVersion: encounter.version,
       advantage: resolvedAttack.advantage,
       disadvantage: resolvedAttack.disadvantage,
+      offHand,
     },
     userId,
   );
@@ -1190,29 +1214,28 @@ async function proposeCombatSpell(
  * Submitted before the exit is marked, which is the whole ordering rule: the blow lands while the
  * player is still in reach.
  */
-async function resolvePlayerExit(params: {
+async function movementReactionContext(params: {
   encounterId: string;
   sessionId: string;
   userId: string;
   state: CombatState;
   actorId: string;
-  intent: 'flee' | 'yield';
-}): Promise<PlayerExitResult> {
-  const { encounterId, sessionId, userId, state, actorId, intent } = params;
+  destination?: { x: number; y: number };
+}) {
+  const { encounterId, sessionId, userId, state, actorId, destination } = params;
   const map = await loadActiveTacticalMap(sessionId);
   const roster = rosterFrom(state.participants);
-  return recordPlayerExit({
+  return {
     encounterId,
     sessionId,
     userId,
     state,
     actorId,
-    intent,
-    label: (participantId) => facingName(undefined, participantId, roster),
-    slugOf: (participantId) =>
+    label: (participantId: string) => facingName(undefined, participantId, roster),
+    slugOf: (participantId: string) =>
       engineSlugForParticipant(map, participantId, facingName(undefined, participantId, roster)),
-    selectAttacker: (actor) =>
-      selectOpportunityAttacker({
+    selectAttackers: (actor: Parameters<typeof selectOpportunityAttackers>[0]['actor']) =>
+      selectOpportunityAttackers({
         state,
         actor,
         map,
@@ -1222,6 +1245,8 @@ async function resolvePlayerExit(params: {
         },
         hasLineOfSight: (fromId, toId) => (map ? checkLineOfSight(map, fromId, toId) : false),
         distanceFeet: getDistance,
+        conditionsOf: getActiveConditionNames,
+        destination,
       }),
     resolveOpportunityAttack: async (attacker: OpportunityAttacker) => {
       const attackService = await createCombatAttackService();
@@ -1248,9 +1273,21 @@ async function resolvePlayerExit(params: {
         isCritical: outcome.isCritical,
       };
     },
-    markExited: (id, participantId) =>
+    markExited: (id: string, participantId: string) =>
       CombatEncounterService.markParticipantExited(id, participantId),
-  });
+  };
+}
+
+async function resolvePlayerExit(params: {
+  encounterId: string;
+  sessionId: string;
+  userId: string;
+  state: CombatState;
+  actorId: string;
+  intent: 'flee' | 'yield';
+}): Promise<PlayerExitResult> {
+  const context = await movementReactionContext(params);
+  return recordPlayerExit({ ...context, intent: params.intent });
 }
 
 /** The single mutation gateway for player and AI-DM combat intents. */
@@ -1429,13 +1466,56 @@ export async function executeCombatIntent(
     let yieldEndedCombat = false;
     let fleeEndedCombat = false;
     if (intent.type === 'move') {
-      result = await applyTacticalMapAction(encounter.sessionId, {
-        action: 'move',
+      const mapBeforeMove = await loadActiveTacticalMap(encounter.sessionId);
+      const moveAction = {
+        action: 'move' as const,
         entityId: intent.actorId,
         x: intent.x,
         y: intent.y,
         changes: null,
-      });
+      };
+      const { dispatchMapAction } = await import('../../tactical/dispatch.js');
+      const preview = mapBeforeMove
+        ? dispatchMapAction(structuredClone(mapBeforeMove), moveAction)
+        : null;
+      if (!preview?.applied) {
+        throw new BusinessLogicError(
+          'Movement refused',
+          preview?.refusal ?? { reason: 'no_active_map' },
+        );
+      }
+      const path = preview.path ?? [];
+      const completedPath = path.length ? [path[0]!] : [];
+      let interrupted = false;
+      for (const destination of path.slice(1)) {
+        const current = await CombatEncounterService.getCombatState(encounterId, userId);
+        const mover = current.participants.find((participant) => participant.id === intent.actorId);
+        if (!mover)
+          throw new BusinessLogicError('Movement actor missing', { actorId: intent.actorId });
+        const context = await movementReactionContext({
+          encounterId,
+          sessionId: encounter.sessionId,
+          userId,
+          state: current,
+          actorId: intent.actorId,
+          destination,
+        });
+        const reactions = await resolveMovementReactions({
+          ...context,
+          actor: mover,
+        });
+        if (reactions.playerDowned) {
+          interrupted = true;
+          break;
+        }
+        const step = await applyTacticalMapAction(encounter.sessionId, {
+          ...moveAction,
+          ...destination,
+        });
+        if (!step.applied) throw new BusinessLogicError('Movement refused', step.refusal);
+        completedPath.push(destination);
+      }
+      result = { applied: true, action: moveAction, path: completedPath, interrupted };
       if (!(result as { applied?: boolean }).applied) {
         throw new BusinessLogicError(
           'Movement refused',
@@ -1459,6 +1539,7 @@ export async function executeCombatIntent(
           .isDisengaged;
         if (
           actorDisengaged &&
+          !interrupted &&
           map &&
           hasLeftTheBoard(map, destination) &&
           (playerInput === undefined || playerTextDeclaresLeaving(playerInput))
@@ -1489,6 +1570,15 @@ export async function executeCombatIntent(
       // does not back (see refuseUngroundedPlayerWeapon); DM narration keeps the
       // ungrounded substitute path below so a fight is never stopped by a weapon name.
       refuseUngroundedPlayerWeapon(grounding, source);
+      // #1639: an off-hand attack is refused before any claim, roll or move.
+      if (intent.offHand) {
+        await assertOffHandAttackAllowed({
+          encounterId,
+          actorId: intent.actorId,
+          weaponId: grounding.weaponId,
+          equipped,
+        });
+      }
       const groundedWeaponId = isUnarmedWeaponClaim(intent.weaponId)
         ? UNARMED_STRIKE.id
         : grounding.weaponId;
@@ -1520,14 +1610,17 @@ export async function executeCombatIntent(
         weaponSubstituted: !grounding.grounded,
         actorIsPlayer,
       } satisfies AttackVisibilityContext;
-      const approach = await decideAttackApproach({
-        sessionId: encounter.sessionId,
-        actorId: intent.actorId,
-        actorLabel,
-        targetId: intent.targetId,
-        targetLabel,
-        weapon,
-      });
+      // An off-hand attack is melee in place: it never moves the actor, and the bonus action is not a move.
+      const approach = intent.offHand
+        ? ({ movementOnly: false, attackType: 'melee' } as const)
+        : await decideAttackApproach({
+            sessionId: encounter.sessionId,
+            actorId: intent.actorId,
+            actorLabel,
+            targetId: intent.targetId,
+            targetLabel,
+            weapon,
+          });
       if (approach.movementOnly) {
         result = exposeAttackVisibility(approach.result, visibility);
       } else {
@@ -1551,6 +1644,8 @@ export async function executeCombatIntent(
               // land on the weapon the reach check was made against.
               weaponId: groundedWeaponId,
               attackType: approach.attackType,
+              // #1639: the off-hand swing claims the bonus action, not the Attack action.
+              offHand: intent.offHand === true,
               expectedVersion: intent.expectedVersion,
               advantage: intent.advantage,
               disadvantage: intent.disadvantage,
@@ -2472,7 +2567,14 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
   const canAttack =
     !actor.actionUsed ||
     (actor.participantType === 'player' && !!(await attackBudgetPlan(encounterId, actor.id)).plan);
-  if (canAttack) {
+  // #1639: the light weapon that took this turn's Attack action, read before the gate so the
+  // off-hand chip is offered after the Action is spent. An off-hand swing can only follow a spent
+  // Action, so the read waits for that; without a live mark nothing below opens.
+  const lightAttackWeaponId =
+    actor.actionUsed && actor.characterId && !actor.bonusActionUsed
+      ? await readLightAttackMark(encounterId, actor.id)
+      : null;
+  if (canAttack || lightAttackWeaponId) {
     const [equippedWeapons, attackerConditions] = await Promise.all([
       listEquippedWeaponProfiles(actor),
       getActiveConditionNames(actor.id),
@@ -2532,13 +2634,15 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         });
         return { targetId: target.id, legal: rules.legal, refusal: rules.refusal };
       });
-    actions.push(...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }));
+    if (canAttack) {
+      actions.push(...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }));
+    }
     // #1362: Divine Smite is declared with a melee weapon attack, before the roll: the rider
     // spends the slot only on a hit. One option per melee weapon and slot level the Paladin can
     // still spend, against the targets that weapon can reach now (no move-first). The client
     // sends the attack intent with divineSmiteSlotLevel; combat-attack-service refuses it again
     // before the roll if the class or slot no longer holds.
-    if (actor.characterId && actor.characterClass?.toLowerCase().includes('paladin')) {
+    if (canAttack && actor.characterId && actor.characterClass?.toLowerCase().includes('paladin')) {
       const ledger = await spellSlotLedger(actor.characterId, actor);
       const slotLevels = [...ledger.entries()]
         .filter(([, count]) => count > 0)
@@ -2562,6 +2666,28 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         }
       }
     }
+    // #1639: the off-hand attack, a bonus action once the Attack action with a light melee weapon is
+    // taken this turn. It is offered only for a light melee weapon other than the one that took the
+    // Attack action, against the targets that weapon can reach now.
+    if (lightAttackWeaponId) {
+      {
+        for (const weapon of equippedWeapons.filter((candidate) =>
+          isOffHandCandidate(candidate, lightAttackWeaponId),
+        )) {
+          const reachableTargetIds = targetsForWeapon(weapon)
+            .filter((target) => target.legal)
+            .map((target) => target.targetId);
+          if (reachableTargetIds.length) {
+            actions.push({
+              type: 'off_hand_attack',
+              label: `Off-hand attack with ${weapon.name} (bonus action)`,
+              weaponId: weapon.id,
+              targetIds: reachableTargetIds,
+            });
+          }
+        }
+      }
+    }
     // #1059: a carried ranged weapon the package left unequipped (the
     // shortbow, the light crossbow) while a melee weapon holds the main
     // hand is offered as 'Equip and attack': the client equips it — the
@@ -2570,7 +2696,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     // is no main hand to preserve; the create pass equips the package's
     // main ranged weapon for that shape, and the sheet/typed equip paths
     // cover the rest.
-    if (equippedWeapons.length > 0) {
+    if (canAttack && equippedWeapons.length > 0) {
       const carriedWeapons = await listCarriedWeaponProfiles(actor);
       const equippedNames = new Set(
         equippedWeapons.map((weapon) => normalizeWeaponName(weapon.name)),

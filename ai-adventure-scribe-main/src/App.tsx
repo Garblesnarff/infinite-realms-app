@@ -1,4 +1,4 @@
-import { lazy, useEffect } from 'react';
+import { useEffect } from 'react';
 import { HelmetProvider } from 'react-helmet-async';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'sonner';
@@ -12,7 +12,9 @@ import { useTelemetry } from './hooks/use-telemetry';
 import { LEGAL_ROUTES } from './pages/legal/legal-routes';
 import AppNotFound from './routes/AppNotFound';
 import { ProtectedAppRoutes } from './routes/ProtectedAppRoutes';
+import { lazyPage } from './routes/route-chunk-progress';
 import { withRouteSuspense } from './routes/route-suspense';
+import { RoutePendingIndicator } from './routes/RoutePendingIndicator';
 import { installGlobalClientFailureReporting } from './services/client-failure-reporting';
 import { ErrorBoundary } from './shared/components/error/ErrorBoundary';
 
@@ -21,18 +23,20 @@ import { Z_INDEX } from '@/constants/z-index';
 import { TRPCProvider } from '@/infrastructure/api';
 
 // Lazy load route page components for code splitting
-const LaunchPage = lazy(() => import('./pages/LaunchPage'));
-const CallbackPage = lazy(() => import('./features/auth/components/CallbackPage'));
-const TesterLoginPage = lazy(() => import('./features/auth/components/TesterLoginPage'));
-const GameUIPreview = lazy(() => import('./pages/GameUIPreview'));
-const BlogAdminLogin = lazy(() => import('./pages/BlogAdminLogin'));
-const BlogAdmin = lazy(() => import('./pages/BlogAdmin'));
-const BlogEditor = lazy(() => import('./pages/BlogEditor'));
-const CampaignDetailPage = lazy(() => import('./pages/CampaignDetailPage'));
-const ExploreGalleryPage = lazy(() => import('./pages/ExploreGalleryPage'));
-const StarterCharacterSelectionPage = lazy(() => import('./pages/StarterCharacterSelectionPage'));
-const PricingPage = lazy(() => import('./pages/PricingPage'));
-const PublicChroniclePage = lazy(() => import('./pages/PublicChroniclePage'));
+const LaunchPage = lazyPage(() => import('./pages/LaunchPage'));
+const CallbackPage = lazyPage(() => import('./features/auth/components/CallbackPage'));
+const TesterLoginPage = lazyPage(() => import('./features/auth/components/TesterLoginPage'));
+const GameUIPreview = lazyPage(() => import('./pages/GameUIPreview'));
+const BlogAdminLogin = lazyPage(() => import('./pages/BlogAdminLogin'));
+const BlogAdmin = lazyPage(() => import('./pages/BlogAdmin'));
+const BlogEditor = lazyPage(() => import('./pages/BlogEditor'));
+const CampaignDetailPage = lazyPage(() => import('./pages/CampaignDetailPage'));
+const ExploreGalleryPage = lazyPage(() => import('./pages/ExploreGalleryPage'));
+const StarterCharacterSelectionPage = lazyPage(
+  () => import('./pages/StarterCharacterSelectionPage'),
+);
+const PricingPage = lazyPage(() => import('./pages/PricingPage'));
+const PublicChroniclePage = lazyPage(() => import('./pages/PublicChroniclePage'));
 
 /** Public route table. Exported so tests can render it under MemoryRouter. */
 export function AppRoutes() {
@@ -129,6 +133,7 @@ function App() {
                       >
                         Skip to content
                       </a>
+                      <RoutePendingIndicator />
                       <AppRoutes />
                       <Toaster />
                     </div>

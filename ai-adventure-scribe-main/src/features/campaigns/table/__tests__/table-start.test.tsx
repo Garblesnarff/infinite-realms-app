@@ -248,4 +248,26 @@ describe('Table start screens', () => {
     expect(screen.getByRole('button', { name: 'Choose One' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Choose Two' })).toHaveTextContent('HP 12 · AC 15');
   });
+
+  // #1679: the hero row starts with padding, so the first card is not clipped when the fan overflows
+  // (#1664). The scroller stays a plain scroll box; only the inner row centres.
+  describe('HeroFan row start padding (#1664, #1679)', () => {
+    it('pads the inner row at its start and centres only inside it', () => {
+      render(
+        <HeroFan
+          vitals={() => ({ hp: 12, ac: 15 })}
+          templates={[hero('one', 'One'), hero('two', 'Two')]}
+          disabled={false}
+          signedIn
+          onPlay={vi.fn()}
+        />,
+      );
+      const scroller = screen.getByRole('group', { name: 'Choose your hero' });
+      const row = scroller.firstElementChild as HTMLElement;
+
+      expect(scroller).toHaveClass('overflow-x-auto');
+      expect(scroller).not.toHaveClass('justify-center');
+      expect(row).toHaveClass('w-max', 'min-w-full', 'justify-center', 'px-3');
+    });
+  });
 });
