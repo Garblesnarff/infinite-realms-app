@@ -1,13 +1,18 @@
 import { Loader2, Sparkles, Image as ImageIcon, Wand2, CheckCircle, ImageOff } from 'lucide-react';
 import React, { useId, useState } from 'react';
 
-import { useCharacterFinalization } from './character-finalization/use-character-finalization';
 import { isDraconicBloodline } from '../../../../shared/class-feature-choices';
 import {
   computeServerArmorClass,
   withStartingPackageEquipped,
 } from '../../../../shared/creation-armor-class';
 import { CharacterPreviewAbilityScores } from '../shared/CharacterPreviewAbilityScores';
+import {
+  summarizeEnhancements,
+  summarizePhysicalTraits,
+  summarizeSpells,
+} from './character-finalization/summary-sections';
+import { useCharacterFinalization } from './character-finalization/use-character-finalization';
 import { describeStartingEquipment } from './equipment-selection/starting-equipment';
 import { getCharacterNameError } from '../wizard/validation-rules';
 
@@ -96,6 +101,9 @@ const CharacterFinalization: React.FC = () => {
         isDraconicBloodline(character?.classFeatures),
       )
     : null;
+  const spellSummary = summarizeSpells(character);
+  const enhancementSummary = summarizeEnhancements(character);
+  const physicalSummary = summarizePhysicalTraits(character);
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-center mb-6">Finalize Your Character</h2>
@@ -152,6 +160,41 @@ const CharacterFinalization: React.FC = () => {
           <div className="md:col-span-2">
             <strong>Equipment:</strong> {describeStartingEquipment(state.character)}
           </div>
+          {(spellSummary.cantrips.length > 0 || spellSummary.spells.length > 0) && (
+            <div className="md:col-span-2 text-sm" data-testid="summary-spells">
+              <h4 className="font-semibold">Spells</h4>
+              {spellSummary.cantrips.length > 0 && (
+                <div>
+                  <strong>Cantrips:</strong> {spellSummary.cantrips.join(', ')}
+                </div>
+              )}
+              {spellSummary.spells.length > 0 && (
+                <div>
+                  <strong>Spells:</strong> {spellSummary.spells.join(', ')}
+                </div>
+              )}
+            </div>
+          )}
+          {enhancementSummary.length > 0 && (
+            <div className="md:col-span-2 text-sm" data-testid="summary-enhancements">
+              <h4 className="font-semibold">Enhancements</h4>
+              {enhancementSummary.map((row, index) => (
+                <div key={`${row.label}-${index}`}>
+                  <strong>{row.label}:</strong> {row.value}
+                </div>
+              ))}
+            </div>
+          )}
+          {physicalSummary.length > 0 && (
+            <div className="md:col-span-2 text-sm" data-testid="summary-physical">
+              <h4 className="font-semibold">Physical Traits</h4>
+              {physicalSummary.map((row, index) => (
+                <div key={`${row.label}-${index}`}>
+                  <strong>{row.label}:</strong> {row.value}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
