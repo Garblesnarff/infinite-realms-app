@@ -48,7 +48,7 @@ describe('combat-entry-confirmation-bridge', () => {
 
     const strike = requestCombatEntryConfirmation({ ...spec, targetChoices: undefined });
     settlePendingCombatEntryConfirmation(true);
-    await expect(strike).resolves.toBe(true);
+    await expect(strike).resolves.toBe('confirmed');
   });
 
   it('notifies pending-change listeners on present and on settle (#400)', async () => {

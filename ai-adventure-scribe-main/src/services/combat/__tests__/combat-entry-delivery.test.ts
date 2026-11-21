@@ -49,7 +49,7 @@ function http(status: number, body: unknown): Response {
 describe('startCombatEntryDelivery (#913)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(confirmCombatEntry).mockResolvedValue(true);
+    vi.mocked(confirmCombatEntry).mockResolvedValue('confirmed');
     vi.mocked(requestPlayerInitiativeRoll).mockResolvedValue({ d20: 12 });
     vi.mocked(userDataApi.getActiveCombat).mockResolvedValue(http(200, { combat: null }));
     vi.mocked(userDataApi.enterCombat).mockResolvedValue(http(201, { encounter: { id: 'enc-1' } }));
@@ -64,7 +64,7 @@ describe('startCombatEntryDelivery (#913)', () => {
       pending: PENDING,
       player: PLAYER,
     });
-    const handlerConfirm = vi.fn(async () => true);
+    const handlerConfirm = vi.fn(async () => 'confirmed' as const);
     const handler = startCombatEntryDelivery({
       sessionId: 'session-share',
       pending: PENDING,
@@ -90,7 +90,7 @@ describe('startCombatEntryDelivery (#913)', () => {
       sessionId: 'session-409',
       pending: PENDING,
       player: PLAYER,
-      confirm: async () => true,
+      confirm: async () => 'confirmed',
       rollInitiative: async () => ({ d20: 4 }),
     });
 
@@ -100,7 +100,7 @@ describe('startCombatEntryDelivery (#913)', () => {
 
   it('does not reuse a declined poll when the same actors are attacked on a later turn', async () => {
     markCombatEntryTurnConfirmed('session-next');
-    vi.mocked(confirmCombatEntry).mockResolvedValue(false);
+    vi.mocked(confirmCombatEntry).mockResolvedValue('declined');
 
     await expect(
       startCombatEntryDelivery({
@@ -111,7 +111,7 @@ describe('startCombatEntryDelivery (#913)', () => {
     ).resolves.toEqual({ kind: 'declined' });
 
     markCombatEntryTurnConfirmed('session-next');
-    const confirm = vi.fn(async () => true);
+    const confirm = vi.fn(async () => 'confirmed' as const);
     const result = await startCombatEntryDelivery({
       sessionId: 'session-next',
       pending: PENDING,
@@ -126,7 +126,7 @@ describe('startCombatEntryDelivery (#913)', () => {
   });
 });
 
-describe('a superseded entry card is not a decline (#1678)', () => {
+describe('a replaced entry card is not a decline (#1678)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(userDataApi.getActiveCombat).mockResolvedValue(http(200, { combat: null }));
@@ -136,15 +136,15 @@ describe('a superseded entry card is not a decline (#1678)', () => {
     );
   });
 
-  it('returns superseded and leaves the server pending entry to the newer card', async () => {
+  it('returns replaced and leaves the server pending entry to the newer card', async () => {
     const result = await startCombatEntryDelivery({
       sessionId: 'session-superseded',
       pending: PENDING,
       player: PLAYER,
-      confirm: async () => 'superseded',
+      confirm: async () => 'replaced',
     });
 
-    expect(result).toEqual({ kind: 'superseded' });
+    expect(result).toEqual({ kind: 'replaced' });
     expect(userDataApi.declinePendingCombatEntry).not.toHaveBeenCalled();
     expect(userDataApi.enterCombat).not.toHaveBeenCalled();
   });

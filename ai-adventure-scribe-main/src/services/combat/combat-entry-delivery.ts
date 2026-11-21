@@ -8,6 +8,7 @@
  * caller for the same actors waits for that result.
  */
 import type { AIResponse } from '@/services/ai/shared/types';
+import type { CombatEntryOutcome } from '@/services/combat/combat-entry-confirmation-bridge';
 
 import { confirmCombatEntry } from '@/hooks/ai/combat-entry-hold';
 import { SessionExpiredError } from '@/infrastructure/api/rest-client';
@@ -27,7 +28,7 @@ export type DeliverableCombatEntry = NonNullable<AIResponse['combat_entry_pendin
 export type CombatEntryDeliveryResult =
   | { kind: 'declined' }
   /** #1678: a newer entry card replaced this one. Not a decline; the newer card owns the entry. */
-  | { kind: 'superseded' }
+  | { kind: 'replaced' }
   | { kind: 'seated'; entryPayload: unknown; encounterId: string }
   | { kind: 'already-seated'; encounterId: string };
 
@@ -41,7 +42,7 @@ type DeliveryArgs = {
   /** The player already chose Strike before the DM was called. */
   entryConfirmed?: boolean;
   signal?: AbortSignal;
-  confirm?: () => Promise<boolean | 'superseded'>;
+  confirm?: () => Promise<CombatEntryOutcome>;
   rollInitiative?: () => Promise<{ d20: number | null }>;
 };
 
@@ -164,15 +165,16 @@ async function runDelivery(args: DeliveryArgs): Promise<CombatEntryDeliveryResul
   // joins the remembered poll result above and never gets here.
   const alreadySeated = await encounterIdFromActive(args.sessionId);
   if (alreadySeated) return { kind: 'already-seated', encounterId: alreadySeated };
-  const answer =
-    args.entryConfirmed === true ||
-    (await (
-      args.confirm ?? (() => confirmCombatEntry(args.pending, args.player, args.playerMessage))
-    )());
-  // #1678: a superseded card is not a decline. Declining here would clear the server's pending
+  const outcome: CombatEntryOutcome =
+    args.entryConfirmed === true
+      ? 'confirmed'
+      : await (
+          args.confirm ?? (() => confirmCombatEntry(args.pending, args.player, args.playerMessage))
+        )();
+  // #1678: a replaced card is not a decline. Declining here would clear the server's pending
   // entry, which is now the newer card's, and record a decline for its actor.
-  if (answer === 'superseded') return { kind: 'superseded' };
-  if (!answer) {
+  if (outcome === 'replaced') return { kind: 'replaced' };
+  if (outcome === 'declined') {
     await userDataApi.declinePendingCombatEntry?.(args.sessionId);
     return { kind: 'declined' };
   }
