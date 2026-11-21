@@ -315,7 +315,7 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
     );
   });
 
-  it('the DM row with its roll request is saved before the roll prompt opens (#1678)', async () => {
+  it('pins only the hook-level call order: the DM row callback runs before the handler (#1678)', async () => {
     const rollRequest = { type: 'skill', formula: '1d20+3', purpose: 'Perception' };
     vi.mocked(AIService.chatWithDM).mockImplementation((async (params: any) => {
       const modelReply = {
@@ -349,7 +349,8 @@ describe('useAIResponse: the combat-entry popup comes before the DM (#2341)', ()
       expect.objectContaining({ rollRequests: [expect.objectContaining({ type: 'skill' })] }),
       expect.anything(),
     );
-    // The prompt is opened by the handler, which runs only after the row is saved.
+    // Hook-level order only, with mocked callbacks. This does not prove that the real save
+    // completes before the roll tray opens: the tray opens first in production (see #1696).
     expect(order.indexOf('DM row saved with roll request')).toBeGreaterThanOrEqual(0);
     expect(order.indexOf('DM row saved with roll request')).toBeLessThan(order.indexOf('handler'));
   });
