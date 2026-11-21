@@ -39,6 +39,9 @@ const { CombatInitiativeService } = await importWithRealDb(
 const combatTurnFlags = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
 const { claimRage, clearRage, isRaging } = combatTurnFlags;
 const { logger } = await importWithRealDb(() => import('../../lib/logger.js'));
+const { executeCombatIntent } = await importWithRealDb(
+  () => import('../combat/combat-intent-service.js'),
+);
 const { combatAttackService } = await importWithRealDb(
   () => import('../combat/combat-attack-service.js'),
 );
@@ -216,6 +219,50 @@ describeWithDb('When Rage ends and what it resists (#1654)', () => {
       userId,
     );
   };
+
+  it('keeps the rage-end line when the next participant is down and skipped', async () => {
+    await resetFight();
+    await claimRage(encounterId, barbarianId);
+    await db
+      .update(combatParticipantStatus)
+      .set({ currentHp: 0, isConscious: false })
+      .where(eq(combatParticipantStatus.participantId, goblinId));
+    const [next] = await db
+      .insert(combatParticipants)
+      .values({
+        encounterId,
+        name: 'Another Goblin',
+        participantType: 'monster',
+        turnOrder: 2,
+        initiative: 5,
+        armorClass: 12,
+        maxHp: 10,
+        speed: 30,
+      })
+      .returning({ id: combatParticipants.id });
+    await db
+      .insert(combatParticipantStatus)
+      .values({ participantId: next.id, currentHp: 10, maxHp: 10, isConscious: true });
+    try {
+      const result = (await executeCombatIntent(
+        encounterId,
+        { type: 'end_turn', actorId: barbarianId },
+        userId,
+        'player',
+        undefined,
+        'action_bar',
+      )) as {
+        currentParticipant: { id: string };
+        engineLines?: string[];
+      };
+      expect(result.currentParticipant.id).toBe(next.id);
+      expect(result.engineLines).toEqual(["The Barbarian's rage ends."]);
+      expect(await isRaging(encounterId, barbarianId)).toBe(false);
+    } finally {
+      await db.delete(combatParticipants).where(eq(combatParticipants.id, next.id));
+      await resetFight();
+    }
+  });
 
   it('a turn that ends with no attack and no damage ends Rage, and the engine says so', async () => {
     await resetFight();

@@ -105,7 +105,11 @@ export async function settleDownedTurns(
     if (vital === 'standing') break;
     if (vital === 'dying') return { turn: current, awaitingDeathSave: true };
 
-    current = await CombatInitiativeService.advanceTurn(encounterId, userId);
+    const next = await CombatInitiativeService.advanceTurn(encounterId, userId);
+    current = {
+      ...next,
+      engineLines: [...(current.engineLines ?? []), ...(next.engineLines ?? [])],
+    };
     await resetTacticalMovementForTurn(sessionId, current.currentParticipant.id);
   }
 
