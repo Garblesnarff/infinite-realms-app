@@ -19,6 +19,7 @@ import {
   combatParticipants,
   gameSessions,
   inventoryItems,
+  tacticalMaps,
 } from '../../../../db/schema/index';
 import { setRngSeed } from '../../lib/rng.js';
 
@@ -29,8 +30,11 @@ const { isReckless } = await importWithRealDb(() => import('../combat/combat-tur
 const { CombatInitiativeService } = await importWithRealDb(
   () => import('../combat-initiative-service.js'),
 );
-const { getLegalCombatActions } = await importWithRealDb(
+const { getLegalCombatActions, proposeCombatAttack, executeCombatIntent } = await importWithRealDb(
   () => import('../combat/combat-intent-service.js'),
+);
+const { saveTacticalMap, loadActiveTacticalMap } = await importWithRealDb(
+  () => import('../combat/tactical-map-store.js'),
 );
 
 if (!hasRealDb) {
@@ -346,6 +350,79 @@ describeWithDb('Reckless Attack on real combat state (#1635)', () => {
         userId,
       ),
     ).rejects.toThrow('requires the Barbarian class');
+  });
+
+  it('refuses an ineligible out-of-reach declaration before proposal or commit moves', async () => {
+    await resetFight();
+    await db
+      .update(characters)
+      .set({ level: 1, classLevels: [{ className: 'Barbarian', level: 1 }] })
+      .where(eq(characters.id, barbarianCharacterId));
+    await saveTacticalMap({
+      id: crypto.randomUUID(),
+      sessionId,
+      width: 7,
+      height: 3,
+      cells: Array.from({ length: 3 }, () =>
+        Array.from({ length: 7 }, () => ({
+          terrain: 'floor' as const,
+          blocksMovement: false,
+          blocksSight: false,
+          cover: 0 as const,
+          elevation: 0,
+        })),
+      ),
+      entities: [
+        {
+          id: barbarianId,
+          x: 0,
+          y: 1,
+          size: 'medium' as const,
+          type: 'pc' as const,
+          speedFeet: 30,
+          movementRemaining: 30,
+        },
+        {
+          id: allyId,
+          x: 5,
+          y: 1,
+          size: 'medium' as const,
+          type: 'monster' as const,
+          speedFeet: 30,
+          movementRemaining: 30,
+        },
+      ],
+      round: 1,
+      sceneDescription: 'reckless approach fixture',
+    });
+    const intent = {
+      type: 'attack' as const,
+      actorId: barbarianId,
+      targetId: allyId,
+      weaponId: 'Longsword',
+      reckless: true,
+      expectedVersion: await version(),
+    };
+    try {
+      await expect(proposeCombatAttack(encounterId, intent, userId, 'player')).rejects.toThrow(
+        'requires Barbarian level 2',
+      );
+      await expect(
+        executeCombatIntent(encounterId, intent, userId, 'player', undefined, 'action_bar'),
+      ).rejects.toThrow('requires Barbarian level 2');
+      const map = await loadActiveTacticalMap(sessionId);
+      expect(map?.entities.find((entity) => entity.id === barbarianId)).toMatchObject({
+        x: 0,
+        y: 1,
+        movementRemaining: 30,
+      });
+    } finally {
+      await db.delete(tacticalMaps).where(eq(tacticalMaps.sessionId, sessionId));
+      await db
+        .update(characters)
+        .set({ level: 5, classLevels: [{ className: 'Barbarian', level: 5 }] })
+        .where(eq(characters.id, barbarianCharacterId));
+    }
   });
 
   it('refuses a Barbarian below level 2', async () => {

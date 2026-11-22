@@ -1109,6 +1109,23 @@ export async function proposeCombatAttack(
       throw new BusinessLogicError('Action already used this turn', { participantId: actor.id });
     }
   }
+  const attackService = await createCombatAttackService();
+  // Validate Reckless Attack before an out-of-range proposal can move the actor.
+  if (resolvedAttack.reckless) {
+    await attackService.proposeAttack(
+      encounterId,
+      {
+        attackerId: resolvedAttack.actorId,
+        targetId: resolvedAttack.targetId,
+        weaponId: groundedWeaponId,
+        attackType: grounding.weapon.ranged ? 'ranged' : 'melee',
+        expectedVersion: encounter.version,
+        reckless: true,
+        offHand,
+      },
+      userId,
+    );
+  }
   // An off-hand swing is melee in place: it never moves the actor (as in the executed branch).
   const approach = offHand
     ? ({ movementOnly: false, attackType: 'melee' } as const)
@@ -1121,7 +1138,6 @@ export async function proposeCombatAttack(
         weapon: grounding.weapon,
       });
   if (approach.movementOnly) return { movementOnly: true, result: approach.result };
-  const attackService = await createCombatAttackService();
   const proposal = await attackService.proposeAttack(
     encounterId,
     {
@@ -1627,6 +1643,23 @@ export async function executeCombatIntent(
         weaponSubstituted: !grounding.grounded,
         actorIsPlayer,
       } satisfies AttackVisibilityContext;
+      if (intent.reckless) {
+        await (
+          await createCombatAttackService()
+        ).proposeAttack(
+          encounterId,
+          {
+            attackerId: intent.actorId,
+            targetId: intent.targetId,
+            weaponId: groundedWeaponId,
+            attackType: weapon.ranged ? 'ranged' : 'melee',
+            expectedVersion: intent.expectedVersion,
+            reckless: true,
+            offHand: intent.offHand === true,
+          },
+          userId,
+        );
+      }
       // An off-hand attack is melee in place: it never moves the actor, and the bonus action is not a move.
       const approach = intent.offHand
         ? ({ movementOnly: false, attackType: 'melee' } as const)
