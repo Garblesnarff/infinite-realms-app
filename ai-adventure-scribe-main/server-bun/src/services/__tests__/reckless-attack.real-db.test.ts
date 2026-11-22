@@ -255,6 +255,69 @@ describeWithDb('Reckless Attack on real combat state (#1635)', () => {
     expect(afterHit.advantage).toBe(false);
   });
 
+  it('grants advantage to a spell attack against a reckless Barbarian', async () => {
+    await resetFight();
+    await db
+      .update(characters)
+      .set({ knownSpells: 'Eldritch Blast' })
+      .where(eq(characters.id, allyCharacterId));
+    try {
+      await combatAttackService!.resolveAttack(
+        encounterId,
+        await input({ reckless: true, providedD20: 10 }),
+        userId,
+      );
+      await CombatInitiativeService!.advanceTurn(encounterId, userId);
+      const spell = {
+        casterId: allyId,
+        targetIds: [barbarianId],
+        spellId: 'eldritch-blast',
+        spellName: 'Eldritch Blast',
+        expectedVersion: await version(),
+      };
+      const proposal = await combatAttackService!.proposeSpellAttack(encounterId, spell, userId);
+      expect(proposal.advantage).toBe(true);
+      expect(proposal.advantageSources).toContain('target used Reckless Attack');
+      const result = await combatAttackService!.resolveSpellAttack(encounterId, spell, userId);
+      expect(result.results[0].advantage).toBe(true);
+    } finally {
+      await db
+        .update(characters)
+        .set({ knownSpells: null })
+        .where(eq(characters.id, allyCharacterId));
+    }
+  });
+
+  it('counts a spell attack as the first attack of the turn', async () => {
+    await resetFight();
+    await db
+      .update(characters)
+      .set({ knownSpells: 'Eldritch Blast' })
+      .where(eq(characters.id, barbarianCharacterId));
+    try {
+      await combatAttackService!.resolveSpellAttack(
+        encounterId,
+        {
+          casterId: barbarianId,
+          targetIds: [allyId],
+          spellId: 'eldritch-blast',
+          spellName: 'Eldritch Blast',
+          expectedVersion: await version(),
+          d20: 10,
+        },
+        userId,
+      );
+      await expect(
+        combatAttackService!.proposeAttack(encounterId, await input({ reckless: true }), userId),
+      ).rejects.toThrow('first attack of the turn');
+    } finally {
+      await db
+        .update(characters)
+        .set({ knownSpells: null })
+        .where(eq(characters.id, barbarianCharacterId));
+    }
+  });
+
   it('offers the reckless attack option only before the first attack', async () => {
     await resetFight();
     const before = await getLegalCombatActions(encounterId, userId);
