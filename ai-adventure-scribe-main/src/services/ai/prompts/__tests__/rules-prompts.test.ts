@@ -20,6 +20,14 @@ describe('RulesPrompts combat transition contract', () => {
     expect(prompt).toMatch(/The declared action is the opening combat\s+action/);
   });
 
+  it('requires NPC attacks and accepted fight challenges to start combat (#1704)', () => {
+    const prompt = RulesPrompts.buildRulesOfPlaySection();
+
+    expect(prompt).toContain(
+      'When an NPC attacks, rushes or squares up to fight the player, or the player accepts a challenge to fight, emit combat_transition "start" with scene_spec and combatants. Do not substitute an ability check for the fight itself.',
+    );
+  });
+
   it('teaches all four check-governance rules at the DM prompt seam', () => {
     const prompt = RulesPrompts.buildRulesOfPlaySection();
 
