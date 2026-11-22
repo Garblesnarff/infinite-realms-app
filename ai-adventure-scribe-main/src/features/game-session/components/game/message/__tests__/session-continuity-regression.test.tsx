@@ -406,9 +406,10 @@ describe('session-continuity regression', () => {
       );
     });
 
-    expect(mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm')).toHaveLength(
-      0,
-    );
+    // #1696: the roll row is saved provisional before the tray opens; the prose stays withheld.
+    const beforeResolve = mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm');
+    expect(beforeResolve).toHaveLength(1);
+    expect(beforeResolve[0]?.[0].context?.provisional).toBe(true);
     expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
 
     await act(async () => {
@@ -662,19 +663,21 @@ describe('session-continuity regression', () => {
       );
     });
 
-    // Declaration prose is never shown while the roll is outstanding.
-    expect(mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm')).toHaveLength(
-      0,
-    );
+    // #1696: before the roll, only the provisional row is saved; the prose stays withheld.
+    const beforeResolve = mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm');
+    expect(beforeResolve).toHaveLength(1);
+    expect(beforeResolve[0]?.[0].context?.provisional).toBe(true);
 
     await act(async () => {
       resolveAIResponse?.(resolvedResponse);
       await sendPromise;
     });
 
+    // The final row replaces the provisional one under the same id; the final text is what sticks.
     const dmMessages = mockSendMessage.mock.calls.filter(([message]) => message.sender === 'dm');
-    expect(dmMessages).toHaveLength(1);
-    expect(dmMessages[0]?.[0].text).toBe(resolvedResponse.text);
+    expect(dmMessages).toHaveLength(2);
+    expect(dmMessages[1]?.[0].context?.provisional).toBeUndefined();
+    expect(dmMessages[1]?.[0].text).toBe(resolvedResponse.text);
     // The prompt fired once, from the early callback only.
     expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
   });
@@ -830,7 +833,9 @@ describe('session-continuity regression', () => {
     // The skill check is still owed, so this turn waits on its die: the composer stays blocked
     // and combat detection waits for the roll turn. The reply is saved once, prose and the
     // narrative request together (#2280); the message list withholds the prose until the roll.
-    expect(dmPersisted()).toEqual([
+    // #1696: the provisional row, then the final row under the same id.
+    expect(dmPersisted()).toHaveLength(2);
+    expect(dmPersisted().slice(-1)).toEqual([
       expect.objectContaining({
         text: 'You brace against the rubble.',
         rollRequests: [
@@ -1063,8 +1068,9 @@ describe('session-continuity regression', () => {
         });
 
         const dmMessageId = mockGetAIResponse.mock.calls[0]?.[5] as string;
-        await waitFor(() => expect(dmPersisted()).toHaveLength(1));
-        const [saved] = dmPersisted() as Array<{
+        // #1696: provisional row first, final row last; both under the turn's id.
+        await waitFor(() => expect(dmPersisted()).toHaveLength(2));
+        const [saved] = dmPersisted().slice(-1) as Array<{
           id?: string;
           text?: string;
           rollRequests?: unknown;
@@ -1143,8 +1149,9 @@ describe('session-continuity regression', () => {
         await ref.send(turn.playerInput);
       });
 
-      await waitFor(() => expect(dmPersisted()).toHaveLength(1));
-      expect(dmPersisted()[0]?.text).toBe(
+      // #1696: provisional row, then the final row; the final row carries the roll text.
+      await waitFor(() => expect(dmPersisted()).toHaveLength(2));
+      expect(dmPersisted().slice(-1)[0]?.text).toBe(
         `The DM asks for a roll: ${turn.rollRequests[0]?.purpose}.`,
       );
     });

@@ -414,8 +414,9 @@ export const useMessageHandlerLogic = ({
 
   /**
    * #1696: save the DM roll row before the roll tray opens, so a reload finds the row the popup
-   * came from. Returns whether the save landed. The wait is short; on failure or timeout the tray
-   * still opens, the miss is logged, and the turn's own save runs as before.
+   * came from. The row is written provisional: the turn's final save replaces it in place through
+   * the server's provisional-row path (dm-reply-persistence.ts). The wait is short; on failure or
+   * timeout the tray still opens, and the miss is logged.
    */
   const saveRollRowBeforePrompt = async (row: ChatMessage): Promise<boolean> => {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -425,8 +426,12 @@ export const useMessageHandlerLogic = ({
         ROLL_ROW_SAVE_BEFORE_PROMPT_TIMEOUT_MS,
       );
     });
+    const provisionalRow: ChatMessage = {
+      ...row,
+      context: { ...row.context, provisional: true },
+    };
     try {
-      await Promise.race([sendMessage(row), timeout]);
+      await Promise.race([sendMessage(provisionalRow), timeout]);
       return true;
     } catch (error) {
       logger.warn('DM_ROW_SAVE_BEFORE_PROMPT_FAILED', { messageId: row.id, error });
@@ -554,7 +559,6 @@ export const useMessageHandlerLogic = ({
     let earlyMessage: EnhancedChatMessage | null = null;
     let rollTurnStarted = false;
     /** #1696: the roll row was saved before the tray opened, so the turn's own save is skipped. */
-    let rollRowSavedBeforePrompt = false;
     let textPhaseEmitted = false;
     try {
       logger.info('[Memory Flow] Starting message handling for:', playerInput);
@@ -833,7 +837,7 @@ export const useMessageHandlerLogic = ({
                 rollTurnStarted = true;
                 turnPhase('text shown');
                 textPhaseEmitted = true;
-                rollRowSavedBeforePrompt = await saveRollRowBeforePrompt(
+                await saveRollRowBeforePrompt(
                   rollReplyMessage(
                     {
                       ...earlyResponse,
@@ -1035,7 +1039,7 @@ export const useMessageHandlerLogic = ({
       }
 
       if (hasRollRequests && !rollTurnStarted) {
-        rollRowSavedBeforePrompt = await saveRollRowBeforePrompt(
+        await saveRollRowBeforePrompt(
           rollReplyMessage(sanitizedAiResponseMessage, dmMessageId, narrativeRollRequests),
         );
         processAiResponse(
@@ -1051,7 +1055,7 @@ export const useMessageHandlerLogic = ({
         setComposerBlocked(false);
       }
 
-      if (hasRollRequests && !rollRowSavedBeforePrompt) {
+      if (hasRollRequests) {
         // One row per DM reply (#2280). The reply's prose and its narrative roll requests are
         // saved together under this turn's id, so a reload can restore the popup from the same
         // row. The message list withholds this row's prose until the roll is answered
