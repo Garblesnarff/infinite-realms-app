@@ -43,6 +43,7 @@ const d20Pair = t.Optional(t.Tuple([dieFace, dieFace]));
 
 const attackFields = {
   type: t.Literal('attack'),
+  reckless: t.Optional(t.Boolean()),
   actorId: participantId,
   actionId,
   targetId: participantId,

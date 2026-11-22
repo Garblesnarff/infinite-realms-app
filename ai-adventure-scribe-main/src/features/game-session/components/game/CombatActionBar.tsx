@@ -85,6 +85,7 @@ export const LEGAL_ACTION_PLACEMENT = {
   rage: 'more',
   /** #1639: the off-hand attack, a bonus action; it rides More with the other bonus-action chips. */
   off_hand_attack: 'more',
+  reckless_attack: 'more',
   // #1554: Lay on Hands is an Action, but its chips name a target and an amount, so they ride More.
   lay_on_hands: 'more',
   // #1414: Inspiration arms advantage on the next roll; it spends no Action, so it rides More

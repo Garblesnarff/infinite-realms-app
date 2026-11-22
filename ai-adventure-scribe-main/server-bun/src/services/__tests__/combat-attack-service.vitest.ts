@@ -9,6 +9,15 @@ import type { AttackRollInput } from '../../types/combat.js';
 import { CombatHPService } from '../combat-hp-service.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 
+vi.mock('../combat/combat-turn-flags.js', async (importOriginal) => ({
+  ...((await importOriginal()) as object),
+  isReckless: vi.fn(async () => false),
+  isRecklessOnCurrentTurn: vi.fn(async () => false),
+  hasAttackedThisTurn: vi.fn(async () => false),
+  markTurnAttack: vi.fn(async () => {}),
+  classLevelOfCharacter: vi.fn(async () => 0),
+}));
+
 vi.mock('../combat-initiative-service.js', () => ({
   CombatInitiativeService: { getCurrentTurn: vi.fn() },
 }));

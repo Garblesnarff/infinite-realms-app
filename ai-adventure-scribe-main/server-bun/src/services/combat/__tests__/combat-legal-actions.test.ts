@@ -12,6 +12,7 @@ const realTurnFlags = await import('../combat-turn-flags.js');
 mock.module('../combat-turn-flags.js', () => ({
   ...realTurnFlags,
   readLightAttackMark: async () => null,
+  hasAttackedThisTurn: async () => false,
 }));
 
 let remainingSwing = false;

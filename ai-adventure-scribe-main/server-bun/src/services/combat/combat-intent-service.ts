@@ -24,7 +24,7 @@ import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.j
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
-import { readLightAttackMark } from './combat-turn-flags.js';
+import { hasAttackedThisTurn, readLightAttackMark } from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
@@ -133,6 +133,7 @@ export type CombatIntent =
   | { type: 'move'; actorId: string; x: number; y: number }
   | {
       type: 'attack';
+      reckless?: boolean;
       actorId: string;
       targetId: string;
       weaponId?: string;
@@ -360,6 +361,7 @@ export const VERSIONED_INTENT_TYPES = new Set([
   // #1639: an off_hand_attack legal option submits an 'attack' intent with offHand, so it is
   // claim-based too. Listed so the legal-action version test holds; no intent carries this type.
   'off_hand_attack',
+  'reckless_attack',
   'use_item',
   // #1233: a Flexible Casting intent spends the player's sorcery points and slot ledger.
   'flexible_casting',
@@ -1107,6 +1109,23 @@ export async function proposeCombatAttack(
       throw new BusinessLogicError('Action already used this turn', { participantId: actor.id });
     }
   }
+  const attackService = await createCombatAttackService();
+  // Validate Reckless Attack before an out-of-range proposal can move the actor.
+  if (resolvedAttack.reckless) {
+    await attackService.proposeAttack(
+      encounterId,
+      {
+        attackerId: resolvedAttack.actorId,
+        targetId: resolvedAttack.targetId,
+        weaponId: groundedWeaponId,
+        attackType: grounding.weapon.ranged ? 'ranged' : 'melee',
+        expectedVersion: encounter.version,
+        reckless: true,
+        offHand,
+      },
+      userId,
+    );
+  }
   // An off-hand swing is melee in place: it never moves the actor (as in the executed branch).
   const approach = offHand
     ? ({ movementOnly: false, attackType: 'melee' } as const)
@@ -1119,7 +1138,6 @@ export async function proposeCombatAttack(
         weapon: grounding.weapon,
       });
   if (approach.movementOnly) return { movementOnly: true, result: approach.result };
-  const attackService = await createCombatAttackService();
   const proposal = await attackService.proposeAttack(
     encounterId,
     {
@@ -1132,6 +1150,7 @@ export async function proposeCombatAttack(
       advantage: resolvedAttack.advantage,
       disadvantage: resolvedAttack.disadvantage,
       offHand,
+      reckless: resolvedAttack.reckless,
     },
     userId,
   );
@@ -1624,6 +1643,23 @@ export async function executeCombatIntent(
         weaponSubstituted: !grounding.grounded,
         actorIsPlayer,
       } satisfies AttackVisibilityContext;
+      if (intent.reckless) {
+        await (
+          await createCombatAttackService()
+        ).proposeAttack(
+          encounterId,
+          {
+            attackerId: intent.actorId,
+            targetId: intent.targetId,
+            weaponId: groundedWeaponId,
+            attackType: weapon.ranged ? 'ranged' : 'melee',
+            expectedVersion: intent.expectedVersion,
+            reckless: true,
+            offHand: intent.offHand === true,
+          },
+          userId,
+        );
+      }
       // An off-hand attack is melee in place: it never moves the actor, and the bonus action is not a move.
       const approach = intent.offHand
         ? ({ movementOnly: false, attackType: 'melee' } as const)
@@ -1660,6 +1696,7 @@ export async function executeCombatIntent(
               attackType: approach.attackType,
               // #1639: the off-hand swing claims the bonus action, not the Attack action.
               offHand: intent.offHand === true,
+              reckless: intent.reckless,
               expectedVersion: intent.expectedVersion,
               advantage: intent.advantage,
               disadvantage: intent.disadvantage,
@@ -2654,7 +2691,9 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       listEquippedWeaponProfiles(actor),
       getActiveConditionNames(actor.id),
     ]);
-    const weapons = equippedWeapons.length ? equippedWeapons : [UNARMED_STRIKE];
+    const weapons: WeaponRuleProfile[] = equippedWeapons.length
+      ? equippedWeapons
+      : [UNARMED_STRIKE];
     const opposingTargets = state.participants.filter(
       (participant) =>
         participant.id !== actor.id &&
@@ -2711,6 +2750,34 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       });
     if (canAttack) {
       actions.push(...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }));
+      if (
+        actor.characterId &&
+        classLevelOf(
+          {
+            class: actor.characterClass ?? null,
+            level: actor.characterLevel ?? null,
+            classLevels: actor.characterClassLevels,
+          },
+          'Barbarian',
+        ) >= 2 &&
+        !(await hasAttackedThisTurn(encounterId, actor.id))
+      ) {
+        const recklessWeapons = weapons.filter(
+          (weapon) =>
+            weapon.meleeWeapon === true &&
+            !weapon.ranged &&
+            (!weapon.finesse || (profile.scores.str ?? 10) >= (profile.scores.dex ?? 10)),
+        );
+        actions.push(
+          ...buildCombatWeaponOptions(recklessWeapons, targetsForWeapon, { canCloseDistance }).map(
+            (option) => ({
+              ...option,
+              type: 'reckless_attack' as const,
+              label: option.label.replace('Attack', 'Reckless Attack'),
+            }),
+          ),
+        );
+      }
     }
     // #1362: Divine Smite is declared with a melee weapon attack, before the roll: the rider
     // spends the slot only on a hit. One option per melee weapon and slot level the Paladin can

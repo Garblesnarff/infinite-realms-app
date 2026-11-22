@@ -72,6 +72,8 @@ export type AttackRuleInput = {
    * advantage source is "hidden"; the attack clears the mark, not this resolver.
    */
   attackerHidden?: boolean;
+  attackerReckless?: boolean;
+  targetReckless?: boolean;
   /**
    * The target took the Dodge action. Dodge imposes disadvantage on attacks against it, and
    * it is its own player-facing reason rather than a second "requested" source (#603).
@@ -157,6 +159,14 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
   if (input.requestedAdvantage) advantageSources.push('requested');
   if (input.requestedDisadvantage) disadvantageSources.push('requested');
   if (input.attackerHidden) advantageSources.push('hidden');
+  if (
+    input.attackerReckless &&
+    weapon.meleeWeapon === true &&
+    !weapon.ranged &&
+    ability === 'strength'
+  )
+    advantageSources.push('Reckless Attack');
+  if (input.targetReckless) advantageSources.push('target used Reckless Attack');
   if (input.targetDodging) disadvantageSources.push('target is dodging');
   if (geometry && geometry.distanceFeet > weapon.normalRange)
     disadvantageSources.push('long range');

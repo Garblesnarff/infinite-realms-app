@@ -83,7 +83,8 @@ export type LegalAction = {
     | 'divine_smite'
     | 'inspiration'
     | 'metamagic'
-    | 'off_hand_attack';
+    | 'off_hand_attack'
+    | 'reckless_attack';
   /** #1635: a `cunning_action` chip's mode: the bonus action pays for this Dash, Disengage or Hide. */
   mode?: 'dash' | 'disengage' | 'hide';
   /** #1233: a `metamagic` option: the Metamagic id the chip arms for the next cast. */
@@ -607,7 +608,8 @@ export function useCombatLegalActions(input: {
         } else if (
           (action.type === 'attack' ||
             action.type === 'divine_smite' ||
-            action.type === 'off_hand_attack') &&
+            action.type === 'off_hand_attack' ||
+            action.type === 'reckless_attack') &&
           action.targetIds?.[0]
         ) {
           // #1059: an 'Equip and attack' choice readies the weapon first —
@@ -650,6 +652,7 @@ export function useCombatLegalActions(input: {
               : {}),
             // #1639: the off-hand chip sends the attack as the bonus-action swing.
             ...(action.type === 'off_hand_attack' ? { off_hand: true } : {}),
+            ...(action.type === 'reckless_attack' ? { reckless: true } : {}),
           };
           const actor = encounter.participants.find((participant) => participant.id === actorId);
           const die = await askPlayerForAttackDie({
