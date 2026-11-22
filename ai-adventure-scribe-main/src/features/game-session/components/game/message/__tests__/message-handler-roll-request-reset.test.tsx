@@ -15,6 +15,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageHandler } from '../MessageHandler';
 
+import logger from '@/lib/logger';
+
 const {
   mockGetAIResponse,
   mockSendMessage,
@@ -179,4 +181,40 @@ describe('roll-request turn across SSE reset events (P0 #783)', () => {
       expect(persisted?.rollRequests).toHaveLength(1);
     },
   );
+
+  // #1696: the DM roll row is saved before the roll tray opens. Real order, through the real
+  // handler: the save's invocation comes first.
+  it('saves the DM roll row before the roll tray opens (#1696)', async () => {
+    await runRollRequestTurn(0);
+
+    const persistIndex = mockSendMessage.mock.calls.findIndex((call) => {
+      const message = call[0] as { sender: string; rollRequests?: unknown[] };
+      return message.sender === 'dm' && Array.isArray(message.rollRequests);
+    });
+    expect(persistIndex).toBeGreaterThanOrEqual(0);
+    expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
+
+    const saveOrder = mockSendMessage.mock.invocationCallOrder[persistIndex];
+    const trayOrder = mockProcessAiResponse.mock.invocationCallOrder[0];
+    expect(saveOrder).toBeLessThan(trayOrder);
+  });
+
+  // #1696: a failed pre-tray save does not block the roll. The tray still opens and the miss is
+  // logged under DM_ROW_SAVE_BEFORE_PROMPT_FAILED.
+  it('opens the roll tray and logs DM_ROW_SAVE_BEFORE_PROMPT_FAILED when the pre-tray save fails (#1696)', async () => {
+    const warn = vi.spyOn(logger, 'warn');
+    mockSendMessage.mockImplementation(async (message: unknown) => {
+      const row = message as { sender: string; rollRequests?: unknown[] };
+      if (row.sender === 'dm' && Array.isArray(row.rollRequests)) throw new Error('save down');
+    });
+
+    await runRollRequestTurn(0);
+
+    expect(mockProcessAiResponse).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith(
+      'DM_ROW_SAVE_BEFORE_PROMPT_FAILED',
+      expect.objectContaining({ error: expect.any(Error) }),
+    );
+    warn.mockRestore();
+  });
 });
