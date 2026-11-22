@@ -1216,6 +1216,9 @@ export class CombatAttackService {
             sessionId: attackerData.participant.encounter?.sessionId,
           },
         );
+        // #1635: Relentless Endurance kept the target up at 1 HP; the engine says so.
+        if (hpResult.relentlessEnduranceLine)
+          transcriptLines.push(hpResult.relentlessEnduranceLine);
         transcriptLines.push(...concentrationLines);
         // #1654: a blow that drops a raging creature to 0 HP ends its Rage, and the engine says so.
         if (hpResult.rageEnded) transcriptLines.push(`${targetParticipant.name}'s rage ends.`);
@@ -1983,6 +1986,9 @@ export class CombatAttackService {
                 targetIsDead: attackResult.targetIsDead,
                 sessionId: casterData.participant.encounter?.sessionId,
               });
+            // #1635: Relentless Endurance kept the target up at 1 HP; the engine says so.
+            if (hpResult.relentlessEnduranceLine)
+              transcriptLines.push(hpResult.relentlessEnduranceLine);
             transcriptLines.push(...concentrationLines);
             return {
               ...attackResult,
@@ -2140,6 +2146,9 @@ export class CombatAttackService {
                   targetIsDead: attackResult.targetIsDead,
                   sessionId: casterData.participant.encounter?.sessionId,
                 });
+              // #1635: Relentless Endurance kept the target up at 1 HP; the engine says so.
+              if (hpResult.relentlessEnduranceLine)
+                transcriptLines.push(hpResult.relentlessEnduranceLine);
               transcriptLines.push(...concentrationLines);
               return {
                 ...attackResult,
@@ -2267,6 +2276,9 @@ export class CombatAttackService {
                   targetIsDead: saveResult.targetIsDead,
                   sessionId: casterData.participant.encounter?.sessionId,
                 });
+              // #1635: Relentless Endurance kept the target up at 1 HP; the engine says so.
+              if (hpResult.relentlessEnduranceLine)
+                transcriptLines.push(hpResult.relentlessEnduranceLine);
               transcriptLines.push(...concentrationLines);
               return {
                 ...saveResult,

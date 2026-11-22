@@ -145,6 +145,7 @@ export async function applyNonAttackDamage(
           overflow: outcome.overflow,
           hpMax: before.maxHitPoints,
         });
+    if (vitals.relentlessEnduranceLine) engineLines.push(vitals.relentlessEnduranceLine);
     // 2014 concentration: a concentrating character who takes damage rolls a
     // CON save (DC max(10, half damage)); a failed save ends the spell. Dropping
     // to 0 HP ends it outright — an unconscious character cannot concentrate.
@@ -195,6 +196,7 @@ export async function applyNonAttackDamage(
   });
   // #1654: a fall that ended a live Rage is an engine fact the player and the DM both read.
   if (result.rageEnded) engineLines.push(`${name}'s rage ends.`);
+  if (result.relentlessEnduranceLine) engineLines.push(result.relentlessEnduranceLine);
   for (const line of engineLines) await recordDmTacticalFact(live.sessionId, line);
 
   const vitals = await CharacterVitalsService.getVitals(characterId, userId);

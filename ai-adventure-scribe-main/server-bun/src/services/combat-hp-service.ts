@@ -21,6 +21,11 @@
 import { and, eq, exists, or, sql } from 'drizzle-orm';
 
 import { CharacterVitalsService } from './character-vitals-service.js';
+import {
+  relentlessEnduranceLine,
+  spendRelentlessEndurance,
+  wouldRelentlessEnduranceTrigger,
+} from './combat/relentless-endurance.js';
 import { db } from '../../../db/client';
 import {
   combatParticipantStatus,
@@ -440,37 +445,78 @@ export class CombatHPService {
     // aborts the enclosing Postgres transaction, and a "best-effort" write that
     // can still roll back the gameplay state it is describing is not
     // best-effort at all.
-    await this.writeThrough({
+    //
+    // #1635: Relentless Endurance may drop a Half-Orc to 1 HP instead of 0. The spend
+    // happens inside the same transaction as the HP write, so a failed write rolls back
+    // the spend with it.
+    const triggerRelentless =
+      !!participant.characterId &&
+      participant.participantType === 'player' &&
+      wouldRelentlessEnduranceTrigger({
+        hpBefore: status.currentHp,
+        newHp: result.newCurrentHp,
+        massiveDamage: result.massiveDamage === true,
+        isDead: result.isDead,
+      });
+
+    const writeRequest = (r: DamageResult, tx?: VitalsTx): WriteThroughRequest => ({
       participantId,
       encounterId,
       characterId: participant.characterId ?? null,
       userId,
       status: {
-        currentHp: result.newCurrentHp,
-        tempHp: result.newTempHp,
-        isConscious: result.isConscious,
-        deathSavesSuccesses: result.newDeathSavesSuccesses ?? status.deathSavesSuccesses,
-        deathSavesFailures: result.newDeathSavesFailures,
+        currentHp: r.newCurrentHp,
+        tempHp: r.newTempHp,
+        isConscious: r.isConscious,
+        deathSavesSuccesses: r.newDeathSavesSuccesses ?? status.deathSavesSuccesses,
+        deathSavesFailures: r.newDeathSavesFailures,
       },
       character: {
-        currentHitPoints: result.newCurrentHp,
-        temporaryHitPoints: result.newTempHp,
-        isConscious: result.isConscious,
+        currentHitPoints: r.newCurrentHp,
+        temporaryHitPoints: r.newTempHp,
+        isConscious: r.isConscious,
         // Damage never adds successes. It only clears them: a fresh drop starts a new dying
         // sequence and a hit on a stable creature makes it dying again.
-        deathSavesSuccesses: result.newDeathSavesSuccesses ?? status.deathSavesSuccesses,
-        deathSavesFailures: result.newDeathSavesFailures,
+        deathSavesSuccesses: r.newDeathSavesSuccesses ?? status.deathSavesSuccesses,
+        deathSavesFailures: r.newDeathSavesFailures,
         // #261: massive damage / overflow kills must name the state outright — the tallies
         // alone don't reach the sheet's character_stats mirror (Hark D4-014).
-        ...(result.isDead ? { vitalState: 'dead' as const } : {}),
+        ...(r.isDead ? { vitalState: 'dead' as const } : {}),
       },
+      ...(tx ? { tx } : {}),
     });
+
+    let final: DamageResult = result;
+    let relentlessLine: string | undefined;
+    const characterId = participant.characterId;
+    if (triggerRelentless && characterId) {
+      const outcome = await db.transaction(async (tx) => {
+        const spent = await spendRelentlessEndurance(tx, characterId);
+        const written: DamageResult = spent
+          ? {
+              ...result,
+              newCurrentHp: 1,
+              isConscious: true,
+              newDeathSavesFailures: 0,
+              newDeathSavesSuccesses: 0,
+            }
+          : result;
+        await this.writeThrough(writeRequest(written, tx));
+        return { written, spent };
+      });
+      final = outcome.written;
+      if (outcome.spent) {
+        relentlessLine = relentlessEnduranceLine(participant.name ?? outcome.spent.characterName);
+      }
+    } else {
+      await this.writeThrough(writeRequest(result));
+    }
 
     if (damageAmount > 0) {
       await touchEncounterActivity(encounterId);
     }
     // #1637: a hidden participant that takes damage is found; the Hide mark ends.
-    if (result.modifiedDamage > 0 && (await isHiddenAttacker(encounterId, participantId))) {
+    if (final.modifiedDamage > 0 && (await isHiddenAttacker(encounterId, participantId))) {
       await clearHiddenAttacker(encounterId, participantId);
     }
     // #1654: a character's Rage, written after the HP commit. Damage taken (HP or temp HP lost, after
@@ -478,14 +524,14 @@ export class CombatHPService {
     // unconscious ends Rage at once (2014 SRD 5.1). A failed write is logged; the damage already landed.
     let rageEnded = false;
     if (participant.characterId) {
-      if (result.modifiedDamage + result.tempHpLost > 0) {
+      if (final.modifiedDamage + final.tempHpLost > 0) {
         try {
           await markRageActive(encounterId, participantId);
         } catch (error) {
           logger.error({ msg: 'RAGE_ACTIVITY_MARK_FAILED', encounterId, participantId, error });
         }
       }
-      if (result.newCurrentHp <= 0 || !result.isConscious) {
+      if (final.newCurrentHp <= 0 || !final.isConscious) {
         try {
           rageEnded = await clearRage(encounterId, participantId);
         } catch (error) {
@@ -503,7 +549,7 @@ export class CombatHPService {
         await db.insert(combatDamageLog).values({
           encounterId,
           participantId,
-          damageAmount: result.modifiedDamage,
+          damageAmount: final.modifiedDamage,
           damageType: damageType || 'untyped',
           sourceParticipantId: sourceParticipantId || null,
           sourceDescription: sourceDescription || null,
@@ -518,13 +564,17 @@ export class CombatHPService {
           error,
           encounterId,
           participantId,
-          damageAmount: result.modifiedDamage,
+          damageAmount: final.modifiedDamage,
           roundNumber: currentRound,
         });
       }
     }
 
-    return { ...result, rageEnded };
+    return {
+      ...final,
+      rageEnded,
+      ...(relentlessLine ? { relentlessEnduranceLine: relentlessLine } : {}),
+    };
   }
 
   /**
