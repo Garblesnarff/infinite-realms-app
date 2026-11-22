@@ -108,6 +108,7 @@ function seatDeps(equipped: (typeof quarterstaffProfile)[], initiatives: Record<
       deriveCombatEntryFirstAction(params, {
         getParticipantAbilityProfile: async () => scholarProfile as never,
         listEquippedWeaponProfiles: async () => equipped as never,
+        listCarriedWeaponProfiles: async () => equipped as never,
         getActiveConditionNames: async () => [],
         loadActiveTacticalMap: async () => null,
         logger: { warn: (data: unknown) => warnings.push(data) },

@@ -273,6 +273,7 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
 
   const enter = async (
     targetSessionId = sessionId,
+    playerInitiativeRoll = 14,
   ): Promise<{ status: number; payload: Record<string, unknown> }> => {
     const response = await app!.handle(
       new Request(`http://localhost/v1/combat/sessions/${targetSessionId}/enter`, {
@@ -281,7 +282,7 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
         body: JSON.stringify({
           fromPending: true,
           player,
-          playerInitiativeRoll: 14,
+          playerInitiativeRoll,
         }),
       }),
     );
@@ -446,7 +447,7 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
       14,
     ],
     ['I attack Dutch Pellam.', 'weapon', 'Javelin', 'piercing', null, 19, 14],
-    ['I attack Dutch Pellam with my longsword.', 'weapon', 'Longsword', 'slashing', null, 19, 14],
+    ['I attack Dutch Pellam with longsword.', 'weapon', 'Longsword', 'slashing', null, 19, 14],
     ['I punch Dutch Pellam.', 'unarmed', 'Unarmed Strike', 'bludgeoning', 1, 20, 8],
   ])(
     '#1710 resolves the opening attack from %s',
@@ -461,7 +462,7 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
         declaredAttack: { actorName: 'Dutch Pellam', attackSource: source },
       });
 
-      const { status, payload } = await enter();
+      const { status, payload } = await enter(sessionId, 20);
       expect(status).toBe(201);
       expect(payload.first_action).toMatchObject({
         type: 'attack',

@@ -520,11 +520,16 @@ const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
   );
   const directVerbMatch = directVerbPattern.exec(clause);
   if (!directVerbMatch) return null;
-  const weaponMatch = /^(.+?)\s+with\s+(?:my|the|a|his|her)\s+(.+)$/i.exec(directVerbMatch[2]);
+  const weaponMatch = /^(.+?)\s+with\s+(?:(my|the|an?|his|her)\s+)?(.+)$/i.exec(directVerbMatch[2]);
+  const claim = weaponMatch && stripTrailingPunctuation(weaponMatch[3]);
+  const hasWeaponClaim =
+    weaponMatch &&
+    claim &&
+    (weaponMatch[2] || findCatalogWeapon(claim) || isUnarmedWeaponClaim(claim));
   return {
     verb: singularVerb(directVerbMatch[1]),
-    targetText: weaponMatch ? stripTrailingPunctuation(weaponMatch[1]) : directVerbMatch[2],
-    ...(weaponMatch ? { weaponName: stripTrailingPunctuation(weaponMatch[2]) } : {}),
+    targetText: hasWeaponClaim ? stripTrailingPunctuation(weaponMatch[1]) : directVerbMatch[2],
+    ...(hasWeaponClaim ? { weaponName: claim } : {}),
   };
 };
 

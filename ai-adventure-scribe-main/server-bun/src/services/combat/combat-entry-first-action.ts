@@ -2,7 +2,7 @@
 /**
  * Derives the first player action from the declaration that caused combat entry.
  *
- * This is intentionally a server-side read/derivation step. The model's `combat_actions` are
+ * This runs on the server after the player confirms entry. The model's `combat_actions` are
  * useful for NPC turns and for ordinary combat turns, but they are not the authority for the
  * player's opening attack: the declaration already named the action before the model answered.
  */
@@ -142,6 +142,7 @@ type EntryParticipant = CombatEntryFirstActionState['participants'][number] & {
 };
 
 export interface CombatEntryFirstActionDeps {
+  listCarriedWeaponProfiles: typeof listCarriedWeaponProfiles;
   listEquippedWeaponProfiles: typeof listEquippedWeaponProfiles;
   getParticipantAbilityProfile: typeof getParticipantAbilityProfile;
   getActiveConditionNames: typeof getActiveConditionNames;
@@ -151,6 +152,7 @@ export interface CombatEntryFirstActionDeps {
 }
 
 const defaultDeps: CombatEntryFirstActionDeps = {
+  listCarriedWeaponProfiles,
   listEquippedWeaponProfiles,
   getParticipantAbilityProfile,
   getActiveConditionNames,
@@ -446,7 +448,7 @@ export async function deriveCombatEntryFirstAction(
     params.userId &&
     playerParticipant.characterId
   ) {
-    const carried = await listCarriedWeaponProfiles(playerParticipant);
+    const carried = await deps.listCarriedWeaponProfiles(playerParticipant);
     const match = carried.find((weapon) => weaponProfileMatches(weapon, claimedWeapon));
     if (match) {
       const result = await CharacterEquipService.equipItem(
