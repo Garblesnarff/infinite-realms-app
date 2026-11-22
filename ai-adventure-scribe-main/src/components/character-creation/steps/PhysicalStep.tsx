@@ -59,6 +59,34 @@ const PhysicalStep: React.FC = () => {
   const heightRange = race?.heightRange || [48, 84];
   const weightRange = race?.weightRange || [80, 300];
 
+  // The sliders display the race minima as the values while nothing is set
+  // yet (character.height || heightRange[0]); make those displayed values
+  // real state when the step first shows them unset, so the summary step —
+  // which reads state — shows exactly what this step showed. #213: Hark's
+  // run saw 4'10" / 114 lbs here and nothing on the summary, because the
+  // displayed defaults were never dispatched.
+  //
+  // The refs remember which values this effect auto-set (vs the user chose):
+  // a value that still equals its auto-default is re-initialized when the
+  // race changes, so switching race after visiting the step follows the new
+  // race's minima instead of freezing the old race's. A value the user moved
+  // is never touched.
+  const autoHeightRef = React.useRef<number | undefined>(undefined);
+  const autoWeightRef = React.useRef<number | undefined>(undefined);
+  React.useEffect(() => {
+    if (character.height === undefined || character.height === autoHeightRef.current) {
+      dispatch({ type: 'SET_HEIGHT', payload: heightRange[0] });
+      autoHeightRef.current = heightRange[0];
+    }
+    if (character.weight === undefined || character.weight === autoWeightRef.current) {
+      dispatch({ type: 'SET_WEIGHT', payload: weightRange[0] });
+      autoWeightRef.current = weightRange[0];
+    }
+    // Only initialize while unset or still at the auto-default; a set value
+    // is the user's (or a draft's).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [heightRange[0], weightRange[0], character.height, character.weight, dispatch]);
+
   const convertToMetricHeight = (inches: number) => {
     return Math.round(inches * 2.54);
   };

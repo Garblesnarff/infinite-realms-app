@@ -4,6 +4,30 @@ import { describe, expect, it, vi } from 'vitest';
 import { TableCharacterCard } from '../LeftRail';
 import { buildCharacterSheet } from '../useOverhaulViewModel';
 
+import type { Character } from '@/types/character';
+
+const scores = {
+  strength: { score: 10, modifier: 0, savingThrow: false },
+  dexterity: { score: 14, modifier: 2, savingThrow: false },
+  constitution: { score: 14, modifier: 2, savingThrow: false },
+  intelligence: { score: 10, modifier: 0, savingThrow: false },
+  wisdom: { score: 12, modifier: 1, savingThrow: false },
+  charisma: { score: 16, modifier: 3, savingThrow: false },
+};
+
+/** Session loader shape: class is a name stub, class_features is the GET overlay. */
+function sessionCharacter(partial: Partial<Character>): Character {
+  return {
+    id: 'session-hero',
+    name: 'Clarice',
+    level: 3,
+    race: { name: 'Human', speed: 30, traits: [], languages: [] },
+    abilityScores: scores,
+    character_stats: { current_hit_points: 18, max_hit_points: 18 },
+    ...partial,
+  } as unknown as Character;
+}
+
 describe('Table character card', () => {
   it('uses the sheet values and links Open full sheet to the standalone sheet (#1705)', () => {
     const open = vi.fn();
@@ -82,5 +106,50 @@ describe('Table character card', () => {
     const clip = container.querySelector('svg.ir-paper-clip');
     expect(clip).toHaveAttribute('aria-hidden', 'true');
     expect(container.querySelector('dl.ir-plaques')).toBeInTheDocument();
+  });
+
+  it('shows the Lay on Hands pool from the tracked overlay the sheet reads (#1670)', () => {
+    const sheet = buildCharacterSheet(
+      sessionCharacter({
+        class: { name: 'Paladin' } as Character['class'],
+        classFeatures: { lay_on_hands: { currentUses: 12, maxUses: 15 } },
+      }),
+    );
+    expect(sheet.resources?.layOnHands).toEqual({ current: 12, max: 15 });
+    render(<TableCharacterCard character={sheet} onOpenSheet={vi.fn()} />);
+    expect(screen.getByText('Lay on Hands · 12 / 15 points')).toBeInTheDocument();
+  });
+
+  it('moves the Lay on Hands line when the pool changes, with no reload (#1670)', () => {
+    const paladin = { class: { name: 'Paladin' } as Character['class'] };
+    const view = render(
+      <TableCharacterCard
+        character={buildCharacterSheet(
+          sessionCharacter({
+            ...paladin,
+            classFeatures: { lay_on_hands: { currentUses: 12, maxUses: 15 } },
+          }),
+        )}
+        onOpenSheet={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Lay on Hands · 12 / 15 points')).toBeInTheDocument();
+    // New props from the CharacterContext refresh (character-pool-updated →
+    // SET_TRACKED_USES → useOverhaulViewModel recompute). This rerender proves
+    // the card follows its props with no reload; the event→dispatch half is
+    // covered by use-character-refresh.pool.test.tsx, not here.
+    view.rerender(
+      <TableCharacterCard
+        character={buildCharacterSheet(
+          sessionCharacter({
+            ...paladin,
+            classFeatures: { lay_on_hands: { currentUses: 7, maxUses: 15 } },
+          }),
+        )}
+        onOpenSheet={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Lay on Hands · 7 / 15 points')).toBeInTheDocument();
+    expect(screen.queryByText('Lay on Hands · 12 / 15 points')).not.toBeInTheDocument();
   });
 });

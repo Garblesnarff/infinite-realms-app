@@ -232,6 +232,10 @@ export const TableCharacterCard: React.FC<{
     current: character.hpCurrent,
     maximum: character.hpMax,
   }).replace('/', ' / ');
+  // #1670: the same pool the full sheet renders (ResourceSection), from the
+  // same resources object — refreshed by the character-pool-updated event
+  // via SET_TRACKED_USES, so the line moves with no reload.
+  const layOnHands = character.resources?.layOnHands;
   return (
     <section
       className="ir-index-card rounded-lg p-1 text-[#2a1a0c] md:p-4"
@@ -277,6 +281,11 @@ export const TableCharacterCard: React.FC<{
           </div>
         </dl>
         <p className="mt-3 font-semibold">Hit points · {hp}</p>
+        {layOnHands !== undefined && (
+          <p className="mt-3 font-semibold">
+            Lay on Hands · {layOnHands.current} / {layOnHands.max} points
+          </p>
+        )}
         {character.hpCurrent !== null &&
           character.hpMax !== null &&
           character.hpMax > 0 &&
