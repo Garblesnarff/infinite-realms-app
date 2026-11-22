@@ -70,6 +70,8 @@ interface UseMessageHandlerLogicProps {
  */
 const headerMode = String(import.meta.env.VITE_SCENE_SUMMARY_HEADER ?? 'short').toLowerCase();
 const DEFERRED_TASK_TIMEOUT_MS = 20_000;
+/** #1696: how long the roll tray waits for its DM row to be saved before it opens anyway. */
+const ROLL_ROW_SAVE_BEFORE_PROMPT_TIMEOUT_MS = 1_500;
 export const DM_STILL_THINKING_TIMEOUT_MS = 30_000;
 export const DM_TURN_TIMEOUT_MS = 90_000;
 export const DM_TIMEOUT_MESSAGE = 'The DM did not respond in time. Your message is still here.';
@@ -410,6 +412,35 @@ export const useMessageHandlerLogic = ({
     }
   };
 
+  /**
+   * #1696: save the DM roll row before the roll tray opens, so a reload finds the row the popup
+   * came from. The row is written provisional: the turn's final save replaces it in place through
+   * the server's provisional-row path (dm-reply-persistence.ts). The wait is short; on failure or
+   * timeout the tray still opens, and the miss is logged.
+   */
+  const saveRollRowBeforePrompt = async (row: ChatMessage): Promise<boolean> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error('DM roll row save timed out')),
+        ROLL_ROW_SAVE_BEFORE_PROMPT_TIMEOUT_MS,
+      );
+    });
+    const provisionalRow: ChatMessage = {
+      ...row,
+      context: { ...row.context, provisional: true },
+    };
+    try {
+      await Promise.race([sendMessage(provisionalRow), timeout]);
+      return true;
+    } catch (error) {
+      logger.warn('DM_ROW_SAVE_BEFORE_PROMPT_FAILED', { messageId: row.id, error });
+      return false;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   // The actual message sending logic (extracted from handleSendMessage)
   const actualSendMessage = async (
     playerInput: string,
@@ -527,6 +558,7 @@ export const useMessageHandlerLogic = ({
     let textShown = false;
     let earlyMessage: EnhancedChatMessage | null = null;
     let rollTurnStarted = false;
+    /** #1696: the roll row was saved before the tray opened, so the turn's own save is skipped. */
     let textPhaseEmitted = false;
     try {
       logger.info('[Memory Flow] Starting message handling for:', playerInput);
@@ -805,6 +837,19 @@ export const useMessageHandlerLogic = ({
                 rollTurnStarted = true;
                 turnPhase('text shown');
                 textPhaseEmitted = true;
+                await saveRollRowBeforePrompt(
+                  rollReplyMessage(
+                    {
+                      ...earlyResponse,
+                      id: dmMessageId,
+                      sender: 'dm',
+                      text: sanitizeDMText(earlyResponse.text),
+                      timestamp: new Date().toISOString(),
+                    } as unknown as ChatMessage,
+                    dmMessageId,
+                    earlyPromptRollRequests,
+                  ),
+                );
                 processAiResponse(
                   earlyPromptRollRequests as unknown as Parameters<typeof processAiResponse>[0],
                 );
@@ -994,6 +1039,9 @@ export const useMessageHandlerLogic = ({
       }
 
       if (hasRollRequests && !rollTurnStarted) {
+        await saveRollRowBeforePrompt(
+          rollReplyMessage(sanitizedAiResponseMessage, dmMessageId, narrativeRollRequests),
+        );
         processAiResponse(
           narrativeRollRequests as unknown as Parameters<typeof processAiResponse>[0],
         );
