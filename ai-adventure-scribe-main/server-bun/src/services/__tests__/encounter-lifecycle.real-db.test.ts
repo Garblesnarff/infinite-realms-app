@@ -1438,7 +1438,12 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     const { actions } = await getLegalCombatActions(f.encounterId, f.userId);
     expect(actions.some((action) => action.type === 'move')).toBe(true);
     expect(
-      actions.some((action) => action.type === 'attack' && action.targetIds?.includes(f.foeId)),
+      actions.some(
+        (action) =>
+          action.type === 'attack' &&
+          Array.isArray(action.targetIds) &&
+          action.targetIds.includes(f.foeId),
+      ),
     ).toBe(false);
     expect((await entityAt(f, f.heroId)).movementRemaining).toBe(10);
 
