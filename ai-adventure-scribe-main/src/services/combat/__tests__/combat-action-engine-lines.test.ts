@@ -55,6 +55,12 @@ const TABLE: Record<LegalActionType, Row> = {
     action: attackAction(SCHOLAR, REEVES),
     value: PLAYER_HITS_ENEMY,
   },
+  reckless_attack: {
+    prints: true,
+    formatAs: 'attack',
+    action: attackAction(SCHOLAR, REEVES),
+    value: PLAYER_HITS_ENEMY,
+  },
   spell: {
     prints: true,
     formatAs: 'cast_spell',

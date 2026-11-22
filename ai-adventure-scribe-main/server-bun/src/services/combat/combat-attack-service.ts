@@ -19,7 +19,6 @@ import { logAttackResolution, participantSlug } from './attack-telemetry.js';
 import { appliesBlessDie } from './bless-rider.js';
 import { mookGroupAttackBonus } from './boss-moves.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
-import { recklessAttackRefusal } from './reckless-attack-rules.js';
 import {
   activeAlliesOf,
   claimSneakAttack,
@@ -67,6 +66,7 @@ import { appliesHexRider, hexRiderDice } from './hex-rider.js';
 import { autoCritReason, checkHit, checkAutoCrit } from './hit-check.js';
 import { markPlayerDamageProvocation } from './npc-provocation.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
+import { recklessAttackRefusal } from './reckless-attack-rules.js';
 import {
   aggregateResistances,
   RAGE_RESISTANCES,

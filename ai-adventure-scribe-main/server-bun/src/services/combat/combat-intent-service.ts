@@ -24,11 +24,7 @@ import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.j
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
-import {
-  classLevelOfCharacter,
-  hasAttackedThisTurn,
-  readLightAttackMark,
-} from './combat-turn-flags.js';
+import { hasAttackedThisTurn, readLightAttackMark } from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
@@ -2662,7 +2658,9 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       listEquippedWeaponProfiles(actor),
       getActiveConditionNames(actor.id),
     ]);
-    const weapons = equippedWeapons.length ? equippedWeapons : [UNARMED_STRIKE];
+    const weapons: WeaponRuleProfile[] = equippedWeapons.length
+      ? equippedWeapons
+      : [UNARMED_STRIKE];
     const opposingTargets = state.participants.filter(
       (participant) =>
         participant.id !== actor.id &&
@@ -2721,7 +2719,14 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       actions.push(...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }));
       if (
         actor.characterId &&
-        (await classLevelOfCharacter(actor.characterId, 'Barbarian')) >= 2 &&
+        classLevelOf(
+          {
+            class: actor.characterClass ?? null,
+            level: actor.characterLevel ?? null,
+            classLevels: actor.characterClassLevels,
+          },
+          'Barbarian',
+        ) >= 2 &&
         !(await hasAttackedThisTurn(encounterId, actor.id))
       ) {
         const recklessWeapons = weapons.filter(

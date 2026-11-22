@@ -478,6 +478,12 @@ describe('CombatActionBar', () => {
         // #1638: Rage, a Barbarian's bonus action, rides the More menu.
         rage: { type: 'rage', label: 'Rage' },
         // #1639: the off-hand attack, a bonus action, rides the More menu.
+        reckless_attack: {
+          type: 'reckless_attack',
+          label: 'Reckless Attack with Longsword',
+          weaponId: 'longsword',
+          targetIds: ['orc-1'],
+        },
         off_hand_attack: {
           type: 'off_hand_attack',
           label: 'Off-hand attack with Dagger (bonus action)',
