@@ -25,6 +25,8 @@ import {
   combatEncounters,
   dialogueHistory,
   gameSessions,
+  characterEquipment,
+  npcs,
 } from '../../../../../db/schema/index';
 import {
   closeRealDb,
@@ -202,7 +204,9 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
         )
     : null;
 
-  const generate = async (): Promise<Record<string, unknown>> => {
+  const generate = async (
+    playerInput = 'Continue the scene.',
+  ): Promise<Record<string, unknown>> => {
     generatedResult = { text: dmText(), provider: 'openrouter', model: 'test/model' };
     const response = await app!.handle(
       new Request('http://localhost/v1/llm/generate', {
@@ -210,7 +214,7 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
         headers: { authorization: 'Bearer test', 'content-type': 'application/json' },
         body: JSON.stringify({
           prompt: 'Continue the scene.',
-          player_input: 'Continue the scene.',
+          player_input: playerInput,
           sessionId,
           combatEntry: { sessionId, player },
         }),
@@ -349,6 +353,11 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
       currentHitPoints: 12,
       speed: 30,
     });
+    await database.insert(npcs).values({ campaignId, name: 'Dutch Pellam' });
+    await database.insert(characterEquipment).values([
+      { characterId, itemName: 'Javelin', itemType: 'weapon', equipped: true },
+      { characterId, itemName: 'Longsword', itemType: 'weapon', equipped: false },
+    ]);
     await database.insert(gameSessions).values({
       id: sessionId,
       campaignId,
@@ -421,6 +430,77 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
     if (typeof encounterId !== 'string') throw new Error('encounter id missing');
     expect(rows[0]?.id).toBe(encounterId);
   });
+
+  test.each([
+    ['I throw a punch at Dutch Pellam.', 'unarmed', 'Unarmed Strike', 'bludgeoning', 3, 19, 14],
+    ['I headbutt Dutch Pellam.', 'unarmed', 'Unarmed Strike', 'bludgeoning', 3, 19, 14],
+    ['I kick Dutch Pellam.', 'unarmed', 'Unarmed Strike', 'bludgeoning', 3, 20, 14],
+    ['I strike Dutch Pellam with my fist.', 'unarmed', 'Unarmed Strike', 'bludgeoning', 3, 19, 14],
+    [
+      'I deliver an unarmed blow to Dutch Pellam.',
+      'unarmed',
+      'Unarmed Strike',
+      'bludgeoning',
+      3,
+      19,
+      14,
+    ],
+    ['I attack Dutch Pellam.', 'weapon', 'Javelin', 'piercing', null, 19, 14],
+    ['I attack Dutch Pellam with my longsword.', 'weapon', 'Longsword', 'slashing', null, 19, 14],
+    ['I punch Dutch Pellam.', 'unarmed', 'Unarmed Strike', 'bludgeoning', 1, 20, 8],
+  ])(
+    '#1710 resolves the opening attack from %s',
+    async (input, source, weapon, damageType, damage, d20, strength) => {
+      await database
+        .update(characterStats)
+        .set({ strength })
+        .where(eq(characterStats.characterId, characterId));
+      const attackBonus = Math.floor((strength - 10) / 2) + 2;
+      const generated = await generate(input);
+      expect(generated.combat_entry_pending).toMatchObject({
+        declaredAttack: { actorName: 'Dutch Pellam', attackSource: source },
+      });
+
+      const { status, payload } = await enter();
+      expect(status).toBe(201);
+      expect(payload.first_action).toMatchObject({
+        type: 'attack',
+        weaponName: weapon,
+        roll_request: { modifier: attackBonus },
+      });
+      const { encounter, first_action: first } = payload as {
+        encounter: { id: string };
+        first_action: {
+          combat_action: { actor_id: string; target_ids: string[]; weapon_id: string };
+        };
+      };
+      const action = first.combat_action;
+      const response = await app!.handle(
+        new Request(`http://localhost/v1/combat/${encounter.id}/intent`, {
+          method: 'POST',
+          headers: { authorization: 'Bearer test', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            source: 'dm',
+            intent: {
+              type: 'attack',
+              actorId: action.actor_id,
+              targetId: action.target_ids[0],
+              weaponId: action.weapon_id,
+              d20,
+            },
+          }),
+        }),
+      );
+      const committed = await response.json();
+      expect(response.status).toBe(200);
+      expect(committed.result).toMatchObject({
+        hit: true,
+        attackBonus,
+        damageType,
+        ...(damage === null ? {} : { finalDamage: damage }),
+      });
+    },
+  );
 
   test('a held fight-opening reply is written once, before the combat rows, on confirm (#1390)', async () => {
     // This session is never used by the preceding seat test, so a late write from it cannot

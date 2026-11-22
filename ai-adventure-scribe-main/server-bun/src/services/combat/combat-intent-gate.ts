@@ -35,7 +35,7 @@ export interface DeclaredAttack {
   weaponName?: string;
   /**
    * True only when the player named the weapon (e.g. "with the dagger").
-   * A missing weapon on "I attack" is Unarmed Strike, not an inferred blade.
+   * A missing weapon on "I attack" uses the default equipped weapon.
    */
   weaponStated?: boolean;
   spellId?: string;
@@ -58,6 +58,7 @@ const DIRECT_ATTACK_VERBS = [
   'shoot',
   'attack',
   'kick',
+  'headbutt',
   'tackle',
   'grapple',
   'shove',
@@ -470,8 +471,23 @@ const matchClauseHead = (clause: string): ClauseAttackMatch | null => {
     }
   }
 
-  const throwMatch = /^(?:throw|hurl|launch|loose)\s+.+?\s+at\s+(.+)$/i.exec(clause);
-  if (throwMatch) return { verb: 'throw', targetText: throwMatch[1] };
+  const blowMatch =
+    /^(?:throw|land|deliver)\s+(?:(?:a|an|my|the)\s+)?(punch|kick|headbutt|fists?|unarmed (?:blow|strike))\s+(?:at|on|to)\s+(.+)$/i.exec(
+      clause,
+    );
+  if (blowMatch) {
+    return { verb: 'strike', weaponName: blowMatch[1], targetText: blowMatch[2] };
+  }
+
+  const throwMatch =
+    /^(?:throw|hurl|launch|loose)\s+(?:(?:a|an|my|the)\s+)?(.+?)\s+at\s+(.+)$/i.exec(clause);
+  if (throwMatch) {
+    return {
+      verb: 'throw',
+      ...(findCatalogWeapon(throwMatch[1]) ? { weaponName: throwMatch[1] } : {}),
+      targetText: throwMatch[2],
+    };
+  }
 
   const takeSwingMatch = /^take\s+a\s+swing\s+(?:at|on)\s+(.+)$/i.exec(clause);
   if (takeSwingMatch) return { verb: 'swing', targetText: takeSwingMatch[1] };

@@ -10,12 +10,18 @@ import { resolveAttackRules } from './combat-rules.js';
 import {
   getActiveConditionNames,
   getParticipantAbilityProfile,
+  listCarriedWeaponProfiles,
   listEquippedWeaponProfiles,
   remainingSpellSlots,
 } from './data-access.js';
 import { resolveParticipantArmorClass } from './participant-armor-class.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
-import { isUnarmedAttackVerb, isUnarmedWeaponClaim, UNARMED_STRIKE } from './weapon-catalog.js';
+import {
+  isUnarmedAttackVerb,
+  isUnarmedWeaponClaim,
+  UNARMED_STRIKE,
+  weaponProfileMatches,
+} from './weapon-catalog.js';
 import { groundRequestedWeapon } from './weapon-grounding.js';
 import { displayNameOf } from '../../../../shared/engine-display-name';
 import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
@@ -28,6 +34,7 @@ import { combatLogger } from '../../lib/logger.js';
 import { planApproach } from '../../tactical/approach.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { isUnresolvedNpcName, resolveSceneCombatant } from '../../tactical/seating.js';
+import { CharacterEquipService } from '../inventory/character-equip-service.js';
 
 import type { DeclaredAttack } from './combat-intent-gate.js';
 
@@ -316,6 +323,7 @@ function geometryFor(
 export async function deriveCombatEntryFirstAction(
   params: {
     sessionId: string;
+    userId?: string;
     combatState: CombatEntryFirstActionState;
     player: { characterId?: string | null; name: string };
     declaredAttack: DeclaredAttack;
@@ -421,12 +429,39 @@ export async function deriveCombatEntryFirstAction(
   const requestedAttackSource = requestedSource;
   profile ??= await deps.getParticipantAbilityProfile(playerParticipant);
   const equipped = await deps.listEquippedWeaponProfiles(playerParticipant);
-  const grounded =
+  let grounded =
     requestedAttackSource === 'unarmed'
       ? { weapon: { ...UNARMED_STRIKE }, weaponId: undefined, grounded: true, requested: null }
       : groundRequestedWeapon(params.declaredAttack.weaponName, equipped);
   const weaponStated =
     params.declaredAttack.weaponStated ?? Boolean(params.declaredAttack.weaponName?.trim());
+  // Choosing Start the fight also readies a weapon the player explicitly named, using
+  // the same owned equipment write as the combat menu's Equip and attack option.
+  const claimedWeapon = params.declaredAttack.weaponName;
+  if (
+    requestedAttackSource === 'weapon' &&
+    !grounded.grounded &&
+    weaponStated &&
+    claimedWeapon &&
+    params.userId &&
+    playerParticipant.characterId
+  ) {
+    const carried = await listCarriedWeaponProfiles(playerParticipant);
+    const match = carried.find((weapon) => weaponProfileMatches(weapon, claimedWeapon));
+    if (match) {
+      const result = await CharacterEquipService.equipItem(
+        playerParticipant.characterId,
+        params.userId,
+        match.id,
+      );
+      if (result.success) {
+        grounded = groundRequestedWeapon(
+          claimedWeapon,
+          await deps.listEquippedWeaponProfiles(playerParticipant),
+        );
+      }
+    }
+  }
   if (requestedAttackSource === 'weapon' && grounded.grounded === false) {
     const swappedToUnarmed = !grounded.weaponId || grounded.weapon.id === UNARMED_STRIKE.id;
     if (!weaponStated || swappedToUnarmed) {

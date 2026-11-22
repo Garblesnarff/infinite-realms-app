@@ -590,6 +590,7 @@ export interface CombatEntryGateDeps {
   }) => Promise<unknown>;
   deriveFirstAction?: (params: {
     sessionId: string;
+    userId: string;
     combatState: CombatEntryStartResult;
     player: CombatEntryPlayer;
     declaredAttack: DeclaredAttack;
@@ -832,6 +833,7 @@ export async function seatCombatEntry(
       try {
         const derived = await deps.deriveFirstAction({
           sessionId,
+          userId,
           combatState,
           player,
           declaredAttack,
