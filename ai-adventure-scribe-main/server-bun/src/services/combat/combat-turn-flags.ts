@@ -42,6 +42,8 @@ const HIDDEN_KEY = 'hiddenParticipants';
 const SNEAK_KEY = 'sneakAttackSpent';
 const RAGE_KEY = 'raging';
 const LIGHT_ATTACK_KEY = 'lightAttack';
+const RECKLESS_KEY = 'recklessAttack';
+const ATTACK_TURN_KEY = 'firstAttackTurn';
 /** Rage lasts 10 rounds (2014 SRD 5.1; the reduced first scope of #1638). */
 export const RAGE_DURATION_ROUNDS = 10;
 /** Conditions that make a creature unable to act for the Sneak Attack flanking clause (2014). */
@@ -91,6 +93,84 @@ async function readSessionState(encounterId: string): Promise<unknown> {
     .where(eq(gameSessions.id, sessionOfEncounter(encounterId)))
     .limit(1);
   return row?.state ?? null;
+}
+
+/** Whether this creature has made an attack on the current turn. */
+export async function hasAttackedThisTurn(
+  encounterId: string,
+  participantId: string,
+): Promise<boolean> {
+  const db = await database();
+  const [row] = await db
+    .select({
+      state: gameSessions.sessionState,
+      round: combatEncounters.currentRound,
+      order: combatEncounters.currentTurnOrder,
+    })
+    .from(combatEncounters)
+    .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+    .where(eq(combatEncounters.id, encounterId))
+    .limit(1);
+  const entry = flagEntry(row?.state, ATTACK_TURN_KEY, participantId);
+  return !!row && entry?.encounterId === encounterId && entry.turn === `${row.round}:${row.order}`;
+}
+
+export async function isRecklessOnCurrentTurn(
+  encounterId: string,
+  participantId: string,
+): Promise<boolean> {
+  const db = await database();
+  const [row] = await db
+    .select({
+      state: gameSessions.sessionState,
+      round: combatEncounters.currentRound,
+      order: combatEncounters.currentTurnOrder,
+    })
+    .from(combatEncounters)
+    .innerJoin(gameSessions, eq(combatEncounters.sessionId, gameSessions.id))
+    .where(eq(combatEncounters.id, encounterId))
+    .limit(1);
+  const entry = flagEntry(row?.state, RECKLESS_KEY, participantId);
+  return !!row && entry?.encounterId === encounterId && entry.turn === `${row.round}:${row.order}`;
+}
+
+export async function isReckless(encounterId: string, participantId: string): Promise<boolean> {
+  return (
+    flagEntry(await readSessionState(encounterId), RECKLESS_KEY, participantId)?.encounterId ===
+    encounterId
+  );
+}
+
+/** Record an attack during the actor's own turn and optionally activate Reckless Attack. */
+export async function markTurnAttack(
+  encounterId: string,
+  participantId: string,
+  reckless: boolean,
+): Promise<void> {
+  const db = await database();
+  const entry = sql`jsonb_build_object('encounterId', ${encounterId}::text, 'turn', ${turnOfEncounter(encounterId)})`;
+  const state = sql`jsonb_set(COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${ATTACK_TURN_KEY}}`}::text[],
+    COALESCE(${gameSessions.sessionState} -> ${ATTACK_TURN_KEY}, '{}'::jsonb) || jsonb_build_object(${participantId}::text, ${entry}), true)`;
+  await db
+    .update(gameSessions)
+    .set({
+      sessionState: reckless
+        ? sql`jsonb_set(${state}, ${`{${RECKLESS_KEY}}`}::text[], COALESCE(${gameSessions.sessionState} -> ${RECKLESS_KEY}, '{}'::jsonb) || jsonb_build_object(${participantId}::text, ${entry}), true)`
+        : state,
+      updatedAt: new Date(),
+    })
+    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
+}
+
+export async function clearReckless(encounterId: string, participantId: string): Promise<void> {
+  const db = await database();
+  await db
+    .update(gameSessions)
+    .set({
+      sessionState: sql`COALESCE(${gameSessions.sessionState}, '{}'::jsonb) #- ARRAY[${RECKLESS_KEY}, ${participantId}]::text[]`,
+      updatedAt: new Date(),
+    })
+    .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
 }
 
 /** Store the hidden mark for one participant (a successful Hide check). */
@@ -384,13 +464,16 @@ export async function clearFightFlags(
   await executor
     .update(gameSessions)
     .set({
-      sessionState: sql`jsonb_set(
+      sessionState: sql`jsonb_set(jsonb_set(
+        jsonb_set(
         jsonb_set(
           jsonb_set(
             jsonb_set(COALESCE(${gameSessions.sessionState}, '{}'::jsonb), ${`{${HIDDEN_KEY}}`}::text[], ${keep(HIDDEN_KEY)}, true),
             ${`{${SNEAK_KEY}}`}::text[], ${keep(SNEAK_KEY)}, true),
           ${`{${RAGE_KEY}}`}::text[], ${keep(RAGE_KEY)}, true),
-        ${`{${LIGHT_ATTACK_KEY}}`}::text[], ${keep(LIGHT_ATTACK_KEY)}, true)`,
+        ${`{${LIGHT_ATTACK_KEY}}`}::text[], ${keep(LIGHT_ATTACK_KEY)}, true),
+        ${`{${RECKLESS_KEY}}`}::text[], ${keep(RECKLESS_KEY)}, true),
+        ${`{${ATTACK_TURN_KEY}}`}::text[], ${keep(ATTACK_TURN_KEY)}, true)`,
       updatedAt: new Date(),
     })
     .where(eq(gameSessions.id, sessionOfEncounter(encounterId)));
@@ -405,7 +488,7 @@ export function combatTurnFlagsPreservingState(incoming: SQL): SQL {
   // The incoming blob is written once, with each turn-flag key removed from it, and the stored
   // object (when there is one) is put back beside it. A CASE per key that repeated the incoming
   // expression in both branches doubled the statement for every key (#1639 added the fourth).
-  const keys = [HIDDEN_KEY, SNEAK_KEY, RAGE_KEY, LIGHT_ATTACK_KEY];
+  const keys = [HIDDEN_KEY, SNEAK_KEY, RAGE_KEY, LIGHT_ATTACK_KEY, RECKLESS_KEY, ATTACK_TURN_KEY];
   const storedObject = (key: string): SQL =>
     sql`CASE WHEN jsonb_typeof(${gameSessions.sessionState} -> ${key}) = 'object'
       THEN ${gameSessions.sessionState} -> ${key} END`;

@@ -19,6 +19,7 @@ export const LEGAL_ACTION_TYPES = [
   'rage',
   /** #1639: an off-hand attack, a bonus action after the Attack action with a light melee weapon. */
   'off_hand_attack',
+  'reckless_attack',
   /** #1554: Lay on Hands, an Action: heal self or an adjacent ally from the pool, or cure 5 points. */
   'lay_on_hands',
   'divine_smite',

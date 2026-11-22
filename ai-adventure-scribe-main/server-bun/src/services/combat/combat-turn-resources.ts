@@ -1,7 +1,7 @@
 import { and, eq, sql, type SQL } from 'drizzle-orm';
 
 import { clearAttackBudget } from './attack-budget-service.js';
-import { clearSneakAttackSpent } from './combat-turn-flags.js';
+import { clearReckless, clearSneakAttackSpent } from './combat-turn-flags.js';
 import { db } from '../../../../db/client';
 import { combatEncounters, combatParticipants, gameSessions } from '../../../../db/schema/index';
 import { BusinessLogicError } from '../../lib/errors.js';
@@ -455,6 +455,7 @@ export async function resetTurnResources(participantId: string, round: number): 
       await clearAttackBudget(row.sessionId, participantId);
       // #1637: a Sneak Attack taken last round is spent for this round only.
       await clearSneakAttackSpent(row.encounterId, participantId);
+      await clearReckless(row.encounterId, participantId);
     }
   } catch (error) {
     logger.error({ msg: 'ACTION_SURGE_MARK_CLEAR_FAILED', participantId, error });

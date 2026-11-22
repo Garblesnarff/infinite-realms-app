@@ -572,6 +572,7 @@ export interface CreateWeaponAttackInput {
  * Input for resolving an attack
  */
 export interface AttackRollInput {
+  reckless?: boolean;
   expectedVersion: number;
   attackerId: string;
   targetId: string;

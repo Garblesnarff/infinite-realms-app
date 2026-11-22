@@ -24,7 +24,11 @@ import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.j
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
-import { readLightAttackMark } from './combat-turn-flags.js';
+import {
+  classLevelOfCharacter,
+  hasAttackedThisTurn,
+  readLightAttackMark,
+} from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
@@ -133,6 +137,7 @@ export type CombatIntent =
   | { type: 'move'; actorId: string; x: number; y: number }
   | {
       type: 'attack';
+      reckless?: boolean;
       actorId: string;
       targetId: string;
       weaponId?: string;
@@ -360,6 +365,7 @@ export const VERSIONED_INTENT_TYPES = new Set([
   // #1639: an off_hand_attack legal option submits an 'attack' intent with offHand, so it is
   // claim-based too. Listed so the legal-action version test holds; no intent carries this type.
   'off_hand_attack',
+  'reckless_attack',
   'use_item',
   // #1233: a Flexible Casting intent spends the player's sorcery points and slot ledger.
   'flexible_casting',
@@ -1132,6 +1138,7 @@ export async function proposeCombatAttack(
       advantage: resolvedAttack.advantage,
       disadvantage: resolvedAttack.disadvantage,
       offHand,
+      reckless: resolvedAttack.reckless,
     },
     userId,
   );
@@ -1660,6 +1667,7 @@ export async function executeCombatIntent(
               attackType: approach.attackType,
               // #1639: the off-hand swing claims the bonus action, not the Attack action.
               offHand: intent.offHand === true,
+              reckless: intent.reckless,
               expectedVersion: intent.expectedVersion,
               advantage: intent.advantage,
               disadvantage: intent.disadvantage,
@@ -2711,6 +2719,27 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       });
     if (canAttack) {
       actions.push(...buildCombatWeaponOptions(weapons, targetsForWeapon, { canCloseDistance }));
+      if (
+        actor.characterId &&
+        (await classLevelOfCharacter(actor.characterId, 'Barbarian')) >= 2 &&
+        !(await hasAttackedThisTurn(encounterId, actor.id))
+      ) {
+        const recklessWeapons = weapons.filter(
+          (weapon) =>
+            weapon.meleeWeapon === true &&
+            !weapon.ranged &&
+            (!weapon.finesse || (profile.scores.str ?? 10) >= (profile.scores.dex ?? 10)),
+        );
+        actions.push(
+          ...buildCombatWeaponOptions(recklessWeapons, targetsForWeapon, { canCloseDistance }).map(
+            (option) => ({
+              ...option,
+              type: 'reckless_attack' as const,
+              label: option.label.replace('Attack', 'Reckless Attack'),
+            }),
+          ),
+        );
+      }
     }
     // #1362: Divine Smite is declared with a melee weapon attack, before the roll: the rider
     // spends the slot only on a hit. One option per melee weapon and slot level the Paladin can

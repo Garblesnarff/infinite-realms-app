@@ -61,6 +61,7 @@ export interface StructuredCombatAction {
   divine_smite_slot_level?: number;
   /** #1639: the off-hand attack, a bonus action after the Attack action with a light melee weapon. */
   off_hand?: boolean;
+  reckless?: boolean;
   /** #1233: a Metamagic option armed for this cast; the server checks it and spends the points. */
   metamagic?: string;
   x?: number;
@@ -105,6 +106,7 @@ export type ClientCombatIntent =
       divineSmiteSlotLevel?: number;
       /** #1639: the off-hand attack, a bonus action. */
       offHand?: boolean;
+      reckless?: boolean;
     }
   | {
       type: 'spell';
@@ -432,6 +434,7 @@ export async function executeStructuredCombatActionWithBoundary(
           ? { divineSmiteSlotLevel: action.divine_smite_slot_level }
           : {}),
         ...(action.off_hand === true ? { offHand: true } : {}),
+        ...(action.reckless === true ? { reckless: true } : {}),
       },
       'dm',
       dmStartedAt,

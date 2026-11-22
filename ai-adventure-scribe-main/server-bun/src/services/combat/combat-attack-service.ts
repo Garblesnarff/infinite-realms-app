@@ -19,6 +19,7 @@ import { logAttackResolution, participantSlug } from './attack-telemetry.js';
 import { appliesBlessDie } from './bless-rider.js';
 import { mookGroupAttackBonus } from './boss-moves.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
+import { recklessAttackRefusal } from './reckless-attack-rules.js';
 import {
   activeAlliesOf,
   claimSneakAttack,
@@ -30,6 +31,10 @@ import {
   classLevelOfCharacter,
   isRaging,
   markRageActive,
+  isReckless,
+  isRecklessOnCurrentTurn,
+  hasAttackedThisTurn,
+  markTurnAttack,
 } from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
@@ -679,6 +684,8 @@ export class CombatAttackService {
       attackerHidden,
       attackerRaging,
       targetRaging,
+      attackerReckless,
+      targetReckless,
     ] = await Promise.all([
       getEquippedWeaponProfile(attackerData.participant, weaponId),
       getParticipantAbilityProfile(attackerData.participant),
@@ -689,6 +696,8 @@ export class CombatAttackService {
       // Rage belongs to a character, so a participant with no character skips the two reads.
       attackerCharacterId ? isRaging(encounterId, attackerId) : false,
       targetData.participant.characterId ? isRaging(encounterId, targetId) : false,
+      attackerCharacterId ? isRecklessOnCurrentTurn(encounterId, attackerId) : false,
+      targetData.participant.characterId ? isReckless(encounterId, targetId) : false,
     ]);
     // #1638: Rage's damage follows the attacker's Barbarian level (+2, +3 at 9, +4 at 16; #1654).
     const ragingDamageBonus =
@@ -721,12 +730,26 @@ export class CombatAttackService {
       requestedDisadvantage: disadvantage,
       targetDodging: targetParticipant.isDodging,
       attackerHidden,
+      attackerReckless: attackerReckless || input.reckless === true,
+      targetReckless,
       attackerConditions,
       targetConditions,
       fightingStyles: attackerProfile.fightingStyles,
       ragingDamageBonus,
       offHand: input.offHand === true,
     });
+    if (input.reckless) {
+      const barbarianLevel = attackerCharacterId
+        ? await classLevelOfCharacter(attackerCharacterId, 'Barbarian')
+        : 0;
+      const refusal = recklessAttackRefusal({
+        barbarianLevel,
+        firstAttack: !input.isReaction && !(await hasAttackedThisTurn(encounterId, attackerId)),
+        meleeWeapon: weapon.meleeWeapon === true && !weapon.ranged && input.attackType === 'melee',
+        strengthAttack: baseRules.ability === 'strength',
+      });
+      if (refusal) throw new BusinessLogicError(refusal, { reason: 'reckless_attack_refused' });
+    }
     // #728 (house rule): a mook attacking with its pack gets +1 to hit for each extra standing
     // mook, to a maximum of +3. Applied here, inside prepareAttack, so the proposal popup and
     // the resolution promise and use the same number.
@@ -885,6 +908,21 @@ export class CombatAttackService {
     // fleer's turn, so claiming a turn action for the attacker would spend a second creature's
     // Action for a blow provoked by the first one.
     const resolveAttackRoll = async () => {
+      if (
+        !isReaction &&
+        attackerData.participant.characterId &&
+        (await classLevelOfCharacter(attackerData.participant.characterId, 'Barbarian')) > 0
+      ) {
+        // This runs after the attack claim, within the encounter transaction for player attacks.
+        if (input.reckless && (await hasAttackedThisTurn(encounterId, attackerId))) {
+          throw new BusinessLogicError(
+            'Reckless Attack must be declared on your first attack of the turn.',
+            { reason: 'reckless_attack_refused' },
+          );
+        }
+        await markTurnAttack(encounterId, attackerId, input.reckless === true);
+      }
+
       // #1637: the attack spends a Hide's advantage, hit or miss, once it is actually resolving.
       if (rules.advantageSources.includes('hidden')) {
         await clearHiddenAttacker(encounterId, attackerId);
@@ -1422,6 +1460,10 @@ export class CombatAttackService {
         attackerConditions: casterConditions,
         targetConditions,
         attackerHidden: Boolean(spell.attackType) && casterHidden,
+        targetReckless:
+          Boolean(spell.attackType) &&
+          !!targetData.participant.characterId &&
+          (await isReckless(encounterId, targetId)),
       });
       if (!rules.legal) {
         const targetName = targetData.participant.name ?? 'the target';
@@ -1698,6 +1740,13 @@ export class CombatAttackService {
       }
 
       spellCommitted = true;
+      if (
+        spell.attackType &&
+        casterData.participant.characterId &&
+        (await classLevelOfCharacter(casterData.participant.characterId, 'Barbarian')) > 0
+      ) {
+        await markTurnAttack(encounterId, casterId, false);
+      }
       // #1651: the cast spends a hidden caster's position, hit or miss, once it is committed.
       if (casterHidden) {
         await clearHiddenAttacker(encounterId, casterId);
