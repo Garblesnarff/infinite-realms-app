@@ -13,6 +13,8 @@ interface UseSessionInitializationProps {
   starterCampaignId?: string;
   /** #1669: "Start new session" was chosen; skip the choice and create the continuation. */
   continueNew?: boolean;
+  /** #1703: forces re-initialization after End session navigates back to the same game URL. */
+  reinitKey?: string;
   setSessionData: (data: ExtendedGameSession | null) => void;
   setSessionState: (state: SessionState) => void;
   createGameSession: (campId: string, charId: string) => Promise<string | null>;
@@ -42,6 +44,7 @@ export const useSessionInitialization = ({
   specificSessionId,
   starterCampaignId,
   continueNew,
+  reinitKey,
   setSessionData,
   setSessionState,
   createGameSession,
@@ -89,6 +92,7 @@ export const useSessionInitialization = ({
       specificSessionId || 'none',
       starterCampaignId || 'none',
       continueNew ? 'continue-new' : 'offer-choice',
+      reinitKey || 'initial',
     ].join(':');
 
     if (lastInitKeyRef.current !== initKey) {
@@ -363,6 +367,7 @@ export const useSessionInitialization = ({
             }
             if (resumable.length > 0) {
               logger.info('[Session Init] Offering the session choice; resumable sessions exist');
+              setSessionData(null);
               setSessionState('choosing');
               sessionInitializedRef.current = true;
               return;
@@ -459,6 +464,7 @@ export const useSessionInitialization = ({
     specificSessionId,
     starterCampaignId,
     continueNew,
+    reinitKey,
     setSessionData,
     setSessionState,
     mountedRef,

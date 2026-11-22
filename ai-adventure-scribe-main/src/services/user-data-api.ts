@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- Compatibility boundary for legacy character shapes. */
 /* eslint-disable max-lines */
+import { isFinishedOneShotSession } from '../../shared/one-shot-completion';
+
 import type { SessionListApiRow } from '../../shared/session-list-contract';
 import type {
   CombatEntryPayload,
@@ -532,11 +534,14 @@ export const userDataApi = {
     const context = await request<SessionContextPayload>(
       `/v1/sessions/${encodeURIComponent(sessionId)}/context`,
     );
-    if (context.status !== 'completed') return null;
     const campaignRecord = context.campaign ?? {};
-    if (campaignRecord.campaignLength !== 'one-shot') return null;
+    const status = typeof context.status === 'string' ? context.status : null;
+    const campaignLength =
+      typeof campaignRecord.campaignLength === 'string' ? campaignRecord.campaignLength : null;
     const summary = typeof context.summary === 'string' ? context.summary : null;
-    if (!summary?.trim()) return null;
+    if (!summary || !isFinishedOneShotSession({ status, campaignLength, summary })) {
+      return null;
+    }
     const characterRecord = context.character ?? {};
     return {
       characterId:

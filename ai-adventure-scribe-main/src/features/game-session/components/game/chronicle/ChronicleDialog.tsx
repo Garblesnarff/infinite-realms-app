@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { shareChronicle } from './chronicleShareApi';
 import { planHasPaidFeatures } from '../../../../../../shared/plan-features';
-import { EndSessionButton } from '../game-content/EndSessionButton';
+import { EndSessionButton, type EndSessionTarget } from '../game-content/EndSessionButton';
 
 import './chronicle.css';
 
@@ -16,7 +16,7 @@ interface ChronicleDialogProps {
   sessionId: string | null;
   open: boolean;
   onClose: () => void;
-  endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  endSession?: EndSessionTarget;
   isFallen?: boolean;
 }
 
@@ -90,6 +90,7 @@ const ChronicleDialog: React.FC<ChronicleDialogProps> = ({
           <EndSessionButton
             sessionId={sessionId}
             campaignId={endSession.campaignId}
+            characterId={endSession.characterId}
             starterCampaignId={endSession.starterCampaignId}
           />
         </div>

@@ -130,9 +130,16 @@ export const GameSidePanel: React.FC<GameSidePanelProps> = React.memo(
     const chronicleEndSession = useMemo(
       () => ({
         campaignId: routeCampaignId ?? sessionData?.campaign_id ?? null,
+        characterId: characterState.character?.id ?? sessionData?.character_id ?? null,
         starterCampaignId: sessionData?.starter_campaign_id ?? null,
       }),
-      [routeCampaignId, sessionData?.campaign_id, sessionData?.starter_campaign_id],
+      [
+        routeCampaignId,
+        sessionData?.campaign_id,
+        characterState.character?.id,
+        sessionData?.character_id,
+        sessionData?.starter_campaign_id,
+      ],
     );
 
     const handleTabChange = useCallback(

@@ -6,6 +6,7 @@ import { JournalTabContent } from './JournalTabContent';
 import { DesktopMemoryTab } from './memory/DesktopMemoryTab';
 import { RightSheetLive } from './overhaul/RightSheetLive';
 
+import type { EndSessionTarget } from './game-content/EndSessionButton';
 import type { SpellCastHandlerRef } from './spell-cast-handler';
 import type { JournalHandoutEntry } from '@/services/user-data-api';
 import type { Memory } from '@/types/memory';
@@ -28,7 +29,7 @@ export interface DesktopGameSidePanelProps {
   isExpanded: boolean;
   setIsExpanded: (expanded: boolean) => void;
   onToggle: () => void;
-  endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  endSession?: EndSessionTarget;
   isFallen?: boolean;
   sessionNotesId: string;
   localSessionNotes: string;

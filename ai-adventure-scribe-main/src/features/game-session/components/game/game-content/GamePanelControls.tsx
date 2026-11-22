@@ -3,6 +3,8 @@ import React, { memo } from 'react';
 import { GameFeedbackButton } from './GameFeedbackButton';
 import { GameChronicleButton } from '../chronicle/GameChronicleButton';
 
+import type { EndSessionTarget } from './EndSessionButton';
+
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
@@ -21,7 +23,7 @@ interface GamePanelControlsProps {
   onRightToggle: () => void;
   onSceneBlurbToggle: () => void;
   sessionId?: string | null;
-  endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  endSession?: EndSessionTarget;
   isFallen?: boolean;
 }
 

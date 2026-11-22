@@ -5,6 +5,7 @@ import { JournalTabContent } from './JournalTabContent';
 import { MemoryList } from './memory/MemoryList';
 import { RightSheetLive } from './overhaul/RightSheetLive';
 
+import type { EndSessionTarget } from './game-content/EndSessionButton';
 import type { SpellCastHandlerRef } from './spell-cast-handler';
 import type { CharacterState } from '@/contexts/character/types';
 import type { ExtendedGameSession } from '@/hooks/use-game-session';
@@ -16,7 +17,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export interface GameSidePanelContentProps {
   sessionId?: string;
-  endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  endSession?: EndSessionTarget;
   isFallen?: boolean;
   sessionData: ExtendedGameSession | null;
   updateGameSessionState: (newState: Partial<ExtendedGameSession>) => Promise<void>;

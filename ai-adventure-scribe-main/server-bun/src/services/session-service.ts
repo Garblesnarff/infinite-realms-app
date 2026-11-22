@@ -32,6 +32,7 @@ import {
   type GameSession,
   type DialogueHistory,
 } from '../../../db/schema/index';
+import { isFinishedOneShotSession } from '../../../shared/one-shot-completion.js';
 import { mapSessionListApiRow } from '../../../shared/session-list-contract.js';
 import { resolveCatalogSpell } from '../data/spellData.js';
 import { BusinessLogicError, NotFoundError } from '../lib/errors.js';
@@ -735,9 +736,10 @@ export class SessionService {
   }
 
   /**
-   * #1669: the sessions this user can resume: completed, the hero not fallen, the campaign not a
-   * one-shot, and the hero has no active session in that campaign. Newest first. Optionally one
-   * campaign and one hero. Owner-filtered (campaign or character owner).
+   * #1669/#1703: the sessions this user can resume: completed, the hero not fallen, not a finished
+   * one-shot (a one-shot ended by hand has no summary and stays resumable), and the hero has no
+   * active session in that campaign. Newest first. Optionally one campaign and one hero.
+   * Owner-filtered (campaign or character owner).
    */
   static async listResumableSessions(
     userId: string,
@@ -745,7 +747,10 @@ export class SessionService {
     characterId?: string,
   ): Promise<GameSession[]> {
     const rows = await db
-      .select({ session: gameSessions })
+      .select({
+        session: gameSessions,
+        campaignLength: campaigns.campaignLength,
+      })
       .from(gameSessions)
       .innerJoin(campaigns, eq(gameSessions.campaignId, campaigns.id))
       .leftJoin(characterStats, eq(characterStats.characterId, gameSessions.characterId))
@@ -756,12 +761,20 @@ export class SessionService {
           campaignId ? eq(gameSessions.campaignId, campaignId) : undefined,
           characterId ? eq(gameSessions.characterId, characterId) : undefined,
           or(isNull(characterStats.vitalState), ne(characterStats.vitalState, 'dead')),
-          or(isNull(campaigns.campaignLength), ne(campaigns.campaignLength, 'one-shot')),
           sql`not exists (select 1 from game_sessions a where a.campaign_id = ${gameSessions.campaignId} and a.character_id = ${gameSessions.characterId} and a.status = 'active')`,
         ),
       )
       .orderBy(desc(gameSessions.sessionNumber));
-    return rows.map((row) => row.session);
+    return rows
+      .filter(
+        (row) =>
+          !isFinishedOneShotSession({
+            status: row.session.status,
+            campaignLength: row.campaignLength,
+            summary: row.session.summary,
+          }),
+      )
+      .map((row) => row.session);
   }
 
   /**
@@ -793,7 +806,15 @@ export class SessionService {
         return { ok: false as const, reason: 'not_completed' as const };
       }
       if (row.vitalState === 'dead') return { ok: false as const, reason: 'fallen' as const };
-      if (row.campaignLength === 'one-shot') return { ok: false as const, reason: 'one_shot' as const };
+      if (
+        isFinishedOneShotSession({
+          status: row.session.status,
+          campaignLength: row.campaignLength,
+          summary: row.session.summary,
+        })
+      ) {
+        return { ok: false as const, reason: 'one_shot' as const };
+      }
 
       // Serialise resumes (and their checks) per hero until this transaction ends.
       await tx.execute(sql`select id from characters where id = ${characterId} for update`);
