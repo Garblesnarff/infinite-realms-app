@@ -32,10 +32,10 @@ import {
   reconcileCombatTurnAfterAction,
   type CombatTurnUiState,
 } from '@/hooks/ai/combat-turn-preflight';
+import { shadowConfrontationWithoutCombatEntry } from '@/hooks/ai/confrontation-without-combat-entry-shadow';
 import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { DYING_ACTION_REFUSED_NOTICE, dyingTurnDeclaration } from '@/hooks/ai/dying-turn';
-import { shadowConfrontationWithoutCombatEntry } from '@/hooks/ai/confrontation-without-combat-entry-shadow';
 import { shadowFailedCheckHarm } from '@/hooks/ai/failed-check-harm-shadow';
 import { updateGamePhase, clampCombatIntentFlags } from '@/hooks/ai/game-phase-updater';
 import {
