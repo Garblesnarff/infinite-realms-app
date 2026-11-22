@@ -298,7 +298,8 @@ describe('CombatRulesPrompts', () => {
     // #2400. A deliberate edit to that prompt fails it; update the hash in the same PR. The other
     // out-of-combat sections are pinned in context-builder-in-combat-prompt.test.ts.
     // #2533 re-pinned it after condensing the five engine-owned combat blocks (1:1 with
-    // COMBAT_RULES_TEMPLATE in combat-rules-templates.ts); nothing else in the prompt moved.
+    // COMBAT_RULES_TEMPLATE in combat-rules-templates.ts); #1704 re-pinned it after adding
+    // the NPC-attack / accepted-challenge combat-entry rule; nothing else in the prompt moved.
     it('is byte-identical to the prompt before the in-combat change', () => {
       const notCombat: CombatDetectionResult = {
         isCombat: false,
@@ -310,9 +311,9 @@ describe('CombatRulesPrompts', () => {
 
       expect(CombatRulesPrompts.formatCombatContext(notCombat)).toBe('');
       const rules = RulesPrompts.buildRulesOfPlaySection();
-      expect(rules).toHaveLength(24104);
+      expect(rules).toHaveLength(24333);
       expect(sha256(rules)).toBe(
-        'c69196ff1f07a853b22a95f18369cc0ec540e51307f8818a88dd3880bf951664',
+        '73322ee368837c421972c3fed29b61684473aa80e465710b2bd84c24142b6e6b',
       );
     });
   });

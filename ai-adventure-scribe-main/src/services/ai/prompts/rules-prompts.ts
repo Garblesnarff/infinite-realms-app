@@ -194,6 +194,7 @@ save caused by a creature's attack REQUIRES \`combat_transition: "start"\` with 
   emit \`combat_transition: "start"\` before its outcome is resolved, including attacks, grapples,
   shoves, and other attempts to harm or restrain. The declared action is the opening combat
   action; do not resolve it as an out-of-combat check or freeform narration.
+- When an NPC attacks, rushes or squares up to fight the player, or the player accepts a challenge to fight, emit combat_transition "start" with scene_spec and combatants. Do not substitute an ability check for the fight itself.
 
 ✅ GOOD: Goblins attack; request initiative with \`combat_transition: "start"\`, a forest
 \`scene_spec\`, and the goblins in \`combatants\`.

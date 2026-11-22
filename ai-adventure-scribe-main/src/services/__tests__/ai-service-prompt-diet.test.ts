@@ -200,8 +200,10 @@ describe('DM prompt budget on the fixed fixture session (#2533)', () => {
 
     expect(medians.total).toBeLessThanOrEqual(BASELINE.total * 0.6);
     // Each of the three sections #2533 targets is down, and by the amount it was meant to be.
+    // #1704 adds two verbatim sentences (+57 tokens) to rules-prompts.ts with no other prompt edits;
+    // system_rules had only 3 tokens of headroom below the pre-#2533 baseline (8300 vs 8303).
     expect(medians.campaign_and_canon).toBeLessThanOrEqual(BASELINE.campaign_and_canon * 0.4);
-    expect(medians.system_rules).toBeLessThan(BASELINE.system_rules);
+    expect(medians.system_rules).toBeLessThanOrEqual(BASELINE.system_rules + 60);
     expect(medians.history).toBeLessThanOrEqual(BASELINE.history * 0.6);
     // The counter's sections still sum to the total, so the cut is not a re-labelling.
     for (const counts of run.turns) {

@@ -155,17 +155,18 @@ describe('the prompt outside combat (#2400)', () => {
    * #264 re-pinned the response-structure hash after adding the out-of-combat story-rest field.
    * #353 re-pinned the response-structure hash after adding the out-of-combat story-items field.
    * The #264/#353 rebase re-pinned it again after keeping both fields.
- * #400 re-pinned the response-structure hash after constraining options to sheet spells/attacks.
- * #714 re-pinned the rules-of-play hash after adding the spell-cast rule.
- * #610 re-pinned the response-structure hash after adding the out-of-combat story-damage field.
- * #1020 leaves the default hash untouched — the campaign-ending field is gated to one-shot
- * campaigns — and pins the one-shot variant's hash separately below.
- */
+   * #400 re-pinned the response-structure hash after constraining options to sheet spells/attacks.
+   * #714 re-pinned the rules-of-play hash after adding the spell-cast rule.
+   * #610 re-pinned the response-structure hash after adding the out-of-combat story-damage field.
+   * #1020 leaves the default hash untouched — the campaign-ending field is gated to one-shot
+   * campaigns — and pins the one-shot variant's hash separately below.
+   * #1704 re-pinned the rules-of-play hash after adding the NPC-attack / accepted-challenge rule.
+   */
   it('keeps the byte-identical sections it had before the combat variants existed', () => {
     const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
     expect(sha256(RulesPrompts.buildRulesOfPlaySection())).toBe(
-      'c69196ff1f07a853b22a95f18369cc0ec540e51307f8818a88dd3880bf951664',
+      '73322ee368837c421972c3fed29b61684473aa80e465710b2bd84c24142b6e6b',
     );
     expect(sha256(ContextBuilderPrompts.buildResponseStructureSection())).toBe(
       '04d8155608c5ec0baaff9f309a1887c8465c2b643bd7658a047cf4690f5659d8',
