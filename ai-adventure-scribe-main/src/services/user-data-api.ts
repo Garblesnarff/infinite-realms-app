@@ -230,7 +230,8 @@ export type ClientFailureKind =
   | 'auth_refresh_check_skipped'
   | 'narrated_death_without_engine'
   | 'failed_check_harm_without_engine'
-  | 'narrated_dead_npc_acting';
+  | 'narrated_dead_npc_acting'
+  | 'confrontation_without_combat_entry';
 
 /** Optional context the server logs alongside a client failure (#2515). */
 export type ClientFailureDetails = {

@@ -32,6 +32,7 @@ import {
   reconcileCombatTurnAfterAction,
   type CombatTurnUiState,
 } from '@/hooks/ai/combat-turn-preflight';
+import { shadowConfrontationWithoutCombatEntry } from '@/hooks/ai/confrontation-without-combat-entry-shadow';
 import { conversationHistoryFrom } from '@/hooks/ai/conversation-history';
 import { handleDmActionsAndTransitions } from '@/hooks/ai/dm-actions-handler';
 import { DYING_ACTION_REFUSED_NOTICE, dyingTurnDeclaration } from '@/hooks/ai/dying-turn';
@@ -1206,6 +1207,14 @@ export const useAIResponse = (): {
             conversationHistory,
             getOutcome: (sid) => SessionStateService.getLatestRollOutcome(sid),
             isStale: (outcome, history) => isRollOutcomeStale(outcome, history),
+          });
+        }
+        // #1704: a confrontation narrated with no combat-entry signal is logged (shadow only).
+        if (!entryDeclined) {
+          shadowConfrontationWithoutCombatEntry({
+            reply: result,
+            sessionId,
+            inCombat: isInCombat || combatWasActiveAtRequestStart,
           });
         }
         // #266: a roll-result turn carries the engine's authoritative verdict for the roll, and
