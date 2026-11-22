@@ -504,9 +504,10 @@ describeWithDb('combat damage reaches the character record', () => {
         .where(eq(characterStats.characterId, characterId));
     };
 
-    it('the seed row exists: Half-Orc, long rest, one use', async () => {
+    it('the seed row exists: Half-Orc, passive, long rest, one use', async () => {
       const rows = await db
         .select({
+          usageType: classFeaturesLibrary.usageType,
           usesPerRest: classFeaturesLibrary.usesPerRest,
           usesCount: classFeaturesLibrary.usesCount,
         })
@@ -517,7 +518,7 @@ describeWithDb('combat damage reaches the character record', () => {
             eq(classFeaturesLibrary.featureName, 'Relentless Endurance'),
           ),
         );
-      expect(rows).toEqual([{ usesPerRest: 'long_rest', usesCount: 1 }]);
+      expect(rows).toEqual([{ usageType: 'passive', usesPerRest: 'long_rest', usesCount: 1 }]);
     });
 
     it('a Half-Orc dropped to 0 stays at 1 HP, on both rows, and the use is spent', async () => {

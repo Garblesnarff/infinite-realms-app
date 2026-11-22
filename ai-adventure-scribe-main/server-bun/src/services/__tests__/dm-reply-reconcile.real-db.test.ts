@@ -1226,6 +1226,9 @@ ${playerInput}
       'Cleric',
       'Druid',
       'Fighter',
+      // #1635: the Half-Orc racial trait Relentless Endurance is tracked in the same library
+      // (20261122_seed_relentless_endurance.sql); it is the one non-class row.
+      'Half-Orc',
       'Monk',
       'Paladin',
       'Ranger',
