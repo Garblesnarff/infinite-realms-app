@@ -3,11 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 
 import ChronicleDialog from './ChronicleDialog';
 
+import type { EndSessionTarget } from '../game-content/EndSessionButton';
+
 import { Button } from '@/components/ui/button';
 
 interface GameChronicleButtonProps {
   sessionId?: string | null;
-  endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  endSession?: EndSessionTarget;
   isFallen?: boolean;
 }
 

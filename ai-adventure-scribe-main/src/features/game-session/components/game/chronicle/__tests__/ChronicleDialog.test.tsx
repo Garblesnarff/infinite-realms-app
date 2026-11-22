@@ -526,7 +526,7 @@ describe('empty chronicle state (#1523)', () => {
           sessionId="session-1"
           open
           onClose={vi.fn()}
-          endSession={{ campaignId: 'campaign-1', starterCampaignId: null }}
+          endSession={{ campaignId: 'campaign-1', characterId: 'hero-1', starterCampaignId: null }}
         />
       </MemoryRouter>,
     );
@@ -549,7 +549,7 @@ describe('empty chronicle state (#1523)', () => {
           sessionId="session-1"
           open
           onClose={vi.fn()}
-          endSession={{ campaignId: 'campaign-1', starterCampaignId: null }}
+          endSession={{ campaignId: 'campaign-1', characterId: 'hero-1', starterCampaignId: null }}
         />
       </MemoryRouter>,
     );
@@ -557,7 +557,11 @@ describe('empty chronicle state (#1523)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'End session' }));
 
     await waitFor(() => expect(mockCompleteSession).toHaveBeenCalledWith('session-1'));
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/app/campaigns/campaign-1'));
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('/app/game/campaign-1?character=hero-1', {
+        state: { sessionEnded: true },
+      }),
+    );
   });
 
   it('outside a game (no endSession) shows the message without the button', () => {
@@ -584,7 +588,7 @@ describe('empty chronicle state (#1523)', () => {
           sessionId="session-1"
           open
           onClose={vi.fn()}
-          endSession={{ campaignId: 'campaign-1', starterCampaignId: null }}
+          endSession={{ campaignId: 'campaign-1', characterId: 'hero-1', starterCampaignId: null }}
           isFallen={true}
         />
       </MemoryRouter>,

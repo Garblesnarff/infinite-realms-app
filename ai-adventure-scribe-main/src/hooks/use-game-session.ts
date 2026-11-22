@@ -97,6 +97,7 @@ export const useGameSession = (
   starterCampaignId?: string,
   onForceNewSessionCreated?: () => void,
   continueNew?: boolean,
+  reinitKey?: string,
 ) => {
   const [sessionData, setSessionData] = useState<ExtendedGameSession | null>(null);
   const [sessionState, setSessionState] = useState<SessionState>('idle');
@@ -185,6 +186,7 @@ export const useGameSession = (
     specificSessionId,
     starterCampaignId,
     continueNew,
+    reinitKey,
     setSessionData,
     setSessionState,
     createGameSession,

@@ -3,9 +3,11 @@ import React, { useState } from 'react';
 
 import ChronicleDialog from './chronicle/ChronicleDialog';
 
+import type { EndSessionTarget } from './game-content/EndSessionButton';
+
 interface StorySoFarLinkProps {
   sessionId: string;
-  endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  endSession?: EndSessionTarget;
   isFallen?: boolean;
 }
 

@@ -197,6 +197,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
               <EndSessionButton
                 sessionId={sessionId}
                 campaignId={campaignIdForHandler}
+                characterId={characterIdForHandler ?? sessionData.character_id ?? null}
                 starterCampaignId={sessionData.starter_campaign_id ?? null}
               />
             </div>

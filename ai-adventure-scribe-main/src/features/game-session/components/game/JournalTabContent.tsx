@@ -2,6 +2,7 @@ import React from 'react';
 
 import { StorySoFarLink } from './StorySoFarLink';
 
+import type { EndSessionTarget } from './game-content/EndSessionButton';
 import type { JournalHandoutEntry } from '@/services/user-data-api';
 
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,7 @@ import { HandoutCard } from '@/features/game-session/components/handouts/Handout
 
 export interface JournalTabContentProps {
   sessionId?: string;
-  endSession?: { campaignId: string | null; starterCampaignId: string | null };
+  endSession?: EndSessionTarget;
   isFallen?: boolean;
   sessionNotesId: string;
   localSessionNotes: string;

@@ -2,23 +2,41 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
-import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 import { userDataApi } from '@/services/user-data-api';
+
+export interface EndSessionTarget {
+  campaignId: string | null;
+  characterId: string | null;
+  starterCampaignId: string | null;
+}
+
+function buildEndSessionChoiceUrl({
+  campaignId,
+  characterId,
+  starterCampaignId,
+}: EndSessionTarget): string {
+  if (campaignId && characterId) {
+    const params = new URLSearchParams({ character: characterId });
+    if (starterCampaignId) params.set('starterCampaign', starterCampaignId);
+    return `/app/game/${campaignId}?${params.toString()}`;
+  }
+  return campaignId ? `/app/campaigns/${campaignId}` : '/app';
+}
 
 export function EndSessionButton({
   sessionId,
   campaignId,
+  characterId,
   starterCampaignId,
 }: {
   sessionId: string;
   campaignId: string | null;
+  characterId: string | null;
   starterCampaignId: string | null;
 }): React.ReactElement {
   const navigate = useNavigate();
-  const { campaigns, isLoading } = useStarterCampaigns();
   const [ending, setEnding] = React.useState(false);
   const [error, setError] = React.useState(false);
-  const slug = campaigns.find((campaign) => campaign.id === starterCampaignId)?.slug;
 
   async function endSession(): Promise<void> {
     if (ending) return;
@@ -26,7 +44,9 @@ export function EndSessionButton({
     setError(false);
     try {
       await userDataApi.completeSession(sessionId);
-      navigate(slug ? `/explore/${slug}` : `/app/campaigns/${campaignId}`);
+      navigate(buildEndSessionChoiceUrl({ campaignId, characterId, starterCampaignId }), {
+        state: { sessionEnded: true },
+      });
     } catch {
       setError(true);
       setEnding(false);
@@ -39,7 +59,7 @@ export function EndSessionButton({
         type="button"
         size="sm"
         variant="outline"
-        disabled={ending || (Boolean(starterCampaignId) && isLoading)}
+        disabled={ending}
         onClick={() => void endSession()}
       >
         {ending ? 'Ending session…' : 'End session'}

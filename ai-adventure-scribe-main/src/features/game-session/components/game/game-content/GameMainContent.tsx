@@ -360,8 +360,12 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     // #1523: the Chronicle dialog's empty state offers the same End session control.
     const starterCampaignId = sessionData.starter_campaign_id ?? null;
     const chronicleEndSession = React.useMemo(
-      () => ({ campaignId: campaignIdForHandler, starterCampaignId }),
-      [campaignIdForHandler, starterCampaignId],
+      () => ({
+        campaignId: campaignIdForHandler,
+        characterId: characterIdForHandler ?? sessionData.character_id ?? null,
+        starterCampaignId,
+      }),
+      [campaignIdForHandler, characterIdForHandler, sessionData.character_id, starterCampaignId],
     );
     // #90: in combat the chat box says what to do, or whose turn it is.
     const combatChatPlaceholder = useCombatChatPlaceholder();

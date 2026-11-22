@@ -1,6 +1,6 @@
 /* eslint-disable max-lines */
 import React, { useState, useCallback, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useLocation, useParams, useSearchParams } from 'react-router-dom';
 
 import { GameLoadingOverlay, GameLayout } from './game-content';
 import { CampaignCompleteEndState } from './game-content/CompletionScreen';
@@ -47,6 +47,7 @@ type GameAIResponse = ChatMessage;
  */
 const GameContent: React.FC = () => {
   const { id: campaignIdFromParams } = useParams<{ id: string }>();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const characterIdFromParams = searchParams.get('character');
   const forceNew = searchParams.get('new') === 'true';
@@ -54,6 +55,11 @@ const GameContent: React.FC = () => {
   const starterCampaignIdFromParams = searchParams.get('starterCampaign') || undefined;
   // #1669: "Start new session" was chosen on the choice screen; the game load creates the continuation.
   const continueNew = searchParams.get('continue') === '1';
+  // #1703: End session navigates to this same game URL without a session id; location.key lets
+  // session init re-run and reach 'choosing' even when pathname + search did not change.
+  const sessionEndedKey = (location.state as { sessionEnded?: boolean } | null)?.sessionEnded
+    ? location.key
+    : undefined;
   const { state: campaignState } = useCampaign();
 
   // BUG FIX: page refresh was creating a new session instead of resuming.
@@ -85,6 +91,7 @@ const GameContent: React.FC = () => {
     starterCampaignIdFromParams,
     clearForceNewParam,
     continueNew,
+    sessionEndedKey,
   );
 
   useEffect(() => {
