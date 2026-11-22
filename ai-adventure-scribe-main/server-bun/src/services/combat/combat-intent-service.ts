@@ -2711,17 +2711,11 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         ),
       ),
     );
-    // #259: "Attack with X (move closer first)" is only offered for a target the engine
-    // would actually move toward. Offering it with no movement left (or no closer cell)
-    // produces the "no attack was rolled" loop: the identical intent retries identically
-    // forever because the non-spending movement_only never advances the turn.
+    // An attack option promises a swing after the approach. A partial approach is a Move.
     const canCloseDistance =
       map && mapActor
-        ? (targetId: string, weapon: WeaponRuleProfile): boolean => {
-            const plan = planApproach(map, actor.id, targetId, weapon.normalRange ?? 5);
-            const destination = plan?.destination;
-            return !!destination && (destination.x !== mapActor.x || destination.y !== mapActor.y);
-          }
+        ? (targetId: string, weapon: WeaponRuleProfile): boolean =>
+            planApproach(map, actor.id, targetId, weapon.normalRange ?? 5)?.inReach === true
         : undefined;
     const targetsForWeapon = (weapon: WeaponRuleProfile): WeaponTargetResolution[] =>
       opposingTargets.map((target) => {
