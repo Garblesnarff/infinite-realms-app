@@ -202,9 +202,10 @@ const EncounterTracker: React.FC<{
 /** Compact view of the same character data used by the full sheet. */
 export const TableCharacterCard: React.FC<{
   character: CharacterSheetVM;
-  onOpenSheet: () => void;
+  characterId?: string;
+  onOpenSheet?: () => void;
   preferredPortrait?: string;
-}> = ({ character, onOpenSheet, preferredPortrait }) => {
+}> = ({ character, characterId, preferredPortrait }) => {
   const [expanded, setExpanded] = React.useState(false);
   const portrait = tableImageUrl(preferredPortrait ?? null, 144, 144);
   const alternatePortrait = tableImageUrl(character.avatarUrl ?? null, 144, 144);
@@ -291,9 +292,14 @@ export const TableCharacterCard: React.FC<{
             {attack.name} {attack.bonus} · {attack.damage}
           </p>
         ))}
-        <button type="button" onClick={onOpenSheet} className="min-h-11 underline">
-          Open full sheet
-        </button>
+        {characterId && (
+          <a
+            href={`/app/character/${encodeURIComponent(characterId)}`}
+            className="inline-flex min-h-11 items-center underline"
+          >
+            Open full sheet
+          </a>
+        )}
       </div>
     </section>
   );

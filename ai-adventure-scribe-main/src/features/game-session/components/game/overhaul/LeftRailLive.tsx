@@ -17,7 +17,7 @@ export const LeftRailLive: React.FC<{
 }> = React.memo(({ sessionId, chapterLabel, onOpenSheet }) => {
   const { messages } = useMessageContext();
   const vm = useOverhaulViewModel({ sessionId, messages, chapterLabel });
-  const characterImage = useOptionalCharacter()?.state.character?.image_url;
+  const character = useOptionalCharacter()?.state.character;
   return (
     <>
       <div className="[body.ir-table-look_&]:hidden h-full">
@@ -31,7 +31,8 @@ export const LeftRailLive: React.FC<{
       <div className="hidden [body.ir-table-look_&]:block">
         <TableCharacterCard
           character={vm.character}
-          preferredPortrait={characterImage}
+          characterId={character?.id}
+          preferredPortrait={character?.image_url}
           onOpenSheet={onOpenSheet}
         />
       </div>
