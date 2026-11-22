@@ -1,4 +1,4 @@
-import { BookOpen, Brain, Dice6, Sword, X } from 'lucide-react';
+import { BookOpen, Brain, Dice6, Home, Sword, X } from 'lucide-react';
 import React, { memo } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -494,6 +494,11 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
         {tableControlsSlot &&
           createPortal(
             <>
+              <Button asChild variant="outline" className="h-11 w-11 min-h-11 min-w-11 p-0">
+                <a href="/app" aria-label="Back to your adventures" title="Back to your adventures">
+                  <Home aria-hidden="true" />
+                </a>
+              </Button>
               <nav aria-label="Table panels" className="flex items-center gap-1">
                 <Button
                   type="button"

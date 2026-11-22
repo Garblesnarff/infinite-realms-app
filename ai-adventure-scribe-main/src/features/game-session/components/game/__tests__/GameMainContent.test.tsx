@@ -926,4 +926,21 @@ describe('GameMainContent overhaul behavior contract', () => {
 
     expect(gamePanelControlsMock.calls.at(-1)?.sessionId).toBe('resolved-session-uuid');
   });
+
+  it('renders a Home link to /app left of the panel buttons without ending the session (#1705)', () => {
+    const updateGameSessionState = vi.fn();
+    render(<GameMainContent {...baseProps} updateGameSessionState={updateGameSessionState} />);
+
+    const homeLink = screen.getByRole('link', { name: 'Back to your adventures' });
+    const panelsNav = screen.getByRole('navigation', { name: 'Table panels' });
+
+    expect(homeLink).toHaveAttribute('href', '/app');
+    expect(
+      homeLink.compareDocumentPosition(panelsNav) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    homeLink.addEventListener('click', (event) => event.preventDefault());
+    fireEvent.click(homeLink);
+    expect(updateGameSessionState).not.toHaveBeenCalled();
+  });
 });

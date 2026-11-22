@@ -5,7 +5,7 @@ import { TableCharacterCard } from '../LeftRail';
 import { buildCharacterSheet } from '../useOverhaulViewModel';
 
 describe('Table character card', () => {
-  it('uses the sheet values and opens the full sheet', () => {
+  it('uses the sheet values and links Open full sheet to the standalone sheet (#1705)', () => {
     const open = vi.fn();
     const character = {
       ...buildCharacterSheet(null),
@@ -20,7 +20,7 @@ describe('Table character card', () => {
       },
       attacks: [{ id: 'staff', name: 'Quarterstaff', bonus: '+2', damage: '1d6' }],
     };
-    render(<TableCharacterCard character={character} onOpenSheet={open} />);
+    render(<TableCharacterCard character={character} characterId="char-42" onOpenSheet={open} />);
     expect(screen.getByRole('heading', { name: 'The Scholar', hidden: true })).toBeInTheDocument();
     expect(screen.getByText(/Hit points · 4 \/ 7/)).toBeInTheDocument();
     expect(screen.getByText('Quarterstaff +2 · 1d6')).toBeInTheDocument();
@@ -31,8 +31,16 @@ describe('Table character card', () => {
     expect(summary).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(summary);
     expect(summary).toHaveAttribute('aria-expanded', 'true');
-    fireEvent.click(screen.getByRole('button', { name: 'Open full sheet' }));
-    expect(open).toHaveBeenCalledOnce();
+    const sheetLink = screen.getByRole('link', { name: 'Open full sheet' });
+    expect(sheetLink).toHaveAttribute('href', '/app/character/char-42');
+    sheetLink.addEventListener('click', (event) => event.preventDefault());
+    fireEvent.click(sheetLink);
+    expect(open).not.toHaveBeenCalled();
+  });
+
+  it('omits Open full sheet when no character id is available', () => {
+    render(<TableCharacterCard character={buildCharacterSheet(null)} onOpenSheet={vi.fn()} />);
+    expect(screen.queryByRole('link', { name: 'Open full sheet' })).not.toBeInTheDocument();
   });
 
   it('uses the resized alternate portrait when the primary is unsupported or fails', () => {
