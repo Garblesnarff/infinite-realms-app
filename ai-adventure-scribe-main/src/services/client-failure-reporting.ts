@@ -133,7 +133,8 @@ export function reportNarrationShadowHit(
   kind:
     | 'narrated_death_without_engine'
     | 'failed_check_harm_without_engine'
-    | 'narrated_dead_npc_acting',
+    | 'narrated_dead_npc_acting'
+    | 'confrontation_without_combat_entry',
   sessionId: string | undefined,
   patterns: string[],
 ): void {

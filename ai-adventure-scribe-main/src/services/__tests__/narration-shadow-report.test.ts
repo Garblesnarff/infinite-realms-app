@@ -7,6 +7,7 @@ vi.mock('@/services/auth/TokenService', () => ({
 }));
 
 import {
+  CONFRONTATION_WITHOUT_COMBAT_ENTRY_SHADOW_REPORT_BODY,
   FAILED_CHECK_SHADOW_REPORT_BODY,
   NARRATED_DEAD_NPC_SHADOW_REPORT_BODY,
   NARRATED_DEATH_SHADOW_REPORT_BODY,
@@ -59,5 +60,18 @@ describe('reportNarrationShadowHit (#468)', () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body).toMatchObject(NARRATED_DEAD_NPC_SHADOW_REPORT_BODY);
+  });
+
+  // #1704 shadow count: the confrontation-without-combat-entry report posts the shared fixture body.
+  it('posts the #1704 confrontation fixture body with pattern names only', async () => {
+    reportNarrationShadowHit('confrontation_without_combat_entry', 'sess-1704-fixture', [
+      'rushes',
+      'squares_up',
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toMatchObject(CONFRONTATION_WITHOUT_COMBAT_ENTRY_SHADOW_REPORT_BODY);
   });
 });

@@ -24,3 +24,11 @@ export const FAILED_CHECK_SHADOW_REPORT_BODY = {
   error: 'rope_burn',
   message: 'rope_burn',
 } as const;
+
+/** #1704 shadow count: the exact body the confrontation-without-combat-entry report posts. */
+export const CONFRONTATION_WITHOUT_COMBAT_ENTRY_SHADOW_REPORT_BODY = {
+  kind: 'confrontation_without_combat_entry',
+  sessionId: 'sess-1704-fixture',
+  error: 'rushes,squares_up',
+  message: 'rushes,squares_up',
+} as const;

@@ -61,6 +61,7 @@ const authedRequest = (body: unknown) =>
   });
 
 import {
+  CONFRONTATION_WITHOUT_COMBAT_ENTRY_SHADOW_REPORT_BODY,
   FAILED_CHECK_SHADOW_REPORT_BODY,
   NARRATED_DEAD_NPC_SHADOW_REPORT_BODY,
   NARRATED_DEATH_SHADOW_REPORT_BODY,
@@ -105,6 +106,20 @@ describe('POST /v1/telemetry/client-failure', () => {
       kind: 'narrated_dead_npc_acting',
       sessionId: 'sess-1595-fixture',
       message: 'attack,return_or_entry',
+    });
+    expect(alertCalls).toHaveLength(0);
+  });
+
+  // #1704 shadow count: the exact confrontation body is accepted, logged as a count, and does not page.
+  it('accepts the #1704 confrontation shadow body exactly as the client sends it, logs it, and does not page', async () => {
+    const response = await app.handle(
+      authedRequest(CONFRONTATION_WITHOUT_COMBAT_ENTRY_SHADOW_REPORT_BODY),
+    );
+    expect(response.status).toBe(204);
+    expect(loggedInfo.find((entry) => entry.msg === 'CLIENT_FAILURE')).toMatchObject({
+      kind: 'confrontation_without_combat_entry',
+      sessionId: 'sess-1704-fixture',
+      message: 'rushes,squares_up',
     });
     expect(alertCalls).toHaveLength(0);
   });
