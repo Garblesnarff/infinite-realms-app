@@ -19,7 +19,10 @@ import { useCharacter } from '@/contexts/CharacterContext';
 import { useCombat } from '@/contexts/CombatContext';
 import { usePendingCombatEntryOffer } from '@/hooks/combat/use-pending-combat-entry-offer';
 import { AIService } from '@/services/ai-service';
-import { requestCombatEntryConfirmation } from '@/services/combat/combat-entry-confirmation-bridge';
+import {
+  type CombatEntryOutcome,
+  requestCombatEntryConfirmation,
+} from '@/services/combat/combat-entry-confirmation-bridge';
 import {
   clearCombatEntryTurnConfirmed,
   registerCombatEntryPlayerSource,
@@ -238,8 +241,8 @@ describe('useAIResponse: combat-start envelope reaches the confirm prompt (#1315
     vi.mocked(AIService.chatWithDM).mockResolvedValue(COMBAT_START_ENVELOPE as any);
     vi.mocked(requestCombatEntryConfirmation).mockImplementation(
       () =>
-        new Promise<boolean>((resolve) => {
-          chooseConfirm = (confirmed) => resolve(confirmed);
+        new Promise<CombatEntryOutcome>((resolve) => {
+          chooseConfirm = (confirmed) => resolve(confirmed ? 'confirmed' : 'declined');
         }),
     );
     vi.mocked(requestPlayerInitiativeRoll).mockImplementation(

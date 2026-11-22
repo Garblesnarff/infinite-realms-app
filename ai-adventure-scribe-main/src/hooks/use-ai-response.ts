@@ -906,6 +906,20 @@ export const useAIResponse = (): {
             localNotices: [{ text: heldEntry.notice, persist: true }],
           };
         }
+        // #1678: a newer card replaced the prompt this turn was holding. The held turn is dropped
+        // in favour of that card: no DM call, no notice, and no 'declined' flag for the DM.
+        if (heldEntry?.decision === 'replaced') {
+          logger.info('COMBAT_ENTRY_HOLD_REPLACED', { sessionId });
+          setCombatTurnUiState(
+            combatTurnUiStateForEncounter(activeEncounter, isInCombat, characterId),
+          );
+          return {
+            text: '',
+            sender: 'dm',
+            timestamp: new Date().toISOString(),
+            context: { emotion: 'neutral', intent: 'response' },
+          };
+        }
         const entryDeclined = heldEntry?.decision === 'declined';
         if (heldEntry?.decision === 'declined') {
           aiContext.gameState.combatEntryDeclined = heldEntry.label;

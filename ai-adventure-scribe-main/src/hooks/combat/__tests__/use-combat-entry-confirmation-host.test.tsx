@@ -42,7 +42,7 @@ describe('useCombatEntryConfirmationHost teardown', () => {
     act(() => {
       expect(settlePendingCombatEntryConfirmation(true)).toBe(true);
     });
-    await expect(pending).resolves.toBe(true);
+    await expect(pending).resolves.toBe('confirmed');
     second.unmount();
   });
 
@@ -51,7 +51,7 @@ describe('useCombatEntryConfirmationHost teardown', () => {
     const pending = requestCombatEntryConfirmation(SPEC);
 
     unmount();
-    await expect(pending).resolves.toBe(false);
+    await expect(pending).resolves.toBe('declined');
     expect(hasPendingCombatEntryConfirmation()).toBe(false);
   });
 });

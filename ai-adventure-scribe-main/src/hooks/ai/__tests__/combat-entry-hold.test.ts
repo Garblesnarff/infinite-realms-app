@@ -44,6 +44,7 @@ vi.mock('@/services/combat/combat-entry-confirmation-bridge', () => ({
 
 import logger from '@/lib/logger';
 import {
+  type CombatEntryOutcome,
   consumeCombatEntryTypedAnswer,
   requestCombatEntryAnswer,
   requestCombatEntryConfirmation,
@@ -86,7 +87,7 @@ describe('holdCombatEntryBeforeDm', () => {
     vi.mocked(consumeCombatEntryTypedAnswer).mockReturnValue(false);
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockResolvedValue(jsonResponse({ pending }));
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('confirmed');
   });
 
   it('sends the shared wire body to the declared-attack route, and asks the player with the result', async () => {
@@ -162,9 +163,9 @@ describe('holdCombatEntryBeforeDm', () => {
   });
 
   it('does not answer until the player has chosen', async () => {
-    let choose: (confirmed: boolean) => void = () => {};
+    let choose: (outcome: CombatEntryOutcome) => void = () => {};
     vi.mocked(requestCombatEntryConfirmation).mockReturnValue(
-      new Promise<boolean>((resolve) => {
+      new Promise<CombatEntryOutcome>((resolve) => {
         choose = resolve;
       }),
     );
@@ -178,16 +179,21 @@ describe('holdCombatEntryBeforeDm', () => {
     await Promise.resolve();
     expect(settled).toBe(false);
 
-    choose(true);
+    choose('confirmed');
     await expect(held).resolves.toEqual({ pending, decision: 'confirmed' });
   });
 
   it('reports a decline', async () => {
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(false);
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('declined');
     await expect(hold()).resolves.toEqual({
       decision: 'declined',
       label: 'the spell Chill Touch against Valerius',
     });
+  });
+
+  it('reports a replaced prompt as replaced, never as a decline (#1678)', async () => {
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('replaced');
+    await expect(hold()).resolves.toEqual({ decision: 'replaced' });
   });
 
   it('reports that nothing was asked when no popup host is mounted', async () => {
@@ -311,6 +317,11 @@ describe('an attack spell with no creature named ("I cast Fire Bolt at him")', (
     expect(bodies()).toEqual([untargetedSpellCheckBody, pickedTargetCheckBody]);
   });
 
+  it('a replaced target choice is replaced, not a decline (#1678)', async () => {
+    vi.mocked(requestCombatEntryAnswer).mockResolvedValue({ confirmed: false, superseded: true });
+    await expect(holdUntargeted()).resolves.toEqual({ decision: 'replaced' });
+  });
+
   it('holds the DM back and tells it nothing happened when the player does something else', async () => {
     vi.mocked(requestCombatEntryAnswer).mockResolvedValue({ confirmed: false });
 
@@ -395,7 +406,7 @@ describe('the card for a fight the DM asked for without naming anyone (#2532)', 
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue(true);
+    vi.mocked(requestCombatEntryConfirmation).mockResolvedValue('confirmed');
   });
 
   it('shows the creature the server named, from the exact entry the server sends', async () => {
