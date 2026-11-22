@@ -83,8 +83,9 @@ const CampaignSessions: React.FC = () => {
       campaignId ? ((await userDataApi.listResumableSessions(campaignId)) ?? []) : [],
     enabled: Boolean(campaignId),
   });
+  // #1691: undefined while the list is still loading, so no "Resume is off" reason shows before it loads.
   const resumableIds = React.useMemo(
-    () => new Set((resumableRows ?? []).map((row) => row.id)),
+    () => (resumableRows ? new Set(resumableRows.map((row) => row.id)) : undefined),
     [resumableRows],
   );
 

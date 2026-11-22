@@ -122,6 +122,13 @@ export type ClientCombatIntent =
       metamagic?: string;
     }
   | { type: 'dash' | 'dodge' | 'disengage'; actorId: string; expectedVersion?: number }
+  /** #1635: Cunning Action, a Rogue's bonus action; the server spends it and runs the mode. */
+  | {
+      type: 'cunning_action';
+      actorId: string;
+      mode: 'dash' | 'disengage' | 'hide';
+      expectedVersion?: number;
+    }
   /** #975: the Fighter's short-rest features; the server spends the tracked use. */
   | {
       type: 'second_wind' | 'action_surge' | 'divine_sense' | 'rage';

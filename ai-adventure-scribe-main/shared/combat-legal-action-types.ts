@@ -10,6 +10,8 @@ export const LEGAL_ACTION_TYPES = [
   'dash',
   'dodge',
   'disengage',
+  /** #1635: Cunning Action, a Rogue's bonus action (level 2+): Dash, Disengage or Hide. */
+  'cunning_action',
   'second_wind',
   'action_surge',
   'divine_sense',

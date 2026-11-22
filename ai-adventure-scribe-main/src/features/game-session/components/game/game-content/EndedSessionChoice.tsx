@@ -49,7 +49,13 @@ export function EndedSessionChoice({
   const [showList, setShowList] = React.useState(false);
   const [busy, setBusy] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
+  const listRef = React.useRef<HTMLUListElement>(null);
   const missingHero = !campaignId || !characterId;
+
+  // #1691: when the list opens, keyboard and screen-reader focus moves to it.
+  React.useEffect(() => {
+    if (showList) listRef.current?.focus();
+  }, [showList]);
 
   React.useEffect(() => {
     if (!campaignId || !characterId) return undefined;
@@ -58,9 +64,7 @@ export function EndedSessionChoice({
       (list: ResumableRow[]) => {
         if (cancelled) return;
         // Newest first: the session number decides the order, not the order the server returned.
-        setRows(
-          [...list].sort((a, b) => (b.session_number ?? 0) - (a.session_number ?? 0)),
-        );
+        setRows([...list].sort((a, b) => (b.session_number ?? 0) - (a.session_number ?? 0)));
       },
       (err: unknown) => {
         if (cancelled) return;
@@ -93,9 +97,7 @@ export function EndedSessionChoice({
     try {
       await userDataApi.resumeSession(row.id);
       // Full load of the game for the reopened session, so every part of the screen starts from it.
-      window.location.assign(
-        `/app/game/${campaignId}?character=${characterId}&session=${row.id}`,
-      );
+      window.location.assign(`/app/game/${campaignId}?character=${characterId}&session=${row.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not resume that session.');
       setBusy(null);
@@ -150,7 +152,13 @@ export function EndedSessionChoice({
       )}
 
       {showList && rows && rows.length > 0 && (
-        <ul className="flex w-full max-w-xl flex-col gap-3 text-left" aria-label="Sessions to resume">
+        // #1691: the list is capped in height and scrolls, so a long list does not make a very long page.
+        <ul
+          ref={listRef}
+          tabIndex={-1}
+          className="flex max-h-[60vh] w-full max-w-xl flex-col gap-3 overflow-y-auto text-left"
+          aria-label="Sessions to resume"
+        >
           {rows.map((row) => (
             <li
               key={row.id}
@@ -169,7 +177,9 @@ export function EndedSessionChoice({
                     </span>
                   )}
                 </p>
-                <p className="text-sm text-muted-foreground">{lastSceneLine(row.current_scene_description)}</p>
+                <p className="text-sm text-muted-foreground">
+                  {lastSceneLine(row.current_scene_description)}
+                </p>
               </div>
               <Button
                 type="button"

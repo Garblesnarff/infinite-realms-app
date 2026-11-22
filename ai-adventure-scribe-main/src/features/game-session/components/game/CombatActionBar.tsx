@@ -77,6 +77,8 @@ export const LEGAL_ACTION_PLACEMENT = {
   dash: 'more',
   disengage: 'more',
   second_wind: 'more',
+  /** #1635: Cunning Action, a Rogue's bonus action (Dash, Disengage or Hide); it rides More. */
+  cunning_action: 'more',
   action_surge: 'more',
   divine_sense: 'more',
   /** #1638: Rage, a Barbarian's bonus action, sits with the other Fighter-style features. */
