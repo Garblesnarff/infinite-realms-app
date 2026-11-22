@@ -1,5 +1,5 @@
 /** Reckless Attack lifecycle and refusals against real PostgreSQL; no live DM. */
-import { afterAll, afterEach, beforeAll, expect, it } from 'bun:test';
+import { afterAll, afterEach, beforeAll, expect, it, spyOn } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import {
@@ -26,7 +26,10 @@ import { setRngSeed } from '../../lib/rng.js';
 const { combatAttackService } = await importWithRealDb(
   () => import('../combat/combat-attack-service.js'),
 );
-const { isReckless } = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
+const { isReckless, hasAttackedThisTurn } = await importWithRealDb(
+  () => import('../combat/combat-turn-flags.js'),
+);
+const { CombatHPService } = await importWithRealDb(() => import('../combat-hp-service.js'));
 const { CombatInitiativeService } = await importWithRealDb(
   () => import('../combat-initiative-service.js'),
 );
@@ -221,6 +224,42 @@ describeWithDb('Reckless Attack on real combat state (#1635)', () => {
     expect(second.d20Rolls).toHaveLength(2);
     expect(await isReckless(encounterId, barbarianId)).toBe(true);
     setRngSeed(undefined);
+  });
+
+  it('does not mark a failed attack and allows a reckless retry', async () => {
+    await resetFight();
+    const intent = async () => ({
+      type: 'attack' as const,
+      actorId: barbarianId,
+      targetId: allyId,
+      weaponId: 'Longsword',
+      reckless: true,
+      d20: 20,
+      expectedVersion: await version(),
+    });
+    const broken = spyOn(CombatHPService!, 'applyDamage').mockRejectedValueOnce(
+      new Error('damage write failed'),
+    );
+    try {
+      await expect(
+        executeCombatIntent(encounterId, await intent(), userId, 'player', undefined, 'action_bar'),
+      ).rejects.toThrow('Attack succeeded but damage application failed');
+      expect(broken).toHaveBeenCalledTimes(1);
+    } finally {
+      broken.mockRestore();
+    }
+    expect(await hasAttackedThisTurn(encounterId, barbarianId)).toBe(false);
+    expect(await isReckless(encounterId, barbarianId)).toBe(false);
+    await executeCombatIntent(
+      encounterId,
+      await intent(),
+      userId,
+      'player',
+      undefined,
+      'action_bar',
+    );
+    expect(await hasAttackedThisTurn(encounterId, barbarianId)).toBe(true);
+    expect(await isReckless(encounterId, barbarianId)).toBe(true);
   });
 
   it('grants attacks against the Barbarian advantage until their next turn', async () => {

@@ -908,20 +908,25 @@ export class CombatAttackService {
     // fleer's turn, so claiming a turn action for the attacker would spend a second creature's
     // Action for a blow provoked by the first one.
     const resolveAttackRoll = async () => {
-      if (
+      const trackBarbarianAttack =
         !isReaction &&
-        attackerData.participant.characterId &&
-        (await classLevelOfCharacter(attackerData.participant.characterId, 'Barbarian')) > 0
+        !!attackerData.participant.characterId &&
+        (await classLevelOfCharacter(attackerData.participant.characterId, 'Barbarian')) > 0;
+      if (
+        trackBarbarianAttack &&
+        input.reckless &&
+        (await hasAttackedThisTurn(encounterId, attackerId))
       ) {
-        // This runs after the attack claim, within the encounter transaction for player attacks.
-        if (input.reckless && (await hasAttackedThisTurn(encounterId, attackerId))) {
-          throw new BusinessLogicError(
-            'Reckless Attack must be declared on your first attack of the turn.',
-            { reason: 'reckless_attack_refused' },
-          );
-        }
-        await markTurnAttack(encounterId, attackerId, input.reckless === true);
+        throw new BusinessLogicError(
+          'Reckless Attack must be declared on your first attack of the turn.',
+          { reason: 'reckless_attack_refused' },
+        );
       }
+      // Like the light-attack mark, record the decision only once the attack resolves.
+      const markResolvedBarbarianAttack = async (): Promise<void> => {
+        if (trackBarbarianAttack)
+          await markTurnAttack(encounterId, attackerId, input.reckless === true);
+      };
 
       // #1637: the attack spends a Hide's advantage, hit or miss, once it is actually resolving.
       if (rules.advantageSources.includes('hidden')) {
@@ -1033,6 +1038,7 @@ export class CombatAttackService {
           targetHpAfter: null,
         });
         // Miss - no damage
+        await markResolvedBarbarianAttack();
         await markLightAttackAction();
         return {
           hit: false,
@@ -1302,6 +1308,7 @@ export class CombatAttackService {
           ...(concentration ? { concentration } : {}),
           ...(transcriptLines.length ? { transcriptLines } : {}),
         };
+        await markResolvedBarbarianAttack();
         await markLightAttackAction();
         return attackResult;
       } catch (error) {
