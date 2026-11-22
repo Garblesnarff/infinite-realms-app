@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.55.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.54.0...v0.55.0) (2026-11-22)
+
+
+### Features
+
+* **barbarian:** Reckless Attack ([e3ebcdb](https://github.com/Garblesnarff/infinite-realms-app/commit/e3ebcdb84d5794860317aaf41fda0e1a93f3a12b))
+* **shadow:** count confrontations narrated without combat entry ([#1704](https://github.com/Garblesnarff/infinite-realms-app/issues/1704)) ([0082c5e](https://github.com/Garblesnarff/infinite-realms-app/commit/0082c5e194859edc61a2d1946e92b7e244d24259))
+
+
+### Bug Fixes
+
+* **combat-entry:** a replaced prompt on the hold path is not a decline ([#1678](https://github.com/Garblesnarff/infinite-realms-app/issues/1678)) ([b6fb361](https://github.com/Garblesnarff/infinite-realms-app/commit/b6fb361f8260f981723f7ccc0588b56729e9073d))
+* **combat-entry:** save the DM row before the roll tray opens ([#1696](https://github.com/Garblesnarff/infinite-realms-app/issues/1696)) ([e347c35](https://github.com/Garblesnarff/infinite-realms-app/commit/e347c350741fe4e921654f420f13fbd7b05e1efa))
+* **combat:** keep the engine lines of skipped turns ([#1697](https://github.com/Garblesnarff/infinite-realms-app/issues/1697)) ([e12f534](https://github.com/Garblesnarff/infinite-realms-app/commit/e12f534291e59170032954d059b78b52695ae9f1))
+* **creation:** the summary shows spells, equipment, enhancements and traits ([#213](https://github.com/Garblesnarff/infinite-realms-app/issues/213)) ([260c3d6](https://github.com/Garblesnarff/infinite-realms-app/commit/260c3d6b1809378dd611a754758e18170406a8ed))
+* **dm-prompt:** an NPC attack or an accepted challenge starts the fight ([#1704](https://github.com/Garblesnarff/infinite-realms-app/issues/1704)) ([f8a9fc5](https://github.com/Garblesnarff/infinite-realms-app/commit/f8a9fc50946b232eb87280f0c4f605991622d244))
+* **game:** a Home link on the game screen; Open full sheet opens the sheet ([#1705](https://github.com/Garblesnarff/infinite-realms-app/issues/1705)) ([bd678e2](https://github.com/Garblesnarff/infinite-realms-app/commit/bd678e26dd58b92a45b41a23784b8ec826565eaf))
+* **sessions:** End session leads to the two choices; a one-shot never starts session 2 unasked ([#1703](https://github.com/Garblesnarff/infinite-realms-app/issues/1703)) ([2c6aeb5](https://github.com/Garblesnarff/infinite-realms-app/commit/2c6aeb5a59f518a5b5cbaed8de6487a061339f97))
+
 ## [0.54.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.53.0...v0.54.0) (2026-11-22)
 
 
