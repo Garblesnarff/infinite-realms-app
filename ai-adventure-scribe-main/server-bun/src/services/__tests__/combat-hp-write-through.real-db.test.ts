@@ -10,14 +10,16 @@
  *
  * Requires TEST_DATABASE_URL or DATABASE_URL -- see fixtures/real-db.ts.
  */
-import { afterAll, beforeAll, beforeEach, expect, it } from 'bun:test';
-import { eq, sql } from 'drizzle-orm';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
 import {
   campaigns,
   characterStats,
   characters,
+  characterFeatures,
+  classFeaturesLibrary,
   combatDamageLog,
   combatEncounters,
   combatParticipantStatus,
@@ -140,6 +142,8 @@ describeWithDb('combat damage reaches the character record', () => {
         diedAt: null,
       })
       .where(eq(characterStats.characterId, characterId));
+    await db.update(characters).set({ race: null }).where(eq(characters.id, characterId));
+    await db.delete(characterFeatures).where(eq(characterFeatures.characterId, characterId));
   });
 
   afterAll(async () => {
@@ -433,6 +437,267 @@ describeWithDb('combat damage reaches the character record', () => {
       damageDealt: 3,
       damageTaken: 7,
       status: 'ok',
+    });
+  });
+
+  // #1635: Half-Orc Relentless Endurance. The class_features_library row comes from migration
+  // db/migrations/20261122_seed_relentless_endurance.sql (replayed into this database); the
+  // character_features row is created by the engine on first use. Producers: the production
+  // CombatHPService.applyDamage, CharacterVitalsService.applyDamage, applyNonAttackDamage,
+  // combatAttackService.resolveAttack and ClassFeatureUsageService.restoreFeatures. The fight
+  // rows are the suite's own fixtures above. Nothing here reaches the DM.
+  describe('Half-Orc Relentless Endurance (#1635)', () => {
+    const LINE = 'The Seeker stays on their feet with 1 HP (Relentless Endurance).';
+
+    const becomeHalfOrc = () =>
+      db.update(characters).set({ race: 'Half-Orc' }).where(eq(characters.id, characterId));
+
+    const usesRemaining = async (): Promise<number | null | undefined> => {
+      const rows = await db
+        .select({ usesRemaining: characterFeatures.usesRemaining })
+        .from(characterFeatures)
+        .innerJoin(classFeaturesLibrary, eq(characterFeatures.featureId, classFeaturesLibrary.id))
+        .where(
+          and(
+            eq(characterFeatures.characterId, characterId),
+            eq(classFeaturesLibrary.className, 'Half-Orc'),
+            eq(classFeaturesLibrary.featureName, 'Relentless Endurance'),
+          ),
+        );
+      expect(rows.length).toBeLessThanOrEqual(1);
+      return rows[0]?.usesRemaining;
+    };
+
+    const hit = async (amount: number) => {
+      const { CombatHPService } = await import('../combat-hp-service.js');
+      return CombatHPService.applyDamage(
+        heroId,
+        encounterId,
+        {
+          damageAmount: amount,
+          damageType: 'slashing',
+          sourceDescription: 'a falling rock',
+          uncapped: true,
+        },
+        userId,
+      );
+    };
+
+    const backToFull = async () => {
+      await db
+        .update(combatParticipantStatus)
+        .set({
+          currentHp: MAX_HP,
+          isConscious: true,
+          deathSavesSuccesses: 0,
+          deathSavesFailures: 0,
+        })
+        .where(eq(combatParticipantStatus.participantId, heroId));
+      await db
+        .update(characterStats)
+        .set({
+          currentHitPoints: MAX_HP,
+          isConscious: true,
+          vitalState: 'standing',
+          deathSavesFailures: 0,
+        })
+        .where(eq(characterStats.characterId, characterId));
+    };
+
+    it('the seed row exists: Half-Orc, passive, long rest, one use', async () => {
+      const rows = await db
+        .select({
+          usageType: classFeaturesLibrary.usageType,
+          usesPerRest: classFeaturesLibrary.usesPerRest,
+          usesCount: classFeaturesLibrary.usesCount,
+        })
+        .from(classFeaturesLibrary)
+        .where(
+          and(
+            eq(classFeaturesLibrary.className, 'Half-Orc'),
+            eq(classFeaturesLibrary.featureName, 'Relentless Endurance'),
+          ),
+        );
+      expect(rows).toEqual([{ usageType: 'passive', usesPerRest: 'long_rest', usesCount: 1 }]);
+    });
+
+    it('a Half-Orc dropped to 0 stays at 1 HP, on both rows, and the use is spent', async () => {
+      await becomeHalfOrc();
+
+      const result = await hit(MAX_HP);
+
+      expect(result.newCurrentHp).toBe(1);
+      expect(result.isConscious).toBe(true);
+      expect(result.relentlessEnduranceLine).toBe(LINE);
+      expect(await participant(heroId)).toMatchObject({
+        currentHp: 1,
+        isConscious: true,
+        deathSavesFailures: 0,
+      });
+      expect(await sheet()).toMatchObject({
+        currentHitPoints: 1,
+        isConscious: true,
+        vitalState: 'standing',
+      });
+      expect(await usesRemaining()).toBe(0);
+    });
+
+    it('a second drop to 0 before a long rest goes to 0 and starts dying', async () => {
+      await becomeHalfOrc();
+      expect((await hit(MAX_HP)).newCurrentHp).toBe(1);
+      await backToFull();
+
+      const result = await hit(MAX_HP);
+
+      expect(result.newCurrentHp).toBe(0);
+      expect(result.isConscious).toBe(false);
+      expect(result.relentlessEnduranceLine).toBeUndefined();
+      expect(await sheet()).toMatchObject({ currentHitPoints: 0, vitalState: 'dying' });
+      expect(await usesRemaining()).toBe(0);
+    });
+
+    it('massive damage kills a Half-Orc outright and does not touch the use', async () => {
+      await becomeHalfOrc();
+
+      // 20 HP, 40 damage: 20 left over after reaching 0, equal to the maximum (SRD instant death).
+      const result = await hit(2 * MAX_HP);
+
+      expect(result.massiveDamage).toBe(true);
+      expect(result.isDead).toBe(true);
+      expect(result.relentlessEnduranceLine).toBeUndefined();
+      expect(await sheet()).toMatchObject({ currentHitPoints: 0, vitalState: 'dead' });
+      expect(await usesRemaining()).toBeUndefined();
+    });
+
+    it('a character who is not a Half-Orc drops to 0 and gets no feature row', async () => {
+      const result = await hit(MAX_HP);
+
+      expect(result.newCurrentHp).toBe(0);
+      expect(result.relentlessEnduranceLine).toBeUndefined();
+      expect(await sheet()).toMatchObject({ currentHitPoints: 0, vitalState: 'dying' });
+      const rows = await db
+        .select({ id: characterFeatures.id })
+        .from(characterFeatures)
+        .where(eq(characterFeatures.characterId, characterId));
+      expect(rows).toEqual([]);
+    });
+
+    it('a long rest restores the use, and the next drop is caught again', async () => {
+      const { ClassFeatureUsageService } =
+        await import('../progression/class-feature-usage-service.js');
+      await becomeHalfOrc();
+      expect((await hit(MAX_HP)).newCurrentHp).toBe(1);
+      expect(await usesRemaining()).toBe(0);
+
+      await ClassFeatureUsageService.restoreFeatures({ characterId, restType: 'long', userId });
+
+      expect(await usesRemaining()).toBe(1);
+      await backToFull();
+      const result = await hit(MAX_HP);
+      expect(result.newCurrentHp).toBe(1);
+      expect(result.relentlessEnduranceLine).toBe(LINE);
+      expect(await usesRemaining()).toBe(0);
+    });
+
+    it('the out-of-combat writer (CharacterVitalsService.applyDamage) uses the same rule', async () => {
+      const { CharacterVitalsService } = await import('../character-vitals-service.js');
+      await becomeHalfOrc();
+      await db
+        .update(characterStats)
+        .set({ currentHitPoints: 5 })
+        .where(eq(characterStats.characterId, characterId));
+      const [{ name }] = await db
+        .select({ name: characters.name })
+        .from(characters)
+        .where(eq(characters.id, characterId));
+
+      const first = await CharacterVitalsService.applyDamage(characterId, userId, 5);
+      expect(first).toMatchObject({
+        currentHitPoints: 1,
+        isConscious: true,
+        vitalState: 'standing',
+      });
+      expect(first.relentlessEnduranceLine).toBe(
+        `${name} stays on their feet with 1 HP (Relentless Endurance).`,
+      );
+      expect(await usesRemaining()).toBe(0);
+
+      const second = await CharacterVitalsService.applyDamage(characterId, userId, 5);
+      expect(second).toMatchObject({ currentHitPoints: 0, vitalState: 'dying' });
+      expect(second.relentlessEnduranceLine).toBeUndefined();
+    });
+
+    it('a non-attack source in a live fight (applyNonAttackDamage) carries the engine line', async () => {
+      const { applyNonAttackDamage } = await import('../combat/non-attack-damage.js');
+      await becomeHalfOrc();
+
+      const result = await applyNonAttackDamage(
+        characterId,
+        userId,
+        MAX_HP,
+        'a collapsing ceiling',
+      );
+
+      expect(result.engineLines).toContain(LINE);
+      expect(await participant(heroId)).toMatchObject({ currentHp: 1, isConscious: true });
+      expect(await sheet()).toMatchObject({ currentHitPoints: 1, vitalState: 'standing' });
+      expect(await usesRemaining()).toBe(0);
+    });
+
+    it('an attack (combatAttackService.resolveAttack) that drops a Half-Orc carries the engine line', async () => {
+      const { combatAttackService } = await import('../combat/combat-attack-service.js');
+      await becomeHalfOrc();
+      // The goblin's turn, the hero at 1 HP and armour class 1: a d20 of 15 hits and is no crit,
+      // and any damage drops the hero to 0, so the per-hit cap cannot keep them up.
+      await db
+        .update(combatParticipantStatus)
+        .set({ currentHp: 1 })
+        .where(eq(combatParticipantStatus.participantId, heroId));
+      await db
+        .update(characterStats)
+        .set({ currentHitPoints: 1 })
+        .where(eq(characterStats.characterId, characterId));
+      await db
+        .update(combatParticipants)
+        .set({ armorClass: 1 })
+        .where(eq(combatParticipants.id, heroId));
+      await db
+        .update(combatEncounters)
+        .set({ currentTurnOrder: 1 })
+        .where(eq(combatEncounters.id, encounterId));
+      try {
+        const [{ version }] = await db
+          .select({ version: combatEncounters.version })
+          .from(combatEncounters)
+          .where(eq(combatEncounters.id, encounterId));
+
+        const result = await combatAttackService.resolveAttack(
+          encounterId,
+          {
+            attackerId: goblinId,
+            targetId: heroId,
+            expectedVersion: version,
+            attackType: 'melee',
+            providedD20: 15,
+          },
+          userId,
+        );
+
+        expect(result.hit).toBe(true);
+        expect(result.transcriptLines ?? []).toContain(LINE);
+        expect(await participant(heroId)).toMatchObject({ currentHp: 1, isConscious: true });
+        expect(await sheet()).toMatchObject({ currentHitPoints: 1, vitalState: 'standing' });
+        expect(await usesRemaining()).toBe(0);
+      } finally {
+        await db
+          .update(combatParticipants)
+          .set({ armorClass: null, actionUsed: false })
+          .where(eq(combatParticipants.encounterId, encounterId));
+        await db
+          .update(combatEncounters)
+          .set({ currentTurnOrder: 0 })
+          .where(eq(combatEncounters.id, encounterId));
+      }
     });
   });
 });

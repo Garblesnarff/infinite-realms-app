@@ -30,6 +30,11 @@ import { TRPCError } from '@trpc/server';
 import { and, eq, exists, or, sql } from 'drizzle-orm';
 
 import { HPMechanics } from './combat/hp-mechanics.js';
+import {
+  relentlessEnduranceLine,
+  spendRelentlessEndurance,
+  wouldRelentlessEnduranceTrigger,
+} from './combat/relentless-endurance.js';
 import { db } from '../../../db/client';
 import { characterStats, characters } from '../../../db/schema/index';
 import { DEATH_SAVE_LIMIT } from '../../../shared/death-save-limit.js';
@@ -393,18 +398,43 @@ export class CharacterVitalsService {
     userId: string,
     amount: number,
     options: { critical?: boolean } = {},
-  ): Promise<CharacterVitals> {
+  ): Promise<CharacterVitals & { relentlessEnduranceLine?: string }> {
     return db.transaction(async (tx) => {
       const current = await loadVitals(tx, characterId, { userId, forUpdate: true });
       if (!current) throw notFound();
 
-      return writeVitals(
-        tx,
-        characterId,
-        current.maxHitPoints,
-        computeVitalsAfterDamage(current, amount, options),
-        userId,
-      );
+      const next = computeVitalsAfterDamage(current, amount, options);
+
+      // #1635: a Half-Orc dropped to 0 and not killed outright stays up at 1 HP, once per long
+      // rest. Massive damage already reads as 'dead' here (computeVitalsAfterDamage), so the
+      // vital state is the "killed outright" test; the spend shares this transaction.
+      let final = next;
+      let line: string | undefined;
+      if (
+        current.vitalState !== 'dead' &&
+        wouldRelentlessEnduranceTrigger({
+          hpBefore: current.currentHitPoints,
+          newHp: next.currentHitPoints,
+          massiveDamage: next.vitalState === 'dead',
+          isDead: next.vitalState === 'dead',
+        })
+      ) {
+        const spent = await spendRelentlessEndurance(tx, characterId);
+        if (spent) {
+          final = {
+            ...next,
+            currentHitPoints: 1,
+            isConscious: true,
+            vitalState: 'standing',
+            deathSavesSuccesses: 0,
+            deathSavesFailures: 0,
+          };
+          line = relentlessEnduranceLine(spent.characterName);
+        }
+      }
+
+      const written = await writeVitals(tx, characterId, current.maxHitPoints, final, userId);
+      return line ? { ...written, relentlessEnduranceLine: line } : written;
     });
   }
 

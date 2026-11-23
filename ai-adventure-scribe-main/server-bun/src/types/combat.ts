@@ -1119,6 +1119,8 @@ export interface DamageResult {
   overflow?: number;
   /** True when this damage ended a live Rage (the Barbarian fell to 0 HP or unconscious). */
   rageEnded?: boolean;
+  /** #1635: present when Relentless Endurance dropped the target to 1 HP instead of 0. */
+  relentlessEnduranceLine?: string;
   /** The target's hit point maximum when the hit landed (the number `overflow` is judged against). */
   hpMaximum?: number;
   deathSaveFailuresAdded: number;
