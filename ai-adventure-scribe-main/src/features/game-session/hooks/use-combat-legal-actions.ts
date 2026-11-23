@@ -23,6 +23,7 @@ import {
   type ClientCombatIntent,
   type StructuredCombatAction,
 } from '@/services/combat/combat-action-executor';
+import { runCombatCheck } from '@/services/combat/combat-check-client';
 import {
   engineRosterOf,
   formatCombatActionParts,
@@ -129,6 +130,10 @@ export type LegalAction = {
    * greyed. `runAction` does not send it.
    */
   narrated?: boolean;
+  /** #1635: a `check` chip's kind. */
+  checkKind?: 'grapple' | 'shove' | 'hide';
+  /** #1635: display modifier for the check roll popup. */
+  checkModifier?: number;
 };
 
 type EngineNotice = {
@@ -438,6 +443,40 @@ export function useCombatLegalActions(input: {
             text: parts.map((part) => part.line).join('\n\n'),
             cards: parts.map((part) => part.card),
           });
+          await refreshCombatState();
+        } else if (action.type === 'check' && action.checkKind) {
+          // #1635: Grapple, Shove and Hide chips send the same intent the typed check sends.
+          const target = action.targetId
+            ? encounter.participants.find((p) => p.id === action.targetId)
+            : undefined;
+          const actor = encounter.participants.find((p) => p.id === actorId);
+          const outcome = await runCombatCheck(
+            {
+              kind: action.checkKind,
+              ...(action.targetId ? { targetId: action.targetId } : {}),
+              ...(target?.name ? { targetLabel: target.name } : {}),
+            },
+            {
+              encounterId: encounter.id,
+              actorId,
+              actorLabel: actor?.name ?? 'You',
+              checkModifier: action.checkModifier ?? 0,
+              origin: 'action_bar',
+            },
+          );
+          if (outcome.reason === 'refused') {
+            setError(outcome.message ?? 'The engine refused that check. Nothing was spent.');
+          } else if (outcome.result) {
+            const result = outcome.result as { engineLine?: string };
+            const engineLine = typeof result.engineLine === 'string' ? result.engineLine : '';
+            if (engineLine) {
+              const parts = [...formatWakeParts(result)];
+              await sendEngineNotice(input.onSendMessage, {
+                text: [engineLine, ...parts.map((part) => part.line)].join('\n\n'),
+                cards: parts.map((part) => part.card),
+              });
+            }
+          }
           await refreshCombatState();
         } else if (action.type === 'dash' || action.type === 'disengage') {
           const result = await executeAuthoritativeCombatIntent(

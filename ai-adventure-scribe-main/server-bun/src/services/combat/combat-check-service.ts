@@ -49,6 +49,7 @@ import { tacticalSizeForParticipant } from '../../tactical/participant-size.js';
 import { ConditionsService } from '../conditions-service.js';
 
 import type { CombatCheckIntent } from '../../../../shared/combat-check-intent.js';
+import type { EntitySize, TacticalMap } from '../../tactical/types.js';
 
 /**
  * How long each condition a check applies lasts. Prone is the 1-round backstop to standing up on
@@ -146,7 +147,7 @@ async function checkProfileOf(participant: unknown): Promise<CheckActorProfile> 
  * a proficient Athletics shove is a different roll from an unproficient one, and resolving both
  * as unproficient quietly costs the player their bonus.
  */
-function isProficientIn(profile: CheckActorProfile, skill: string): boolean {
+export function isProficientIn(profile: CheckActorProfile, skill: string): boolean {
   const target = skill.toLowerCase();
   return (profile.skillProficiencies ?? []).some(
     (entry) => entry.toLowerCase().replace(/[^a-z0-9]/g, '') === target.replace(/[^a-z0-9]/g, ''),
@@ -336,17 +337,20 @@ const SIZE_ORDER = ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'] as
  * creature making it. Sizes come from the board entity, which seating filled from the resolved
  * stat block; a participant the board does not hold falls back to the catalog lookup.
  */
-async function refuseOversizedTarget(
-  state: CombatState,
-  request: CombatCheckIntentRequest,
-): Promise<void> {
-  const { intent, actorId, targetId } = request;
-  if ((intent.kind !== 'shove' && intent.kind !== 'grapple') || !targetId) return;
-  const map = await loadActiveTacticalMap(state.encounter.sessionId);
-  const sizeOf = (id: string): (typeof SIZE_ORDER)[number] => {
+export function checkTargetTooLarge(
+  map: TacticalMap | null | undefined,
+  participants: ReadonlyArray<{
+    id: string;
+    name?: string | null;
+    participantType?: string | null;
+  }>,
+  actorId: string,
+  targetId: string,
+): { tooLarge: boolean; actorSize: EntitySize; targetSize: EntitySize } {
+  const sizeOf = (id: string): EntitySize => {
     const entity = map?.entities.find((candidate) => candidate.id === id);
     if (entity) return entity.size;
-    const participant = state.participants.find((candidate) => candidate.id === id);
+    const participant = participants.find((candidate) => candidate.id === id);
     return tacticalSizeForParticipant({
       name: participant?.name ?? '',
       participantType: participant?.participantType ?? 'monster',
@@ -354,7 +358,24 @@ async function refuseOversizedTarget(
   };
   const actorSize = sizeOf(actorId);
   const targetSize = sizeOf(targetId);
-  if (SIZE_ORDER.indexOf(targetSize) - SIZE_ORDER.indexOf(actorSize) <= 1) return;
+  const tooLarge = SIZE_ORDER.indexOf(targetSize) - SIZE_ORDER.indexOf(actorSize) > 1;
+  return { tooLarge, actorSize, targetSize };
+}
+
+async function refuseOversizedTarget(
+  state: CombatState,
+  request: CombatCheckIntentRequest,
+): Promise<void> {
+  const { intent, actorId, targetId } = request;
+  if ((intent.kind !== 'shove' && intent.kind !== 'grapple') || !targetId) return;
+  const map = await loadActiveTacticalMap(state.encounter.sessionId);
+  const { tooLarge, actorSize, targetSize } = checkTargetTooLarge(
+    map,
+    state.participants,
+    actorId,
+    targetId,
+  );
+  if (!tooLarge) return;
   throw new BusinessLogicError(
     `${labelOf(state, actorId)} (${actorSize}) cannot ${intent.kind} ${labelOf(state, targetId)} (${targetSize}): ` +
       'the target can be no more than one size larger.',

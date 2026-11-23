@@ -1091,3 +1091,149 @@ describe('getLegalCombatActions', () => {
     expect(none.actions.some((action) => action.type === 'use_item')).toBe(false);
   });
 });
+
+describe('#1635 Grapple, Shove and Hide chips', () => {
+  test('a player with an unused action gets Grapple/Shove <goblin> chips and a Hide chip, each with a numeric checkModifier', async () => {
+    const goblin = {
+      id: 'goblin-1',
+      name: 'Goblin',
+      participantType: 'monster',
+      isActive: true,
+      actionUsed: false,
+      bonusActionUsed: false,
+      armorClass: 12,
+      encounterId: 'encounter-1',
+      turnOrder: 1,
+      maxHp: 10,
+      status: { currentHp: 10, isConscious: true },
+    };
+    const savedParticipants = participants;
+    const savedActionUsed = player.actionUsed;
+    const savedTurnOrder = player.turnOrder;
+    participants = [player, goblin];
+    player.actionUsed = false;
+    player.turnOrder = 0;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      const checks = result.actions.filter((action) => action.type === 'check');
+      expect(checks).toContainEqual(
+        expect.objectContaining({
+          type: 'check',
+          checkKind: 'grapple',
+          targetId: 'goblin-1',
+          label: 'Grapple Goblin',
+        }),
+      );
+      expect(checks).toContainEqual(
+        expect.objectContaining({
+          type: 'check',
+          checkKind: 'shove',
+          targetId: 'goblin-1',
+          label: 'Shove Goblin',
+        }),
+      );
+      expect(checks).toContainEqual(
+        expect.objectContaining({ type: 'check', checkKind: 'hide', label: 'Hide' }),
+      );
+      for (const check of checks) expect(typeof check.checkModifier).toBe('number');
+    } finally {
+      participants = savedParticipants;
+      player.actionUsed = savedActionUsed;
+      player.turnOrder = savedTurnOrder;
+    }
+  });
+
+  test('a player whose action is used gets no check chips', async () => {
+    const goblin = {
+      id: 'goblin-1',
+      name: 'Goblin',
+      participantType: 'monster',
+      isActive: true,
+      actionUsed: false,
+      bonusActionUsed: false,
+      armorClass: 12,
+      encounterId: 'encounter-1',
+      turnOrder: 1,
+      maxHp: 10,
+      status: { currentHp: 10, isConscious: true },
+    };
+    const savedParticipants = participants;
+    const savedActionUsed = player.actionUsed;
+    participants = [player, goblin];
+    player.actionUsed = true;
+    player.turnOrder = 0;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      expect(result.actions.filter((action) => action.type === 'check')).toEqual([]);
+    } finally {
+      participants = savedParticipants;
+      player.actionUsed = savedActionUsed;
+    }
+  });
+
+  test('a monster actor gets no check chips', async () => {
+    const savedParticipants = participants;
+    const savedTurnOrder = player.turnOrder;
+    participants = [monster];
+    player.turnOrder = 99;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      expect(result.actions.filter((action) => action.type === 'check')).toEqual([]);
+    } finally {
+      participants = savedParticipants;
+      player.turnOrder = savedTurnOrder;
+    }
+  });
+
+  test('a huge target gets no grapple/shove chip but Hide is still offered', async () => {
+    const goblin = {
+      id: 'goblin-1',
+      name: 'Goblin',
+      participantType: 'monster',
+      isActive: true,
+      actionUsed: false,
+      bonusActionUsed: false,
+      armorClass: 12,
+      encounterId: 'encounter-1',
+      turnOrder: 1,
+      maxHp: 10,
+      status: { currentHp: 10, isConscious: true },
+    };
+    const savedParticipants = participants;
+    const savedActionUsed = player.actionUsed;
+    const savedTurnOrder = player.turnOrder;
+    const savedEntities = map.entities.slice();
+    map.entities = map.entities.filter((entity) => entity.id !== 'goblin-1');
+    map.entities.push({
+      id: 'goblin-1',
+      name: 'Goblin',
+      x: 8,
+      y: 8,
+      size: 'huge',
+      type: 'monster',
+      speedFeet: 10,
+      movementRemaining: 10,
+    } as unknown as (typeof map.entities)[number]);
+    participants = [player, goblin];
+    player.actionUsed = false;
+    player.turnOrder = 0;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      const checks = result.actions.filter((action) => action.type === 'check');
+      expect(
+        checks.some((action) => action.checkKind === 'grapple' && action.targetId === 'goblin-1'),
+      ).toBe(false);
+      expect(
+        checks.some((action) => action.checkKind === 'shove' && action.targetId === 'goblin-1'),
+      ).toBe(false);
+      expect(checks).toContainEqual(
+        expect.objectContaining({ type: 'check', checkKind: 'hide', label: 'Hide' }),
+      );
+    } finally {
+      participants = savedParticipants;
+      player.actionUsed = savedActionUsed;
+      player.turnOrder = savedTurnOrder;
+      map.entities = savedEntities;
+    }
+  });
+});

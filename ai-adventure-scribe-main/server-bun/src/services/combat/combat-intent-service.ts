@@ -8,7 +8,8 @@ import { attackBudgetPlan } from './attack-budget-service.js';
 import { describeRefusedSpell, describeResolvedSpell } from './attack-narration.js';
 import { rageIsOffered, resolveRage } from './barbarian-rage-service.js';
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
-import { executeCombatCheck } from './combat-check-service.js';
+import { CHECK_DEFINITIONS, checkModifier } from './combat-check-rules.js';
+import { checkTargetTooLarge, executeCombatCheck, isProficientIn } from './combat-check-service.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { partyHasLeftTheFight } from './combat-end-guard.js';
 import { concludeEncounter } from './combat-ending.js';
@@ -2889,6 +2890,51 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         { type: 'dodge', label: 'Dodge' },
         { type: 'disengage', label: 'Disengage' },
       );
+    // #1635: Grapple, Shove and Hide as fight action menu chips. Same intent the typed check
+    // sends; the engine refuses (target too large, action used, not your turn) exactly as for
+    // a typed check. Display-only checkModifier for the roll popup.
+    // Chips are withheld where the engine would refuse for size; the engine still refuses a
+    // stale chip exactly as it refuses a typed check.
+    if (!actor.actionUsed && actor.participantType === 'player') {
+      const checkProfile = {
+        scores: profile.scores,
+        level: profile.level,
+        skillProficiencies: profile.skillProficiencies,
+      };
+      const opposing = state.participants.filter(
+        (participant) =>
+          participant.id !== actor.id &&
+          participant.isActive &&
+          participant.participantType !== actor.participantType &&
+          vitalStateOf(participant as unknown as VitalsInput) !== 'dead',
+      );
+      for (const target of opposing) {
+        for (const kind of ['grapple', 'shove'] as const) {
+          if (checkTargetTooLarge(map, state.participants, actor.id, target.id).tooLarge) continue;
+          actions.push({
+            type: 'check',
+            checkKind: kind,
+            targetId: target.id,
+            label: `${kind === 'grapple' ? 'Grapple' : 'Shove'} ${target.name}`,
+            checkModifier: checkModifier(
+              checkProfile,
+              CHECK_DEFINITIONS[kind],
+              isProficientIn(checkProfile, CHECK_DEFINITIONS[kind].skill),
+            ),
+          });
+        }
+      }
+      actions.push({
+        type: 'check',
+        checkKind: 'hide',
+        label: 'Hide',
+        checkModifier: checkModifier(
+          checkProfile,
+          CHECK_DEFINITIONS.hide,
+          isProficientIn(checkProfile, CHECK_DEFINITIONS.hide.skill),
+        ),
+      });
+    }
   }
   // #1233: Flexible Casting is a bonus action, offered to a Sorcerer with a sorcery-point pool
   // (no pool, not a Sorcerer, means no offer). Convert: one offer per spell slot the character

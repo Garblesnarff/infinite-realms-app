@@ -206,6 +206,81 @@ function participantIdFor(
 }
 
 /**
+ * #1635: one check the player already chose — from a typed sentence or a menu chip: the roll
+ * popup, then the same check intent through the DM dialect. A refusal is returned, not thrown.
+ */
+export async function runCombatCheck(
+  check: {
+    kind: CombatCheckIntentKind;
+    targetId?: string;
+    targetLabel?: string;
+    parleySkill?: 'persuade' | 'intimidate';
+  },
+  context: Pick<
+    CombatCheckClientContext,
+    'encounterId' | 'actorId' | 'actorLabel' | 'checkModifier' | 'shoveOutcome' | 'origin'
+  >,
+): Promise<CombatCheckClientOutcome> {
+  const targetLabel = check.targetLabel;
+  const checkLabel =
+    check.kind === 'parley' && check.parleySkill === 'intimidate'
+      ? 'Intimidation'
+      : CHECK_LABELS[check.kind];
+
+  // The one roll request: the same popup the skill checks use, reached through the bridge so its
+  // result returns here rather than being posted to the DM as a fresh utterance.
+  const outcome = await requestPlayerCheckRoll({
+    actorLabel: context.actorLabel,
+    checkLabel,
+    checkModifier: context.checkModifier,
+    ...(targetLabel ? { targetLabel } : {}),
+  });
+
+  if (outcome.cancelled) {
+    logger.info('[CombatCheck] player dismissed the check prompt; the check does not resolve', {
+      encounterId: context.encounterId,
+      kind: check.kind,
+    });
+    return { declared: true, reason: 'dismissed' };
+  }
+
+  const checkIntent: ClientCombatIntent = {
+    type: 'check',
+    actorId: context.actorId,
+    checkKind: check.kind,
+    ...(check.targetId ? { targetId: check.targetId } : {}),
+    ...(check.parleySkill ? { parleySkill: check.parleySkill } : {}),
+    ...(check.kind === 'shove' && context.shoveOutcome
+      ? { shoveOutcome: context.shoveOutcome }
+      : {}),
+    // An absent d20 means the engine rolls the whole check, which is the timeout/no-popup path.
+    ...(outcome.d20 !== null ? { d20: outcome.d20 } : {}),
+  };
+
+  try {
+    const result = await executeAuthoritativeCombatIntent(
+      context.encounterId,
+      checkIntent,
+      'dm',
+      undefined,
+      context.origin,
+    );
+    publishEngineRollOutcome(outcome.rollId, result);
+    return { declared: true, result };
+  } catch (error) {
+    // A refusal (a target too large to shove, nothing to escape) cost the player nothing; the
+    // engine's reason is the answer, not an error to throw the turn away on.
+    if (!(error instanceof CombatIntentRefusedError)) throw error;
+    logger.info('[CombatCheck] the engine refused the check', {
+      kind: check.kind,
+      reason: error.details?.reason,
+      encounterId: context.encounterId,
+    });
+    return { declared: true, reason: 'refused', message: error.message };
+  }
+}
+
+/**
  * Run one mid-combat check, if the player's message declared one.
  *
  * Returns `{ declared: false }` for an ordinary message so the caller proceeds exactly as it did
@@ -250,60 +325,20 @@ export async function runDeclaredCombatCheck(
   }
 
   const targetLabel = intent.targetName;
-  const checkLabel =
-    intent.kind === 'parley' && intent.parleySkill === 'intimidate'
-      ? 'Intimidation'
-      : CHECK_LABELS[intent.kind];
-
-  // The one roll request: the same popup the skill checks use, reached through the bridge so its
-  // result returns here rather than being posted to the DM as a fresh utterance.
-  const outcome = await requestPlayerCheckRoll({
-    actorLabel: context.actorLabel,
-    checkLabel,
-    checkModifier: context.checkModifier,
-    ...(targetLabel ? { targetLabel } : {}),
-  });
-
-  if (outcome.cancelled) {
-    logger.info('[CombatCheck] player dismissed the check prompt; the check does not resolve', {
-      encounterId: context.encounterId,
+  return runCombatCheck(
+    {
       kind: intent.kind,
-    });
-    return { declared: true, reason: 'dismissed' };
-  }
-
-  const checkIntent: ClientCombatIntent = {
-    type: 'check',
-    actorId: context.actorId,
-    checkKind: intent.kind,
-    ...(targetId ? { targetId } : {}),
-    ...(intent.parleySkill ? { parleySkill: intent.parleySkill } : {}),
-    ...(intent.kind === 'shove' && context.shoveOutcome
-      ? { shoveOutcome: context.shoveOutcome }
-      : {}),
-    // An absent d20 means the engine rolls the whole check, which is the timeout/no-popup path.
-    ...(outcome.d20 !== null ? { d20: outcome.d20 } : {}),
-  };
-
-  try {
-    const result = await executeAuthoritativeCombatIntent(
-      context.encounterId,
-      checkIntent,
-      'dm',
-      undefined,
-      context.origin,
-    );
-    publishEngineRollOutcome(outcome.rollId, result);
-    return { declared: true, result };
-  } catch (error) {
-    // A refusal (a target too large to shove, nothing to escape) cost the player nothing; the
-    // engine's reason is the answer, not an error to throw the turn away on.
-    if (!(error instanceof CombatIntentRefusedError)) throw error;
-    logger.info('[CombatCheck] the engine refused the check', {
-      kind: intent.kind,
-      reason: error.details?.reason,
+      ...(targetId ? { targetId } : {}),
+      ...(targetLabel ? { targetLabel } : {}),
+      ...(intent.parleySkill ? { parleySkill: intent.parleySkill } : {}),
+    },
+    {
       encounterId: context.encounterId,
-    });
-    return { declared: true, reason: 'refused', message: error.message };
-  }
+      actorId: context.actorId,
+      actorLabel: context.actorLabel,
+      checkModifier: context.checkModifier,
+      ...(context.shoveOutcome ? { shoveOutcome: context.shoveOutcome } : {}),
+      ...(context.origin ? { origin: context.origin } : {}),
+    },
+  );
 }
