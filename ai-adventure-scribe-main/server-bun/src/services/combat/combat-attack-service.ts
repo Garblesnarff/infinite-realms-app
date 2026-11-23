@@ -85,6 +85,7 @@ import {
   splitResistedSneakTotal,
 } from './sneak-attack-rider.js';
 import { loadActiveTacticalMap } from './tactical-map-store.js';
+import { UNARMED_STRIKE } from './weapon-catalog.js';
 import { abilityModifier } from '../../../../shared/ability-modifier';
 import {
   greatWeaponFightingApplies,
@@ -1087,9 +1088,11 @@ export class CombatAttackService {
           meleeWeapon: weapon.meleeWeapon === true,
           twoHanded: weapon.twoHanded === true,
         });
+      // An unarmed strike has flat SRD damage. Critical hits have no weapon die to double.
+      const unarmed = weapon.id === UNARMED_STRIKE.id;
       const damageCalc = calculateDamage({
-        damageDice: weapon.damageDice,
-        damageBonus: rules.damageBonus,
+        damageDice: unarmed ? '0d1' : weapon.damageDice,
+        damageBonus: unarmed ? Math.max(1, 1 + rules.damageBonus) : rules.damageBonus,
         damageType: weapon.damageType as DamageType,
         isCritical: isCrit,
         resistances: defenses.resistances,

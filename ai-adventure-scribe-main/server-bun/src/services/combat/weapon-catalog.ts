@@ -128,6 +128,7 @@ export function weaponProfileMatches(
  */
 const UNARMED_CLAIMS = new Set([
   'unarmedstrike',
+  'unarmedblow',
   'unarmed',
   'punch',
   'hit',

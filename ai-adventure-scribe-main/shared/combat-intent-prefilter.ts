@@ -41,7 +41,7 @@ export const COMBAT_INTENT_VERBS = [
   'cast',
 ] as const;
 
-const COMBAT_INTENT_IDIOMS = ['take a swing', 'swing at', 'go for'] as const;
+const COMBAT_INTENT_IDIOMS = ['take a swing', 'swing at', 'go for', 'unarmed blow'] as const;
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
