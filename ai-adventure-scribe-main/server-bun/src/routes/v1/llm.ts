@@ -1037,7 +1037,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             : typeof combatEntry?.sessionId === 'string'
               ? combatEntry.sessionId
               : null;
-        if (dmReply && defenseSessionId && typeof playerInput === 'string') {
+        if (dmReply?.inCombat && defenseSessionId && typeof playerInput === 'string') {
           const { resolveCombatUtilityAction } =
             await import('../../services/dm/combat-utility-action.js');
           const line = await resolveCombatUtilityAction(defenseSessionId, userId, playerInput);
