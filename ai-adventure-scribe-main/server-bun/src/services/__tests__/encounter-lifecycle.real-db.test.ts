@@ -47,7 +47,7 @@ import {
   tacticalMaps,
 } from '../../../../db/schema/index';
 
-const { executeCombatIntent, getLegalCombatActions } = await importWithRealDb(
+const { executeCombatIntent, getLegalCombatActions, proposeCombatAttack } = await importWithRealDb(
   () => import('../combat/combat-intent-service.js'),
 );
 const { CombatEncounterService } = await importWithRealDb(
@@ -943,6 +943,7 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     blocked?: Blocked[];
     foeName?: string;
     foeSize?: 'medium' | 'large';
+    heroMovementRemaining?: number;
   }): Promise<Fight> {
     const userId = testId('pin259-user');
     const [{ id: campaignId }] = await db
@@ -1041,7 +1042,7 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
           size: 'medium' as const,
           type: 'pc' as const,
           speedFeet: 30,
-          movementRemaining: 30,
+          movementRemaining: opts.heroMovementRemaining ?? 30,
           name: 'Pin Fighter',
         },
         {
@@ -1420,6 +1421,50 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     );
     expect(refusalLine).toContain('has no movement left this turn');
     expect(refusalLine).not.toContain('could not move closer');
+  });
+
+  test('round 1, the melee menu omits a foe beyond the remaining movement (#1642)', async () => {
+    const f = await seed({
+      width: 12,
+      height: 12,
+      hero: { x: 2, y: 6 },
+      foe: { x: 7, y: 6 },
+      foeName: 'Dutch Pellam',
+      heroMovementRemaining: 10,
+    });
+
+    expect((await entityAt(f, f.heroId)).movementRemaining).toBe(10);
+    expect(distFt(await entityAt(f, f.heroId), await entityAt(f, f.foeId))).toBe(25);
+    const { actions } = await getLegalCombatActions(f.encounterId, f.userId);
+    expect(actions.some((action) => action.type === 'move')).toBe(true);
+    expect(
+      actions.some(
+        (action) =>
+          action.type === 'attack' &&
+          Array.isArray(action.targetIds) &&
+          action.targetIds.includes(f.foeId),
+      ),
+    ).toBe(false);
+    expect((await entityAt(f, f.heroId)).movementRemaining).toBe(10);
+
+    // An already-rendered chip can still be clicked. The ordinary proposal reports
+    // its movement-only result to the caller, with the original gap and budget.
+    const proposal = await proposeCombatAttack(
+      f.encounterId,
+      { type: 'attack', actorId: f.heroId, targetId: f.foeId, weaponId: 'longsword' },
+      f.userId,
+      'dm',
+    );
+    expect(proposal).toMatchObject({
+      movementOnly: true,
+      result: {
+        reason: 'out_of_reach_after_full_movement',
+        refusalReason: 'movement_exhausted',
+        startingDistanceFeet: 25,
+        movementAvailableFeet: 10,
+        movedFeet: 10,
+      },
+    });
   });
 
   test('round 1, foe 10 ft away: the melee attack closes the gap and rolls (#1642)', async () => {
