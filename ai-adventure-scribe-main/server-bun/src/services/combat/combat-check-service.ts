@@ -45,6 +45,7 @@ import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { facingName, rosterEntryForParticipant } from '../../../../shared/engine-display-name';
 import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { getDistance } from '../../tactical/engine.js';
 import { tacticalSizeForParticipant } from '../../tactical/participant-size.js';
 import { ConditionsService } from '../conditions-service.js';
 
@@ -362,15 +363,43 @@ export function checkTargetTooLarge(
   return { tooLarge, actorSize, targetSize };
 }
 
+/** #1635: a creature's natural reach for a grapple or a shove (2014 SRD). */
+export const CHECK_REACH_FEET = 5;
+
+/**
+ * #1635: 2014 SRD: a grapple or a shove needs the target within the attacker's reach. Reach is 5 ft —
+ * a player's natural reach. A reach weapon adds reach only "when you attack with it", and grapple
+ * and shove are not weapon attacks, so it never applies here.
+ *
+ * When the map or either entity is missing, the distance cannot be measured and the check refuses
+ * nothing: chips are still offered and the theatre-of-mind fight keeps today's behaviour.
+ */
+export function checkTargetOutOfReach(
+  map: TacticalMap | null | undefined,
+  actorId: string,
+  targetId: string,
+): { outOfReach: boolean; distanceFeet: number | null; reachFeet: number } {
+  const reachFeet = CHECK_REACH_FEET;
+  const actorEntity = map?.entities.find((candidate) => candidate.id === actorId);
+  const targetEntity = map?.entities.find((candidate) => candidate.id === targetId);
+  if (!map || !actorEntity || !targetEntity) {
+    return { outOfReach: false, distanceFeet: null, reachFeet };
+  }
+  const distanceFeet = getDistance(actorEntity, targetEntity);
+  return { outOfReach: distanceFeet > reachFeet, distanceFeet, reachFeet };
+}
+
 async function refuseOversizedTarget(
   state: CombatState,
   request: CombatCheckIntentRequest,
+  map?: TacticalMap | null,
 ): Promise<void> {
   const { intent, actorId, targetId } = request;
   if ((intent.kind !== 'shove' && intent.kind !== 'grapple') || !targetId) return;
-  const map = await loadActiveTacticalMap(state.encounter.sessionId);
+  const loadedMap =
+    map === undefined ? await loadActiveTacticalMap(state.encounter.sessionId) : map;
   const { tooLarge, actorSize, targetSize } = checkTargetTooLarge(
-    map,
+    loadedMap,
     state.participants,
     actorId,
     targetId,
@@ -563,7 +592,22 @@ export async function executeCombatCheck(
   }
   const checkRequest = { ...request, ...(targetId ? { targetId } : {}) };
   // Refused before the action is claimed, so a refusal costs the player nothing.
-  await refuseOversizedTarget(state, checkRequest);
+  const needsTarget = (intent.kind === 'shove' || intent.kind === 'grapple') && targetId;
+  if (needsTarget) {
+    const map = await loadActiveTacticalMap(state.encounter.sessionId);
+    await refuseOversizedTarget(state, checkRequest, map);
+    const { outOfReach, distanceFeet, reachFeet } = checkTargetOutOfReach(
+      map,
+      actorId,
+      targetId as string,
+    );
+    if (outOfReach) {
+      throw new BusinessLogicError(
+        `${labelOf(state, targetId as string)} is out of reach (${distanceFeet} ft); grapple and shove need a target within ${reachFeet} ft.`,
+        { reason: 'check_target_out_of_reach', distanceFeet, reachFeet },
+      );
+    }
+  }
 
   const claim = request.costsBonusAction
     ? claimTurnBonusActionAndResolve

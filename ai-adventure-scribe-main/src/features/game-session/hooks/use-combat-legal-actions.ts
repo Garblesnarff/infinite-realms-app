@@ -132,6 +132,8 @@ export type LegalAction = {
   narrated?: boolean;
   /** #1635: a `check` chip's kind. */
   checkKind?: 'grapple' | 'shove' | 'hide';
+  /** #1635: which way a shove lands, carried by a shove chip. */
+  shoveOutcome?: 'prone' | 'push';
   /** #1635: display modifier for the check roll popup. */
   checkModifier?: number;
 };
@@ -461,6 +463,9 @@ export function useCombatLegalActions(input: {
               actorId,
               actorLabel: actor?.name ?? 'You',
               checkModifier: action.checkModifier ?? 0,
+              ...(action.checkKind === 'shove' && action.shoveOutcome
+                ? { shoveOutcome: action.shoveOutcome }
+                : {}),
               origin: 'action_bar',
             },
           );

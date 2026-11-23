@@ -250,6 +250,82 @@ describe('use-combat-legal-actions check chips (#1635)', () => {
     expect(combatHolder.current.refreshCombatState).toHaveBeenCalled();
   });
 
+  it("a 'Shove: push 5 ft' chip POSTs shoveOutcome 'push'", async () => {
+    const onSendText = vi.fn(async () => {});
+    const onSendMessage = vi.fn(async (_message: ChatMessage) => {});
+    mockFetch([
+      {
+        type: 'check',
+        checkKind: 'shove',
+        shoveOutcome: 'push',
+        targetId: CHECK_MENU_TARGET_ID,
+        label: 'Shove: push 5 ft (Goblin)',
+        checkModifier: 5,
+      },
+    ]);
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendText, onSendMessage }),
+    );
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.runAction(result.current.actions[0]);
+    });
+
+    const fetchSpy = vi.mocked(globalThis.fetch);
+    const intentCall = fetchSpy.mock.calls.find(([url]) =>
+      String(url).endsWith('/v1/combat/enc-1/intent'),
+    );
+    expect(intentCall).toBeDefined();
+    const body = JSON.parse(String((intentCall![1] as { body?: string }).body));
+    expect(body).toEqual(
+      combatCheckMenuIntentBody('shove', {
+        targetId: CHECK_MENU_TARGET_ID,
+        d20: 14,
+        shoveOutcome: 'push',
+      }),
+    );
+    expect(onSendText).not.toHaveBeenCalled();
+  });
+
+  it("a 'Shove: knock prone' chip POSTs shoveOutcome 'prone'", async () => {
+    const onSendText = vi.fn(async () => {});
+    const onSendMessage = vi.fn(async (_message: ChatMessage) => {});
+    mockFetch([
+      {
+        type: 'check',
+        checkKind: 'shove',
+        shoveOutcome: 'prone',
+        targetId: CHECK_MENU_TARGET_ID,
+        label: 'Shove: knock prone (Goblin)',
+        checkModifier: 5,
+      },
+    ]);
+    const { result } = renderHook(() =>
+      useCombatLegalActions({ enabled: true, onSendText, onSendMessage }),
+    );
+    await waitFor(() => expect(result.current.actions).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.runAction(result.current.actions[0]);
+    });
+
+    const fetchSpy = vi.mocked(globalThis.fetch);
+    const intentCall = fetchSpy.mock.calls.find(([url]) =>
+      String(url).endsWith('/v1/combat/enc-1/intent'),
+    );
+    expect(intentCall).toBeDefined();
+    const body = JSON.parse(String((intentCall![1] as { body?: string }).body));
+    expect(body).toEqual(
+      combatCheckMenuIntentBody('shove', {
+        targetId: CHECK_MENU_TARGET_ID,
+        d20: 14,
+        shoveOutcome: 'prone',
+      }),
+    );
+    expect(onSendText).not.toHaveBeenCalled();
+  });
+
   it('dismissed roll popup sends no /intent POST, sets no error, and calls no notice senders', async () => {
     const onSendText = vi.fn(async () => {});
     const onSendMessage = vi.fn(async (_message: ChatMessage) => {});

@@ -15,6 +15,7 @@ import {
 } from '../../../../../../db/schema/index';
 import {
   CHECK_MENU_ACTOR_ID,
+  CHECK_MENU_FAR_ID,
   CHECK_MENU_GIANT_ID,
   CHECK_MENU_TARGET_ID,
   combatCheckMenuIntentBody,
@@ -58,6 +59,7 @@ describeWithDb('Check menu chips resolve through the real route (#1635)', () => 
   let heroId: string;
   let goblinId: string;
   let giantId: string;
+  let farId: string;
 
   const getLegal = () =>
     app!.handle(
@@ -146,14 +148,27 @@ describeWithDb('Check menu chips resolve through the real route (#1635)', () => 
         maxHp: 105,
         speed: 40,
       },
+      {
+        id: CHECK_MENU_FAR_ID,
+        encounterId,
+        name: 'Far Goblin',
+        participantType: 'monster',
+        turnOrder: 3,
+        initiative: 4,
+        armorClass: 12,
+        maxHp: 20,
+        speed: 30,
+      },
     ]);
     heroId = CHECK_MENU_ACTOR_ID;
     goblinId = CHECK_MENU_TARGET_ID;
     giantId = CHECK_MENU_GIANT_ID;
+    farId = CHECK_MENU_FAR_ID;
     await db.insert(combatParticipantStatus).values([
       { participantId: heroId, currentHp: 10, maxHp: 10, isConscious: true },
       { participantId: goblinId, currentHp: 20, maxHp: 20, isConscious: true },
       { participantId: giantId, currentHp: 105, maxHp: 105, isConscious: true },
+      { participantId: farId, currentHp: 20, maxHp: 20, isConscious: true },
     ]);
     await db.insert(tacticalMaps).values({
       sessionId,
@@ -202,6 +217,16 @@ describeWithDb('Check menu chips resolve through the real route (#1635)', () => 
             speedFeet: 40,
             movementRemaining: 40,
           },
+          {
+            id: farId,
+            name: 'Far Goblin',
+            type: 'monster',
+            x: 10,
+            y: 4,
+            size: 'medium',
+            speedFeet: 30,
+            movementRemaining: 30,
+          },
         ],
         round: 1,
         sceneDescription: '1635 check fixture',
@@ -230,14 +255,33 @@ describeWithDb('Check menu chips resolve through the real route (#1635)', () => 
     expect(
       checks.some((a) => a.checkKind === 'grapple' && a.targetId === CHECK_MENU_TARGET_ID),
     ).toBe(true);
-    expect(checks.some((a) => a.checkKind === 'shove' && a.targetId === CHECK_MENU_TARGET_ID)).toBe(
-      true,
-    );
+    expect(
+      checks.some(
+        (a) =>
+          a.checkKind === 'shove' &&
+          a.targetId === CHECK_MENU_TARGET_ID &&
+          a.shoveOutcome === 'prone',
+      ),
+    ).toBe(true);
+    expect(
+      checks.some(
+        (a) =>
+          a.checkKind === 'shove' &&
+          a.targetId === CHECK_MENU_TARGET_ID &&
+          a.shoveOutcome === 'push',
+      ),
+    ).toBe(true);
     expect(checks.some((a) => a.checkKind === 'hide' && a.targetId === undefined)).toBe(true);
     expect(
       checks.some((a) => a.checkKind === 'grapple' && a.targetId === CHECK_MENU_GIANT_ID),
     ).toBe(false);
     expect(checks.some((a) => a.checkKind === 'shove' && a.targetId === CHECK_MENU_GIANT_ID)).toBe(
+      false,
+    );
+    expect(checks.some((a) => a.checkKind === 'grapple' && a.targetId === CHECK_MENU_FAR_ID)).toBe(
+      false,
+    );
+    expect(checks.some((a) => a.checkKind === 'shove' && a.targetId === CHECK_MENU_FAR_ID)).toBe(
       false,
     );
     for (const c of checks) {
@@ -253,6 +297,24 @@ describeWithDb('Check menu chips resolve through the real route (#1635)', () => 
     const body = (await res.json()) as { error?: string };
     expect(typeof body.error).toBe('string');
     expect(body.error).toContain('no more than one size larger');
+    const [row] = await db
+      .select({ actionUsed: combatParticipants.actionUsed })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, heroId));
+    expect(row.actionUsed).toBe(false);
+  });
+
+  test('typed grapple at the far goblin is out of reach, actionUsed stays false', async () => {
+    const res = await post({
+      ...combatCheckMenuIntentBody('grapple', { targetId: CHECK_MENU_FAR_ID, d20: 15 }),
+      origin: 'typed',
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error?: string };
+    expect(typeof body.error).toBe('string');
+    expect(body.error).toContain(
+      'is out of reach (30 ft); grapple and shove need a target within 5 ft.',
+    );
     const [row] = await db
       .select({ actionUsed: combatParticipants.actionUsed })
       .from(combatParticipants)
@@ -278,5 +340,24 @@ describeWithDb('Check menu chips resolve through the real route (#1635)', () => 
     const body = (await res.json()) as { error?: string };
     expect(typeof body.error).toBe('string');
     expect((body.error ?? '').length).toBeGreaterThan(0);
+  });
+
+  test('push shove succeeds after action reset and reports the push', async () => {
+    // The grapple above spent the hero's action; reset it so this shove can resolve.
+    await db
+      .update(combatParticipants)
+      .set({ actionUsed: false })
+      .where(eq(combatParticipants.id, heroId));
+    const res = await post(
+      combatCheckMenuIntentBody('shove', {
+        targetId: CHECK_MENU_TARGET_ID,
+        d20: 20,
+        shoveOutcome: 'push',
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { result?: { engineLine?: string } };
+    expect(typeof body.result?.engineLine).toBe('string');
+    expect(body.result?.engineLine).toContain('pushed');
   });
 });
