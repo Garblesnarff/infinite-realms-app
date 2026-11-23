@@ -609,6 +609,7 @@ export interface GenerateTextParams {
     provider?: 'openrouter' | 'gemini';
     model?: string;
     dmReplyMessageId?: string;
+    combatUtilityLine?: string;
   }) => void;
   /**
    * Optional, numbers-only per-section prompt token telemetry (log-only on the
@@ -662,6 +663,7 @@ export interface GenerateStreamPayload {
   provider?: 'openrouter' | 'gemini';
   model?: string;
   dmReplyMessageId?: string;
+  combatUtilityLine?: string;
   terminalState?: string;
   encounterId?: string;
   error?: string;
@@ -938,6 +940,9 @@ class LlmApiClient {
             provider: streamed.provider,
             model: streamed.model,
             ...(streamed.dmReplyMessageId ? { dmReplyMessageId: streamed.dmReplyMessageId } : {}),
+            ...(typeof streamed.combatUtilityLine === 'string'
+              ? { combatUtilityLine: streamed.combatUtilityLine }
+              : {}),
           });
           this.lastGenerateRequestId = this.lastRequestId;
           return streamed.text ?? '';
@@ -948,6 +953,7 @@ class LlmApiClient {
         provider?: 'openrouter' | 'gemini';
         model?: string;
         dmReplyMessageId?: string;
+        combatUtilityLine?: string;
         terminalState?: string;
         encounterId?: string;
         degraded?: boolean;
@@ -970,6 +976,9 @@ class LlmApiClient {
         provider: data.provider,
         model: data.model,
         ...(data.dmReplyMessageId ? { dmReplyMessageId: data.dmReplyMessageId } : {}),
+        ...(typeof data.combatUtilityLine === 'string'
+          ? { combatUtilityLine: data.combatUtilityLine }
+          : {}),
       });
       this.lastGenerateRequestId = this.lastRequestId;
       return data?.text ?? '';

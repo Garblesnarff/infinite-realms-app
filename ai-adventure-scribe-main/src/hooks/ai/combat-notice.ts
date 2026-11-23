@@ -1,3 +1,5 @@
+import { HELP_REFUSAL, READY_REFUSAL } from '../../../shared/combat-object-action';
+
 import type {
   CombatRefusalDetails,
   CombatIntentRefusedError,
@@ -123,26 +125,14 @@ export function noMechanicalActionNotice(hadEngineLines = false): string {
  */
 export const REST_IN_COMBAT_NOTICE = 'A rest is not possible during combat. It is still your turn.';
 
-/** Player-facing names for the declared action kinds the engine has no owner for (#1640). */
-const UNSUPPORTED_ACTION_NAMES: ReadonlyMap<string, string> = new Map([
-  ['help', 'Help'],
-  ['ready', 'Ready'],
-  ['use_object', 'Use an Object'],
-]);
-
-/** The line for an unknown kind: the same choices, without naming the action (#1640). */
+/** Plain engine notice for a declaration that could not resolve. */
 export const UNSUPPORTED_ACTION_GENERIC_NOTICE =
   'That action is not supported yet. Your turn is not used: choose Attack, Dodge, Dash, Disengage or Hide.';
 
-/**
- * The player declared an action the engine cannot resolve (Help, Ready, Use an Object). Their
- * turn is not used, and the line names the choices they still have. Plain text, no markdown:
- * it is an engine line (#614, #1640).
- */
 export function unsupportedActionNotice(actionKind: string | null | undefined): string {
-  const name = actionKind ? UNSUPPORTED_ACTION_NAMES.get(actionKind) : undefined;
-  if (!name) return UNSUPPORTED_ACTION_GENERIC_NOTICE;
-  return `${name} is not a supported action yet. Your turn is not used: choose Attack, Dodge, Dash, Disengage or Hide.`;
+  if (actionKind === 'help') return HELP_REFUSAL;
+  if (actionKind === 'ready') return READY_REFUSAL;
+  return UNSUPPORTED_ACTION_GENERIC_NOTICE;
 }
 
 /**

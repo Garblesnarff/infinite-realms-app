@@ -4,6 +4,11 @@ import {
   type StructuredCombatActionExecution,
 } from './combat-action-boundary';
 import { reportCombatIntentFailure } from './combat-intent-failure';
+import {
+  HELP_REFUSAL,
+  READY_REFUSAL,
+  objectCombatIntent,
+} from '../../../shared/combat-object-action';
 
 export {
   combatBoundaryFromResult,
@@ -138,6 +143,7 @@ export type ClientCombatIntent =
       expectedVersion?: number;
     }
   /** #1147: drinking a healing consumable; the server heals, then spends the item. */
+  | (ReturnType<typeof objectCombatIntent> & { expectedVersion?: number })
   | { type: 'use_item'; actorId: string; itemId: string; expectedVersion?: number }
   /**
    * #1233: Flexible Casting, a bonus action. `convert` turns a spell slot of `slotLevel` into
@@ -205,6 +211,7 @@ const INTENT_TYPES_REQUIRING_VERSION = new Set([
   'divine_sense',
   'rage',
   'use_item',
+  'use_object',
   'flexible_casting',
   'lay_on_hands',
 ]);
@@ -379,7 +386,7 @@ export async function executeAuthoritativeCombatIntent(
 
 /**
  * `CombatRefusalDetails.reason` for a declared action the engine has no owner for:
- * help / ready / use_object, which the intent schema does not know, and anything else
+ * Help, Ready, and anything else
  * that reaches the executor's catch-all (an action_type outside the union from the DM's
  * parsed JSON). `hide` is not among them: it routes to the Stealth check intent (#2420).
  */
@@ -563,19 +570,22 @@ export async function executeStructuredCombatActionWithBoundary(
         intentType: 'hide',
       });
     }
-  } else if (
-    action.action_type === 'help' ||
-    action.action_type === 'ready' ||
-    action.action_type === 'use_object'
-  ) {
-    // No engine intent exists for these action types, so there is nothing to dispatch.
-    // The empty success this branch used to return settled the declaration as if it had
-    // been acted: the turn ended and NPC turns advanced on an action that never happened.
-    // Refuse instead — the resolution step records it and keeps the turn open.
-    throw new CombatIntentRefusedError('That action is not supported yet', 422, {
-      reason: ACTION_NOT_SUPPORTED_REASON,
-      intentType: action.action_type,
-    });
+  } else if (action.action_type === 'use_object') {
+    result = await executeAuthoritativeCombatIntent(
+      encounterId,
+      objectCombatIntent(action.actor_id),
+      'dm',
+      dmStartedAt,
+      origin,
+      signal,
+      playerInput,
+    );
+  } else if (action.action_type === 'help' || action.action_type === 'ready') {
+    throw new CombatIntentRefusedError(
+      action.action_type === 'help' ? HELP_REFUSAL : READY_REFUSAL,
+      422,
+      { reason: ACTION_NOT_SUPPORTED_REASON, intentType: action.action_type },
+    );
   } else {
     // The typed union is fully covered above, but declared actions arrive as parsed DM
     // JSON: an action_type outside the union (a typo, a hallucinated verb) still reaches

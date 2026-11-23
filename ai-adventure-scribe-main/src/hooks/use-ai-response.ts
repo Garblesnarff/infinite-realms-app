@@ -1124,6 +1124,11 @@ export const useAIResponse = (): {
           return castCancelledReply(SPELL_CAST_CANCELLED_NOTICE);
         let result = answered;
 
+        if (result.combatUtilityLine) {
+          activeEncounter = await refreshCombatState(signal);
+          return castCancelledReply(result.combatUtilityLine);
+        }
+
         // #2456: the party was defeated. Settle the preflight state (it was
         // set to 'running' above and must not wedge the UI on "Checking whose
         // turn it is… / Resuming…"), surface the death screen, and return a

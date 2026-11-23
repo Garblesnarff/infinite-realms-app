@@ -214,6 +214,7 @@ export class AIService {
       let preparationCheckpoint = performance.now();
       let rawResponse: string;
       let canonicalDmMessageId: string | undefined;
+      let combatUtilityLine: string | undefined;
       let voiceContext: SessionVoiceContext | null = null;
       let isFirstMessage = false;
       try {
@@ -802,6 +803,7 @@ export class AIService {
           // client no longer sends it.
           onResponseMetadata: (metadata) => {
             canonicalDmMessageId = metadata.dmReplyMessageId;
+            combatUtilityLine = metadata.combatUtilityLine;
             params.onProviderResponse?.(metadata);
           },
           metrics: promptMetrics,
@@ -823,6 +825,8 @@ export class AIService {
           'generate end',
           llmApiClient.lastGenerateRequestId ?? llmApiClient.lastRequestId,
         );
+
+        if (combatUtilityLine) return { text: '', combatUtilityLine };
 
         // #2236: cheap narration post-check against the engine's narration contract.
         // No second model call unless the check fails: one regeneration with the violation
