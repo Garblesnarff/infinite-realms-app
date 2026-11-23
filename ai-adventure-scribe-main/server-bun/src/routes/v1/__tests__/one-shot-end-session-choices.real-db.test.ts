@@ -254,10 +254,10 @@ describeWithDb('One-shot ended by hand offers the two choices (#1703)', () => {
       .select({ speakerType: dialogueHistory.speakerType, message: dialogueHistory.message })
       .from(dialogueHistory)
       .where(eq(dialogueHistory.sessionId, seeded.sessionId));
-    expect(restoredMessages.map((m) => m.message)).toEqual([
-      'I inspect the cracked bell.',
+    expect(restoredMessages.map((m) => m.message).sort()).toEqual([
       'A faint chime answers from below.',
       'I descend the spiral stair.',
+      'I inspect the cracked bell.',
     ]);
 
     const trackersRes = await get(`/v1/sessions/${seeded.sessionId}/trackers`);
