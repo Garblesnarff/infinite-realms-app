@@ -134,11 +134,12 @@ const includes = (conditions: string[], names: string[]): boolean =>
 /** Pure D&D 5E attack validation/calculation used by every server action source. */
 export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution {
   const { weapon, geometry } = input;
-  const ability = weapon.ranged
-    ? 'dexterity'
-    : weapon.finesse && input.dexterity > input.strength
+  const ability =
+    weapon.ranged && weapon.meleeWeapon !== true
       ? 'dexterity'
-      : 'strength';
+      : weapon.finesse && input.dexterity > input.strength
+        ? 'dexterity'
+        : 'strength';
   const modifier = abilityModifier(ability === 'dexterity' ? input.dexterity : input.strength);
   const proficiency = weapon.proficient ? proficiencyBonus(input.level) : 0;
   const attackerConditions = input.attackerConditions ?? [];

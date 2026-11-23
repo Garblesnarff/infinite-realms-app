@@ -264,6 +264,22 @@ export function useCombatLegalActions(input: {
     void refreshLegalActions();
   }, [refreshLegalActions]);
 
+  useEffect(() => {
+    if (!showCombatMenu || !encounter?.id) return;
+    const onBoardChange = (event: Event): void => {
+      const delta = (event as CustomEvent<{ type?: string }>).detail;
+      if (
+        delta?.type === 'entity_moved' ||
+        delta?.type === 'movement_updated' ||
+        delta?.type === 'cell_updated'
+      ) {
+        void refreshLegalActions();
+      }
+    };
+    window.addEventListener('tactical-map-delta', onBoardChange);
+    return () => window.removeEventListener('tactical-map-delta', onBoardChange);
+  }, [showCombatMenu, encounter?.id, refreshLegalActions]);
+
   const isPlayerTurn =
     legalState.actorId === encounter?.currentTurnParticipantId &&
     !!encounter?.participants.some(

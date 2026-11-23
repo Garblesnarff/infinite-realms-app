@@ -944,6 +944,7 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     foeName?: string;
     foeSize?: 'medium' | 'large';
     heroMovementRemaining?: number;
+    equippedJavelin?: boolean;
   }): Promise<Fight> {
     const userId = testId('pin259-user');
     const [{ id: campaignId }] = await db
@@ -966,6 +967,15 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     await db
       .insert(inventoryItems)
       .values({ characterId, name: 'Longsword', itemType: 'weapon', isEquipped: true });
+    if (opts.equippedJavelin) {
+      await db.insert(inventoryItems).values({
+        characterId,
+        name: 'Javelin',
+        itemType: 'weapon',
+        isEquipped: true,
+        properties: JSON.stringify({ range: { normal: 5 } }),
+      });
+    }
     const [{ id: sessionId }] = await db
       .insert(gameSessions)
       .values({ campaignId, characterId, sessionNumber: 1, status: 'active' })
@@ -1431,20 +1441,16 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
       foe: { x: 7, y: 6 },
       foeName: 'Dutch Pellam',
       heroMovementRemaining: 10,
+      equippedJavelin: true,
     });
 
     expect((await entityAt(f, f.heroId)).movementRemaining).toBe(10);
     expect(distFt(await entityAt(f, f.heroId), await entityAt(f, f.foeId))).toBe(25);
     const { actions } = await getLegalCombatActions(f.encounterId, f.userId);
     expect(actions.some((action) => action.type === 'move')).toBe(true);
-    expect(
-      actions.some(
-        (action) =>
-          action.type === 'attack' &&
-          Array.isArray(action.targetIds) &&
-          action.targetIds.includes(f.foeId),
-      ),
-    ).toBe(false);
+    expect(actions.filter((action) => action.type === 'attack')).toMatchObject([
+      { label: 'Attack with Javelin', targetIds: [f.foeId] },
+    ]);
     expect((await entityAt(f, f.heroId)).movementRemaining).toBe(10);
 
     // An already-rendered chip can still be clicked. The ordinary proposal reports
