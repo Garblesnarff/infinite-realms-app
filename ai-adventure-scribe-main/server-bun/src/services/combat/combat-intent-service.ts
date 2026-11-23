@@ -8,7 +8,13 @@ import { attackBudgetPlan } from './attack-budget-service.js';
 import { describeRefusedSpell, describeResolvedSpell } from './attack-narration.js';
 import { rageIsOffered, resolveRage } from './barbarian-rage-service.js';
 import { decideAttackApproach, describeResolvedAttack } from './combat-approach-service.js';
-import { executeCombatCheck } from './combat-check-service.js';
+import { CHECK_DEFINITIONS, checkModifier } from './combat-check-rules.js';
+import {
+  checkTargetOutOfReach,
+  checkTargetTooLarge,
+  executeCombatCheck,
+  isProficientIn,
+} from './combat-check-service.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
 import { partyHasLeftTheFight } from './combat-end-guard.js';
 import { concludeEncounter } from './combat-ending.js';
@@ -24,7 +30,7 @@ import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.j
 import { CombatInitiativeService } from '../combat-initiative-service.js';
 import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
-import { hasAttackedThisTurn, readLightAttackMark } from './combat-turn-flags.js';
+import { hasAttackedThisTurn, isHiddenAttacker, readLightAttackMark } from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
@@ -2686,6 +2692,11 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     actor.actionUsed && actor.characterId && !actor.bonusActionUsed
       ? await readLightAttackMark(encounterId, actor.id)
       : null;
+  // #1635: read the hidden mark at most once per request, shared by the Hide check chip below and
+  // the Cunning Action block. The DB read stays inside the branches that need it.
+  let hiddenMark: boolean | undefined;
+  const isHidden = async () =>
+    (hiddenMark ??= await isHiddenAttacker(state.encounter.id, actor.id));
   if (canAttack || lightAttackWeaponId) {
     const [equippedWeapons, attackerConditions] = await Promise.all([
       listEquippedWeaponProfiles(actor),
@@ -2889,6 +2900,79 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         { type: 'dodge', label: 'Dodge' },
         { type: 'disengage', label: 'Disengage' },
       );
+    // #1635: Grapple, Shove and Hide as fight action menu chips. Same intent the typed check
+    // sends; the engine refuses (target too large, out of reach, action used, not your turn)
+    // exactly as for a typed check. Display-only checkModifier for the roll popup.
+    // Chips are withheld where the engine would refuse for size or reach; the engine still
+    // refuses a stale chip exactly as it refuses a typed check.
+    if (!actor.actionUsed && actor.participantType === 'player') {
+      const checkProfile = {
+        scores: profile.scores,
+        level: profile.level,
+        skillProficiencies: profile.skillProficiencies,
+      };
+      const opposing = state.participants.filter(
+        (participant) =>
+          participant.id !== actor.id &&
+          participant.isActive &&
+          participant.participantType !== actor.participantType &&
+          vitalStateOf(participant as unknown as VitalsInput) !== 'dead',
+      );
+      for (const target of opposing) {
+        // Compute size and reach once per target, not once per kind.
+        const sizeCheck = checkTargetTooLarge(map, state.participants, actor.id, target.id);
+        const reachCheck = checkTargetOutOfReach(map, actor.id, target.id);
+        if (sizeCheck.tooLarge || reachCheck.outOfReach) continue;
+        actions.push({
+          type: 'check',
+          checkKind: 'grapple',
+          targetId: target.id,
+          label: `Grapple ${target.name}`,
+          checkModifier: checkModifier(
+            checkProfile,
+            CHECK_DEFINITIONS.grapple,
+            isProficientIn(checkProfile, CHECK_DEFINITIONS.grapple.skill),
+          ),
+        });
+        actions.push({
+          type: 'check',
+          checkKind: 'shove',
+          shoveOutcome: 'prone',
+          targetId: target.id,
+          label: `Shove: knock prone (${target.name})`,
+          checkModifier: checkModifier(
+            checkProfile,
+            CHECK_DEFINITIONS.shove,
+            isProficientIn(checkProfile, CHECK_DEFINITIONS.shove.skill),
+          ),
+        });
+        actions.push({
+          type: 'check',
+          checkKind: 'shove',
+          shoveOutcome: 'push',
+          targetId: target.id,
+          label: `Shove: push 5 ft (${target.name})`,
+          checkModifier: checkModifier(
+            checkProfile,
+            CHECK_DEFINITIONS.shove,
+            isProficientIn(checkProfile, CHECK_DEFINITIONS.shove.skill),
+          ),
+        });
+      }
+      // No Hide chip while already hidden: a hidden attacker gains nothing from re-hiding.
+      if (!(await isHidden())) {
+        actions.push({
+          type: 'check',
+          checkKind: 'hide',
+          label: 'Hide',
+          checkModifier: checkModifier(
+            checkProfile,
+            CHECK_DEFINITIONS.hide,
+            isProficientIn(checkProfile, CHECK_DEFINITIONS.hide.skill),
+          ),
+        });
+      }
+    }
   }
   // #1233: Flexible Casting is a bonus action, offered to a Sorcerer with a sorcery-point pool
   // (no pool, not a Sorcerer, means no offer). Convert: one offer per spell slot the character
@@ -3014,6 +3098,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
     }
     // #1635: Cunning Action, a Rogue's bonus action from level 2: Dash, Disengage or Hide. Offered
     // only while the bonus action is free, so no chip is a trap; the level is read the way Rage reads it.
+    // No Hide (Cunning Action) while the actor already has the hidden mark.
     const rogueLevel = classLevelOf(
       {
         class: actor.characterClass ?? null,
@@ -3023,7 +3108,10 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       'Rogue',
     );
     if (rogueLevel >= 2 && !actor.bonusActionUsed) {
+      // No Hide choice while the actor already has the hidden mark.
+      const hidden = await isHidden();
       for (const mode of ['dash', 'disengage', 'hide'] as const) {
+        if (mode === 'hide' && hidden) continue;
         const modeLabel = { dash: 'Dash', disengage: 'Disengage', hide: 'Hide' }[mode];
         actions.push({
           type: 'cunning_action',

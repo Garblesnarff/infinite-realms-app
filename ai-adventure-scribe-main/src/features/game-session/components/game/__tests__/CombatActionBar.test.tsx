@@ -446,6 +446,14 @@ describe('CombatActionBar', () => {
         disengage: disengageAction,
         // #1635: a Cunning Action chip is a bonus action; it rides the More menu with the others.
         cunning_action: { type: 'cunning_action', label: 'Hide (Cunning Action)', mode: 'hide' },
+        // #1635: a check chip rides the More menu.
+        check: {
+          type: 'check',
+          checkKind: 'grapple',
+          label: 'Grapple Goblin',
+          targetId: 'goblin-1',
+          checkModifier: 5,
+        },
         second_wind: secondWindAction,
         action_surge: actionSurgeAction,
         divine_sense: { type: 'divine_sense', label: 'Divine Sense' },

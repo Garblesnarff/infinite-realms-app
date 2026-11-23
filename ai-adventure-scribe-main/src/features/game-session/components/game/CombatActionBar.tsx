@@ -99,6 +99,8 @@ export const LEGAL_ACTION_PLACEMENT = {
   flee: 'more',
   yield: 'more',
   death_save: 'hidden',
+  /** #1635: Grapple, Shove and Hide chips ride More. */
+  check: 'more',
 } as const satisfies Partial<
   Record<LegalAction['type'], 'button' | 'cast' | 'move' | 'more' | 'hidden'>
 >;

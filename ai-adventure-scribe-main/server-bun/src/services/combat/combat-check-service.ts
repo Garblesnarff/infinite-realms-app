@@ -45,10 +45,12 @@ import { loadActiveTacticalMap } from './tactical-map-store.js';
 import { facingName, rosterEntryForParticipant } from '../../../../shared/engine-display-name';
 import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
+import { getDistance } from '../../tactical/engine.js';
 import { tacticalSizeForParticipant } from '../../tactical/participant-size.js';
 import { ConditionsService } from '../conditions-service.js';
 
 import type { CombatCheckIntent } from '../../../../shared/combat-check-intent.js';
+import type { EntitySize, TacticalMap } from '../../tactical/types.js';
 
 /**
  * How long each condition a check applies lasts. Prone is the 1-round backstop to standing up on
@@ -146,7 +148,7 @@ async function checkProfileOf(participant: unknown): Promise<CheckActorProfile> 
  * a proficient Athletics shove is a different roll from an unproficient one, and resolving both
  * as unproficient quietly costs the player their bonus.
  */
-function isProficientIn(profile: CheckActorProfile, skill: string): boolean {
+export function isProficientIn(profile: CheckActorProfile, skill: string): boolean {
   const target = skill.toLowerCase();
   return (profile.skillProficiencies ?? []).some(
     (entry) => entry.toLowerCase().replace(/[^a-z0-9]/g, '') === target.replace(/[^a-z0-9]/g, ''),
@@ -336,17 +338,20 @@ const SIZE_ORDER = ['tiny', 'small', 'medium', 'large', 'huge', 'gargantuan'] as
  * creature making it. Sizes come from the board entity, which seating filled from the resolved
  * stat block; a participant the board does not hold falls back to the catalog lookup.
  */
-async function refuseOversizedTarget(
-  state: CombatState,
-  request: CombatCheckIntentRequest,
-): Promise<void> {
-  const { intent, actorId, targetId } = request;
-  if ((intent.kind !== 'shove' && intent.kind !== 'grapple') || !targetId) return;
-  const map = await loadActiveTacticalMap(state.encounter.sessionId);
-  const sizeOf = (id: string): (typeof SIZE_ORDER)[number] => {
+export function checkTargetTooLarge(
+  map: TacticalMap | null | undefined,
+  participants: ReadonlyArray<{
+    id: string;
+    name?: string | null;
+    participantType?: string | null;
+  }>,
+  actorId: string,
+  targetId: string,
+): { tooLarge: boolean; actorSize: EntitySize; targetSize: EntitySize } {
+  const sizeOf = (id: string): EntitySize => {
     const entity = map?.entities.find((candidate) => candidate.id === id);
     if (entity) return entity.size;
-    const participant = state.participants.find((candidate) => candidate.id === id);
+    const participant = participants.find((candidate) => candidate.id === id);
     return tacticalSizeForParticipant({
       name: participant?.name ?? '',
       participantType: participant?.participantType ?? 'monster',
@@ -354,7 +359,52 @@ async function refuseOversizedTarget(
   };
   const actorSize = sizeOf(actorId);
   const targetSize = sizeOf(targetId);
-  if (SIZE_ORDER.indexOf(targetSize) - SIZE_ORDER.indexOf(actorSize) <= 1) return;
+  const tooLarge = SIZE_ORDER.indexOf(targetSize) - SIZE_ORDER.indexOf(actorSize) > 1;
+  return { tooLarge, actorSize, targetSize };
+}
+
+/** #1635: a creature's natural reach for a grapple or a shove (2014 SRD). */
+export const CHECK_REACH_FEET = 5;
+
+/**
+ * #1635: 2014 SRD: a grapple or a shove needs the target within the attacker's reach. Reach is 5 ft —
+ * a player's natural reach. A reach weapon adds reach only "when you attack with it", and grapple
+ * and shove are not weapon attacks, so it never applies here.
+ *
+ * When the map or either entity is missing, the distance cannot be measured and the check refuses
+ * nothing: chips are still offered and the theatre-of-mind fight keeps today's behaviour.
+ */
+export function checkTargetOutOfReach(
+  map: TacticalMap | null | undefined,
+  actorId: string,
+  targetId: string,
+): { outOfReach: boolean; distanceFeet: number | null; reachFeet: number } {
+  const reachFeet = CHECK_REACH_FEET;
+  const actorEntity = map?.entities.find((candidate) => candidate.id === actorId);
+  const targetEntity = map?.entities.find((candidate) => candidate.id === targetId);
+  if (!map || !actorEntity || !targetEntity) {
+    return { outOfReach: false, distanceFeet: null, reachFeet };
+  }
+  const distanceFeet = getDistance(actorEntity, targetEntity);
+  return { outOfReach: distanceFeet > reachFeet, distanceFeet, reachFeet };
+}
+
+async function refuseOversizedTarget(
+  state: CombatState,
+  request: CombatCheckIntentRequest,
+  map?: TacticalMap | null,
+): Promise<void> {
+  const { intent, actorId, targetId } = request;
+  if ((intent.kind !== 'shove' && intent.kind !== 'grapple') || !targetId) return;
+  const loadedMap =
+    map === undefined ? await loadActiveTacticalMap(state.encounter.sessionId) : map;
+  const { tooLarge, actorSize, targetSize } = checkTargetTooLarge(
+    loadedMap,
+    state.participants,
+    actorId,
+    targetId,
+  );
+  if (!tooLarge) return;
   throw new BusinessLogicError(
     `${labelOf(state, actorId)} (${actorSize}) cannot ${intent.kind} ${labelOf(state, targetId)} (${targetSize}): ` +
       'the target can be no more than one size larger.',
@@ -542,7 +592,22 @@ export async function executeCombatCheck(
   }
   const checkRequest = { ...request, ...(targetId ? { targetId } : {}) };
   // Refused before the action is claimed, so a refusal costs the player nothing.
-  await refuseOversizedTarget(state, checkRequest);
+  const needsTarget = (intent.kind === 'shove' || intent.kind === 'grapple') && targetId;
+  if (needsTarget) {
+    const map = await loadActiveTacticalMap(state.encounter.sessionId);
+    await refuseOversizedTarget(state, checkRequest, map);
+    const { outOfReach, distanceFeet, reachFeet } = checkTargetOutOfReach(
+      map,
+      actorId,
+      targetId as string,
+    );
+    if (outOfReach) {
+      throw new BusinessLogicError(
+        `${labelOf(state, targetId as string)} is out of reach (${distanceFeet} ft); grapple and shove need a target within ${reachFeet} ft.`,
+        { reason: 'check_target_out_of_reach', distanceFeet, reachFeet },
+      );
+    }
+  }
 
   const claim = request.costsBonusAction
     ? claimTurnBonusActionAndResolve
