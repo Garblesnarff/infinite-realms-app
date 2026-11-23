@@ -187,3 +187,85 @@ describe('shadowConfrontationWithoutCombatEntry', () => {
     expect(reply).toEqual(snapshot);
   });
 });
+
+describe('confrontationVerbPatterns: everyday uses of charge, swing, rush, attack (#1704)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const everydayPhrases = [
+    'The captain is in charge of the watch here.',
+    'The prisoner was charged with theft.',
+    'The ferryman takes you across at no charge.',
+    'The door swings open.',
+    'A rush of wind fills the hall.',
+    'He suffers an attack of nerves.',
+  ];
+
+  const hostilePhrases: Array<[string, string]> = [
+    ['The guard charges at you.', 'charges'],
+    ['He swings his club at you.', 'swings'],
+    ['She rushes you.', 'rushes'],
+    ['It attacks.', 'attacks'],
+  ];
+
+  it('still counts a verb after a relative "that": the wolf that charges at you', () => {
+    expect(confrontationVerbPatterns('The wolf that charges at you snarls.')).toEqual(['charges']);
+  });
+
+  it('still counts a missed swing and an active charge with a weapon (review)', () => {
+    expect(confrontationVerbPatterns('He swings wide and misses.')).toEqual(['swings']);
+    expect(confrontationVerbPatterns('The orc charged with his axe raised.')).toEqual(['charges']);
+    expect(confrontationVerbPatterns('The gate swings wide open.')).toEqual([]);
+  });
+
+  it.each(everydayPhrases.map((p) => [p]))('gives [] for %s', (phrase) => {
+    expect(confrontationVerbPatterns(phrase)).toEqual([]);
+  });
+
+  it.each(hostilePhrases)('gives exactly one name for %s', (phrase, name) => {
+    expect(confrontationVerbPatterns(phrase)).toEqual([name]);
+  });
+
+  it('does not report when everyday phrases are fed through shadowConfrontationWithoutCombatEntry', () => {
+    for (const phrase of everydayPhrases) {
+      vi.clearAllMocks();
+      shadowConfrontationWithoutCombatEntry({
+        reply: {
+          text: phrase,
+          combat_transition: 'none',
+          map_actions: [],
+          combat_actions: [],
+          roll_requests: [],
+        },
+        sessionId: 'sess-1704-everyday',
+        inCombat: false,
+      });
+      expect(reportNarrationShadowHit).not.toHaveBeenCalled();
+      expect(logger.warn).not.toHaveBeenCalled();
+    }
+  });
+
+  it('reports once per phrase with the right single name for hostile phrases', () => {
+    for (const [phrase, name] of hostilePhrases) {
+      vi.clearAllMocks();
+      shadowConfrontationWithoutCombatEntry({
+        reply: {
+          text: phrase,
+          combat_transition: 'none',
+          map_actions: [],
+          combat_actions: [],
+          roll_requests: [],
+        },
+        sessionId: 'sess-1704-hostile',
+        inCombat: false,
+      });
+      expect(reportNarrationShadowHit).toHaveBeenCalledTimes(1);
+      expect(reportNarrationShadowHit).toHaveBeenCalledWith(
+        'confrontation_without_combat_entry',
+        'sess-1704-hostile',
+        [name],
+      );
+    }
+  });
+});
