@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.56.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.55.0...v0.56.0) (2026-11-23)
+
+
+### Features
+
+* **combat:** Half-Orc Relentless Endurance ([#1713](https://github.com/Garblesnarff/infinite-realms-app/issues/1713)) ([bedfaa2](https://github.com/Garblesnarff/infinite-realms-app/commit/bedfaa2fb18b78eafcbdd57c4ad13fa171f6fb28)), closes [#1635](https://github.com/Garblesnarff/infinite-realms-app/issues/1635)
+
+
+### Bug Fixes
+
+* **combat:** a melee option out of reach says the distance and the move left ([#1642](https://github.com/Garblesnarff/infinite-realms-app/issues/1642)) ([57af72d](https://github.com/Garblesnarff/infinite-realms-app/commit/57af72d687323f5596ea5e2681231718353f0922))
+* **combat:** a typed punch is an unarmed strike ([#1710](https://github.com/Garblesnarff/infinite-realms-app/issues/1710)) ([ff666fe](https://github.com/Garblesnarff/infinite-realms-app/commit/ff666fe5b0ef16507686c951c907644c3b84ef3c))
+* **shadow:** the confrontation counter ignores everyday uses of charge, swing, rush, attack ([#1704](https://github.com/Garblesnarff/infinite-realms-app/issues/1704)) ([5fae51c](https://github.com/Garblesnarff/infinite-realms-app/commit/5fae51cc881533f2c47819c0e5492fa9b03e721a))
+* **sheet:** the creation summary shows physical traits; the game panel shows the Lay on Hands pool ([#213](https://github.com/Garblesnarff/infinite-realms-app/issues/213), [#1670](https://github.com/Garblesnarff/infinite-realms-app/issues/1670)) ([#1714](https://github.com/Garblesnarff/infinite-realms-app/issues/1714)) ([997f25b](https://github.com/Garblesnarff/infinite-realms-app/commit/997f25b40cee03e31fc3a0fbf7ea6e1542fa4510))
+
+
+### Tests
+
+* **sessions:** the one-shot End session test is order-stable ([#1715](https://github.com/Garblesnarff/infinite-realms-app/issues/1715)) ([7f694f1](https://github.com/Garblesnarff/infinite-realms-app/commit/7f694f1b079ac4579c6ce15fc41461f982e4af1a))
+
 ## [0.55.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.54.0...v0.55.0) (2026-11-22)
 
 
