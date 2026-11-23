@@ -8,14 +8,23 @@ export const CONFRONTATION_WITHOUT_COMBAT_ENTRY_SHADOW_REASON =
 /**
  * A word that makes the next word a noun, not a verb: an article, a possessive or a quantifier
  * ("an attack", "a rush", "his swing", "no charge"), plus "in" for "in charge". "that" is left out
- * on purpose: "the wolf that charges at you" is the verb.
+ * on purpose: "the wolf that charges at you" is the verb. "this", "any", "another", "each" and
+ * "every" are handled separately by QUANTIFIER_NOUN.
  */
-const NOUN_LEAD = String.raw`(?<!\b(?:a|an|the|no|his|her|its|their|my|your|our|this|any|another|each|every|in)\s+)`;
+const NOUN_LEAD = String.raw`(?<!\b(?:a|an|the|no|his|her|its|their|my|your|our|in)\s+)`;
+
+/**
+ * "this/any/another/each/every" are pronoun subjects only when the next word is a verb form:
+ * after this/any/another/each/every the bare word is the noun ("this attack", "every swing",
+ * "another charge"), while a form ending in -s or -ed is the verb with the quantifier as its
+ * subject ("Another attacks you.", "Each attacks in turn.", "This charges at you.").
+ */
+const QUANTIFIER_NOUN = String.raw`(?!(?<=\b(?:this|any|another|each|every)\s+)\w+(?<![sd])\b)`;
 
 /** A verb pattern that skips the noun use (see NOUN_LEAD) and any `notAfter` continuation. */
 function verb(forms: string, notAfter?: string): RegExp {
   const tail = notAfter ? `(?!\\s+(?:${notAfter})\\b)` : '';
-  return new RegExp(`${NOUN_LEAD}\\b(?:${forms})\\b${tail}`, 'i');
+  return new RegExp(`${NOUN_LEAD}${QUANTIFIER_NOUN}\\b(?:${forms})\\b${tail}`, 'i');
 }
 
 /**
@@ -35,6 +44,12 @@ const CHARGE_FORMS = String.raw`charg(?:e|es|ing)|charged(?!\s+with\b)|(?<!\b(?:
  */
 const CONFRONTATION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
   { name: 'attacks', re: verb('attack(?:s|ed|ing)?', 'of') },
+  // launched attacks phrased as a noun phrase ("launches an attack", "an attack on you"); an attack
+  // roll and an attack of nerves are not attacks on anyone.
+  {
+    name: 'attacks',
+    re: /\b(?:launch(?:es|ed|ing)?|mak(?:e|es|ing)|made|mount(?:s|ed|ing)?)\s+(?:a|an|another|one|their|his|her|its)?\s*(?:\w+\s+)?attacks?(?!\s+(?:rolls?|of)\b)\b|\b(?:an|another)\s+(?:\w+\s+)?attacks?\s+(?:on|against)\b/i,
+  },
   { name: 'rushes', re: verb('rush(?:es|ed|ing)?', 'of') },
   { name: 'charges', re: verb(CHARGE_FORMS) },
   {

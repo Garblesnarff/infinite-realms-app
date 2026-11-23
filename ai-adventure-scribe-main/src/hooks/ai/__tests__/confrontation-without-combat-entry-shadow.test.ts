@@ -188,6 +188,66 @@ describe('shadowConfrontationWithoutCombatEntry', () => {
   });
 });
 
+describe('confrontationVerbPatterns: launched attacks and pronoun subjects (#1704)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const launchedAttackPhrases = [
+    'The bandit launches an attack on you.',
+    'Another attacks you.',
+    'The orc makes an attack against you.',
+    'The raiders mount an attack on the camp.',
+    'Each attacks in turn.',
+  ];
+
+  const nonMatchPhrases = [
+    'The attack on the village was years ago.',
+    'He suffers an attack of nerves.',
+    'This attack missed.',
+    'Every swing goes wide of the mark.',
+    'Another charge would break the line.',
+    'Any rush would be foolish.',
+    'You make an attack roll.',
+    'She makes an attack of nerves sound like nothing.',
+  ];
+
+  it.each(launchedAttackPhrases.map((p) => [p]))('gives ["attacks"] for %s', (phrase) => {
+    expect(confrontationVerbPatterns(phrase)).toEqual(['attacks']);
+  });
+
+  it('gives ["charges"] for "This charges at you."', () => {
+    expect(confrontationVerbPatterns('This charges at you.')).toEqual(['charges']);
+  });
+
+  it.each(nonMatchPhrases.map((p) => [p]))('gives [] for %s', (phrase) => {
+    expect(confrontationVerbPatterns(phrase)).toEqual([]);
+  });
+
+  it('reports once each for launched-attack phrases through shadowConfrontationWithoutCombatEntry', () => {
+    for (const phrase of ['The bandit launches an attack on you.', 'Another attacks you.']) {
+      vi.clearAllMocks();
+      shadowConfrontationWithoutCombatEntry({
+        reply: {
+          text: phrase,
+          combat_transition: 'none',
+          map_actions: [],
+          combat_actions: [],
+          roll_requests: [],
+        },
+        sessionId: 'sess-1704-launch',
+        inCombat: false,
+      });
+      expect(reportNarrationShadowHit).toHaveBeenCalledTimes(1);
+      expect(reportNarrationShadowHit).toHaveBeenCalledWith(
+        'confrontation_without_combat_entry',
+        'sess-1704-launch',
+        ['attacks'],
+      );
+    }
+  });
+});
+
 describe('confrontationVerbPatterns: everyday uses of charge, swing, rush, attack (#1704)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
