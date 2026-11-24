@@ -154,6 +154,53 @@ describe('useMessageDiceRolls', () => {
     expect(result.current.batchProgress).toEqual({ current: 2, total: 3 });
   });
 
+  it('tags an engine initiative prompt engineOwned so the dialog asks for the d20 face (#115)', () => {
+    const initiativeRoll = {
+      id: 'roll-1',
+      requestType: 'initiative',
+      description: 'Initiative',
+      rollConfig: { dieType: 20, count: 1, modifier: 3 },
+      status: 'pending',
+      combatInitiativeRoll: true,
+    };
+    mockUseGame.state.diceRollQueue = {
+      currentRollId: 'roll-1',
+      pendingRolls: [initiativeRoll] as any,
+    };
+    mockUseGame.getCurrentDiceRoll.mockReturnValue(initiativeRoll);
+
+    const { result } = renderHook(() =>
+      useMessageDiceRolls({
+        onSendMessage: mockOnSendMessage,
+        onSendFullMessage: mockOnSendFullMessage,
+      }),
+    );
+
+    expect(result.current.rollRequest?.engineOwned).toBe(true);
+
+    const narrativeRoll = {
+      id: 'roll-1',
+      requestType: 'skill_check',
+      description: 'Initiative',
+      rollConfig: { dieType: 20, count: 1, modifier: 3 },
+      status: 'pending',
+    };
+    mockUseGame.state.diceRollQueue = {
+      currentRollId: 'roll-1',
+      pendingRolls: [narrativeRoll] as any,
+    };
+    mockUseGame.getCurrentDiceRoll.mockReturnValue(narrativeRoll);
+
+    const { result: result2 } = renderHook(() =>
+      useMessageDiceRolls({
+        onSendMessage: mockOnSendMessage,
+        onSendFullMessage: mockOnSendFullMessage,
+      }),
+    );
+
+    expect(result2.current.rollRequest?.engineOwned).toBeUndefined();
+  });
+
   it('should handle cancel roll', () => {
     const activeRoll = {
       id: 'roll-1',

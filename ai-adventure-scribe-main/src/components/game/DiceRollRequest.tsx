@@ -74,6 +74,7 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
       manualMode,
       manualResult,
       setManualResult,
+      manualError,
       hasAdvantage,
       hasDisadvantage,
       showDiceAnimation,
@@ -311,6 +312,8 @@ export const DiceRollRequest: React.FC<DiceRollRequestProps> = React.memo(
               onSubmit={handleManualSubmitClick}
               onBackToRoll={handleBackToRoll}
               onCancel={onCancel}
+              faceOnly={request.engineOwned === true}
+              error={manualError}
             />
           )}
 

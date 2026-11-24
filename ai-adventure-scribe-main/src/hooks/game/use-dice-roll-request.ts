@@ -53,7 +53,12 @@ interface UseDiceRollRequestProps {
  */
 export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceRollRequestProps) {
   const [manualMode, setManualMode] = useState(false);
-  const [manualResult, setManualResult] = useState('');
+  const [manualResult, setManualResultState] = useState('');
+  const [manualError, setManualError] = useState<string | null>(null);
+  const setManualResult = useCallback((value: string | ((prev: string) => string)) => {
+    setManualError(null);
+    setManualResultState(value);
+  }, []);
   const [hasAdvantage, setHasAdvantage] = useState(request.advantage || false);
   const [hasDisadvantage, setHasDisadvantage] = useState(request.disadvantage || false);
   const [showDiceAnimation, setShowDiceAnimation] = useState(false);
@@ -221,13 +226,19 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
 
   const handleManualSubmit = useCallback(() => {
     const result = parseInt(manualResult);
+    // An engine prompt (initiative, attack, combat check, death save) takes the bare d20 face: the
+    // engine adds its own bonus, so a typed total above 20 would be refused with nothing on screen (#115).
+    if (request.engineOwned === true && !(result >= 1 && result <= 20)) {
+      setManualError('Enter the number the d20 shows, from 1 to 20.');
+      return;
+    }
     if (!isNaN(result) && result >= 1) {
       // #1414: a typed number takes no advantage — disarm without spending. The flag
       // stays for a later roll.
       if (armed) disarm();
       void submitResult(result);
     }
-  }, [armed, disarm, manualResult, submitResult]);
+  }, [armed, disarm, manualResult, request.engineOwned, submitResult]);
 
   const toggleAdvantage = useCallback(() => {
     if (armed) {
@@ -276,7 +287,7 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
   const handleBackToRoll = useCallback(() => {
     setManualMode(false);
     setManualResult('');
-  }, []);
+  }, [setManualResult]);
 
   // A submission that failed puts the prompt back where it started: dice animation gone, Roll /
   // Enter my own roll / Cancel all enabled, and nothing left mounted that could roll and submit
@@ -317,6 +328,7 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
       setManualMode,
       manualResult,
       setManualResult,
+      manualError,
       hasAdvantage: takesAdvantage ? hasAdvantage || armedApplies : hasAdvantage,
       hasDisadvantage: takesAdvantage ? hasDisadvantage && !armedApplies : hasDisadvantage,
       showDiceAnimation,
@@ -338,6 +350,8 @@ export function useDiceRollRequest({ request, onResult, onRollCommit }: UseDiceR
     [
       manualMode,
       manualResult,
+      manualError,
+      setManualResult,
       hasAdvantage,
       hasDisadvantage,
       armedApplies,
