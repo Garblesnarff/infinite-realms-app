@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.57.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.56.0...v0.57.0) (2026-11-24)
+
+
+### Features
+
+* **combat:** Grapple, Shove and Hide in the action menu ([#1635](https://github.com/Garblesnarff/infinite-realms-app/issues/1635)) ([91cfb87](https://github.com/Garblesnarff/infinite-realms-app/commit/91cfb878b3a21ca1b3a0375eef4bb2ea9d160aea))
+* **combat:** Search and Use an Object in a fight; Help and Ready refused in words ([#1635](https://github.com/Garblesnarff/infinite-realms-app/issues/1635)) ([90b8526](https://github.com/Garblesnarff/infinite-realms-app/commit/90b852686ad9e8e0adf23d98d9e522fa7cadaf0f))
+
+
+### Bug Fixes
+
+* **combat:** strip guessed hit points from damage narration ([#1722](https://github.com/Garblesnarff/infinite-realms-app/issues/1722)) ([4cf964b](https://github.com/Garblesnarff/infinite-realms-app/commit/4cf964b2b6e40666be9ff0e7e0bd8b12ba444864))
+* **combat:** the weapon list offers only melee options the move can reach ([#1642](https://github.com/Garblesnarff/infinite-realms-app/issues/1642)) ([2f68e02](https://github.com/Garblesnarff/infinite-realms-app/commit/2f68e0249c8a1ecd99149a1a48442172de71ca1f))
+* **shadow:** count 'launches an attack on you' and 'Another attacks you' ([#1704](https://github.com/Garblesnarff/infinite-realms-app/issues/1704)) ([c69f0c3](https://github.com/Garblesnarff/infinite-realms-app/commit/c69f0c3af93522241a64ef76569cbbcb7618a7fb))
+
 ## [0.56.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.55.0...v0.56.0) (2026-11-23)
 
 
