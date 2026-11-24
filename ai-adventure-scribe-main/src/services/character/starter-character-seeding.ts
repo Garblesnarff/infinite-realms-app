@@ -13,6 +13,7 @@ import {
 } from '@/data/equipment/resolver';
 import { getPactMagicProgression, getSpellSlotsByLevel } from '@/data/spellcastingFeatures';
 import { getClassSpells, getSrdClassSpells } from '@/data/spells/api';
+import logger from '@/lib/logger';
 import { getSpellcastingInfo } from '@/utils/spell-validation';
 
 export interface StarterCharacterTemplateLike {
@@ -172,6 +173,27 @@ function selectSpellIds(curated: string[], fallback: string[], quota: number): s
   return uniqueSpellIds([...curated, ...fallback]).slice(0, quota);
 }
 
+function normalizeAuthoredSpellName(value: string): string {
+  return value.trim().toLowerCase().replace(/’/g, "'");
+}
+
+function resolveAuthoredSpellEntry(
+  entry: string,
+  validSpells: Array<{ id: string; name: string }>,
+  templateName: string,
+): string | null {
+  const byId = validSpells.find((spell) => spell.id === entry);
+  if (byId) return byId.id;
+  const normalized = normalizeAuthoredSpellName(entry);
+  const byName = validSpells.find((spell) => normalizeAuthoredSpellName(spell.name) === normalized);
+  if (byName) return byName.id;
+  logger.warn('[starter-character-seeding] skipping authored spell not on class list', {
+    template: templateName,
+    entry,
+  });
+  return null;
+}
+
 function getTemplateSpellLists(template: StarterCharacterTemplateLike): StarterTemplateSpellLists {
   return {
     cantrips: template.spells?.cantrips || template.cantrips || undefined,
@@ -204,7 +226,10 @@ export function buildStarterSpellSeed(
 
   const curated = getTemplateSpellLists(template);
   const validCantrips = new Set(authoredAvailable.cantrips.map((spell) => spell.id));
-  const curatedCantrips = (curated?.cantrips || []).filter((id) => validCantrips.has(id));
+  const curatedCantrips = (curated?.cantrips || [])
+    .map((entry) => resolveAuthoredSpellEntry(entry, authoredAvailable.cantrips, template.name))
+    .filter((id): id is string => id !== null)
+    .filter((id) => validCantrips.has(id));
   const cantripCount = info.cantripsKnown;
   const cantrips = selectSpellIds(
     curatedCantrips,
@@ -224,8 +249,14 @@ export function buildStarterSpellSeed(
     .filter((spell) => spell.level <= maxSpellLevel)
     .sort((a, b) => a.level - b.level)
     .map((spell) => spell.id);
-  const curatedKnownSpells = (curated?.knownSpells || []).filter((id) => validSpells.has(id));
-  const curatedPreparedSpells = (curated?.preparedSpells || []).filter((id) => validSpells.has(id));
+  const curatedKnownSpells = (curated?.knownSpells || [])
+    .map((entry) => resolveAuthoredSpellEntry(entry, eligibleAuthoredSpells, template.name))
+    .filter((id): id is string => id !== null)
+    .filter((id) => validSpells.has(id));
+  const curatedPreparedSpells = (curated?.preparedSpells || [])
+    .map((entry) => resolveAuthoredSpellEntry(entry, eligibleAuthoredSpells, template.name))
+    .filter((id): id is string => id !== null)
+    .filter((id) => validSpells.has(id));
   const knownCandidates =
     characterClass!.id === 'wizard'
       ? uniqueSpellIds([...curatedKnownSpells, ...curatedPreparedSpells])

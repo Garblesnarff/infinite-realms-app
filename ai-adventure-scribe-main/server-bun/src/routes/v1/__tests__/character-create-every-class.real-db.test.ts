@@ -2238,3 +2238,199 @@ describeWithDb('Fighter sheet exposes level-gated features (#975)', () => {
     await expectSheetFeatureAbsent(id, 'Action Surge');
   });
 });
+
+describeWithDb('starter template spells (#1025)', () => {
+  let app: any;
+  let db: ReturnType<typeof realDb>;
+  let request: (path: string, method: string, body?: unknown) => Promise<Response>;
+  const createdIds: string[] = [];
+  const STARTER_ID = 'test-1025-spells';
+  let campaignId = '';
+  let withSpellsTemplateId = '';
+  let withoutSpellsTemplateId = '';
+
+  beforeAll(async () => {
+    userId = testId('user-1025');
+    await grantLegendPlan(userId);
+    db = realDb();
+
+    const [campaign] = await db
+      .insert(campaigns)
+      .values({ userId, name: `One-shot 1025 ${testId('campaign')}` })
+      .returning();
+    campaignId = campaign.id;
+
+    const client = new Client({ connectionString: realDbUrl });
+    await client.connect();
+    try {
+      await client.query(
+        'DELETE FROM public.starter_character_templates WHERE starter_campaign_id = $1',
+        [STARTER_ID],
+      );
+      await client.query('DELETE FROM public.starter_campaigns WHERE id = $1', [STARTER_ID]);
+      await client.query(
+        `INSERT INTO public.starter_campaigns
+           (id, slug, title, genre, tone, difficulty, premise, is_complete, is_published)
+         VALUES ($1, $1, 'One-shot 1025', ARRAY['fantasy']::text[], ARRAY['heroic']::text[],
+                 'medium', 'Test starter campaign for the #1025 spells proof.', false, false)`,
+        [STARTER_ID],
+      );
+      await client.query(
+        `INSERT INTO public.starter_character_templates
+           (starter_campaign_id, template_key, name, race, class, subclass, background, level,
+            ability_scores, skills, languages, equipment, spells)
+         VALUES ($1, 'tavo-with-spells', 'Tavo Brejo', 'Human', 'Ranger', 'Hunter', 'Outlander', 3,
+                 $2::jsonb, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb)`,
+        [
+          STARTER_ID,
+          JSON.stringify({
+            strength: 13,
+            dexterity: 16,
+            constitution: 14,
+            intelligence: 10,
+            wisdom: 15,
+            charisma: 11,
+          }),
+          JSON.stringify(['Athletics', 'Perception', 'Stealth', 'Survival']),
+          JSON.stringify(['Common']),
+          JSON.stringify(['longbow', 'shortsword', 'leather armor']),
+          JSON.stringify({ knownSpells: ["Hunter's Mark", 'Cure Wounds', 'Goodberry'] }),
+        ],
+      );
+      await client.query(
+        `INSERT INTO public.starter_character_templates
+           (starter_campaign_id, template_key, name, race, class, subclass, background, level,
+            ability_scores, skills, languages, equipment, spells)
+         VALUES ($1, 'tavo-without-spells', 'Tavo Brejo', 'Human', 'Ranger', 'Hunter', 'Outlander', 3,
+                 $2::jsonb, $3::jsonb, $4::jsonb, $5::jsonb, NULL)`,
+        [
+          STARTER_ID,
+          JSON.stringify({
+            strength: 13,
+            dexterity: 16,
+            constitution: 14,
+            intelligence: 10,
+            wisdom: 15,
+            charisma: 11,
+          }),
+          JSON.stringify(['Athletics', 'Perception', 'Stealth', 'Survival']),
+          JSON.stringify(['Common']),
+          JSON.stringify(['longbow', 'shortsword', 'leather armor']),
+        ],
+      );
+      const withRes = await client.query(
+        `SELECT id FROM public.starter_character_templates
+         WHERE starter_campaign_id = $1 AND template_key = 'tavo-with-spells'`,
+        [STARTER_ID],
+      );
+      const withoutRes = await client.query(
+        `SELECT id FROM public.starter_character_templates
+         WHERE starter_campaign_id = $1 AND template_key = 'tavo-without-spells'`,
+        [STARTER_ID],
+      );
+      withSpellsTemplateId = withRes.rows[0].id;
+      withoutSpellsTemplateId = withoutRes.rows[0].id;
+    } finally {
+      await client.end();
+    }
+
+    const pipeline = await importWithRealDb(async () => {
+      const { createRequestPipelineApp } = await import('../../../http-pipeline.ts');
+      const { charactersRoutes } = await import('../characters.ts');
+      const { securedGameDataRoutes } = await import('../secured-game-data.ts');
+      return { createRequestPipelineApp, charactersRoutes, securedGameDataRoutes };
+    });
+    app = pipeline
+      .createRequestPipelineApp()
+      .use(pipeline.securedGameDataRoutes)
+      .use(pipeline.charactersRoutes);
+    request = async (path: string, method: string, body?: unknown) =>
+      app.handle(
+        new Request(`http://localhost${path}`, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: body !== undefined ? JSON.stringify(body) : undefined,
+        }),
+      );
+  });
+
+  afterAll(async () => {
+    for (const id of createdIds) {
+      await db
+        .delete(characters)
+        .where(eq(characters.id, id))
+        .catch(() => {});
+    }
+    if (campaignId) {
+      await db
+        .delete(campaigns)
+        .where(eq(campaigns.id, campaignId))
+        .catch(() => {});
+    }
+    const client = new Client({ connectionString: realDbUrl });
+    await client.connect();
+    try {
+      await client.query(
+        'DELETE FROM public.starter_character_templates WHERE starter_campaign_id = $1',
+        [STARTER_ID],
+      );
+      await client.query('DELETE FROM public.starter_campaigns WHERE id = $1', [STARTER_ID]);
+    } finally {
+      await client.end();
+    }
+    await closeRealDb();
+  });
+
+  it('reads the spells column through the real starter templates route (with spells)', async () => {
+    const res = await request(`/v1/starter-character-templates?id=${withSpellsTemplateId}`, 'GET');
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(200);
+    const body = JSON.parse(text) as { spells: unknown };
+    expect(body.spells).toEqual({
+      knownSpells: ["Hunter's Mark", 'Cure Wounds', 'Goodberry'],
+    });
+  });
+
+  it('reads the spells column through the real starter templates route (null spells)', async () => {
+    const res = await request(
+      `/v1/starter-character-templates?id=${withoutSpellsTemplateId}`,
+      'GET',
+    );
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(200);
+    const body = JSON.parse(text) as { spells: unknown };
+    expect(body.spells).toBeNull();
+  });
+
+  it('creates a character whose known spells come from the template spells fixture', async () => {
+    const body = {
+      ...premadeFixture('premade-ranger-l3-template-spells-create-payload.json'),
+      name: `Tavo Spells ${testId('1025')}`,
+      campaign_id: campaignId,
+    };
+    const res = await request('/v1/characters', 'POST', body);
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [row] = await db.select().from(characters).where(eq(characters.id, id));
+    expect(row.knownSpells).toBe('hunters-mark, cure-wounds, goodberry');
+  });
+
+  it("creates a character whose known spells come from today's picker fixture", async () => {
+    const body = {
+      ...premadeFixture('premade-ranger-l3-create-payload.json'),
+      name: `Tavo Picker ${testId('1025')}`,
+      campaign_id: campaignId,
+    };
+    const res = await request('/v1/characters', 'POST', body);
+    const text = await res.text();
+    expect(res.status, text.slice(0, 300)).toBe(201);
+    const { id } = JSON.parse(text) as { id: string };
+    createdIds.push(id);
+
+    const [row] = await db.select().from(characters).where(eq(characters.id, id));
+    expect(row.knownSpells).toBe('alarm, animal-friendship, cure-wounds');
+  });
+});
