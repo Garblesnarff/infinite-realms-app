@@ -81,8 +81,11 @@ export const useCombatActionHandlers = ({
         undefined,
         'action_bar',
       );
+      // #1732: a check spends the actor's Action on the server. Re-read the encounter so the
+      // legal-actions list (and the Attack button) see that the Action is gone.
+      await refreshCombatState?.();
     },
-    [activeEncounter],
+    [activeEncounter, refreshCombatState],
   );
 
   // Handle enemy attack. The server rolls the enemy's attack and its damage (#621 B2b). The
