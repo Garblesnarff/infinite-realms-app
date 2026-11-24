@@ -40,6 +40,13 @@ interface DMMessageProps {
   onGenerateImage: () => void;
   /** The divider key of the last engine block printed before this message (#2417). */
   previousEngineKey?: string;
+  /**
+   * The latest DM message actually rendered (#1026): the scene band's fallback
+   * shows the current place above this reply. False for every other DM message,
+   * even one that is last in its group — in an alternating transcript each DM
+   * reply is the sole message of its group, so isLastInGroup cannot gate it.
+   */
+  isLatestDmMessage?: boolean;
 }
 
 /**
@@ -79,6 +86,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     imageError,
     onGenerateImage,
     previousEngineKey,
+    isLatestDmMessage = false,
   }) => {
     const { showTargetNumbers } = useShowTargetNumbers();
     const showNPCRolls = useShowNPCRolls();
@@ -97,7 +105,7 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     );
     // Get campaign assets for displaying entity images
     const { getAsset, assets } = useCampaignAssetsContext();
-    const { setSceneBackground } = useSceneBackground();
+    const { setSceneBackground, lastSceneArtUrl, lastSceneArtName } = useSceneBackground();
     const hasSetBackgroundRef = useRef(false);
     // The generated image URL that failed to load, so the Illustrate control comes back.
     const [brokenImageUrl, setBrokenImageUrl] = React.useState<string | null>(null);
@@ -144,10 +152,20 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     );
 
     // Generated art on the last message of a group; otherwise the place or scene the DM tagged.
+    // When the DM's reply names no place, the band falls back to the last
+    // location-or-scene image the background effect set (#1026) — tracked in
+    // the provider, so a monster or NPC reply cannot clear it. Only the
+    // latest DM message takes the fallback: earlier replies keep the art they
+    // named instead of being re-labelled with the current place, and the
+    // latest reply keeps its band while a player reply below it awaits a
+    // DM response.
     const sceneArt =
       isLastInGroup && imageUrl
         ? { url: imageUrl, caption: 'Scene' }
-        : pickSceneArt(candidateTags, getAsset);
+        : (pickSceneArt(candidateTags, getAsset) ??
+          (isLatestDmMessage && lastSceneArtUrl
+            ? { url: lastSceneArtUrl, caption: lastSceneArtName ?? 'Scene' }
+            : null));
 
     // #1062: the server-attached tracker line, rendered from envelope
     // state — never from the DM's prose, which is where the bracket-line

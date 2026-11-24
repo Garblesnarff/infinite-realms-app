@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DMMessage } from '../DMMessage';
@@ -11,8 +11,46 @@ import { CampaignAssetsProvider } from '@/contexts/CampaignAssetsContext';
 
 const setSceneBackground = vi.fn();
 
+/**
+ * The background the DMMessage effect last set, as the real
+ * SceneBackgroundProvider exposes it. The mock updates it synchronously when
+ * setSceneBackground is called, so the band's fallback to the last scene art
+ * is testable without the provider's fade timers; lastSceneArtUrl/Name follow
+ * only location-or-scene sets, mirroring the provider.
+ */
+const sceneBackgroundState: {
+  url: string | null;
+  name: string | null;
+  type: string | null;
+  lastArtUrl: string | null;
+  lastArtName: string | null;
+} = {
+  url: null,
+  name: null,
+  type: null,
+  lastArtUrl: null,
+  lastArtName: null,
+};
+
 vi.mock('@/contexts/SceneBackgroundContext', () => ({
-  useSceneBackground: () => ({ setSceneBackground }),
+  useSceneBackground: () => ({
+    currentBackgroundUrl: sceneBackgroundState.url,
+    currentAssetName: sceneBackgroundState.name,
+    currentAssetType: sceneBackgroundState.type,
+    lastSceneArtUrl: sceneBackgroundState.lastArtUrl,
+    lastSceneArtName: sceneBackgroundState.lastArtName,
+    setSceneBackground: (...args: [string | null, string | null, string | null]) => {
+      sceneBackgroundState.url = args[0];
+      sceneBackgroundState.name = args[1];
+      sceneBackgroundState.type = args[2];
+      if (args[2] === 'location' || args[2] === 'scene') {
+        sceneBackgroundState.lastArtUrl = args[0];
+        sceneBackgroundState.lastArtName = args[1];
+      }
+      return setSceneBackground(...args);
+    },
+    isTransitioning: false,
+  }),
 }));
 vi.mock('../MessageAssetDisplay', () => ({ MessageAssetDisplay: () => null }));
 vi.mock('../MessageVoicePlayer', () => ({ MessageVoicePlayer: () => null }));
@@ -35,6 +73,11 @@ const gardenerLocationRows = [
     entity_name: 'The Heartwood Basin',
     chunk_type: 'location',
     metadata: { image_url: 'heartwood-basin.png' },
+  },
+  {
+    entity_name: 'Goblin',
+    chunk_type: 'monster',
+    metadata: { image_url: 'goblin.png' },
   },
 ];
 
@@ -93,6 +136,11 @@ const urlFor = (name: string) =>
 describe('scene art follows the place the DM names (#1026)', () => {
   beforeEach(() => {
     setSceneBackground.mockClear();
+    sceneBackgroundState.url = null;
+    sceneBackgroundState.name = null;
+    sceneBackgroundState.type = null;
+    sceneBackgroundState.lastArtUrl = null;
+    sceneBackgroundState.lastArtName = null;
   });
 
   it('moves the scene art from The Sweet Mud to The Heartwood as the party moves', async () => {
@@ -190,8 +238,14 @@ const sessionPayloadMessages = [
   },
 ];
 
+// A session-payload row. Production rows carry no context.location (no
+// producer writes it), so the location is optional here.
+type SessionPayloadRow = Omit<(typeof sessionPayloadMessages)[number], 'context'> & {
+  context: { location?: string };
+};
+
 // Mirrors use-messages.ts (text = message, sender = speaker_type, context as-is).
-const chatFromSessionPayload = (row: (typeof sessionPayloadMessages)[number]) => ({
+const chatFromSessionPayload = (row: SessionPayloadRow) => ({
   id: row.id,
   text: row.message,
   sender: row.speaker_type,
@@ -201,7 +255,11 @@ const chatFromSessionPayload = (row: (typeof sessionPayloadMessages)[number]) =>
   images: row.images ?? undefined,
 });
 
-const dmFromPayload = (row: (typeof sessionPayloadMessages)[number], isLastInGroup = true) => {
+const dmFromPayload = (
+  row: SessionPayloadRow,
+  isLastInGroup: boolean,
+  isLatestDmMessage: boolean,
+) => {
   const message = chatFromSessionPayload(row);
   return (
     <DMMessage
@@ -210,6 +268,7 @@ const dmFromPayload = (row: (typeof sessionPayloadMessages)[number], isLastInGro
       messageId={message.id!}
       isFirstInGroup
       isLastInGroup={isLastInGroup}
+      isLatestDmMessage={isLatestDmMessage}
       displayContent={message.text}
       isExpanded={false}
       onToggleExpanded={vi.fn()}
@@ -220,9 +279,18 @@ const dmFromPayload = (row: (typeof sessionPayloadMessages)[number], isLastInGro
 };
 
 describe('scene art follows the current location from a real session payload (#1026)', () => {
+  beforeEach(() => {
+    setSceneBackground.mockClear();
+    sceneBackgroundState.url = null;
+    sceneBackgroundState.name = null;
+    sceneBackgroundState.type = null;
+    sceneBackgroundState.lastArtUrl = null;
+    sceneBackgroundState.lastArtName = null;
+  });
+
   it('shows The Heartwood image in the scene band after the party leaves The Sweet Mud', async () => {
     const [sweetMud, heartwood] = sessionPayloadMessages;
-    const { rerender } = render(scene(dmFromPayload(sweetMud)));
+    const { rerender } = render(scene(dmFromPayload(sweetMud, true, true)));
     await waitFor(() =>
       expect(screen.getByRole('img', { name: 'The Sweet Mud' })).toHaveAttribute(
         'src',
@@ -230,7 +298,7 @@ describe('scene art follows the current location from a real session payload (#1
       ),
     );
 
-    rerender(scene([dmFromPayload(sweetMud, false), dmFromPayload(heartwood)]));
+    rerender(scene([dmFromPayload(sweetMud, false, false), dmFromPayload(heartwood, true, true)]));
     await waitFor(() =>
       expect(screen.getByRole('img', { name: 'The Heartwood' })).toHaveAttribute(
         'src',
@@ -246,13 +314,286 @@ describe('scene art follows the current location from a real session payload (#1
       message: 'The guard looks at you and waits.',
       context: { location: 'The Heartwood' },
     };
-    render(scene(dmFromPayload(contextOnly)));
+    render(scene(dmFromPayload(contextOnly, true, true)));
     await waitFor(() =>
       expect(screen.getByRole('img', { name: 'The Heartwood' })).toHaveAttribute(
         'src',
         urlFor('The Heartwood'),
       ),
     );
+  });
+
+  it('keeps The Heartwood image in the scene band when the next reply names no place', async () => {
+    // Production rows carry no context.location (no producer writes it), so
+    // the place is carried by the prose alone — and the guard reply names
+    // none. The band above that reply must still show the session's current
+    // place, The Heartwood, rather than going blank.
+    const guardRow = {
+      ...sessionPayloadMessages[1],
+      id: 'msg-guard',
+      message: 'The guard looks at you and waits.',
+      context: {},
+      sequence_number: 3,
+    };
+    const [sweetMud, heartwood] = sessionPayloadMessages.map((row) => ({
+      ...row,
+      context: {},
+    }));
+    const { rerender } = render(scene(dmFromPayload(sweetMud, true, true)));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Sweet Mud' })).toHaveAttribute(
+        'src',
+        urlFor('The Sweet Mud'),
+      ),
+    );
+
+    rerender(scene([dmFromPayload(sweetMud, false, false), dmFromPayload(heartwood, true, true)]));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Heartwood' })).toHaveAttribute(
+        'src',
+        urlFor('The Heartwood'),
+      ),
+    );
+
+    rerender(
+      scene([
+        dmFromPayload(sweetMud, false, false),
+        dmFromPayload(heartwood, false, false),
+        dmFromPayload(guardRow, true, true),
+      ]),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByRole('img', { name: 'The Heartwood' })).toHaveLength(2),
+    );
+    expect(screen.getAllByRole('img', { name: 'The Heartwood' })[1]).toHaveAttribute(
+      'src',
+      urlFor('The Heartwood'),
+    );
+    // The second band sits above the guard reply itself, not just somewhere in the list.
+    const articles = screen.getAllByLabelText('Dungeon Master message');
+    expect(articles).toHaveLength(3);
+    within(articles[2].parentElement as HTMLElement).getByRole('img', {
+      name: 'The Heartwood',
+    });
+  });
+
+  it('keeps The Heartwood image in the scene band when the next reply names a place with no chunk', async () => {
+    const forestRow = {
+      ...sessionPayloadMessages[1],
+      id: 'msg-forest',
+      message: forestText,
+      context: {},
+      sequence_number: 3,
+    };
+    const [sweetMud, heartwood] = sessionPayloadMessages.map((row) => ({
+      ...row,
+      context: {},
+    }));
+    const { rerender } = render(scene(dmFromPayload(sweetMud, true, true)));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Sweet Mud' })).toHaveAttribute(
+        'src',
+        urlFor('The Sweet Mud'),
+      ),
+    );
+
+    rerender(scene([dmFromPayload(sweetMud, false, false), dmFromPayload(heartwood, true, true)]));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Heartwood' })).toHaveAttribute(
+        'src',
+        urlFor('The Heartwood'),
+      ),
+    );
+
+    rerender(
+      scene([
+        dmFromPayload(sweetMud, false, false),
+        dmFromPayload(heartwood, false, false),
+        dmFromPayload(forestRow, true, true),
+      ]),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByRole('img', { name: 'The Heartwood' })).toHaveLength(2),
+    );
+    expect(screen.getAllByRole('img', { name: 'The Heartwood' })[1]).toHaveAttribute(
+      'src',
+      urlFor('The Heartwood'),
+    );
+    // The second band sits above the forest reply itself, not just somewhere in the list.
+    const articles = screen.getAllByLabelText('Dungeon Master message');
+    expect(articles).toHaveLength(3);
+    within(articles[2].parentElement as HTMLElement).getByRole('img', {
+      name: 'The Heartwood',
+    });
+  });
+
+  it('keeps The Heartwood image after a monster reply takes over the background', async () => {
+    // The background effect sets the UI background to the highest-priority
+    // asset, so a monster reply makes the *current* background a goblin —
+    // but the band's fallback reads the last location-or-scene image the
+    // provider kept, so the next place-less reply still shows The Heartwood.
+    const monsterRow = {
+      ...sessionPayloadMessages[1],
+      id: 'msg-goblin',
+      message: 'A goblin snarls at you. [ASSET:monster:goblin]',
+      context: {},
+      sequence_number: 3,
+    };
+    const guardRow = {
+      ...sessionPayloadMessages[1],
+      id: 'msg-guard',
+      message: 'The guard looks at you and waits.',
+      context: {},
+      sequence_number: 4,
+    };
+    const [sweetMud, heartwood] = sessionPayloadMessages.map((row) => ({
+      ...row,
+      context: {},
+    }));
+    const { rerender } = render(scene(dmFromPayload(sweetMud, true, true)));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Sweet Mud' })).toHaveAttribute(
+        'src',
+        urlFor('The Sweet Mud'),
+      ),
+    );
+
+    rerender(scene([dmFromPayload(sweetMud, false, false), dmFromPayload(heartwood, true, true)]));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Heartwood' })).toHaveAttribute(
+        'src',
+        urlFor('The Heartwood'),
+      ),
+    );
+
+    rerender(
+      scene([
+        dmFromPayload(sweetMud, false, false),
+        dmFromPayload(heartwood, false, false),
+        dmFromPayload(monsterRow, true, true),
+      ]),
+    );
+    await waitFor(() =>
+      expect(setSceneBackground).toHaveBeenLastCalledWith('goblin.png', 'Goblin', 'monster'),
+    );
+    // The monster reply is the latest one, so its band falls back to the
+    // Heartwood rather than going blank.
+    await waitFor(() =>
+      expect(screen.getAllByRole('img', { name: 'The Heartwood' })).toHaveLength(2),
+    );
+
+    rerender(
+      scene([
+        dmFromPayload(sweetMud, false, false),
+        dmFromPayload(heartwood, false, false),
+        dmFromPayload(monsterRow, false, false),
+        dmFromPayload(guardRow, true, true),
+      ]),
+    );
+    // Only the latest reply takes the fallback: the monster reply loses its
+    // Heartwood band once it is no longer last, and the guard reply takes it.
+    await waitFor(() =>
+      expect(screen.getAllByRole('img', { name: 'The Heartwood' })).toHaveLength(2),
+    );
+    const articles = screen.getAllByLabelText('Dungeon Master message');
+    expect(articles).toHaveLength(4);
+    expect(within(articles[2].parentElement as HTMLElement).queryByRole('img')).toBeNull();
+    within(articles[3].parentElement as HTMLElement).getByRole('img', {
+      name: 'The Heartwood',
+    });
+  });
+
+  it('does not re-label an earlier place-less message with the current place', async () => {
+    // Only the latest DM message takes the fallback: a place-less reply
+    // written before the move keeps no band instead of showing the Heartwood
+    // the party reached later.
+    const guardRow = {
+      ...sessionPayloadMessages[1],
+      id: 'msg-guard',
+      message: 'The guard looks at you and waits.',
+      context: {},
+      sequence_number: 2,
+    };
+    const [sweetMud, heartwood] = sessionPayloadMessages.map((row) => ({
+      ...row,
+      context: {},
+    }));
+    const { rerender } = render(scene(dmFromPayload(sweetMud, true, true)));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Sweet Mud' })).toHaveAttribute(
+        'src',
+        urlFor('The Sweet Mud'),
+      ),
+    );
+
+    rerender(
+      scene([
+        dmFromPayload(sweetMud, false, false),
+        dmFromPayload(guardRow, false, false),
+        dmFromPayload(heartwood, true, true),
+      ]),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Heartwood' })).toHaveAttribute(
+        'src',
+        urlFor('The Heartwood'),
+      ),
+    );
+    expect(screen.getAllByRole('img', { name: 'The Heartwood' })).toHaveLength(1);
+    expect(screen.getAllByRole('img', { name: 'The Sweet Mud' })).toHaveLength(1);
+    const articles = screen.getAllByLabelText('Dungeon Master message');
+    expect(articles).toHaveLength(3);
+    // No scene-art band above the earlier guard reply. Scoped to the
+    // scene-art names, so a mood/location line in the message cannot satisfy it.
+    const guardRoot = articles[1].parentElement as HTMLElement;
+    expect(within(guardRoot).queryByRole('img', { name: 'The Heartwood' })).toBeNull();
+    expect(within(guardRoot).queryByRole('img', { name: 'The Sweet Mud' })).toBeNull();
+  });
+
+  it('does not give the fallback to an earlier DM reply that is last in its group', async () => {
+    // In a normal alternating transcript every DM reply is the sole message
+    // of its group, so isLastInGroup is true for all of them — it cannot gate
+    // the fallback. Only the latest DM message takes it. Under the old gate
+    // this reply showed the Sweet Mud band (the background at the time).
+    const guardRow = {
+      ...sessionPayloadMessages[1],
+      id: 'msg-guard-early',
+      message: 'The guard looks at you and waits.',
+      context: {},
+      sequence_number: 2,
+    };
+    const [sweetMud, heartwood] = sessionPayloadMessages.map((row) => ({
+      ...row,
+      context: {},
+    }));
+    const { rerender } = render(scene(dmFromPayload(sweetMud, true, true)));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Sweet Mud' })).toHaveAttribute(
+        'src',
+        urlFor('The Sweet Mud'),
+      ),
+    );
+
+    rerender(
+      scene([
+        dmFromPayload(sweetMud, false, false),
+        dmFromPayload(guardRow, true, false),
+        dmFromPayload(heartwood, true, true),
+      ]),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Heartwood' })).toHaveAttribute(
+        'src',
+        urlFor('The Heartwood'),
+      ),
+    );
+    expect(screen.getAllByRole('img', { name: 'The Heartwood' })).toHaveLength(1);
+    expect(screen.getAllByRole('img', { name: 'The Sweet Mud' })).toHaveLength(1);
+    const articles = screen.getAllByLabelText('Dungeon Master message');
+    expect(articles).toHaveLength(3);
+    const guardRoot = articles[1].parentElement as HTMLElement;
+    expect(within(guardRoot).queryByRole('img', { name: 'The Heartwood' })).toBeNull();
+    expect(within(guardRoot).queryByRole('img', { name: 'The Sweet Mud' })).toBeNull();
   });
 });
 
