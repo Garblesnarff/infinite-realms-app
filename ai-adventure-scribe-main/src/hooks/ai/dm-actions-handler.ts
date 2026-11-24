@@ -14,6 +14,7 @@ import type {
 import { confirmCombatEntry } from '@/hooks/ai/combat-entry-hold';
 import { resolveDeclaredCombatActions } from '@/hooks/ai/combat-resolution-step';
 import { isAbortError } from '@/hooks/ai/combat-turn-preflight';
+import { shadowNarratedEnemyHp } from '@/hooks/ai/narrated-enemy-hp-shadow';
 import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { filterValidHandoutActions } from '@/services/ai/valid-handout-actions';
@@ -1075,6 +1076,13 @@ export async function handleDmActionsAndTransitions(
       appendLocalNotice('The fight is not over — your opponent is still standing.');
     }
   }
+
+  const heroName = params.characterRecord?.name;
+  shadowNarratedEnemyHp(
+    responseText,
+    sessionId,
+    typeof heroName === 'string' ? heroName : undefined,
+  );
 
   return {
     result,

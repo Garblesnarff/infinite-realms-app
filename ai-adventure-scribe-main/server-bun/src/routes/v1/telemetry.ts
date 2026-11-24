@@ -48,6 +48,7 @@ const ALLOWED_CLIENT_FAILURE_KINDS = [
   'failed_check_harm_without_engine',
   'narrated_dead_npc_acting',
   'confrontation_without_combat_entry',
+  'narrated_enemy_hp_number',
 ] as const;
 
 /** Shadow counts: logged as CLIENT_FAILURE for the count, never paged to Slack (#468). */
@@ -57,6 +58,7 @@ const LOG_ONLY_CLIENT_KINDS: readonly string[] = [
   'failed_check_harm_without_engine',
   'narrated_dead_npc_acting',
   'confrontation_without_combat_entry',
+  'narrated_enemy_hp_number',
 ];
 type ClientFailureKind = (typeof ALLOWED_CLIENT_FAILURE_KINDS)[number];
 
