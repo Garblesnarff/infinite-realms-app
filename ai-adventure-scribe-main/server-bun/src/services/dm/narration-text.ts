@@ -407,8 +407,13 @@ export type NarrationNormalization = 'unwrapped' | 'stripped' | 'unwrapped+strip
  * null when the reply was already clean.
  */
 /** Every artifact strip in one place, looped until stable (a strip can expose another behind it). */
+// The DM may report a hit's damage, but current/max HP comes from the engine.
+const DAMAGE_HP_ASIDE = /\b(damage)[ \t]+\([ \t]*now[ \t]+\d+[ \t]*\/[ \t]*\d+[ \t]*\)/gi;
+const PARTIAL_DAMAGE_HP_ASIDE =
+  /\bdamage([ \t]+\([ \t]*(?:n(?:o(?:w(?:[ \t]+\d*(?:[ \t]*\/[ \t]*\d*)?[ \t]*)?)?)?)?)$/i;
+
 function stripArtifacts(text: string): string {
-  let strippedText = stripToolParameterBlocks(text);
+  let strippedText = stripToolParameterBlocks(text).replace(DAMAGE_HP_ASIDE, '$1');
   for (let i = 0; i < 4; i += 1) {
     const previous = strippedText;
     strippedText = stripInlineLetteredList(strippedText);
@@ -549,6 +554,9 @@ export function normalizePartialNarration(text: string): string {
   const cutAt = (index: number): void => {
     out = out.slice(0, index).trimEnd();
   };
+  // Hold a split damage HP aside until it can be stripped or released as prose.
+  const pendingHpAside = PARTIAL_DAMAGE_HP_ASIDE.exec(out);
+  if (pendingHpAside) cutAt(pendingHpAside.index + 'damage'.length);
   // Unterminated bracket group — held only while its content could
   // still become a tracker group (at most 48 chars from the tracker
   // charset, no sentence terminator or newline). Once the content
