@@ -113,12 +113,27 @@ export function issuedCheckModifier(request: IssuedRollRequest, character: unkno
   return (symbolic[1] === '-' ? -1 : 1) * abilityModifier(score);
 }
 
-export function narrativeCheckShadow(input: {
+/**
+ * The numbers behind a shadow result. Every field is null when the input did not supply it, so a
+ * mismatch line says which number or verdict differed. Holds no user id and no reply text.
+ */
+export interface NarrativeCheckShadowFacts {
+  result: 'match' | 'mismatch' | 'no_natural' | 'no_modifier' | 'no_verdict';
+  clientTotal: number | null;
+  serverTotal: number | null;
+  natural: number | null;
+  modifier: number | null;
+  dc: number | null;
+  clientVerdict: 'success' | 'fail' | null;
+  serverVerdict: 'success' | 'fail' | null;
+}
+
+export function narrativeCheckShadowFacts(input: {
   text: string;
   request: IssuedRollRequest;
   context?: Record<string, unknown>;
   modifier: number | null;
-}): { result: 'match' | 'mismatch' | 'no_natural' | 'no_modifier' | 'no_verdict' } | null {
+}): NarrativeCheckShadowFacts | null {
   if (typeof input.request.type !== 'string' || !NARRATIVE_CHECK_TYPES.has(input.request.type))
     return null;
   const dice = input.context?.diceRoll;
@@ -144,16 +159,70 @@ export function narrativeCheckShadow(input: {
             ? Math.max(...pair)
             : Math.min(...pair)
           : null;
-  if (!Number.isInteger(natural) || natural! < 1 || natural! > 20) return { result: 'no_natural' };
-  if (input.modifier === null) return { result: 'no_modifier' };
   const parsed = parseReportedCheckLine(input.text);
   const verdict = input.text.match(/\s(success|fail)\s*$/i)?.[1]?.toLowerCase();
-  const dc = input.request.dc;
-  if (!parsed || typeof dc !== 'number' || !Number.isFinite(dc) || !verdict)
-    return { result: 'no_verdict' };
-  const total = natural! + input.modifier;
-  return {
-    result:
-      total === parsed.total && total >= dc === (verdict === 'success') ? 'match' : 'mismatch',
+  const dc =
+    typeof input.request.dc === 'number' && Number.isFinite(input.request.dc)
+      ? input.request.dc
+      : null;
+  const validNatural =
+    Number.isInteger(natural) && natural! >= 1 && natural! <= 20 ? natural! : null;
+  const modifier = input.modifier;
+  const serverTotal = validNatural !== null && modifier !== null ? validNatural + modifier : null;
+  const serverVerdict: 'success' | 'fail' | null =
+    serverTotal !== null && dc !== null ? (serverTotal >= dc ? 'success' : 'fail') : null;
+  const clientVerdict: 'success' | 'fail' | null =
+    verdict === 'success' || verdict === 'fail' ? verdict : null;
+  const base = {
+    clientTotal: parsed?.total ?? null,
+    serverTotal,
+    natural: validNatural,
+    modifier,
+    dc,
+    clientVerdict,
+    serverVerdict,
   };
+  if (validNatural === null) return { ...base, result: 'no_natural' };
+  if (modifier === null) return { ...base, result: 'no_modifier' };
+  if (!parsed || dc === null || clientVerdict === null) return { ...base, result: 'no_verdict' };
+  return {
+    ...base,
+    result: serverTotal === parsed.total && serverVerdict === clientVerdict ? 'match' : 'mismatch',
+  };
+}
+
+export function narrativeCheckShadow(input: {
+  text: string;
+  request: IssuedRollRequest;
+  context?: Record<string, unknown>;
+  modifier: number | null;
+}): { result: NarrativeCheckShadowFacts['result'] } | null {
+  const facts = narrativeCheckShadowFacts(input);
+  return facts ? { result: facts.result } : null;
+}
+
+/**
+ * #1423: the mismatch line carries the numbers that differed, so an operator can read it from the
+ * log alone. The ids are the session and the roll request; no user id and no reply text.
+ */
+export function logNarrativeCheckShadowMismatch(
+  log: { info(fields: object, msg: string): void },
+  ids: { sessionId: string; rollRequestId: string },
+  facts: NarrativeCheckShadowFacts,
+): void {
+  log.info(
+    {
+      sessionId: ids.sessionId,
+      rollRequestId: ids.rollRequestId,
+      result: facts.result,
+      clientTotal: facts.clientTotal,
+      serverTotal: facts.serverTotal,
+      natural: facts.natural,
+      modifier: facts.modifier,
+      dc: facts.dc,
+      clientVerdict: facts.clientVerdict,
+      serverVerdict: facts.serverVerdict,
+    },
+    'narrative check shadow mismatch',
+  );
 }

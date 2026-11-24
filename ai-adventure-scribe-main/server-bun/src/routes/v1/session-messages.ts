@@ -9,8 +9,9 @@ import { CharacterService } from '../../services/character-service.js';
 import { expireStaleHeldReplies } from '../../services/dm/dm-reply-persistence.js';
 import {
   issuedCheckModifier,
+  logNarrativeCheckShadowMismatch,
   narrativeCheckCard,
-  narrativeCheckShadow,
+  narrativeCheckShadowFacts,
   serverVerdictLine,
 } from '../../services/session/narrative-check-outcome.js';
 import { SessionMessageService } from '../../services/session/session-message-service.js';
@@ -64,7 +65,7 @@ async function withServerCheckOutcome<
           : null;
         modifier = issuedCheckModifier(issued, character);
       }
-      const shadow = narrativeCheckShadow({
+      const shadow = narrativeCheckShadowFacts({
         text: message.message,
         request: issued,
         context,
@@ -72,7 +73,8 @@ async function withServerCheckOutcome<
       });
       if (shadow) {
         narrativeCheckShadowCounter.inc({ result: shadow.result });
-        if (shadow.result === 'mismatch') logger.info('narrative check shadow mismatch');
+        if (shadow.result === 'mismatch')
+          logNarrativeCheckShadowMismatch(logger, { sessionId, rollRequestId }, shadow);
       }
     }
   } catch (error) {
