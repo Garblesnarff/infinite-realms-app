@@ -21,7 +21,7 @@
  *
  * Requires TEST_DATABASE_URL or DATABASE_URL — see fixtures/real-db.ts.
  */
-import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
 
 import {
@@ -46,9 +46,13 @@ import {
   inventoryItems,
   tacticalMaps,
 } from '../../../../db/schema/index';
+import { resolveCatalogItem } from '../../data/itemCatalog.js';
 
 const { executeCombatIntent, getLegalCombatActions, proposeCombatAttack } = await importWithRealDb(
   () => import('../combat/combat-intent-service.js'),
+);
+const { combatAttackService } = await importWithRealDb(
+  () => import('../combat/combat-attack-service.js'),
 );
 const { CombatEncounterService } = await importWithRealDb(
   () => import('../combat/combat-encounter-service.js'),
@@ -798,10 +802,7 @@ describeWithDb('fighter features resolve as combat intents (#975)', () => {
     };
 
     await setUses('Action Surge', 1);
-    await db
-      .update(gameSessions)
-      .set({ sessionState: {} })
-      .where(eq(gameSessions.id, sessionId));
+    await db.update(gameSessions).set({ sessionState: {} }).where(eq(gameSessions.id, sessionId));
     await resetTurn();
 
     const surged = (await executeCombatIntent(
@@ -843,10 +844,7 @@ describeWithDb('fighter features resolve as combat intents (#975)', () => {
     // with the same single-statement UPDATE inside the claim transaction).
     const mark = { encounterId, participantId: heroId, round: 1 };
     for (let round = 0; round < 25; round++) {
-      await db
-        .update(gameSessions)
-        .set({ sessionState: {} })
-        .where(eq(gameSessions.id, sessionId));
+      await db.update(gameSessions).set({ sessionState: {} }).where(eq(gameSessions.id, sessionId));
       await Promise.all([
         SessionService.updateSession(sessionId, userId, {
           sessionState: { clientKey: 'concurrent' },
@@ -863,10 +861,7 @@ describeWithDb('fighter features resolve as combat intents (#975)', () => {
       ]);
       expect(await readActionSurgeMark(sessionId)).toBeNull();
     }
-    await db
-      .update(gameSessions)
-      .set({ sessionState: {} })
-      .where(eq(gameSessions.id, sessionId));
+    await db.update(gameSessions).set({ sessionState: {} }).where(eq(gameSessions.id, sessionId));
   });
 
   test('Action Surge is refused when the sheet has no such feature row to spend', async () => {
@@ -945,6 +940,7 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     foeSize?: 'medium' | 'large';
     heroMovementRemaining?: number;
     equippedJavelin?: boolean;
+    equippedThrown?: { name: string; legacy?: boolean };
   }): Promise<Fight> {
     const userId = testId('pin259-user');
     const [{ id: campaignId }] = await db
@@ -975,6 +971,17 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
         isEquipped: true,
         // Older inventory rows copied the 5 ft placeholder before the 30/120 ft correction.
         properties: JSON.stringify({ range: { normal: 5 } }),
+      });
+    }
+    if (opts.equippedThrown) {
+      await db.insert(inventoryItems).values({
+        characterId,
+        name: opts.equippedThrown.name,
+        itemType: 'weapon',
+        isEquipped: true,
+        properties: opts.equippedThrown.legacy
+          ? JSON.stringify({ range: { normal: 5 } })
+          : resolveCatalogItem(opts.equippedThrown.name)!.properties,
       });
     }
     const [{ id: sessionId }] = await db
@@ -1376,12 +1383,31 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
       combatState: {
         encounter: { id: f.encounterId },
         participants: [
-          { id: f.heroId, name: 'Pin Fighter', initiative: 20, initiativeModifier: 0, participantType: 'player', characterId: heroCharacterId },
-          { id: f.foeId, name: 'Pin Goblin', initiative: 10, initiativeModifier: 0, participantType: 'monster' },
+          {
+            id: f.heroId,
+            name: 'Pin Fighter',
+            initiative: 20,
+            initiativeModifier: 0,
+            participantType: 'player',
+            characterId: heroCharacterId,
+          },
+          {
+            id: f.foeId,
+            name: 'Pin Goblin',
+            initiative: 10,
+            initiativeModifier: 0,
+            participantType: 'monster',
+          },
         ],
       },
       player: { characterId: heroCharacterId, name: 'Pin Fighter' },
-      declaredAttack: { verb: 'attack', actorName: 'Pin Goblin', attackSource: 'weapon', weaponStated: true, weaponName: 'longsword' },
+      declaredAttack: {
+        verb: 'attack',
+        actorName: 'Pin Goblin',
+        attackSource: 'weapon',
+        weaponStated: true,
+        weaponName: 'longsword',
+      },
     })) as unknown as {
       type: string;
       notice: string;
@@ -1424,7 +1450,8 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     expect(r.movedFeet).toBe(0);
     expect(r.distanceFeet).toBe(10);
     expect(r.movementRemainingFeet).toBe(0);
-    const { formatCombatEngineOutcome } = await import('../../../../shared/combat-outcome-transcript');
+    const { formatCombatEngineOutcome } =
+      await import('../../../../shared/combat-outcome-transcript');
     const refusalLine = formatCombatEngineOutcome(
       { actor_id: f.heroId, action_type: 'attack', target_ids: [f.foeId] },
       r as never,
@@ -1492,6 +1519,155 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
     expect(r.resolvedAs).not.toBe('movement_only');
     expect(typeof r.d20).toBe('number');
     expect((await entityAt(f, f.heroId)).movementRemaining).toBe(25);
+  });
+
+  describe('#1642 thrown range', () => {
+    test.each(['Dagger', 'Handaxe', 'Light hammer', 'Spear', 'Trident'])('%s', async (name) => {
+      // 20 ft: offered and proposal is a non-disadvantaged strength attack.
+      const f20 = await seed({
+        width: 20,
+        height: 5,
+        hero: { x: 1, y: 2 },
+        foe: { x: 5, y: 2 },
+        equippedThrown: { name },
+      });
+      await setTurn(f20, 0);
+      const legal20 = await getLegalCombatActions(f20.encounterId, f20.userId);
+      const action20 = legal20.actions.find(
+        (a: any) =>
+          a.type === 'attack' &&
+          a.label === `Attack with ${name}` &&
+          (a.targetIds ?? []).includes(f20.foeId),
+      );
+      expect(action20).toBeDefined();
+      const proposal20 = await combatAttackService.proposeAttack(
+        f20.encounterId,
+        {
+          attackerId: f20.heroId,
+          targetId: f20.foeId,
+          weaponId: action20!.weaponId as string,
+          attackType: 'ranged',
+          expectedVersion: 1,
+        },
+        f20.userId,
+      );
+      expect(proposal20.disadvantage).toBe(false);
+      expect(proposal20.disadvantageSources).toEqual([]);
+      // 50 ft: offered, but long range.
+      const f50 = await seed({
+        width: 20,
+        height: 5,
+        hero: { x: 1, y: 2 },
+        foe: { x: 11, y: 2 },
+        equippedThrown: { name },
+      });
+      await setTurn(f50, 0);
+      const legal50 = await getLegalCombatActions(f50.encounterId, f50.userId);
+      const action50 = legal50.actions.find(
+        (a: any) =>
+          a.type === 'attack' &&
+          (a.label ?? '').startsWith(`Attack with ${name}`) &&
+          (a.targetIds ?? []).includes(f50.foeId),
+      );
+      expect(action50).toBeDefined();
+      const proposal50 = await combatAttackService.proposeAttack(
+        f50.encounterId,
+        {
+          attackerId: f50.heroId,
+          targetId: f50.foeId,
+          weaponId: action50!.weaponId as string,
+          attackType: 'ranged',
+          expectedVersion: 1,
+        },
+        f50.userId,
+      );
+      expect(proposal50.disadvantage).toBe(true);
+      expect(proposal50.disadvantageSources).toEqual(['long range']);
+      // 65 ft: no action targets the foe; proposal is out of range.
+      const f65 = await seed({
+        width: 20,
+        height: 5,
+        hero: { x: 1, y: 2 },
+        foe: { x: 14, y: 2 },
+        equippedThrown: { name },
+      });
+      await setTurn(f65, 0);
+      const legal65 = await getLegalCombatActions(f65.encounterId, f65.userId);
+      const action65 = legal65.actions.find(
+        (a: any) =>
+          a.type === 'attack' &&
+          (a.label ?? '').startsWith(`Attack with ${name}`) &&
+          (a.targetIds ?? []).includes(f65.foeId),
+      );
+      expect(action65).toBeUndefined();
+      const proposal65 = await combatAttackService.proposeAttack(
+        f65.encounterId,
+        {
+          attackerId: f65.heroId,
+          targetId: f65.foeId,
+          weaponId: name,
+          attackType: 'ranged',
+          expectedVersion: 1,
+        },
+        f65.userId,
+      );
+      expect(proposal65.legal).toBe(false);
+      expect(proposal65.refusal).toBe('out_of_range');
+      // 5 ft: melee use is unchanged.
+      const f5 = await seed({
+        width: 20,
+        height: 5,
+        hero: { x: 1, y: 2 },
+        foe: { x: 2, y: 2 },
+        equippedThrown: { name },
+      });
+      await setTurn(f5, 0);
+      const proposalMelee = await combatAttackService.proposeAttack(
+        f5.encounterId,
+        {
+          attackerId: f5.heroId,
+          targetId: f5.foeId,
+          weaponId: name,
+          attackType: 'melee',
+          expectedVersion: 1,
+        },
+        f5.userId,
+      );
+      expect(proposalMelee.disadvantage).toBe(false);
+      expect(proposalMelee.disadvantageSources).toEqual([]);
+      // Longsword at 5 ft for comparison.
+      const proposalSword = await combatAttackService.proposeAttack(
+        f5.encounterId,
+        {
+          attackerId: f5.heroId,
+          targetId: f5.foeId,
+          weaponId: 'Longsword',
+          attackType: 'melee',
+          expectedVersion: 1,
+        },
+        f5.userId,
+      );
+      expect(proposalMelee.attackBonus).toBe(proposalSword.attackBonus);
+    });
+
+    test('legacy Dagger row is offered at 20 ft', async () => {
+      const f = await seed({
+        width: 20,
+        height: 5,
+        hero: { x: 1, y: 2 },
+        foe: { x: 5, y: 2 },
+        equippedThrown: { name: 'Dagger', legacy: true },
+      });
+      await setTurn(f, 0);
+      const legal = await getLegalCombatActions(f.encounterId, f.userId);
+      const action = legal.actions.find(
+        (a: any) =>
+          a.type === 'attack' &&
+          a.label === 'Attack with Dagger' &&
+          (a.targetIds ?? []).includes(f.foeId),
+      );
+      expect(action).toBeDefined();
+    });
   });
 });
 
@@ -1861,7 +2037,9 @@ describeWithDb('a late player action is not absorbed after their turn ended (#10
       .insert(combatEncounters)
       .values({ sessionId, status: 'active', currentRound: 1, currentTurnOrder: 0, version: 1 })
       .returning({ id: combatEncounters.id });
-    cleanup.push(async () => db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId)));
+    cleanup.push(async () =>
+      db.delete(combatEncounters).where(eq(combatEncounters.id, encounterId)),
+    );
 
     const rows: Array<Record<string, unknown>> = [
       {

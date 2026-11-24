@@ -28,7 +28,7 @@ import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
 import { logger } from '../../lib/logger.js';
 import { checkLineOfSight, getCover, getDistance } from '../../tactical/engine.js';
 import { CombatInitiativeService } from '../combat-initiative-service.js';
-import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
+import { resolveAttackRules, weaponAtDistance, type WeaponRuleProfile } from './combat-rules.js';
 import { publishCombatState } from './combat-sync-service.js';
 import { hasAttackedThisTurn, isHiddenAttacker, readLightAttackMark } from './combat-turn-flags.js';
 import {
@@ -2784,12 +2784,14 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         ) >= 2 &&
         !(await hasAttackedThisTurn(encounterId, actor.id))
       ) {
-        const recklessWeapons = weapons.filter(
-          (weapon) =>
-            weapon.meleeWeapon === true &&
-            !weapon.ranged &&
-            (!weapon.finesse || (profile.scores.str ?? 10) >= (profile.scores.dex ?? 10)),
-        );
+        const recklessWeapons = weapons
+          .map((weapon) => weaponAtDistance(weapon, 5))
+          .filter(
+            (weapon) =>
+              weapon.meleeWeapon === true &&
+              !weapon.ranged &&
+              (!weapon.finesse || (profile.scores.str ?? 10) >= (profile.scores.dex ?? 10)),
+          );
         actions.push(
           ...buildCombatWeaponOptions(recklessWeapons, targetsForWeapon, { canCloseDistance }).map(
             (option) => ({
@@ -2812,7 +2814,9 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
         .filter(([, count]) => count > 0)
         .map(([level]) => level)
         .sort((left, right) => left - right);
-      for (const weapon of equippedWeapons.filter((candidate) => !candidate.ranged)) {
+      for (const weapon of equippedWeapons
+        .map((candidate) => weaponAtDistance(candidate, 5))
+        .filter((candidate) => !candidate.ranged)) {
         const reachableTargetIds = targetsForWeapon(weapon)
           .filter((target) => target.legal)
           .map((target) => target.targetId);

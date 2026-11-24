@@ -1,6 +1,6 @@
 import { canOccupy, findPath, getDistance } from './engine.js';
 import { isUnresolvedNpcName, UNKNOWN_CREATURE } from '../../../shared/unresolved-creature-name';
-import { findCatalogWeapon } from '../services/combat/weapon-catalog.js';
+import { catalogWeaponIsRanged, findCatalogWeapon } from '../services/combat/weapon-catalog.js';
 
 import type { MapEntity, TacticalMap } from './types.js';
 import type {
@@ -240,7 +240,8 @@ function attackProfileForWeapon(
 ): MonsterAttackProfile | undefined {
   const catalog = findCatalogWeapon(name);
   if (!catalog) return undefined;
-  const normalRange = Number(catalog.range?.normal ?? 5);
+  const rangedCatalog = catalogWeaponIsRanged(name);
+  const normalRange = rangedCatalog ? Number(catalog.range?.normal ?? 5) : 5;
   const attack: MonsterAttack = {
     name: catalog.name,
     attackBonus: 0,
@@ -248,8 +249,8 @@ function attackProfileForWeapon(
     damageBonus: 0,
     damageType: (catalog.damage?.type ?? 'bludgeoning') as DamageType,
     normalRange,
-    ...(catalog.range?.long ? { longRange: catalog.range.long } : {}),
-    ranged: normalRange > 5,
+    ...(rangedCatalog && catalog.range?.long ? { longRange: catalog.range.long } : {}),
+    ranged: rangedCatalog && normalRange > 5,
   };
   return { source, attacks: [attack] };
 }

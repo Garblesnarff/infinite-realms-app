@@ -1092,6 +1092,57 @@ describe('getLegalCombatActions', () => {
     const none = await getLegalCombatActions('encounter-1', 'user-1');
     expect(none.actions.some((action) => action.type === 'use_item')).toBe(false);
   });
+
+  test('#1642 Reckless chip for a thrown melee weapon', async () => {
+    const saved = {
+      class: player.characterClass,
+      level: player.characterLevel,
+      levels: player.characterClassLevels,
+      weapons: equippedWeapons,
+      monsterX: map.entities[1].x,
+    };
+    player.characterClass = 'Barbarian';
+    player.characterLevel = 2;
+    player.characterClassLevels = [{ className: 'Barbarian', level: 2 }];
+    equippedWeapons = [
+      {
+        id: 'handaxe',
+        name: 'Handaxe',
+        damageDice: '1d6',
+        damageType: 'slashing',
+        normalRange: 20,
+        longRange: 60,
+        magicBonus: 0,
+        finesse: false,
+        ranged: true,
+        proficient: true,
+        meleeWeapon: true,
+      },
+    ];
+    map.entities[1].x = 7; // 5 ft away
+    map.entities[1].y = 6;
+    const near = await getLegalCombatActions('encounter-1', 'user-1');
+    const chip = near.actions.find(
+      (a: any) => a.type === 'reckless_attack' && a.label === 'Reckless Attack with Handaxe',
+    );
+    expect(chip).toBeDefined();
+    expect(chip!.targetIds).toContain('monster-1');
+    // 20 ft away: not in targetIds
+    map.entities[1].x = 10; // 20 ft away
+    const far = await getLegalCombatActions('encounter-1', 'user-1');
+    const farChip = far.actions.find(
+      (a: any) => a.type === 'reckless_attack' && a.label === 'Reckless Attack with Handaxe',
+    );
+    expect(farChip?.targetIds ?? []).not.toContain('monster-1');
+    // restore
+    Object.assign(player, {
+      characterClass: saved.class,
+      characterLevel: saved.level,
+      characterClassLevels: saved.levels,
+    });
+    equippedWeapons = saved.weapons;
+    map.entities[1].x = saved.monsterX;
+  });
 });
 
 describe('#1635 Grapple, Shove and Hide chips', () => {

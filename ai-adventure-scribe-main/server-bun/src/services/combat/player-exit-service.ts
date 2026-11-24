@@ -22,6 +22,7 @@
  */
 import { describeResolvedAttack } from './attack-narration.js';
 import { isLiveHostile } from './combat-end-guard.js';
+import { weaponAtDistance } from './combat-rules.js';
 import { recordDmTacticalFact } from './tactical-action-service.js';
 import { logger } from '../../lib/logger.js';
 import { NarrativeLedgerService } from '../narrative/narrative-ledger-service.js';
@@ -83,7 +84,14 @@ type ExitParticipant = {
 
 export type OpportunityAttacker = {
   participant: ExitParticipant;
-  weapon: { id: string; name: string; normalRange: number; ranged: boolean };
+  weapon: {
+    id: string;
+    name: string;
+    normalRange: number;
+    ranged: boolean;
+    longRange?: number;
+    meleeWeapon?: boolean;
+  };
   distanceFeet: number;
 };
 
@@ -100,9 +108,14 @@ export async function selectOpportunityAttackers(params: {
   actor: ExitParticipant;
   map: { entities: MapEntity[] } | null;
   /** The attacker's own reach, read from its equipped or stored attack profile. */
-  reachOf: (
-    participant: ExitParticipant,
-  ) => Promise<{ id: string; name: string; normalRange: number; ranged: boolean }>;
+  reachOf: (participant: ExitParticipant) => Promise<{
+    id: string;
+    name: string;
+    normalRange: number;
+    ranged: boolean;
+    longRange?: number;
+    meleeWeapon?: boolean;
+  }>;
   hasLineOfSight: (fromId: string, toId: string) => boolean;
   distanceFeet: (from: MapEntity, to: MapEntity) => number;
   conditionsOf?: (id: string) => Promise<string[]>;
@@ -134,7 +147,10 @@ export async function selectOpportunityAttackers(params: {
     const to = map.entities.find((entity) => entity.id === candidate.id);
     if (!to || !hasLineOfSight(candidate.id, actor.id)) continue;
     const distance = distanceFeet(from, to);
-    const weapon = await reachOf(candidate as unknown as ExitParticipant);
+    const weapon = weaponAtDistance(
+      await reachOf(candidate as unknown as ExitParticipant),
+      distance,
+    );
     // For a melee weapon `normalRange` is its reach: 5 ft, or 10 ft for a reach weapon.
     if (weapon.ranged || distance > weapon.normalRange) continue;
     if (

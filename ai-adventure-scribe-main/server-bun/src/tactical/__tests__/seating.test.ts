@@ -220,3 +220,26 @@ describe('uniqueCollidedSeatNames (#2444)', () => {
     ]);
   });
 });
+
+describe('scene attack profiles stay melee for thrown weapons (#1642)', () => {
+  it('Dagger and Spear are melee (5 ft, no long range)', () => {
+    for (const weapon of ['Dagger', 'Spear']) {
+      const result = resolveSceneCombatant({
+        sceneDescription: `A guard with a ${weapon.toLowerCase()}.`,
+      });
+      const attack = result.attackProfile?.attacks?.[0];
+      expect(attack).toBeDefined();
+      expect(attack?.normalRange).toBe(5);
+      expect(attack?.ranged).toBe(false);
+      expect(attack?.longRange).toBeUndefined();
+    }
+  });
+
+  it('Shortbow stays ranged (80 / 320)', () => {
+    const result = resolveSceneCombatant({ sceneDescription: 'A hunter with a shortbow.' });
+    const attack = result.attackProfile?.attacks?.[0];
+    expect(attack?.normalRange).toBe(80);
+    expect(attack?.longRange).toBe(320);
+    expect(attack?.ranged).toBe(true);
+  });
+});
