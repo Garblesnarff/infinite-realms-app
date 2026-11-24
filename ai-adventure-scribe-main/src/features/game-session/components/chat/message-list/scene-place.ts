@@ -38,9 +38,45 @@ export function findPlaceInText(text: string, locations: CampaignAsset[]): Campa
 }
 
 /**
+ * Reads the tracked place from the reply's `[Place]` state line, e.g.
+ * `[Place: The Heartwood]` or `[Place] The Heartwood`. The state line is the
+ * session's tracked place, so it beats a place merely mentioned in the prose.
+ * The last state line in the reply wins; the name resolves with the same
+ * slug rule as the uploader. A bracketed name without the `Place` keyword
+ * is not a state line — prose asides are indistinguishable from one, and
+ * findPlaceInText already matches those in the prose path.
+ */
+const STATE_LINE_PLACE_COLON = /^[ \t]*\[Place[ \t]*:[ \t]*([^\]\n]+)\]/gim;
+const STATE_LINE_PLACE_BARE = /^[ \t]*\[Place\][ \t]*([^\n]+?)[ \t]*$/gim;
+
+export function findPlaceInStateLine(
+  text: string,
+  locations: CampaignAsset[],
+): CampaignAsset | null {
+  let lastName: string | null = null;
+  let lastIndex = -1;
+  for (const pattern of [STATE_LINE_PLACE_COLON, STATE_LINE_PLACE_BARE]) {
+    pattern.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(text)) !== null) {
+      // An empty capture names no place and must not erase an earlier valid
+      // state line.
+      const name = match[1].trim();
+      if (name && match.index >= lastIndex) {
+        lastIndex = match.index;
+        lastName = name;
+      }
+    }
+  }
+  if (!lastName) return null;
+  return findPlaceInText(lastName, locations);
+}
+
+/**
  * Builds the candidate tag list shared by the scene band and the background
- * effect, so the two cannot drift. Explicit tags come first, then the official context location, then a place named
- * in the prose. A place with no matching
+ * effect, so the two cannot drift. Explicit tags come first, then the tracked
+ * place from the reply's `[Place]` state line, then the official context
+ * location, then a place named in the prose. A place with no matching
  * chunk contributes nothing.
  */
 export function sceneCandidateTags(
@@ -48,8 +84,18 @@ export function sceneCandidateTags(
   text: string,
   contextLocation: string | null | undefined,
   locations: CampaignAsset[],
+  replyText: string = text,
 ): Array<{ type: string; key: string }> {
   const candidates = [...assetTags];
+  // The reply's [Place] state line is the tracked place (#1026): it beats a
+  // place merely mentioned in the prose. It is read from the full reply text,
+  // not the display text — the display pipeline may separate it from the
+  // prose (a state line after the options is cut from displayContent by
+  // parseMessageOptions), so the prose lookup alone would miss it.
+  const trackedPlace = findPlaceInStateLine(replyText, locations);
+  if (trackedPlace) {
+    candidates.push({ type: 'location', key: trackedPlace.key });
+  }
   // Official current location beats a place only mentioned in the prose, so the
   // band follows the session payload's location when one is set.
   if (contextLocation) {

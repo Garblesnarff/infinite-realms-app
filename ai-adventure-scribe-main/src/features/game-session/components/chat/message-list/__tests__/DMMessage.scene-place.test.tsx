@@ -2,12 +2,13 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DMMessage } from '../DMMessage';
-import { findPlaceInText, sceneCandidateTags } from '../scene-place';
+import { findPlaceInStateLine, findPlaceInText, sceneCandidateTags } from '../scene-place';
 
 import type { CampaignAsset } from '@/hooks/use-campaign-assets';
 import type { ReactNode } from 'react';
 
 import { CampaignAssetsProvider } from '@/contexts/CampaignAssetsContext';
+import { parseMessageOptions } from '@/utils/parseMessageOptions';
 
 const setSceneBackground = vi.fn();
 
@@ -205,6 +206,64 @@ describe('findPlaceInText', () => {
   });
 });
 
+describe('findPlaceInStateLine', () => {
+  const locationOf = (name: string): CampaignAsset => ({
+    type: 'location',
+    key: name.toLowerCase().replace(/\s+/g, '-'),
+    name,
+    imageUrl: `${name}.png`,
+  });
+  const sweetMud = locationOf('The Sweet Mud');
+  const heartwood = locationOf('The Heartwood');
+  const heartwoodBasin = locationOf('The Heartwood Basin');
+
+  it('reads [Place: Name]', () => {
+    expect(findPlaceInStateLine('[Place: The Heartwood]', [sweetMud, heartwood])).toBe(heartwood);
+  });
+
+  it('reads [Place] Name', () => {
+    expect(findPlaceInStateLine('[Place] The Heartwood', [sweetMud, heartwood])).toBe(heartwood);
+  });
+
+  it('returns null when the reply carries no state line', () => {
+    expect(findPlaceInStateLine('The guard looks at you and waits.', [heartwood])).toBeNull();
+  });
+
+  it('returns null when the state line names a place with no chunk', () => {
+    expect(findPlaceInStateLine('[Place: The Forest of Glass]', [sweetMud, heartwood])).toBeNull();
+  });
+
+  it('takes the last state line when the reply carries two', () => {
+    expect(
+      findPlaceInStateLine('[Place: The Sweet Mud]\n[Place: The Heartwood]', [sweetMud, heartwood]),
+    ).toBe(heartwood);
+  });
+
+  it('prefers the longer name when the state line names the Basin', () => {
+    expect(findPlaceInStateLine('[Place: The Heartwood Basin]', [heartwood, heartwoodBasin])).toBe(
+      heartwoodBasin,
+    );
+  });
+
+  it('takes the last state line across the two forms, in either order', () => {
+    expect(
+      findPlaceInStateLine('[Place] The Sweet Mud\n[Place: The Heartwood]', [sweetMud, heartwood]),
+    ).toBe(heartwood);
+    expect(
+      findPlaceInStateLine('[Place: The Sweet Mud]\n[Place] The Heartwood', [sweetMud, heartwood]),
+    ).toBe(heartwood);
+  });
+
+  it('ignores an empty trailing state line instead of erasing an earlier one', () => {
+    expect(findPlaceInStateLine('[Place: The Heartwood]\n[Place: ]', [sweetMud, heartwood])).toBe(
+      heartwood,
+    );
+    expect(findPlaceInStateLine('[Place: The Heartwood]\n[Place]   ', [sweetMud, heartwood])).toBe(
+      heartwood,
+    );
+  });
+});
+
 /**
  * A GET /v1/sessions/:id/messages row, the same shape mapMessage in
  * session-messages.ts returns and use-messages.ts maps onto a ChatMessage.
@@ -259,6 +318,7 @@ const dmFromPayload = (
   row: SessionPayloadRow,
   isLastInGroup: boolean,
   isLatestDmMessage: boolean,
+  displayContentOverride?: string,
 ) => {
   const message = chatFromSessionPayload(row);
   return (
@@ -269,7 +329,7 @@ const dmFromPayload = (
       isFirstInGroup
       isLastInGroup={isLastInGroup}
       isLatestDmMessage={isLatestDmMessage}
-      displayContent={message.text}
+      displayContent={displayContentOverride ?? message.text}
       isExpanded={false}
       onToggleExpanded={vi.fn()}
       isGeneratingImage={false}
@@ -374,6 +434,104 @@ describe('scene art follows the current location from a real session payload (#1
     expect(articles).toHaveLength(3);
     within(articles[2].parentElement as HTMLElement).getByRole('img', {
       name: 'The Heartwood',
+    });
+  });
+
+  it('shows the new place art when the move appears only in the [Place] state line', async () => {
+    // The hero moves Sweet Mud -> Heartwood, but the move reply's prose names
+    // no place; the move appears only in the [Place] state line, after the
+    // options. MessageRenderer's parseMessageOptions cuts the narrative at
+    // the first option, so displayContent is the prose alone and the band
+    // lookup never sees the state line — the band must read the tracked
+    // place from the full reply text. Without the fix the band falls back
+    // to the last scene art, The Sweet Mud.
+    const moveRow = {
+      ...sessionPayloadMessages[1],
+      id: 'msg-move-state-line',
+      message:
+        'The guard looks at you and waits.\n\nA. **Search the hall**, looking for anything useful.\nB. **Wait quietly**, listening for footsteps.\n\n[Place: The Heartwood]',
+      context: {},
+      sequence_number: 2,
+    };
+    const [sweetMud] = sessionPayloadMessages.map((row) => ({ ...row, context: {} }));
+    // displayContent is derived through the real option parser, exactly as
+    // MessageRenderer derives it in production.
+    const displayContent = parseMessageOptions(moveRow.message).content;
+    expect(displayContent).toBe('The guard looks at you and waits.');
+    const { rerender } = render(scene(dmFromPayload(sweetMud, true, true)));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Sweet Mud' })).toHaveAttribute(
+        'src',
+        urlFor('The Sweet Mud'),
+      ),
+    );
+
+    rerender(
+      scene([
+        dmFromPayload(sweetMud, false, false),
+        dmFromPayload(moveRow, true, true, displayContent),
+      ]),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Heartwood' })).toHaveAttribute(
+        'src',
+        urlFor('The Heartwood'),
+      ),
+    );
+    // The band sits above the move reply itself, not just somewhere in the list.
+    const articles = screen.getAllByLabelText('Dungeon Master message');
+    expect(articles).toHaveLength(2);
+    within(articles[1].parentElement as HTMLElement).getByRole('img', {
+      name: 'The Heartwood',
+    });
+    await waitFor(() =>
+      expect(setSceneBackground).toHaveBeenLastCalledWith(
+        urlFor('The Heartwood'),
+        'The Heartwood',
+        'location',
+      ),
+    );
+  });
+
+  it('keeps the previous art when the [Place] state line names a place with no chunk', async () => {
+    // The state line names a place with no chunk, so it contributes no
+    // candidate and the band falls back to the last scene art, The Sweet Mud.
+    const forestRow = {
+      ...sessionPayloadMessages[1],
+      id: 'msg-forest-state-line',
+      message:
+        'The guard looks at you and waits.\n\nA. **Search the hall**, looking for anything useful.\nB. **Wait quietly**, listening for footsteps.\n\n[Place: The Forest of Glass]',
+      context: {},
+      sequence_number: 2,
+    };
+    const [sweetMud] = sessionPayloadMessages.map((row) => ({ ...row, context: {} }));
+    const displayContent = parseMessageOptions(forestRow.message).content;
+    expect(displayContent).toBe('The guard looks at you and waits.');
+    const { rerender } = render(scene(dmFromPayload(sweetMud, true, true)));
+    await waitFor(() =>
+      expect(screen.getByRole('img', { name: 'The Sweet Mud' })).toHaveAttribute(
+        'src',
+        urlFor('The Sweet Mud'),
+      ),
+    );
+
+    rerender(
+      scene([
+        dmFromPayload(sweetMud, false, false),
+        dmFromPayload(forestRow, true, true, displayContent),
+      ]),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByRole('img', { name: 'The Sweet Mud' })).toHaveLength(2),
+    );
+    expect(screen.getAllByRole('img', { name: 'The Sweet Mud' })[1]).toHaveAttribute(
+      'src',
+      urlFor('The Sweet Mud'),
+    );
+    const articles = screen.getAllByLabelText('Dungeon Master message');
+    expect(articles).toHaveLength(2);
+    within(articles[1].parentElement as HTMLElement).getByRole('img', {
+      name: 'The Sweet Mud',
     });
   });
 
@@ -640,6 +798,33 @@ describe('sceneCandidateTags', () => {
       sceneCandidateTags([], 'The party reaches The Forest of Glass.', 'The Forest of Glass', [
         sweetMud,
       ]),
+    ).toEqual([]);
+  });
+
+  it('puts the [Place] state line ahead of a different place named in prose', () => {
+    expect(
+      sceneCandidateTags(
+        [],
+        'The reeds part around the Sweet Mud, warm underfoot.',
+        undefined,
+        [sweetMud, heartwood],
+        'The guard looks at you and waits.\n\n[Place: The Heartwood]',
+      ),
+    ).toEqual([
+      { type: 'location', key: heartwood.key },
+      { type: 'location', key: sweetMud.key },
+    ]);
+  });
+
+  it('adds nothing for a [Place] line naming a place with no chunk', () => {
+    expect(
+      sceneCandidateTags(
+        [],
+        'The guard looks at you and waits.',
+        undefined,
+        [sweetMud],
+        'The guard looks at you and waits.\n\n[Place: The Forest of Glass]',
+      ),
     ).toEqual([]);
   });
 });

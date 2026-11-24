@@ -144,11 +144,21 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     const locations = useMemo(() => assets.filter((asset) => asset.type === 'location'), [assets]);
 
     // Shared candidate list for both the scene band and the background effect,
-    // so the two cannot drift: explicit tags, then the official context location,
-    // then a place named in the prose.
+    // so the two cannot drift: explicit tags, then the tracked place from the
+    // reply's [Place] state line, then the official context location, then a
+    // place named in the prose. The state line is read from the full reply
+    // text, not the display text — a state line after the options is cut
+    // from displayContent by parseMessageOptions.
     const candidateTags = useMemo(
-      () => sceneCandidateTags(assetTags, cleanContent, message.context?.location, locations),
-      [assetTags, cleanContent, message.context?.location, locations],
+      () =>
+        sceneCandidateTags(
+          assetTags,
+          cleanContent,
+          message.context?.location,
+          locations,
+          message.text,
+        ),
+      [assetTags, cleanContent, message.context?.location, locations, message.text],
     );
 
     // Generated art on the last message of a group; otherwise the place or scene the DM tagged.
@@ -193,9 +203,10 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
         return;
       }
 
-      // The DM rarely tags a place, but names it in the prose or sets an official
-      // context location. Those become candidates after the tags; a place with no
-      // chunk adds nothing, so the previous image stays up.
+      // The DM rarely tags a place, but names it in the prose, carries it in
+      // the [Place] state line, or sets an official context location. Those
+      // become candidates after the tags; a place with no chunk adds nothing,
+      // so the previous image stays up.
       if (candidateTags.length === 0) {
         return;
       }
