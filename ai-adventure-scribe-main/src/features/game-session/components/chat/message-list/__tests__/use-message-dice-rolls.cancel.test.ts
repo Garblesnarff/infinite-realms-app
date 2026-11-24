@@ -1,6 +1,7 @@
 /**
  * #2291: Cancel on a narrative check records the choice as one system line. Engine-owned
- * attack and initiative prompts keep #2237's dismiss behavior and write nothing.
+ * attack prompts keep #2237's dismiss behavior and write nothing; initiative dismissals
+ * now write one engine line (#115).
  */
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -59,6 +60,7 @@ describe('Cancel on a roll prompt (#2291)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(settleCombatAttackRoll).mockReturnValue(false);
+    vi.mocked(settleCombatInitiativeRoll).mockReturnValue(false);
   });
 
   it('a narrative check saves exactly one system line naming the check', async () => {
@@ -102,22 +104,70 @@ describe('Cancel on a roll prompt (#2291)', () => {
     expect(onSendMessage).not.toHaveBeenCalled();
   });
 
-  it.each([
-    ['an initiative prompt', { requestType: 'initiative', combatInitiativeRoll: true }],
-    ['a raw attack request with no engine settler', { requestType: 'attack' }],
-  ])('%s writes no line', async (_label, fields) => {
+  it.each([['a raw attack request with no engine settler', { requestType: 'attack' }]])(
+    '%s writes no line',
+    async (_label, fields) => {
+      queue({
+        id: 'engine-1',
+        status: 'pending',
+        description: 'Initiative',
+        rollConfig: { dieType: 20, count: 1, modifier: 1 },
+        ...fields,
+      });
+
+      const onSendMessage = cancel();
+
+      await Promise.resolve();
+      expect(onSendMessage).not.toHaveBeenCalled();
+    },
+  );
+
+  it('an initiative prompt the entry flow is waiting on writes one engine line saying the engine rolls it (#115)', async () => {
+    vi.mocked(settleCombatInitiativeRoll).mockReturnValue(true);
     queue({
       id: 'engine-1',
       status: 'pending',
+      requestType: 'initiative',
+      combatInitiativeRoll: true,
       description: 'Initiative',
       rollConfig: { dieType: 20, count: 1, modifier: 1 },
-      ...fields,
     });
 
     const onSendMessage = cancel();
 
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
+    expect(onSendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sender: 'system',
+        text: '⚙️ Engine: You dismissed the Initiative roll, so the engine rolls it for you.',
+        context: { intent: 'engine_roll_dismissed' },
+      }),
+    );
+    expect(settleCombatInitiativeRoll).toHaveBeenCalledWith('engine-1', null);
+  });
+
+  it('a double click on an initiative prompt writes one engine line (#115)', async () => {
+    vi.mocked(settleCombatInitiativeRoll).mockReturnValue(true);
+    queue({
+      id: 'engine-1',
+      status: 'pending',
+      requestType: 'initiative',
+      combatInitiativeRoll: true,
+      description: 'Initiative',
+      rollConfig: { dieType: 20, count: 1, modifier: 1 },
+    });
+    const onSendMessage = vi.fn().mockResolvedValue(undefined);
+    const { result } = renderHook(() => useMessageDiceRolls({ onSendMessage }));
+    const cancelOnce = result.current.handleCancelRoll;
+
+    act(() => {
+      cancelOnce();
+      cancelOnce();
+    });
+
+    await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
     await Promise.resolve();
-    expect(onSendMessage).not.toHaveBeenCalled();
+    expect(onSendMessage).toHaveBeenCalledTimes(1);
   });
 
   it('a failed save of the line does not throw out of Cancel', async () => {

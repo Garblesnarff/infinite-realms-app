@@ -32,7 +32,7 @@ import {
   subscribeEngineRollOutcome,
   type EngineRollOutcome,
 } from '@/services/combat/roll-outcome-display';
-import { declinedRollMessage } from '@/utils/dm-roll-recovery';
+import { declinedRollMessage, dismissedEngineRollMessage } from '@/utils/dm-roll-recovery';
 import { handleAsyncError } from '@/utils/error-handler';
 import { isEngineChannelRollType } from '@/utils/roll-request/engine-channel';
 
@@ -348,14 +348,25 @@ export function useMessageDiceRolls({
       cancelDiceRoll(currentRoll.id);
       // A cancelled narrative check is an answer too, so it goes in the transcript (#2291): the
       // DM's withheld reply shows, a reload does not re-open the popup, and the next DM turn
-      // sees the choice. Engine-owned attack and initiative prompts keep #2237's behavior.
+      // sees the choice. Engine-owned attack prompts keep #2237's behavior (withdrawn, no line);
+      // initiative now writes the engine line (#115).
       const engineOwned =
         attackSettled ||
         initiativeSettled ||
         checkSettled ||
         isEngineTaggedRoll(currentRoll) ||
         isEngineChannelRollType(currentRoll.requestType);
-      if (!engineOwned) {
+      if (initiativeSettled) {
+        const dismissed = dismissedEngineRollMessage();
+        Promise.resolve()
+          .then(() => onSendMessage(dismissed))
+          .catch((error: unknown) =>
+            logger.warn('[useMessageDiceRolls] dismissed engine roll line not saved', {
+              rollId: currentRoll.id,
+              error,
+            }),
+          );
+      } else if (!engineOwned) {
         const declined = declinedRollMessage(currentRoll.description, currentRoll.rollRequestId);
         Promise.resolve()
           .then(() => onSendMessage(declined))

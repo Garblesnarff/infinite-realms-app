@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   declinedRollMessage,
+  dismissedEngineRollMessage,
   latestUnansweredDmRollRequest,
   withheldDmRollReplies,
 } from '../dm-roll-recovery';
@@ -167,5 +168,30 @@ describe('withheldDmRollReplies (#2280)', () => {
       expect(withheldDmRollReplies(messages).size).toBe(0);
       expect(latestUnansweredDmRollRequest(messages)).toBeNull();
     });
+  });
+});
+
+describe('dismissedEngineRollMessage (#115)', () => {
+  const reply: ChatMessage = {
+    id: 'd1',
+    sender: 'dm',
+    text: 'Read him.',
+    rollRequests: [insight],
+  };
+  const player: ChatMessage = { id: 'p1', sender: 'player', text: 'I watch him.' };
+
+  it('reads the engine prefix, system sender, and engine_roll_dismissed intent', () => {
+    const message = dismissedEngineRollMessage();
+    expect(message.sender).toBe('system');
+    expect(message.text).toMatch(/^⚙️ Engine: /);
+    expect(message.context).toEqual({ intent: 'engine_roll_dismissed' });
+  });
+
+  it('is not an answer: a DM reply stays withheld and its request still owed', () => {
+    const messages = [player, reply, dismissedEngineRollMessage()];
+    expect(withheldDmRollReplies(messages)).toEqual(new Set([reply]));
+    expect(latestUnansweredDmRollRequest(messages)?.requests).toEqual([
+      { ...insight, rollRequestId: 'd1:roll:0' },
+    ]);
   });
 });
