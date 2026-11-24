@@ -973,6 +973,7 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
         name: 'Javelin',
         itemType: 'weapon',
         isEquipped: true,
+        // Older inventory rows copied the 5 ft placeholder before the 30/120 ft correction.
         properties: JSON.stringify({ range: { normal: 5 } }),
       });
     }
@@ -1452,6 +1453,18 @@ describeWithDb('a melee attacker closes the gap and the attack is rolled (#259)'
       { label: 'Attack with Javelin', targetIds: [f.foeId] },
     ]);
     expect((await entityAt(f, f.heroId)).movementRemaining).toBe(10);
+
+    const throwProposal = await proposeCombatAttack(
+      f.encounterId,
+      { type: 'attack', actorId: f.heroId, targetId: f.foeId, weaponId: 'javelin' },
+      f.userId,
+      'dm',
+    );
+    expect(throwProposal).toMatchObject({
+      movementOnly: false,
+      disadvantage: false,
+      disadvantageSources: [],
+    });
 
     // An already-rendered chip can still be clicked. The ordinary proposal reports
     // its movement-only result to the caller, with the original gap and budget.
