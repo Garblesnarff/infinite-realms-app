@@ -128,7 +128,7 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate, onCha
               <DiceRoller
                 dice={`1d20${initiativeModifier >= 0 ? '+' : ''}${initiativeModifier}`}
                 label={`${initiativeModifier >= 0 ? '+' : ''}${initiativeModifier}`}
-                className="justify-center [&_button]:h-10 [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-2 [&_button]:text-2xl [&_button]:font-bold [&_button]:shadow-none"
+                className="justify-center [&_button]:h-11 [&_button]:min-w-11 [&_button]:border-0 [&_button]:bg-transparent [&_button]:px-2 [&_button]:text-2xl [&_button]:font-bold [&_button]:shadow-none"
               />
               <div className="text-xs text-muted-foreground">Initiative</div>
             </div>
@@ -160,31 +160,37 @@ const MainTab: React.FC<MainTabProps> = React.memo(({ character, onUpdate, onCha
             <div className="flex flex-wrap gap-2">
               <DiceRoller
                 dice="1d20"
+                className="[&_button]:h-11 [&_button]:min-w-11"
                 modifier={character.abilityScores?.strength.modifier ?? 0}
                 label="STR"
               />
               <DiceRoller
                 dice="1d20"
+                className="[&_button]:h-11 [&_button]:min-w-11"
                 modifier={character.abilityScores?.dexterity.modifier ?? 0}
                 label="DEX"
               />
               <DiceRoller
                 dice="1d20"
+                className="[&_button]:h-11 [&_button]:min-w-11"
                 modifier={character.abilityScores?.constitution.modifier ?? 0}
                 label="CON"
               />
               <DiceRoller
                 dice="1d20"
+                className="[&_button]:h-11 [&_button]:min-w-11"
                 modifier={character.abilityScores?.intelligence.modifier ?? 0}
                 label="INT"
               />
               <DiceRoller
                 dice="1d20"
+                className="[&_button]:h-11 [&_button]:min-w-11"
                 modifier={character.abilityScores?.wisdom.modifier ?? 0}
                 label="WIS"
               />
               <DiceRoller
                 dice="1d20"
+                className="[&_button]:h-11 [&_button]:min-w-11"
                 modifier={character.abilityScores?.charisma.modifier ?? 0}
                 label="CHA"
               />

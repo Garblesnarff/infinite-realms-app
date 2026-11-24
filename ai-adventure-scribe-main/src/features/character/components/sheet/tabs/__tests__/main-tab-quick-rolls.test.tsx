@@ -96,4 +96,24 @@ describe('#228 MB-006 sheet Quick Rolls and Initiative', () => {
     const initiative = screen.getByRole('button', { name: 'Roll -1' });
     expect(initiative.textContent).toBe('-1');
   });
+
+  it('gives Initiative and Quick Roll buttons 44px touch targets', async () => {
+    const character = await loadDriven();
+    render(<MainTab character={character} onUpdate={vi.fn()} onCharacterUpdate={vi.fn()} />);
+
+    // #228 FIX round 1: the Initiative button was h-10 (40 px) and the Quick
+    // Roll buttons were size sm (h-9, 36 px) — below the 44 px floor this PR
+    // sets. The floor lives on the DiceRoller wrapper as arbitrary variants
+    // targeting the inner button, the same class-assertion approach as the
+    // roster test, via the wrapper (min-w-11, not w-11, so wider content is
+    // never clipped).
+    for (const ability of ['STR', 'DEX', 'CON', 'INT', 'WIS', 'CHA']) {
+      const button = screen.getByRole('button', { name: `Roll ${ability}` });
+      expect(button.parentElement?.className).toContain('[&_button]:h-11');
+      expect(button.parentElement?.className).toContain('[&_button]:min-w-11');
+    }
+    const initiative = screen.getByRole('button', { name: 'Roll +3' });
+    expect(initiative.parentElement?.className).toContain('[&_button]:h-11');
+    expect(initiative.parentElement?.className).toContain('[&_button]:min-w-11');
+  });
 });
