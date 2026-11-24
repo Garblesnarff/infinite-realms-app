@@ -30,7 +30,7 @@ import {
   type ShoveOutcome,
 } from './combat-check-rules.js';
 import { CombatEncounterService } from './combat-encounter-service.js';
-import { markHiddenAttacker } from './combat-turn-flags.js';
+import { isRaging, markHiddenAttacker } from './combat-turn-flags.js';
 import {
   claimTurnActionAndResolve,
   claimTurnBonusActionAndResolve,
@@ -632,6 +632,12 @@ export async function executeCombatCheck(
       ? fresh.participants.find((participant) => participant.id === targetId)
       : undefined;
     const targetProfile = target ? await checkProfileOf(target) : null;
+    if (intent.kind === 'shove' || intent.kind === 'grapple' || intent.kind === 'escape') {
+      if (actor.characterId) actorProfile.strengthAdvantage = await isRaging(encounterId, actorId);
+      if (target?.characterId && targetProfile) {
+        targetProfile.strengthAdvantage = await isRaging(encounterId, target.id);
+      }
+    }
     const die = roll ?? (() => Math.floor(Math.random() * 20) + 1);
     const actorD20 = request.d20 !== undefined ? { actorD20: request.d20 } : {};
 
