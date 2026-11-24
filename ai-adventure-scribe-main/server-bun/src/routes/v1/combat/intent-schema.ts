@@ -124,6 +124,7 @@ const checkFields = {
     t.Literal('escape'),
     t.Literal('hide'),
     t.Literal('parley'),
+    t.Literal('search'),
   ]),
   /** Which Charisma skill a parley used; ignored by the other three kinds. */
   parleySkill: t.Optional(t.Union([t.Literal('persuade'), t.Literal('intimidate')])),
@@ -177,6 +178,13 @@ const cunningActionFields = {
  * Drinking a healing consumable (#1147): the item spent, like the feature fields above
  * versioned because it mutates the sheet (quantity) and the board (HP).
  */
+const useObjectFields = {
+  type: t.Literal('use_object'),
+  actorId: participantId,
+  actionId,
+  objectName: t.Optional(t.String({ minLength: 1, maxLength: 255 })),
+};
+
 const itemFields = {
   type: t.Literal('use_item'),
   actorId: participantId,
@@ -206,6 +214,7 @@ const playerCombatIntentSchema = t.Union([
   t.Object({ ...defensiveFields, expectedVersion }),
   t.Object({ ...fighterFeatureFields, expectedVersion }),
   t.Object({ ...itemFields, expectedVersion }),
+  t.Object({ ...useObjectFields, expectedVersion }),
   t.Object({ ...flexibleCastingFields, expectedVersion }),
   t.Object({ ...cunningActionFields, expectedVersion }),
   t.Object({ ...layOnHandsFields, expectedVersion }),
@@ -227,6 +236,7 @@ const dmCombatIntentSchema = t.Union([
   t.Object({ ...defensiveFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...fighterFeatureFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...itemFields, expectedVersion: t.Optional(expectedVersion) }),
+  t.Object({ ...useObjectFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...flexibleCastingFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...cunningActionFields, expectedVersion: t.Optional(expectedVersion) }),
   t.Object({ ...layOnHandsFields, expectedVersion: t.Optional(expectedVersion) }),

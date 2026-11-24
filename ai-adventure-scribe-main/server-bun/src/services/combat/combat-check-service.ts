@@ -49,7 +49,7 @@ import { getDistance } from '../../tactical/engine.js';
 import { tacticalSizeForParticipant } from '../../tactical/participant-size.js';
 import { ConditionsService } from '../conditions-service.js';
 
-import type { CombatCheckIntent } from '../../../../shared/combat-check-intent.js';
+import type { CombatCheckIntent as DeclaredCombatCheck } from '../../../../shared/combat-check-intent.js';
 import type { EntitySize, TacticalMap } from '../../tactical/types.js';
 
 /**
@@ -62,6 +62,10 @@ const CHECK_CONDITION_DURATION = {
 };
 
 /** What the caller sent, plus the d20 the player's popup kept. */
+type CombatCheckIntent = Omit<DeclaredCombatCheck, 'kind'> & {
+  kind: DeclaredCombatCheck['kind'] | 'search';
+};
+
 export interface CombatCheckIntentRequest {
   encounterId: string;
   intent: CombatCheckIntent;
@@ -105,7 +109,7 @@ export interface CombatCheckResult {
   /** The parley DC the engine set, for a parley. */
   parleyDc?: number;
   actorRoll: ResolvedCombatCheck['actor'];
-  opposedBy: number;
+  opposedBy: number | null;
 }
 
 type CombatState = Awaited<ReturnType<typeof CombatEncounterService.getCombatState>>;
@@ -288,6 +292,10 @@ async function resolveNonContestedCheck(params: {
       dc,
       opposedByLabel: watchers.length ? `passive Perception ${dc}` : 'no watchers',
     });
+  }
+
+  if (intent.kind === 'search') {
+    return resolveDcCheck({ ...shared, kind: 'search', dc: null });
   }
 
   const target = params.target as { id?: string; disposition?: string | null } | undefined;
@@ -515,13 +523,16 @@ async function applyResolution(params: {
   });
   const targetLabel = targetId ? labelOf(state, targetId) : null;
   const actorLabel = labelOf(state, actorId);
-  const isParley = resolution.kind === 'persuade' || resolution.kind === 'intimidate';
+  const parleyDc =
+    resolution.kind === 'persuade' || resolution.kind === 'intimidate'
+      ? resolution.opposedBy
+      : null;
   const { engineLine, dmEngineLine, dmFact } = describeOutcome({
     resolution,
     consequence,
     actorLabel,
     targetLabel,
-    ...(isParley ? { parleyDc: resolution.opposedBy } : {}),
+    ...(parleyDc !== null ? { parleyDc } : {}),
     showTargetNumbers: await showTargetNumbersForSession(state.encounter.sessionId),
   });
 
@@ -556,7 +567,7 @@ async function applyResolution(params: {
     ...(targetId ? { targetId } : {}),
     ...(conditionApplied ? { conditionApplied } : {}),
     ...(conditionRemoved ? { conditionRemoved } : {}),
-    ...(isParley ? { parleyDc: resolution.opposedBy } : {}),
+    ...(parleyDc !== null ? { parleyDc } : {}),
     actorRoll: resolution.actor,
     opposedBy: resolution.opposedBy,
   };

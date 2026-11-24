@@ -75,6 +75,7 @@ export interface CampaignParams {
  */
 export interface AIResponse {
   text: string;
+  combatUtilityLine?: string;
   dmMessageId?: string;
   /**
    * #2456: the server reported a handled terminal game state instead of a DM

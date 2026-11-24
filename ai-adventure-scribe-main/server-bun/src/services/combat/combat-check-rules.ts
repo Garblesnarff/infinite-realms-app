@@ -23,7 +23,14 @@ import { abilityModifier } from './combat-rules.js';
 import { combatCheckModifierFor } from '../../../../shared/combat-check-modifier.js';
 
 /** The four checks the engine now owns, plus the two Charisma flavours of the fourth. */
-export type CombatCheckKind = 'shove' | 'grapple' | 'escape' | 'hide' | 'persuade' | 'intimidate';
+export type CombatCheckKind =
+  | 'shove'
+  | 'grapple'
+  | 'escape'
+  | 'hide'
+  | 'search'
+  | 'persuade'
+  | 'intimidate';
 
 export type CheckAbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 
@@ -68,6 +75,13 @@ export const CHECK_DEFINITIONS: Record<CombatCheckKind, CheckDefinition> = {
   },
   escape: { kind: 'escape', ability: 'str', skill: 'Athletics', label: 'Escape', contested: true },
   hide: { kind: 'hide', ability: 'dex', skill: 'Stealth', label: 'Hide', contested: false },
+  search: {
+    kind: 'search',
+    ability: 'wis',
+    skill: 'Perception',
+    label: 'Search (Wisdom / Perception)',
+    contested: false,
+  },
   persuade: {
     kind: 'persuade',
     ability: 'cha',
@@ -169,7 +183,7 @@ export interface ResolvedCombatCheck {
   actor: CheckRoll;
   target: CheckRoll | null;
   /** What the actor rolled against: the target's contest total, or a fixed DC. */
-  opposedBy: number;
+  opposedBy: number | null;
   success: boolean;
   /** The engine line, before the caller's names and the target's reaction are folded in. */
   line: string;
@@ -292,13 +306,13 @@ export function resolveEscapeCheck(params: {
  * Perception is 10 + WIS modifier, not a d20, and a social check is a straight DC test.
  */
 export function resolveDcCheck(params: {
-  kind: 'hide' | 'persuade' | 'intimidate';
+  kind: 'hide' | 'search' | 'persuade' | 'intimidate';
   actorProfile: CheckActorProfile;
   actorSkillProficient?: boolean;
   actorD20?: number;
-  dc: number;
+  dc: number | null;
   /** What the DC is, for the engine line: "passive Perception 13" or "DC 15". */
-  opposedByLabel: string;
+  opposedByLabel?: string;
   roll: DieRoller;
 }): ResolvedCombatCheck {
   const definition = CHECK_DEFINITIONS[params.kind];
@@ -309,7 +323,8 @@ export function resolveDcCheck(params: {
     modifier: actorModifier,
     total: actorD20 + actorModifier,
   };
-  const success = actor.total >= params.dc;
+  const success = params.dc === null || actor.total >= params.dc;
+  const rollLine = `${definition.label}: ${actor.total} (nat ${actorD20}${actorModifier >= 0 ? '+' : ''}${actorModifier})`;
   return {
     kind: params.kind,
     definition,
@@ -317,6 +332,9 @@ export function resolveDcCheck(params: {
     target: null,
     opposedBy: params.dc,
     success,
-    line: `${definition.label}: ${actor.total} (nat ${actorD20}${actorModifier >= 0 ? '+' : ''}${actorModifier}) vs ${params.opposedByLabel} — ${success ? 'success' : 'failure'}`,
+    line:
+      params.dc === null
+        ? rollLine
+        : `${rollLine} vs ${params.opposedByLabel ?? `DC ${params.dc}`} — ${success ? 'success' : 'failure'}`,
   };
 }

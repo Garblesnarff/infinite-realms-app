@@ -87,11 +87,8 @@ const resolutionPayload = () => JSON.parse(chatWithDM.mock.calls[0][0].message);
 
 /** #1640: the refusal line the player reads, as plain engine-block text. */
 const NOTICE_FOR: Record<string, string> = {
-  help: 'Help is not a supported action yet. Your turn is not used: choose Attack, Dodge, Dash, Disengage or Hide.',
-  ready:
-    'Ready is not a supported action yet. Your turn is not used: choose Attack, Dodge, Dash, Disengage or Hide.',
-  use_object:
-    'Use an Object is not a supported action yet. Your turn is not used: choose Attack, Dodge, Dash, Disengage or Hide.',
+  help: 'Help needs an ally to help; there is none in this fight.',
+  ready: 'Ready is not supported yet; choose another action.',
 };
 
 const engineLines = (result: any): string[] =>
@@ -118,7 +115,7 @@ describe('a declared action type the engine has no owner for', () => {
     chatWithDM.mockResolvedValue({ text: 'The moment hangs.', narrationSegments: [] });
   });
 
-  it.each(['help', 'ready', 'use_object'])(
+  it.each(['help', 'ready'])(
     'refuses a player %s visibly and keeps the turn open',
     async (actionType) => {
       const result = await run([unsupportedAction(PLAYER_ID, actionType, NPC_ID)]);
@@ -182,7 +179,7 @@ describe('a declared action type the engine has no owner for', () => {
   // After an NPC pre-flight the turn already sits with the player, so the refusal used
   // to reach them as "declared out of turn" — wrong action, wrong reason, and the
   // narration was told it was not their turn. The refusal has to name itself there too.
-  it.each(['help', 'ready', 'use_object'])(
+  it.each(['help', 'ready'])(
     'still names a player %s as unsupported after an NPC pre-flight, on the player\u2019s own turn',
     async (actionType) => {
       const result = await run([unsupportedAction(PLAYER_ID, actionType, NPC_ID)], {

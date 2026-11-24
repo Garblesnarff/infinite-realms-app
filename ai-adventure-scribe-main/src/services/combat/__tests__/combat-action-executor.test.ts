@@ -1,6 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, max-lines */
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { HELP_REFUSAL, READY_REFUSAL } from '../../../../shared/combat-object-action';
+import {
+  COMBAT_OBJECT_ACTOR_ID,
+  combatObjectIntentBody,
+} from '../../../../shared/test-fixtures/combat-object-intent';
 import {
   CUNNING_ACTOR_ID,
   cunningActionIntentBody,
@@ -644,13 +649,36 @@ describe('combat-action-executor', () => {
       );
     });
 
-    // This test used to assert `[]` and no fetch for `use_object` — it codified the bug:
-    // the empty success settled the declaration as if acted, so the turn ended and NPC
-    // turns advanced on an action the engine never ran. The executor has no engine owner
-    // for these three types, so it refuses them; `hide` is not among them (contested
-    // checks own it, #2420).
+    it('posts the shared Use an Object body', async () => {
+      vi.mocked(globalThis.fetch).mockResolvedValue(
+        Response.json({ result: { engineLine: 'Used an object.' } }),
+      );
+      await executeStructuredCombatActionWithBoundary(
+        encounterId,
+        {
+          actor_id: COMBAT_OBJECT_ACTOR_ID,
+          action_type: 'use_object',
+          target_ids: [],
+          weapon_id: null,
+          spell_id: null,
+          slot_level: null,
+          movement_feet: 0,
+        },
+        undefined,
+        undefined,
+        'typed',
+        undefined,
+        undefined,
+      );
+      const [, request] = vi.mocked(globalThis.fetch).mock.calls[0];
+      expect(JSON.parse(String(request?.body))).toEqual({
+        ...combatObjectIntentBody(COMBAT_OBJECT_ACTOR_ID),
+        dmStartedAt: expect.any(Number),
+      });
+    });
+
     it('refuses declared action types the engine has no owner for', async () => {
-      for (const actionType of ['help', 'ready', 'use_object'] as const) {
+      for (const actionType of ['help', 'ready'] as const) {
         const action = {
           actor_id: 'actor-1',
           action_type: actionType,
@@ -667,7 +695,7 @@ describe('combat-action-executor', () => {
 
         expect(refusal).toBeInstanceOf(CombatIntentRefusedError);
         expect((refusal as CombatIntentRefusedError).message).toBe(
-          'That action is not supported yet',
+          actionType === 'help' ? HELP_REFUSAL : READY_REFUSAL,
         );
         expect((refusal as CombatIntentRefusedError).details?.reason).toBe(
           ACTION_NOT_SUPPORTED_REASON,

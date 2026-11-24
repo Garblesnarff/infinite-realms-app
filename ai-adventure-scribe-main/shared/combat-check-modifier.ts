@@ -6,11 +6,12 @@ export type CombatCheckModifierKind =
   | 'grapple'
   | 'escape'
   | 'hide'
+  | 'search'
   | 'persuade'
   | 'intimidate';
 
 export interface CombatCheckModifierProfile {
-  scores: Partial<Record<'str' | 'dex' | 'cha', number>>;
+  scores: Partial<Record<'str' | 'dex' | 'wis' | 'cha', number>>;
   level: number;
   skillProficiencies?: readonly string[];
 }
@@ -22,14 +23,17 @@ const hasSkill = (profile: CombatCheckModifierProfile, skill: string): boolean =
   return (profile.skillProficiencies ?? []).some((entry) => skillName(entry) === target);
 };
 
-const scoreOf = (profile: CombatCheckModifierProfile, ability: 'str' | 'dex' | 'cha'): number => {
+const scoreOf = (
+  profile: CombatCheckModifierProfile,
+  ability: 'str' | 'dex' | 'wis' | 'cha',
+): number => {
   const score = profile.scores[ability];
   return typeof score === 'number' && Number.isFinite(score) ? score : 10;
 };
 
 const skillModifier = (
   profile: CombatCheckModifierProfile,
-  ability: 'str' | 'dex' | 'cha',
+  ability: 'str' | 'dex' | 'wis' | 'cha',
   skill: string,
 ): number =>
   abilityModifier(scoreOf(profile, ability)) +
@@ -51,6 +55,8 @@ export function combatCheckModifierFor(
       );
     case 'hide':
       return skillModifier(profile, 'dex', 'Stealth');
+    case 'search':
+      return skillModifier(profile, 'wis', 'Perception');
     case 'persuade':
       return skillModifier(profile, 'cha', 'Persuasion');
     case 'intimidate':

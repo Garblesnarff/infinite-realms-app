@@ -552,7 +552,24 @@ export function formatCombatActionParts(
       },
     ];
   }
-  if (action.action_type === 'use_item' && isFiniteNumber(value.healed)) {
+  if (action.action_type === 'use_object' && typeof value.engineLine === 'string') {
+    const line = `⚙️ Engine: ${value.engineLine}`;
+    return [
+      {
+        line,
+        card: {
+          kind: 'move',
+          side: engineCardSide(action.actor_id, roster, false),
+          line,
+          title: 'Use an Object',
+        },
+      },
+    ];
+  }
+  if (
+    (action.action_type === 'use_item' || action.action_type === 'use_object') &&
+    isFiniteNumber(value.healed)
+  ) {
     const actor = facingName(undefined, action.actor_id, roster);
     const itemName = typeof value.itemName === 'string' ? value.itemName : 'an item';
     const hpSuffix =

@@ -68,9 +68,7 @@ export type DMTargetedCombatAction = {
     | 'dash'
     | 'disengage'
     | 'dodge'
-    | 'help'
     | 'hide'
-    | 'ready'
     | 'use_object'
     /**
      * #262: a typed yield/flee reaches the engine as the same intent the inline
@@ -481,9 +479,7 @@ const targetedCombatActionSchema = {
         'dash',
         'disengage',
         'dodge',
-        'help',
         'hide',
-        'ready',
         'use_object',
         // #262: typed yield/flee are declared as combat actions, like dodge.
         'yield',

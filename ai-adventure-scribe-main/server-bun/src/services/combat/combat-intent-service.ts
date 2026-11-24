@@ -180,7 +180,7 @@ export type CombatIntent =
       type: 'check';
       actorId: string;
       targetId?: string;
-      checkKind: 'shove' | 'grapple' | 'escape' | 'hide' | 'parley';
+      checkKind: 'shove' | 'grapple' | 'escape' | 'hide' | 'parley' | 'search';
       parleySkill?: 'persuade' | 'intimidate';
       shoveOutcome?: 'prone' | 'push';
       expectedVersion: number;
@@ -206,6 +206,7 @@ export type CombatIntent =
    * Drinking a healing consumable (#1147). Costs the Action and spends the item; the
    * resolver heals first and decrements second, refusing at full health before spending.
    */
+  | { type: 'use_object'; actorId: string; objectName?: string; expectedVersion: number }
   | { type: 'use_item'; actorId: string; itemId: string; expectedVersion: number }
   /**
    * Flexible Casting (#1233), a bonus action. `convert` turns a spell slot of `slotLevel` into
@@ -284,6 +285,7 @@ const PLAYER_ORIGIN_GUARDED_TYPES = new Set([
   'rage',
   // #1147: an item spend is the player's own resource, same as a feature spend.
   'use_item',
+  'use_object',
   'flexible_casting',
   // #1635: Cunning Action is the player's own bonus action, same as a feature spend.
   'cunning_action',
@@ -369,6 +371,7 @@ export const VERSIONED_INTENT_TYPES = new Set([
   'off_hand_attack',
   'reckless_attack',
   'use_item',
+  'use_object',
   // #1233: a Flexible Casting intent spends the player's sorcery points and slot ledger.
   'flexible_casting',
   // #1554: a Lay on Hands intent draws the player's pool and the target's HP.
@@ -644,6 +647,10 @@ async function recordFeatureActionFact(
     actorSlug: engineSlugForParticipant(map, actorId, label),
     actorIsPlayer: participant?.participantType === 'player',
   });
+}
+
+function isPotionOfHealing(name: string | undefined): boolean {
+  return /^(?:potion of healing|healing potion)$/i.test(name?.trim() ?? '');
 }
 
 /**
@@ -2333,7 +2340,7 @@ export async function executeCombatIntent(
         'lay_on_hands',
         result as { message: string },
       );
-    } else if (intent.type === 'use_item') {
+    } else if (intent.type === 'use_item' || intent.type === 'use_object') {
       // #1147: drinking a healing consumable costs the Action. The claim wraps the
       // resolution, so a refusal inside (not owned, not a consumable, no healing
       // dice, none left, already at full health) refunds the Action and the turn
@@ -2344,28 +2351,38 @@ export async function executeCombatIntent(
         encounterId,
         intent.expectedVersion,
         async () => {
+          if (intent.type === 'use_object' && !isPotionOfHealing(intent.objectName)) {
+            return { engineLine: `${actor.name} used an object. No mechanical effect.` };
+          }
           if (!actorCharacterId) {
             throw new BusinessLogicError("Use item is not on this character's sheet", {
               reason: 'feature_not_on_sheet',
               featureName: 'Use item',
             });
           }
+          const itemId =
+            intent.type === 'use_item'
+              ? intent.itemId
+              : (await listHealingConsumables(actorCharacterId)).find((item) =>
+                  isPotionOfHealing(item.name),
+                )?.id;
+          if (!itemId) throw new BusinessLogicError('You are not carrying a Potion of Healing.');
           return resolveUseItem({
             characterId: actorCharacterId,
             userId,
             participantId: intent.actorId,
             encounterId,
             sessionId: encounter.sessionId,
-            itemId: intent.itemId,
+            itemId,
           });
         },
       );
-      await recordItemUseFact(
-        encounter.sessionId,
-        state,
-        intent.actorId,
-        result as ResolveUseItemResult,
-      );
+      const outcome = result as ResolveUseItemResult | { engineLine: string };
+      if ('engineLine' in outcome) {
+        await recordDmTacticalFact(encounter.sessionId, outcome.engineLine);
+      } else {
+        await recordItemUseFact(encounter.sessionId, state, intent.actorId, outcome);
+      }
     } else if (intent.type === 'death_save') {
       // The dying player's whole turn: one save, rolled by the player (or auto-rolled by the
       // prompt's timer), then the turn ends. It runs before the board moves so the result and

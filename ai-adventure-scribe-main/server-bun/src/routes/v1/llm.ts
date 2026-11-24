@@ -1037,6 +1037,20 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             : typeof combatEntry?.sessionId === 'string'
               ? combatEntry.sessionId
               : null;
+        if (dmReply?.inCombat && defenseSessionId && typeof playerInput === 'string') {
+          const { resolveCombatUtilityAction } =
+            await import('../../services/dm/combat-utility-action.js');
+          const line = await resolveCombatUtilityAction(defenseSessionId, userId, playerInput);
+          if (line) {
+            return {
+              parsed: true,
+              text: '',
+              combatUtilityLine: line,
+              provider: 'engine',
+              model: 'engine',
+            };
+          }
+        }
         let declaredDefense: DefensiveDeclaration | null = null;
         if (defenseSessionId && typeof playerInput === 'string' && !declaredAttack) {
           try {
