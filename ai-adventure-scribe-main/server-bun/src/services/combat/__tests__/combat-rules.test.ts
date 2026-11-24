@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolveAttackRules, type WeaponRuleProfile } from '../combat-rules.js';
+import { resolveAttackRules, weaponAtDistance, type WeaponRuleProfile } from '../combat-rules.js';
 
 const longsword: WeaponRuleProfile = {
   id: 'longsword',
@@ -277,5 +277,104 @@ describe('one AC whatever the weapon (#1086 (e))', () => {
         geometry: { distanceFeet: 5, hasLineOfSight: true, cover: 2 },
       }).targetAc,
     ).toBe(17);
+  });
+});
+
+describe('#1642 thrown melee weapons', () => {
+  const dagger: WeaponRuleProfile = {
+    id: 'dagger',
+    name: 'Dagger',
+    damageDice: '1d4',
+    damageType: 'piercing',
+    normalRange: 20,
+    longRange: 60,
+    magicBonus: 0,
+    finesse: true,
+    ranged: true,
+    proficient: true,
+    meleeWeapon: true,
+  };
+  const handaxe: WeaponRuleProfile = {
+    id: 'handaxe',
+    name: 'Handaxe',
+    damageDice: '1d6',
+    damageType: 'slashing',
+    normalRange: 20,
+    longRange: 60,
+    magicBonus: 0,
+    finesse: false,
+    ranged: true,
+    proficient: true,
+    meleeWeapon: true,
+  };
+
+  test('finesse dagger uses dexterity at 5 ft and 20 ft', () => {
+    for (const d of [5, 20]) {
+      const r = resolveAttackRules({
+        strength: 10,
+        dexterity: 18,
+        level: 1,
+        baseTargetAc: 12,
+        weapon: dagger,
+        geometry: { distanceFeet: d, hasLineOfSight: true, cover: 0 },
+        attackerReckless: false,
+      });
+      expect(r.ability).toBe('dexterity');
+    }
+  });
+
+  test('handaxe uses strength at 20 ft', () => {
+    const r = resolveAttackRules({
+      strength: 10,
+      dexterity: 18,
+      level: 1,
+      baseTargetAc: 12,
+      weapon: handaxe,
+      geometry: { distanceFeet: 20, hasLineOfSight: true, cover: 0 },
+    });
+    expect(r.ability).toBe('strength');
+  });
+
+  test('neither has ranged-within-5-ft disadvantage at 5 ft', () => {
+    for (const w of [dagger, handaxe]) {
+      const r = resolveAttackRules({
+        strength: 10,
+        dexterity: 18,
+        level: 1,
+        baseTargetAc: 12,
+        weapon: w,
+        geometry: { distanceFeet: 5, hasLineOfSight: true, cover: 0 },
+      });
+      expect(r.disadvantageSources).not.toContain('ranged attack with a hostile within 5 ft');
+    }
+  });
+
+  test('Reckless advantage at 5 ft but not 20 ft for handaxe', () => {
+    const near = resolveAttackRules({
+      strength: 10,
+      dexterity: 18,
+      level: 1,
+      baseTargetAc: 12,
+      weapon: handaxe,
+      geometry: { distanceFeet: 5, hasLineOfSight: true, cover: 0 },
+      attackerReckless: true,
+    });
+    expect(near.advantageSources).toContain('Reckless Attack');
+    const far = resolveAttackRules({
+      strength: 10,
+      dexterity: 18,
+      level: 1,
+      baseTargetAc: 12,
+      weapon: handaxe,
+      geometry: { distanceFeet: 20, hasLineOfSight: true, cover: 0 },
+      attackerReckless: true,
+    });
+    expect(far.advantageSources).not.toContain('Reckless Attack');
+  });
+
+  test('no geometry: dagger is melee (ranged false, normalRange 5)', () => {
+    const adjusted = weaponAtDistance(dagger, undefined);
+    expect(adjusted.ranged).toBe(false);
+    expect(adjusted.normalRange).toBe(5);
   });
 });

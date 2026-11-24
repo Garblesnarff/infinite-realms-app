@@ -27,9 +27,9 @@ export function getWeaponDamageText(
 
   const strScore = character.abilityScores?.strength?.score ?? 10;
   const dexScore = character.abilityScores?.dexterity?.score ?? 10;
-  const ranged = (weapon.range?.normal ?? 5) > 5;
-  const useDex = ranged || (weapon.weaponProperties?.finesse && dexScore > strScore);
   const meleeWeapon = !(weapon.subcategory ?? '').toLowerCase().includes('ranged');
+  const ranged = (weapon.range?.normal ?? 5) > 5 && !meleeWeapon;
+  const useDex = ranged || (weapon.weaponProperties?.finesse && dexScore > strScore);
   // Count equipped weapon rows, not distinct catalog ids. Two Longswords share one id
   // and still occupy both hands. A stowed weapon is not wielded.
   const equippedWeaponCount = (character.inventory ?? []).filter((row) => {

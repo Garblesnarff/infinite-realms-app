@@ -109,6 +109,16 @@ function parseEquipmentProperties(properties: string | null): Record<string, unk
   }
 }
 
+// 2014 SRD thrown melee weapons whose catalog range was once a 5 ft placeholder.
+const THROWN_PLACEHOLDER_IDS = new Set([
+  'javelin',
+  'dagger',
+  'handaxe',
+  'light-hammer',
+  'spear',
+  'trident',
+]);
+
 function candidateToProfile(
   candidate: EquippedWeaponCandidate,
   owner: EquippedWeaponOwner | undefined,
@@ -127,11 +137,14 @@ function candidateToProfile(
     : [];
   const damage = (candidate.properties.damage ?? {}) as Record<string, unknown>;
   const range = (candidate.properties.range ?? {}) as Record<string, unknown>;
-  // Older Javelin inventory inherited a melee-only placeholder from the catalog.
-  const legacyJavelinRange =
-    catalog?.id === 'javelin' && Number(range.normal) === 5 && range.long == null;
+  // Older thrown-melee inventory inherited a 5 ft placeholder range from the catalog.
+  const legacyThrownRange =
+    catalog?.id !== undefined &&
+    THROWN_PLACEHOLDER_IDS.has(catalog.id) &&
+    Number(range.normal) === 5 &&
+    range.long == null;
   const normalRange = Number(
-    (legacyJavelinRange ? undefined : range.normal) ?? catalog?.range?.normal ?? 5,
+    (legacyThrownRange ? undefined : range.normal) ?? catalog?.range?.normal ?? 5,
   );
   const rangedWeapon = catalogWeaponIsRanged(candidate.name);
   return {

@@ -28,6 +28,10 @@ describe('getWeaponDamageText', () => {
     expect(getWeaponDamageText(withScores(10, 16), 'Longbow')).toBe('1d8+3 piercing');
   });
 
+  it('#1642 handaxe keeps strength damage bonus', () => {
+    expect(getWeaponDamageText(withScores(16, 10), 'Handaxe')).toBe('1d6+3 slashing');
+  });
+
   it('uses the better of strength and dexterity for a finesse weapon', () => {
     expect(getWeaponDamageText(withScores(10, 18), 'Rapier')).toBe('1d8+4 piercing');
     expect(getWeaponDamageText(withScores(16, 10), 'Rapier')).toBe('1d8+3 piercing');

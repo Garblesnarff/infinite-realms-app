@@ -175,3 +175,32 @@ describe('suffix-first sheet names (#260)', () => {
     expect(result.weaponId).toBe('inv-hand-crossbow');
   });
 });
+
+describe('thrown-range grounding (#1642)', () => {
+  test('an unequipped dagger substitutes the melee weapon, not the bow', () => {
+    const longsword = weapon({ id: 'inv-longsword', name: 'Longsword' });
+    const shortbow = weapon({
+      id: 'inv-shortbow',
+      name: 'Shortbow',
+      normalRange: 80,
+      longRange: 320,
+      ranged: true,
+    });
+    const dagger = weapon({
+      id: 'inv-dagger',
+      name: 'Dagger',
+      normalRange: 20,
+      longRange: 60,
+      ranged: true,
+      meleeWeapon: true,
+    });
+    const result = groundRequestedWeapon(
+      'dagger',
+      [longsword, shortbow],
+      [longsword, shortbow, dagger],
+    );
+    expect(result.weapon.id).toBe('inv-longsword');
+    expect(result.weapon.ranged).toBe(false);
+    expect(result.notEquipped).toBe(true);
+  });
+});

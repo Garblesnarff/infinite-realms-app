@@ -18,7 +18,7 @@
 import { logAttackResolution, participantSlug } from './attack-telemetry.js';
 import { appliesBlessDie } from './bless-rider.js';
 import { mookGroupAttackBonus } from './boss-moves.js';
-import { resolveAttackRules, type WeaponRuleProfile } from './combat-rules.js';
+import { resolveAttackRules, weaponAtDistance, type WeaponRuleProfile } from './combat-rules.js';
 import {
   activeAlliesOf,
   claimSneakAttack,
@@ -720,6 +720,8 @@ export class CombatAttackService {
             cover: getCover(tacticalMap, attackerId, targetId),
           }
         : undefined;
+    const weaponInUse = weaponAtDistance(weapon, geometry?.distanceFeet);
+    const attackTypeInUse = weaponInUse !== weapon ? 'melee' : input.attackType;
     const baseRules = resolveAttackRules({
       strength: attackerProfile.scores.str ?? 10,
       dexterity: attackerProfile.scores.dex ?? 10,
@@ -746,7 +748,8 @@ export class CombatAttackService {
       const refusal = recklessAttackRefusal({
         barbarianLevel,
         firstAttack: !input.isReaction && !(await hasAttackedThisTurn(encounterId, attackerId)),
-        meleeWeapon: weapon.meleeWeapon === true && !weapon.ranged && input.attackType === 'melee',
+        meleeWeapon:
+          weaponInUse.meleeWeapon === true && !weaponInUse.ranged && attackTypeInUse === 'melee',
         strengthAttack: baseRules.ability === 'strength',
       });
       if (refusal) throw new BusinessLogicError(refusal, { reason: 'reckless_attack_refused' });
@@ -851,6 +854,9 @@ export class CombatAttackService {
       attackerRaging,
     } = await this.prepareAttack(encounterId, input, userId);
 
+    const weaponInUse = weaponAtDistance(weapon, geometry?.distanceFeet);
+    const attackTypeInUse = weaponInUse !== weapon ? 'melee' : input.attackType;
+
     if (!rules.legal) {
       if (rules.refusal === 'out_of_range') {
         // #1651: say who is too far, how far it is, and the reach, in the same words the spell path uses.
@@ -870,7 +876,7 @@ export class CombatAttackService {
     if (input.divineSmiteSlotLevel !== undefined) {
       const slotLevel = input.divineSmiteSlotLevel;
       const attackerIsPaladin = !!attackerClassName?.toLowerCase().includes('paladin');
-      const isMeleeWeaponAttack = input.attackType === 'melee' && !weapon.ranged;
+      const isMeleeWeaponAttack = attackTypeInUse === 'melee' && !weaponInUse.ranged;
       // The slot row is read only once the Paladin and melee checks pass, so a refused attack
       // writes no row. It is the row the spend reads, derived from class progression when
       // missing (#2459), so the check and useSpellSlot never disagree on where a slot lives.
@@ -989,7 +995,7 @@ export class CombatAttackService {
       const autoCritOnDowned =
         hitCheck.hit &&
         targetConditions.includes('unconscious') &&
-        !weapon.ranged &&
+        !weaponInUse.ranged &&
         (geometry?.distanceFeet ?? 5) <= 5;
 
       // Everything the telemetry line knows before damage is rolled. Both branches below
@@ -1070,7 +1076,7 @@ export class CombatAttackService {
         targetConditions,
         // Outside 5 ft (or ranged) there is no automatic critical: `undefined` would read as
         // "assume melee" and make every ranged hit on a downed creature cost two failures.
-        !weapon.ranged && (geometry?.distanceFeet ?? 5) <= 5 ? 5 : Number.POSITIVE_INFINITY,
+        !weaponInUse.ranged && (geometry?.distanceFeet ?? 5) <= 5 ? 5 : Number.POSITIVE_INFINITY,
       );
       const isCrit = hitCheck.isCritical || autoCrit;
       // When the die is not a natural 20 the line says what made the hit critical (#2640).

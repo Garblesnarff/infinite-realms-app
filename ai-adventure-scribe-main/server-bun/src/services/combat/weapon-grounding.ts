@@ -16,6 +16,7 @@
  * @module server/services/combat/weapon-grounding
  */
 import {
+  catalogWeaponIsRanged,
   findCatalogWeapon,
   isUnarmedWeaponClaim,
   normalizeWeaponName,
@@ -105,11 +106,13 @@ export function groundRequestedWeapon(
   }
 
   const catalog = findCatalogWeapon(requestedWeaponId);
-  const wantsRanged = catalog ? Number(catalog.range?.normal ?? 5) > 5 : undefined;
+  const wantsRanged = catalog ? catalogWeaponIsRanged(requestedWeaponId) : undefined;
   const byType =
     wantsRanged === undefined
       ? undefined
-      : equipped.find((profile) => profile.ranged === wantsRanged);
+      : equipped.find(
+          (profile) => (profile.ranged && profile.meleeWeapon !== true) === wantsRanged,
+        );
   const substitute = byType ?? fallback;
   // #260: the requested weapon is on the sheet but not equipped. The substitute is
   // returned for the approach geometry, but a player-sourced intent must be refused

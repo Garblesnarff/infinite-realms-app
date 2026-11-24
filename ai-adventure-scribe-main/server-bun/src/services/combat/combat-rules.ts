@@ -133,7 +133,9 @@ const includes = (conditions: string[], names: string[]): boolean =>
 
 /** Pure D&D 5E attack validation/calculation used by every server action source. */
 export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution {
-  const { weapon, geometry } = input;
+  const { geometry } = input;
+  const weapon = weaponAtDistance(input.weapon, geometry?.distanceFeet);
+  const ruled = { ...input, weapon };
   const ability =
     weapon.ranged && weapon.meleeWeapon !== true
       ? 'dexterity'
@@ -146,13 +148,13 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
   const targetConditions = input.targetConditions ?? [];
 
   if (geometry && !geometry.hasLineOfSight) {
-    return illegal('no_line_of_sight', ability, modifier, proficiency, input);
+    return illegal('no_line_of_sight', ability, modifier, proficiency, ruled);
   }
   if (geometry?.cover === 3) {
-    return illegal('total_cover', ability, modifier, proficiency, input);
+    return illegal('total_cover', ability, modifier, proficiency, ruled);
   }
   if (geometry && geometry.distanceFeet > (weapon.longRange ?? weapon.normalRange)) {
-    return illegal('out_of_range', ability, modifier, proficiency, input);
+    return illegal('out_of_range', ability, modifier, proficiency, ruled);
   }
 
   const advantageSources: string[] = [];
@@ -187,7 +189,7 @@ export function resolveAttackRules(input: AttackRuleInput): AttackRuleResolution
   const disadvantage = hasDisadvantage && !hasAdvantage;
   const coverBonus = geometry?.cover === 1 ? 2 : geometry?.cover === 2 ? 5 : 0;
   const { attackBonus, damageBonus, ragingDamage } = styleBonuses(
-    input,
+    ruled,
     modifier,
     proficiency,
     ability,
@@ -279,4 +281,24 @@ function illegal(
     advantageSources: [],
     disadvantageSources: [],
   };
+}
+
+/**
+ * #1642: a thrown melee weapon (meleeWeapon true and ranged true) is swung within 5 ft and
+ * thrown beyond. Within 5 ft, or with no distance to measure, it is the melee weapon it
+ * always was. A profile flagged ranged with no throw range (normalRange <= 5) is left
+ * exactly as given.
+ */
+export function weaponAtDistance<
+  W extends {
+    ranged: boolean;
+    normalRange: number;
+    longRange?: number;
+    meleeWeapon?: boolean;
+  },
+>(weapon: W, distanceFeet: number | undefined): W {
+  if (weapon.meleeWeapon !== true || !weapon.ranged) return weapon;
+  if (weapon.normalRange <= 5) return weapon;
+  if (distanceFeet !== undefined && distanceFeet > 5) return weapon;
+  return { ...weapon, ranged: false, normalRange: 5, longRange: undefined };
 }
