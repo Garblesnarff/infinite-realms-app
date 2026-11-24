@@ -14,7 +14,7 @@
  * combatant `applyCombatEntryGate` names. The confirm player is the
  * `headlessEntryEnterBody.player` shape (`buildCombatEntryPlayer`).
  */
-import { afterAll, beforeAll, beforeEach, expect, mock, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, expect, mock, spyOn, test } from 'bun:test';
 import { asc, eq, like, sql } from 'drizzle-orm';
 
 import {
@@ -23,6 +23,8 @@ import {
   characterStats,
   characters,
   combatEncounters,
+  combatParticipants,
+  combatParticipantStatus,
   dialogueHistory,
   gameSessions,
   characterEquipment,
@@ -502,6 +504,98 @@ describeWithDb('pending combat entry seats, dedupes, and is polled (#913)', () =
       });
     },
   );
+
+  test('#1722: a four-damage punch and javelin leave a fourteen-HP foe at six', async () => {
+    await database
+      .update(characterStats)
+      .set({ strength: 16 })
+      .where(eq(characterStats.characterId, characterId));
+    await generate('I punch Dutch Pellam in the jaw.');
+    const entry = await enter(sessionId, 20);
+    expect(entry.status).toBe(201);
+    const { encounter, first_action: first } = entry.payload as {
+      encounter: { id: string };
+      first_action: {
+        combat_action: { actor_id: string; target_ids: string[]; weapon_id: string };
+      };
+    };
+    const {
+      actor_id: actorId,
+      target_ids: [targetId],
+      weapon_id: unarmed,
+    } = first.combat_action;
+    await database
+      .update(combatParticipants)
+      .set({ maxHp: 14 })
+      .where(eq(combatParticipants.id, targetId));
+    await database
+      .update(combatParticipantStatus)
+      .set({ maxHp: 14, currentHp: 14 })
+      .where(eq(combatParticipantStatus.participantId, targetId));
+
+    const postAttack = (weaponId: string, origin: 'typed' | 'action_bar', d20?: number) =>
+      app!.handle(
+        new Request(`http://localhost/v1/combat/${encounter.id}/intent`, {
+          method: 'POST',
+          headers: { authorization: 'Bearer test', 'content-type': 'application/json' },
+          body: JSON.stringify({
+            source: 'dm',
+            origin,
+            phase: d20 === undefined ? 'propose' : 'commit',
+            intent: { type: 'attack', actorId, targetId, weaponId, d20 },
+          }),
+        }),
+      );
+    const commit = async (weaponId: string, origin: 'typed' | 'action_bar', d20: number) => {
+      const response = await postAttack(weaponId, origin, d20);
+      expect(response.status).toBe(200);
+      return (await response.json()).result;
+    };
+    const readHp = async () => {
+      const [status] = await database
+        .select()
+        .from(combatParticipantStatus)
+        .where(eq(combatParticipantStatus.participantId, targetId));
+      return status.currentHp;
+    };
+
+    expect(await commit(unarmed, 'typed', 19)).toMatchObject({
+      hit: true,
+      finalDamage: 4,
+      targetNewHp: 10,
+    });
+    expect(await readHp()).toBe(10);
+
+    // Isolate the next player hit from the foe's AI turns.
+    await database
+      .update(combatParticipants)
+      .set({ actionUsed: false })
+      .where(eq(combatParticipants.id, actorId));
+    await database
+      .update(combatEncounters)
+      .set({ currentRound: 5 })
+      .where(eq(combatEncounters.id, encounter.id));
+
+    expect((await postAttack('javelin', 'action_bar')).status).toBe(200);
+    expect(await readHp()).toBe(10);
+
+    const random = spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      expect(await commit('javelin', 'action_bar', 14)).toMatchObject({
+        hit: true,
+        finalDamage: 4,
+        targetNewHp: 6,
+      });
+    } finally {
+      random.mockRestore();
+    }
+    expect(await readHp()).toBe(6);
+    const [stored] = await database
+      .select()
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounter.id));
+    expect(stored).toMatchObject({ status: 'active', endedReason: null });
+  });
 
   test('a held fight-opening reply is written once, before the combat rows, on confirm (#1390)', async () => {
     // This session is never used by the preceding seat test, so a late write from it cannot

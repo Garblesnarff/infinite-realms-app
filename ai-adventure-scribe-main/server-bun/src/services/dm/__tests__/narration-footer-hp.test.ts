@@ -93,3 +93,23 @@ describe('DM footer HP matches the engine or is absent (#1289)', () => {
     }
   });
 });
+
+describe('DM damage HP asides (#1722)', () => {
+  const damage = 'Dutch Pellam takes 4 damage';
+  const aside = ' (now 10 / 14)';
+  const continuation = '. He steadies his sword.';
+
+  test('drops the guessed HP while keeping the damage and story', () => {
+    expect(shown(damage + aside + continuation)).toBe(damage + continuation);
+    expect(shown(damage + ' (now with a bruise)' + continuation)).toBe(
+      damage + ' (now with a bruise)' + continuation,
+    );
+  });
+
+  test('holds every partial HP suffix and resumes streaming the story', () => {
+    for (let end = 1; end <= aside.length; end += 1) {
+      expect(normalizePartialNarration(damage + aside.slice(0, end)).trimEnd()).toBe(damage);
+    }
+    expect(normalizePartialNarration(damage + aside + continuation)).toBe(damage + continuation);
+  });
+});
