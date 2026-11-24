@@ -33,6 +33,7 @@ type ExpectedSeededWeapon = {
 };
 
 /** Literal weapon kits from the 41 seeded premade rows (36 from seed migrations + 5 hardcoded academy); this must not be derived from the resolver. */
+// #1642: thrown melee weapons carry their 2014 SRD thrown range (20/60), so at 50 ft they are a long-range throw.
 const EXPECTED_SEEDED_WEAPONS: Array<{
   campaign: string;
   templateKey: string;
@@ -95,7 +96,7 @@ const EXPECTED_SEEDED_WEAPONS: Array<{
     templateKey: 'the-reveler',
     weapons: [
       { name: 'Greataxe', ranged: false, reachFeet: 5 },
-      { name: 'Handaxe', ranged: false, reachFeet: 5 },
+      { name: 'Handaxe', ranged: true, normalRange: 20, longRange: 60 },
     ],
   },
   {
@@ -145,7 +146,7 @@ const EXPECTED_SEEDED_WEAPONS: Array<{
     templateKey: 'the-cardsharp',
     weapons: [
       { name: 'Rapier', ranged: false, reachFeet: 5 },
-      { name: 'Dagger', ranged: false, reachFeet: 5 },
+      { name: 'Dagger', ranged: true, normalRange: 20, longRange: 60 },
     ],
   },
   {
@@ -177,7 +178,7 @@ const EXPECTED_SEEDED_WEAPONS: Array<{
     templateKey: 'the-luck-scholar',
     weapons: [
       { name: 'Quarterstaff', ranged: false, reachFeet: 5 },
-      { name: 'Dagger', ranged: false, reachFeet: 5 },
+      { name: 'Dagger', ranged: true, normalRange: 20, longRange: 60 },
     ],
   },
   {
@@ -185,7 +186,7 @@ const EXPECTED_SEEDED_WEAPONS: Array<{
     templateKey: 'the-rimrunner',
     weapons: [
       { name: 'Shortsword', ranged: false, reachFeet: 5 },
-      { name: 'Dagger', ranged: false, reachFeet: 5 },
+      { name: 'Dagger', ranged: true, normalRange: 20, longRange: 60 },
     ],
   },
   {
@@ -245,7 +246,7 @@ const EXPECTED_SEEDED_WEAPONS: Array<{
     templateKey: 'the-echo',
     weapons: [
       { name: 'Rapier', ranged: false, reachFeet: 5 },
-      { name: 'Dagger', ranged: false, reachFeet: 5 },
+      { name: 'Dagger', ranged: true, normalRange: 20, longRange: 60 },
     ],
   },
   {
@@ -253,14 +254,14 @@ const EXPECTED_SEEDED_WEAPONS: Array<{
     templateKey: 'the-apprentice',
     weapons: [
       { name: 'Quarterstaff', ranged: false, reachFeet: 5 },
-      { name: 'Dagger', ranged: false, reachFeet: 5 },
+      { name: 'Dagger', ranged: true, normalRange: 20, longRange: 60 },
     ],
   },
   {
     campaign: 'academy-of-arcane-gastronomy',
     templateKey: 'the-kitchen-hand',
     weapons: [
-      { name: 'Dagger', ranged: false, reachFeet: 5 },
+      { name: 'Dagger', ranged: true, normalRange: 20, longRange: 60 },
       { name: 'Shortbow', ranged: true, normalRange: 80, longRange: 320 },
     ],
   },
@@ -268,7 +269,7 @@ const EXPECTED_SEEDED_WEAPONS: Array<{
     campaign: 'academy-of-arcane-gastronomy',
     templateKey: 'the-gourmand',
     weapons: [
-      { name: 'Handaxe', ranged: false, reachFeet: 5 },
+      { name: 'Handaxe', ranged: true, normalRange: 20, longRange: 60 },
       { name: 'Longsword', ranged: false, reachFeet: 5 },
     ],
   },
@@ -277,14 +278,14 @@ const EXPECTED_SEEDED_WEAPONS: Array<{
     templateKey: 'the-herbalist',
     weapons: [
       { name: 'Scimitar', ranged: false, reachFeet: 5 },
-      { name: 'Dagger', ranged: false, reachFeet: 5 },
+      { name: 'Dagger', ranged: true, normalRange: 20, longRange: 60 },
     ],
   },
   {
     campaign: 'academy-of-arcane-gastronomy',
     templateKey: 'the-sous-chef',
     weapons: [
-      { name: 'Dagger', ranged: false, reachFeet: 5 },
+      { name: 'Dagger', ranged: true, normalRange: 20, longRange: 60 },
       { name: 'Crossbow, light', ranged: true, normalRange: 80, longRange: 320 },
     ],
   },

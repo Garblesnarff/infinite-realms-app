@@ -286,7 +286,8 @@ function illegal(
 /**
  * #1642: a thrown melee weapon (meleeWeapon true and ranged true) is swung within 5 ft and
  * thrown beyond. Within 5 ft, or with no distance to measure, it is the melee weapon it
- * always was.
+ * always was. A profile flagged ranged with no throw range (normalRange <= 5) is left
+ * exactly as given.
  */
 export function weaponAtDistance<
   W extends {
@@ -297,6 +298,7 @@ export function weaponAtDistance<
   },
 >(weapon: W, distanceFeet: number | undefined): W {
   if (weapon.meleeWeapon !== true || !weapon.ranged) return weapon;
+  if (weapon.normalRange <= 5) return weapon;
   if (distanceFeet !== undefined && distanceFeet > 5) return weapon;
   return { ...weapon, ranged: false, normalRange: 5, longRange: undefined };
 }
