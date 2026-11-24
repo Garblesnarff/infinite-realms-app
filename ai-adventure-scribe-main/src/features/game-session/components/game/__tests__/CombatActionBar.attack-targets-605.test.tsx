@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -116,6 +116,8 @@ const legalPayload = {
   ],
 };
 
+let currentLegalPayload = legalPayload;
+
 const combatHolder = vi.hoisted(() => ({
   current: undefined as
     | {
@@ -174,6 +176,7 @@ const defaultProps = {
 
 beforeEach(() => {
   recorded.length = 0;
+  currentLegalPayload = legalPayload;
   combatHolder.current = undefined;
   pack.inventory = [];
   pack.cantrips = [];
@@ -202,7 +205,7 @@ beforeEach(() => {
       }
       recorded.push({ url, method, body });
       if (url.includes('/legal-actions'))
-        return { ok: true, status: 200, json: async () => legalPayload } as Response;
+        return { ok: true, status: 200, json: async () => currentLegalPayload } as Response;
       if (url.includes('/tactical-map'))
         return {
           ok: true,
@@ -239,6 +242,46 @@ describe('CombatActionBar attack targets (#605)', () => {
       'Attack with Longsword → Slug-Thing 2',
       'Attack with Longsword → Slug-Thing 3',
     ]);
+  });
+
+  it('replaces same-turn melee options when the board moves out of reach (#1642)', async () => {
+    combatHolder.current = {
+      state: { isInCombat: true, activeEncounter: buildEncounter() },
+      refreshCombatState: vi.fn(),
+    };
+    render(<CombatActionBarLive {...defaultProps} />);
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    const trigger = await screen.findByRole('button', { name: /Other weapons and targets/i });
+    await waitFor(() => expect(trigger).not.toBeDisabled());
+
+    currentLegalPayload = {
+      ...legalPayload,
+      actions: [
+        legalPayload.actions[0]!,
+        {
+          type: 'attack',
+          weaponId: 'javelin',
+          label: 'Attack with Javelin',
+          targetIds: ['slug-1'],
+        },
+      ],
+    };
+    act(() => {
+      window.dispatchEvent(
+        new CustomEvent('tactical-map-delta', {
+          detail: { type: 'entity_moved', entityId: 'pc-1', movementRemaining: 10 },
+        }),
+      );
+    });
+    await waitFor(() =>
+      expect(recorded.filter(({ url }) => url.includes('/legal-actions'))).toHaveLength(2),
+    );
+    await waitFor(() => expect(trigger).not.toBeDisabled());
+    await user.click(trigger);
+    expect(
+      await screen.findByRole('menuitem', { name: 'Attack with Javelin → Slug-Thing 1' }),
+    ).toBeVisible();
+    expect(screen.queryByRole('menuitem', { name: /Longsword/ })).toBeNull();
   });
 
   it.each([

@@ -127,7 +127,12 @@ function candidateToProfile(
     : [];
   const damage = (candidate.properties.damage ?? {}) as Record<string, unknown>;
   const range = (candidate.properties.range ?? {}) as Record<string, unknown>;
-  const normalRange = Number(range.normal ?? catalog?.range?.normal ?? 5);
+  // Older Javelin inventory inherited a melee-only placeholder from the catalog.
+  const legacyJavelinRange =
+    catalog?.id === 'javelin' && Number(range.normal) === 5 && range.long == null;
+  const normalRange = Number(
+    (legacyJavelinRange ? undefined : range.normal) ?? catalog?.range?.normal ?? 5,
+  );
   const rangedWeapon = catalogWeaponIsRanged(candidate.name);
   return {
     id: candidate.id,

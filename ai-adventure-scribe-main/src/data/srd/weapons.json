@@ -467,7 +467,8 @@
     },
     "attackBonus": 0,
     "range": {
-      "normal": 5
+      "normal": 30,
+      "long": 120
     },
     "weaponProperties": {
       "thrown": true

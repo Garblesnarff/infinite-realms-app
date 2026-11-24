@@ -83,9 +83,12 @@ export function getWeaponAttackBonus(
   const dexScore = character.abilityScores?.dexterity?.score ?? 10;
   const strMod = abilityMod(strScore);
   const dexMod = abilityMod(dexScore);
-  const ranged = (weapon.range?.normal ?? 5) > 5;
+  const meleeWeapon = (weapon.subcategory ?? '').toLowerCase().includes('melee');
+  const usesRangedAbility = (weapon.range?.normal ?? 5) > 5 && !meleeWeapon;
   const ability =
-    ranged || (weapon.weaponProperties?.finesse && dexScore > strScore) ? 'dexterity' : 'strength';
+    usesRangedAbility || (weapon.weaponProperties?.finesse && dexScore > strScore)
+      ? 'dexterity'
+      : 'strength';
   const proficient = isProficient(character, weapon);
   // Archery is a ranged weapon, not every attack whose range exceeds 5 feet.
   // A javelin is thrown melee and stays on the ability bonus alone.
