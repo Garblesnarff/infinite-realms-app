@@ -184,9 +184,14 @@ const db: any = {
   }),
   transaction: async (callback: (tx: any) => Promise<unknown>) => callback(db),
 };
-mock.module('../npc-engine-row.js', () => ({ writeNpcEngineRow: async () => [], readNpcEngineResult: async () => undefined }));
+mock.module('../npc-engine-row.js', () => ({
+  writeNpcEngineRow: async () => [],
+  readNpcEngineResult: async () => undefined,
+}));
 mock.module('../../../../../db/client', () => ({
-  withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(), db }));
+  withNpcActionTransaction: async (_id: string, work: () => Promise<unknown>) => work(),
+  db,
+}));
 
 async function readState() {
   const [storedEncounter] = await db.select().from(combatEncounters);
@@ -351,8 +356,13 @@ async function seedCheckEncounter(extra: Record<string, unknown>[] = []): Promis
   // would disagree with a reader that takes the highest — which is what makes the two-hostile
   // hide test able to tell the two rules apart.
   rows.set(getTableName(combatParticipants), structuredClone([...extra, scholar, golem]));
+  // #1635: a grapple or a shove needs the target within 5 ft (2014 SRD), so the check fixtures stand the golem next to the scholar; the move tests keep buildMap's distance.
+  const checkMap = buildMap();
+  const golemEntity = checkMap.entities.find((entity) => entity.id === golem.id)!;
+  golemEntity.x = 2;
+  golemEntity.y = 1;
   rows.set(getTableName(tacticalMaps), [
-    { id: 'map-row-1', sessionId: encounter.sessionId, active: true, state: buildMap() },
+    { id: 'map-row-1', sessionId: encounter.sessionId, active: true, state: checkMap },
   ]);
   appliedConditions.length = 0;
   removedConditions.length = 0;
@@ -1182,6 +1192,60 @@ describe('mid-combat ability checks (#2420)', () => {
       expect(lastResult.dmEngineLine).toContain('vs DC 15');
     });
   });
+
+  test('a grapple at a target out of reach is refused in words and leaves the action unspent (#1635)', async () => {
+    const version = await seedCheckEncounter();
+    const map = (await loadActiveTacticalMap(encounter.sessionId))!;
+    map.entities.find((entity) => entity.id === golem.id)!.x = 11;
+    map.entities.find((entity) => entity.id === golem.id)!.y = 7;
+    await saveTacticalMap(map);
+
+    await expect(
+      executeCombatIntent(
+        encounter.id,
+        {
+          type: 'check',
+          actorId: scholar.id,
+          expectedVersion: version,
+          checkKind: 'grapple',
+          targetId: golem.id,
+          d20: 11,
+        } as never,
+        'user-1',
+        'dm',
+        undefined,
+        'typed',
+      ),
+    ).rejects.toThrow('is out of reach (50 ft); grapple and shove need a target within 5 ft.');
+
+    expect(
+      (await readState()).participants.find((row: Row) => row.id === scholar.id).actionUsed,
+    ).toBe(false);
+  });
+
+  test('with no tactical map the reach rule refuses nothing (#1635)', async () => {
+    const version = await seedCheckEncounter();
+    rows.set(getTableName(tacticalMaps), []);
+
+    await withRolledFaces([8], async () => {
+      const result = await executeCombatIntent(
+        encounter.id,
+        {
+          type: 'check',
+          actorId: scholar.id,
+          expectedVersion: version,
+          checkKind: 'grapple',
+          targetId: golem.id,
+          d20: 11,
+        } as never,
+        'user-1',
+        'dm',
+        undefined,
+        'typed',
+      );
+      expect((result as { success: boolean }).success).toBe(true);
+    });
+  });
 });
 
 describe('authoritative Move intent', () => {
@@ -1229,8 +1293,7 @@ describe('authoritative Move intent', () => {
     // turn. Dash and End turn remain.
     expect(
       firstLegal.actions.some(
-        (action) =>
-          action.type === 'attack' && String(action.label).includes('move closer first'),
+        (action) => action.type === 'attack' && String(action.label).includes('move closer first'),
       ),
     ).toBe(false);
     expect(firstLegal.actions).toContainEqual({ type: 'dash', label: 'Dash' });

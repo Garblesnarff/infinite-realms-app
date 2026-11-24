@@ -170,6 +170,13 @@ const TABLE: Record<LegalActionType, Row> = {
     prints: false,
     reason: 'the server writes the turn boundary row; the client posts no engine line for it',
   },
+  // #1635: a check chip carries its own engine line from the server result; the hook posts it
+  // directly rather than through formatCombatActionParts.
+  check: {
+    prints: false,
+    reason:
+      'the hook posts the server engine line directly; formatCombatActionParts is not used (#1635)',
+  },
 };
 
 describe('combat action engine lines (#1618)', () => {

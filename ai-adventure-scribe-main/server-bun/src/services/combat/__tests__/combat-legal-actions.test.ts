@@ -9,10 +9,12 @@ process.env.DATABASE_URL ??= 'postgres://test.invalid/unused';
 // #1639: the off-hand chip reads the turn's light-attack mark from the session. This file has no
 // database, so the read is answered here (no mark), and every other export stays the real one.
 const realTurnFlags = await import('../combat-turn-flags.js');
+let isHiddenAttackerResult = false;
 mock.module('../combat-turn-flags.js', () => ({
   ...realTurnFlags,
   readLightAttackMark: async () => null,
   hasAttackedThisTurn: async () => false,
+  isHiddenAttacker: async () => isHiddenAttackerResult,
 }));
 
 let remainingSwing = false;
@@ -1089,5 +1091,387 @@ describe('getLegalCombatActions', () => {
     healingConsumables = [];
     const none = await getLegalCombatActions('encounter-1', 'user-1');
     expect(none.actions.some((action) => action.type === 'use_item')).toBe(false);
+  });
+});
+
+describe('#1635 Grapple, Shove and Hide chips', () => {
+  test('a player with an unused action gets Grapple/Shove <goblin> chips and a Hide chip, each with a numeric checkModifier', async () => {
+    const goblin = {
+      id: 'goblin-1',
+      name: 'Goblin',
+      participantType: 'monster',
+      isActive: true,
+      actionUsed: false,
+      bonusActionUsed: false,
+      armorClass: 12,
+      encounterId: 'encounter-1',
+      turnOrder: 1,
+      maxHp: 10,
+      status: { currentHp: 10, isConscious: true },
+    };
+    const savedParticipants = participants;
+    const savedActionUsed = player.actionUsed;
+    const savedTurnOrder = player.turnOrder;
+    participants = [player, goblin];
+    player.actionUsed = false;
+    player.turnOrder = 0;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      const checks = result.actions.filter((action) => action.type === 'check');
+      expect(checks).toContainEqual(
+        expect.objectContaining({
+          type: 'check',
+          checkKind: 'grapple',
+          targetId: 'goblin-1',
+          label: 'Grapple Goblin',
+        }),
+      );
+      expect(checks).toContainEqual(
+        expect.objectContaining({
+          type: 'check',
+          checkKind: 'shove',
+          shoveOutcome: 'prone',
+          targetId: 'goblin-1',
+          label: 'Shove: knock prone (Goblin)',
+        }),
+      );
+      expect(checks).toContainEqual(
+        expect.objectContaining({
+          type: 'check',
+          checkKind: 'shove',
+          shoveOutcome: 'push',
+          targetId: 'goblin-1',
+          label: 'Shove: push 5 ft (Goblin)',
+        }),
+      );
+      expect(checks).toContainEqual(
+        expect.objectContaining({ type: 'check', checkKind: 'hide', label: 'Hide' }),
+      );
+      for (const check of checks) expect(typeof check.checkModifier).toBe('number');
+    } finally {
+      participants = savedParticipants;
+      player.actionUsed = savedActionUsed;
+      player.turnOrder = savedTurnOrder;
+    }
+  });
+
+  test('a player whose action is used gets no check chips', async () => {
+    const goblin = {
+      id: 'goblin-1',
+      name: 'Goblin',
+      participantType: 'monster',
+      isActive: true,
+      actionUsed: false,
+      bonusActionUsed: false,
+      armorClass: 12,
+      encounterId: 'encounter-1',
+      turnOrder: 1,
+      maxHp: 10,
+      status: { currentHp: 10, isConscious: true },
+    };
+    const savedParticipants = participants;
+    const savedActionUsed = player.actionUsed;
+    participants = [player, goblin];
+    player.actionUsed = true;
+    player.turnOrder = 0;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      expect(result.actions.filter((action) => action.type === 'check')).toEqual([]);
+    } finally {
+      participants = savedParticipants;
+      player.actionUsed = savedActionUsed;
+    }
+  });
+
+  test('a monster actor gets no check chips', async () => {
+    const savedParticipants = participants;
+    const savedTurnOrder = player.turnOrder;
+    participants = [monster];
+    player.turnOrder = 99;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      expect(result.actions.filter((action) => action.type === 'check')).toEqual([]);
+    } finally {
+      participants = savedParticipants;
+      player.turnOrder = savedTurnOrder;
+    }
+  });
+
+  test('a huge target gets no grapple/shove chip but Hide is still offered', async () => {
+    const goblin = {
+      id: 'goblin-1',
+      name: 'Goblin',
+      participantType: 'monster',
+      isActive: true,
+      actionUsed: false,
+      bonusActionUsed: false,
+      armorClass: 12,
+      encounterId: 'encounter-1',
+      turnOrder: 1,
+      maxHp: 10,
+      status: { currentHp: 10, isConscious: true },
+    };
+    const savedParticipants = participants;
+    const savedActionUsed = player.actionUsed;
+    const savedTurnOrder = player.turnOrder;
+    const savedEntities = map.entities.slice();
+    map.entities = map.entities.filter((entity) => entity.id !== 'goblin-1');
+    map.entities.push({
+      id: 'goblin-1',
+      name: 'Goblin',
+      x: 8,
+      y: 8,
+      size: 'huge',
+      type: 'monster',
+      speedFeet: 10,
+      movementRemaining: 10,
+    } as unknown as (typeof map.entities)[number]);
+    participants = [player, goblin];
+    player.actionUsed = false;
+    player.turnOrder = 0;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      const checks = result.actions.filter((action) => action.type === 'check');
+      expect(
+        checks.some((action) => action.checkKind === 'grapple' && action.targetId === 'goblin-1'),
+      ).toBe(false);
+      expect(
+        checks.some((action) => action.checkKind === 'shove' && action.targetId === 'goblin-1'),
+      ).toBe(false);
+      expect(checks).toContainEqual(
+        expect.objectContaining({ type: 'check', checkKind: 'hide', label: 'Hide' }),
+      );
+    } finally {
+      participants = savedParticipants;
+      player.actionUsed = savedActionUsed;
+      player.turnOrder = savedTurnOrder;
+      map.entities = savedEntities;
+    }
+  });
+
+  test('reach: adjacent goblin gets grapple and both shove chips; a goblin 30 ft away gets none', async () => {
+    const goblinA = {
+      id: 'goblin-a',
+      name: 'Goblin A',
+      participantType: 'monster',
+      isActive: true,
+      actionUsed: false,
+      bonusActionUsed: false,
+      armorClass: 12,
+      encounterId: 'encounter-1',
+      turnOrder: 1,
+      maxHp: 10,
+      status: { currentHp: 10, isConscious: true },
+    };
+    const goblinB = {
+      id: 'goblin-b',
+      name: 'Goblin B',
+      participantType: 'monster',
+      isActive: true,
+      actionUsed: false,
+      bonusActionUsed: false,
+      armorClass: 12,
+      encounterId: 'encounter-1',
+      turnOrder: 2,
+      maxHp: 10,
+      status: { currentHp: 10, isConscious: true },
+    };
+    const savedParticipants = participants;
+    const savedActionUsed = player.actionUsed;
+    const savedTurnOrder = player.turnOrder;
+    const savedEntities = map.entities.slice();
+    map.entities = [
+      {
+        id: 'player-1',
+        name: 'The Veteran',
+        x: 4,
+        y: 4,
+        size: 'medium',
+        type: 'pc',
+        speedFeet: 30,
+        movementRemaining: 0,
+      },
+      {
+        id: 'goblin-a',
+        name: 'Goblin A',
+        x: 5,
+        y: 4,
+        size: 'medium',
+        type: 'monster',
+        speedFeet: 10,
+        movementRemaining: 10,
+      },
+      {
+        id: 'goblin-b',
+        name: 'Goblin B',
+        x: 10,
+        y: 4,
+        size: 'medium',
+        type: 'monster',
+        speedFeet: 10,
+        movementRemaining: 10,
+      },
+    ] as unknown as typeof map.entities;
+    participants = [player, goblinA, goblinB];
+    player.actionUsed = false;
+    player.turnOrder = 0;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      const checks = result.actions.filter((action) => action.type === 'check');
+      expect(checks).toContainEqual(
+        expect.objectContaining({
+          type: 'check',
+          checkKind: 'grapple',
+          targetId: 'goblin-a',
+        }),
+      );
+      expect(checks).toContainEqual(
+        expect.objectContaining({
+          type: 'check',
+          checkKind: 'shove',
+          shoveOutcome: 'prone',
+          targetId: 'goblin-a',
+          label: 'Shove: knock prone (Goblin A)',
+        }),
+      );
+      expect(checks).toContainEqual(
+        expect.objectContaining({
+          type: 'check',
+          checkKind: 'shove',
+          shoveOutcome: 'push',
+          targetId: 'goblin-a',
+          label: 'Shove: push 5 ft (Goblin A)',
+        }),
+      );
+      expect(
+        checks.some(
+          (action) =>
+            action.targetId === 'goblin-b' &&
+            (action.checkKind === 'grapple' || action.checkKind === 'shove'),
+        ),
+      ).toBe(false);
+    } finally {
+      participants = savedParticipants;
+      player.actionUsed = savedActionUsed;
+      player.turnOrder = savedTurnOrder;
+      map.entities = savedEntities;
+    }
+  });
+
+  test('with no map (missing positions) chips are still offered', async () => {
+    const goblin = {
+      id: 'goblin-1',
+      name: 'Goblin',
+      participantType: 'monster',
+      isActive: true,
+      actionUsed: false,
+      bonusActionUsed: false,
+      armorClass: 12,
+      encounterId: 'encounter-1',
+      turnOrder: 1,
+      maxHp: 10,
+      status: { currentHp: 10, isConscious: true },
+    };
+    const savedParticipants = participants;
+    const savedActionUsed = player.actionUsed;
+    const savedTurnOrder = player.turnOrder;
+    // Rely on the missing goblin entity: distance cannot be measured, so the reach check refuses nothing.
+    const savedEntities = map.entities.slice();
+    map.entities = map.entities.filter((entity) => entity.id !== 'goblin-1');
+    participants = [player, goblin];
+    player.actionUsed = false;
+    player.turnOrder = 0;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      const checks = result.actions.filter((action) => action.type === 'check');
+      expect(
+        checks.some((action) => action.checkKind === 'grapple' && action.targetId === 'goblin-1'),
+      ).toBe(true);
+    } finally {
+      participants = savedParticipants;
+      player.actionUsed = savedActionUsed;
+      player.turnOrder = savedTurnOrder;
+      map.entities = savedEntities;
+    }
+  });
+
+  test('hidden: no Hide chip, but Grapple/Shove remain', async () => {
+    const goblin = {
+      id: 'goblin-1',
+      name: 'Goblin',
+      participantType: 'monster',
+      isActive: true,
+      actionUsed: false,
+      bonusActionUsed: false,
+      armorClass: 12,
+      encounterId: 'encounter-1',
+      turnOrder: 1,
+      maxHp: 10,
+      status: { currentHp: 10, isConscious: true },
+    };
+    const savedParticipants = participants;
+    const savedActionUsed = player.actionUsed;
+    const savedTurnOrder = player.turnOrder;
+    const savedHidden = isHiddenAttackerResult;
+    participants = [player, goblin];
+    player.actionUsed = false;
+    player.turnOrder = 0;
+    isHiddenAttackerResult = true;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      const checks = result.actions.filter((action) => action.type === 'check');
+      expect(checks.some((action) => action.checkKind === 'hide')).toBe(false);
+      expect(
+        checks.some((action) => action.checkKind === 'grapple' && action.targetId === 'goblin-1'),
+      ).toBe(true);
+      expect(
+        checks.some((action) => action.checkKind === 'shove' && action.targetId === 'goblin-1'),
+      ).toBe(true);
+    } finally {
+      participants = savedParticipants;
+      player.actionUsed = savedActionUsed;
+      player.turnOrder = savedTurnOrder;
+      isHiddenAttackerResult = savedHidden;
+    }
+  });
+
+  test('a hidden level-2 Rogue gets Dash and Disengage Cunning Action chips but no Hide ones (#1635)', async () => {
+    const savedClass = player.characterClass;
+    const savedLevel = player.characterLevel;
+    const savedClassLevels = player.characterClassLevels;
+    const savedBonusActionUsed = player.bonusActionUsed;
+    const savedHidden = isHiddenAttackerResult;
+    player.characterClass = 'Rogue';
+    player.characterLevel = 2;
+    player.characterClassLevels = [{ className: 'Rogue', level: 2 }];
+    player.bonusActionUsed = false;
+    isHiddenAttackerResult = true;
+    try {
+      const result = await getLegalCombatActions('encounter-1', 'user-1');
+      const cunning = result.actions.filter((action) => action.type === 'cunning_action');
+      expect(cunning).toContainEqual(
+        expect.objectContaining({
+          type: 'cunning_action',
+          mode: 'dash',
+          label: 'Dash (Cunning Action)',
+        }),
+      );
+      expect(cunning).toContainEqual(
+        expect.objectContaining({
+          type: 'cunning_action',
+          mode: 'disengage',
+          label: 'Disengage (Cunning Action)',
+        }),
+      );
+      expect(cunning.some((action) => action.mode === 'hide')).toBe(false);
+      const checks = result.actions.filter((action) => action.type === 'check');
+      expect(checks.some((action) => action.checkKind === 'hide')).toBe(false);
+    } finally {
+      player.characterClass = savedClass;
+      player.characterLevel = savedLevel;
+      player.characterClassLevels = savedClassLevels;
+      player.bonusActionUsed = savedBonusActionUsed;
+      isHiddenAttackerResult = savedHidden;
+    }
   });
 });

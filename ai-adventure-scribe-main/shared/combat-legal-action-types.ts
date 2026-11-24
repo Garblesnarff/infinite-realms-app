@@ -38,6 +38,8 @@ export const LEGAL_ACTION_TYPES = [
   'yield',
   'death_save',
   'end_turn',
+  /** #1635: Grapple, Shove and Hide as fight action menu chips (typed checks already exist). */
+  'check',
 ] as const;
 
 export type LegalActionType = (typeof LEGAL_ACTION_TYPES)[number];

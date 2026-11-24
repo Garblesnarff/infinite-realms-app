@@ -6,15 +6,56 @@ export const CONFRONTATION_WITHOUT_COMBAT_ENTRY_SHADOW_REASON =
   'confrontation_without_combat_entry';
 
 /**
+ * A word that makes the next word a noun, not a verb: an article, a possessive or a quantifier
+ * ("an attack", "a rush", "his swing", "no charge"), plus "in" for "in charge". "that" is left out
+ * on purpose: "the wolf that charges at you" is the verb. "this", "any", "another", "each" and
+ * "every" are handled separately by QUANTIFIER_NOUN.
+ */
+const NOUN_LEAD = String.raw`(?<!\b(?:a|an|the|no|his|her|its|their|my|your|our|in)\s+)`;
+
+/**
+ * "this/any/another/each/every" are pronoun subjects only when the next word is a verb form:
+ * after this/any/another/each/every the bare word is the noun ("this attack", "every swing",
+ * "another charge"), while a form ending in -s or -ed is the verb with the quantifier as its
+ * subject ("Another attacks you.", "Each attacks in turn.", "This charges at you.").
+ */
+const QUANTIFIER_NOUN = String.raw`(?!(?<=\b(?:this|any|another|each|every)\s+)\w+(?<![sd])\b)`;
+
+/** A verb pattern that skips the noun use (see NOUN_LEAD) and any `notAfter` continuation. */
+function verb(forms: string, notAfter?: string): RegExp {
+  const tail = notAfter ? `(?!\\s+(?:${notAfter})\\b)` : '';
+  return new RegExp(`${NOUN_LEAD}${QUANTIFIER_NOUN}\\b(?:${forms})\\b${tail}`, 'i');
+}
+
+/**
+ * "charged with" is skipped only after a form of "be" ("was charged with theft"); an active
+ * "the orc charged with his axe raised" still counts.
+ */
+const CHARGE_FORMS = String.raw`charg(?:e|es|ing)|charged(?!\s+with\b)|(?<!\b(?:is|are|was|were|be|been|being)\s+)charged`;
+
+/**
  * Hostile verbs a reply can use when narrating a fight in prose without starting an encounter
  * (#1704, Hark 11-21). Present, past, and progressive forms. Each pattern carries a name; the
  * shadow logs and reports names only, never the reply text.
+ *
+ * attack, rush, charge and swing are everyday words too, so their noun uses are skipped, and so
+ * are "an attack of nerves", "a rush of wind", "was charged with theft" and "the door swings open"
+ * ("swings wide" alone is a missed blow and still counts).
  */
 const CONFRONTATION_PATTERNS: ReadonlyArray<{ name: string; re: RegExp }> = [
-  { name: 'attacks', re: /\battack(?:s|ed|ing)?\b/i },
-  { name: 'rushes', re: /\brush(?:es|ed|ing)?\b/i },
-  { name: 'charges', re: /\bcharg(?:e|es|ed|ing)\b/i },
-  { name: 'swings', re: /\bsw(?:ings?|ung|inging)\b/i },
+  { name: 'attacks', re: verb('attack(?:s|ed|ing)?', 'of') },
+  // launched attacks phrased as a noun phrase ("launches an attack", "an attack on you"); an attack
+  // roll and an attack of nerves are not attacks on anyone.
+  {
+    name: 'attacks',
+    re: /\b(?:launch(?:es|ed|ing)?|mak(?:e|es|ing)|made|mount(?:s|ed|ing)?)\s+(?:a|an|another|one|their|his|her|its)?\s*(?:\w+\s+)?attacks?(?!\s+(?:rolls?|of)\b)\b|\b(?:an|another)\s+(?:\w+\s+)?attacks?\s+(?:on|against)\b/i,
+  },
+  { name: 'rushes', re: verb('rush(?:es|ed|ing)?', 'of') },
+  { name: 'charges', re: verb(CHARGE_FORMS) },
+  {
+    name: 'swings',
+    re: verb('sw(?:ings?|ung|inging)', 'open|shut|closed|ajar|wide open|inwards?|outwards?'),
+  },
   { name: 'punches', re: /\bpunch(?:es|ed|ing)?\b/i },
   { name: 'squares_up', re: /\bsquar(?:e|es|ed|ing)\s+up\b/i },
   { name: 'lunges', re: /\blung(?:e|es|ed|ing)\b/i },

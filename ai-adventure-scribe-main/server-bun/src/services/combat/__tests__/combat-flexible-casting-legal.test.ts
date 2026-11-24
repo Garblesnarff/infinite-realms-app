@@ -263,6 +263,15 @@ mock.module('../resource-ledger.js', () => ({
   metamagicOptionsLedger: async () => [],
 }));
 
+// #1635: the Hide chip reads the hidden mark from the session; this file has no database, so it answers 'not hidden'.
+const realTurnFlags = await import('../combat-turn-flags.js');
+mock.module('../combat-turn-flags.js', () => ({
+  ...realTurnFlags,
+  readLightAttackMark: async () => null,
+  hasAttackedThisTurn: async () => false,
+  isHiddenAttacker: async () => false,
+}));
+
 const { getLegalCombatActions } = await import('../combat-intent-service.js');
 
 type FlexibleOffer = Record<string, unknown> & { type: string };
