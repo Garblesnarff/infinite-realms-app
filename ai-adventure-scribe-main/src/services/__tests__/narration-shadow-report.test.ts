@@ -11,8 +11,10 @@ import {
   FAILED_CHECK_SHADOW_REPORT_BODY,
   NARRATED_DEAD_NPC_SHADOW_REPORT_BODY,
   NARRATED_DEATH_SHADOW_REPORT_BODY,
+  NARRATED_ENEMY_HP_REPORT_BODY,
 } from '../../../shared/test-fixtures/narration-shadow-telemetry';
 
+import { shadowNarratedEnemyHp } from '@/hooks/ai/narrated-enemy-hp-shadow';
 import { waitForAuth } from '@/lib/auth-gate';
 import { loadCachedSession } from '@/services/auth/TokenService';
 import { reportNarrationShadowHit } from '@/services/client-failure-reporting';
@@ -73,5 +75,20 @@ describe('reportNarrationShadowHit (#468)', () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body).toMatchObject(CONFRONTATION_WITHOUT_COMBAT_ENTRY_SHADOW_REPORT_BODY);
+  });
+  it('posts only pattern names for numeric enemy HP', async () => {
+    vi.spyOn(Date.prototype, 'toISOString').mockReturnValueOnce(
+      NARRATED_ENEMY_HP_REPORT_BODY.clientTimestamp,
+    );
+    shadowNarratedEnemyHp(
+      'Dutch has 6 hit points left. The duelist is down to 6 HP.',
+      'sess-1722-fixture',
+      'Esme',
+    );
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain('/v1/telemetry/client-failure');
+    expect(JSON.parse(String(init.body))).toEqual(NARRATED_ENEMY_HP_REPORT_BODY);
+    vi.restoreAllMocks();
   });
 });

@@ -65,6 +65,7 @@ import {
   FAILED_CHECK_SHADOW_REPORT_BODY,
   NARRATED_DEAD_NPC_SHADOW_REPORT_BODY,
   NARRATED_DEATH_SHADOW_REPORT_BODY,
+  NARRATED_ENEMY_HP_REPORT_BODY,
 } from '../../../../../shared/test-fixtures/narration-shadow-telemetry.js';
 
 describe('POST /v1/telemetry/client-failure', () => {
@@ -120,6 +121,17 @@ describe('POST /v1/telemetry/client-failure', () => {
       kind: 'confrontation_without_combat_entry',
       sessionId: 'sess-1704-fixture',
       message: 'rushes,squares_up',
+    });
+    expect(alertCalls).toHaveLength(0);
+  });
+
+  it('accepts the enemy HP shadow body, logs pattern names, and does not page', async () => {
+    const response = await app.handle(authedRequest(NARRATED_ENEMY_HP_REPORT_BODY));
+    expect(response.status).toBe(204);
+    expect(loggedInfo.find((entry) => entry.msg === 'CLIENT_FAILURE')).toMatchObject({
+      kind: NARRATED_ENEMY_HP_REPORT_BODY.kind,
+      sessionId: NARRATED_ENEMY_HP_REPORT_BODY.sessionId,
+      message: NARRATED_ENEMY_HP_REPORT_BODY.message,
     });
     expect(alertCalls).toHaveLength(0);
   });
