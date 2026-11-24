@@ -38,61 +38,62 @@ export function findPlaceInText(text: string, locations: CampaignAsset[]): Campa
 }
 
 /**
- * Reads the tracked place from the reply's `[Place]` state line, e.g.
- * `[Place: The Heartwood]` or `[Place] The Heartwood`. The state line is the
- * session's tracked place, so it beats a place merely mentioned in the prose.
- * The last state line in the reply wins; the name resolves with the same
- * slug rule as the uploader. A bracketed name without the `Place` keyword
- * is not a state line — prose asides are indistinguishable from one, and
- * findPlaceInText already matches those in the prose path.
+ * Reads the tracked place from the message's story trackers
+ * (`message.context.storyTrackers`, the session's stored clocks the server
+ * attaches to the DM envelope; shape `Array<{name, value, limit}>` in
+ * server-bun/src/services/dm/dm-response-schema.ts). A tracker names a
+ * place when its name matches a campaign location with the same slug rule
+ * — a bare place name ("The Heartwood") or a Scene-prefixed one
+ * ("Scene: The Heartwood"); the slug rule matches the trailing location
+ * name in either form, and the longer-name-wins tiebreak in
+ * findPlaceInText picks the full name. An ordinary clock ("Torches")
+ * matches no location and contributes nothing. The first tracker that
+ * names a place wins — the list is the session's full stored clock list
+ * in campaign clock-definition order with no recency signal, so this
+ * assumes a campaign defines at most one place-named clock (the common
+ * case: the #1042 audit found 14 of 18 campaigns carry one clock each);
+ * with two place-named clocks the band pins to the earliest-defined one.
+ * Returns null when the trackers are absent, malformed, or name no
+ * campaign location.
  */
-const STATE_LINE_PLACE_COLON = /^[ \t]*\[Place[ \t]*:[ \t]*([^\]\n]+)\]/gim;
-const STATE_LINE_PLACE_BARE = /^[ \t]*\[Place\][ \t]*([^\n]+?)[ \t]*$/gim;
-
-export function findPlaceInStateLine(
-  text: string,
+export function findPlaceInStoryTrackers(
+  storyTrackers: unknown,
   locations: CampaignAsset[],
 ): CampaignAsset | null {
-  let lastName: string | null = null;
-  let lastIndex = -1;
-  for (const pattern of [STATE_LINE_PLACE_COLON, STATE_LINE_PLACE_BARE]) {
-    pattern.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = pattern.exec(text)) !== null) {
-      // An empty capture names no place and must not erase an earlier valid
-      // state line.
-      const name = match[1].trim();
-      if (name && match.index >= lastIndex) {
-        lastIndex = match.index;
-        lastName = name;
-      }
-    }
+  if (!Array.isArray(storyTrackers)) return null;
+  for (const entry of storyTrackers) {
+    if (!entry || typeof entry !== 'object') continue;
+    const name = (entry as { name?: unknown }).name;
+    if (typeof name !== 'string' || name.trim().length === 0) continue;
+    const place = findPlaceInText(name, locations);
+    if (place) return place;
   }
-  if (!lastName) return null;
-  return findPlaceInText(lastName, locations);
+  return null;
 }
 
 /**
  * Builds the candidate tag list shared by the scene band and the background
  * effect, so the two cannot drift. Explicit tags come first, then the tracked
- * place from the reply's `[Place]` state line, then the official context
+ * place from the reply's story trackers, then the official context
  * location, then a place named in the prose. A place with no matching
- * chunk contributes nothing.
+ * chunk contributes nothing. The reply text is deliberately not a source
+ * for the tracked place: the server strips a `[Place]` line from the
+ * narration only when it sits in a whole-line run of 2+ tracker-shaped
+ * groups (narration-text.ts stripWholeLineTrackerRuns), so a lone
+ * `[Place]` line survives but the text is not a reliable source — the
+ * tracked place survives only in the context the server attached.
  */
 export function sceneCandidateTags(
   assetTags: Array<{ type: string; key: string }>,
   text: string,
   contextLocation: string | null | undefined,
   locations: CampaignAsset[],
-  replyText: string = text,
+  storyTrackers: unknown = undefined,
 ): Array<{ type: string; key: string }> {
   const candidates = [...assetTags];
-  // The reply's [Place] state line is the tracked place (#1026): it beats a
-  // place merely mentioned in the prose. It is read from the full reply text,
-  // not the display text — the display pipeline may separate it from the
-  // prose (a state line after the options is cut from displayContent by
-  // parseMessageOptions), so the prose lookup alone would miss it.
-  const trackedPlace = findPlaceInStateLine(replyText, locations);
+  // The reply's story trackers carry the tracked place (#1026): a tracker
+  // naming the place beats a place merely mentioned in the prose.
+  const trackedPlace = findPlaceInStoryTrackers(storyTrackers, locations);
   if (trackedPlace) {
     candidates.push({ type: 'location', key: trackedPlace.key });
   }
