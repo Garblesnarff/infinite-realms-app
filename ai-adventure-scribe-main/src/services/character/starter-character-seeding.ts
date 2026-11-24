@@ -187,10 +187,13 @@ function resolveAuthoredSpellEntry(
   const normalized = normalizeAuthoredSpellName(entry);
   const byName = validSpells.find((spell) => normalizeAuthoredSpellName(spell.name) === normalized);
   if (byName) return byName.id;
-  logger.warn('[starter-character-seeding] skipping authored spell not on class list', {
-    template: templateName,
-    entry,
-  });
+  logger.warn(
+    '[starter-character-seeding] skipping authored spell not on the class list at this level',
+    {
+      template: templateName,
+      entry,
+    },
+  );
   return null;
 }
 

@@ -2240,7 +2240,7 @@ describeWithDb('Fighter sheet exposes level-gated features (#975)', () => {
 });
 
 describeWithDb('starter template spells (#1025)', () => {
-  let app: any;
+  let app: { handle: (req: Request) => Promise<Response> };
   let db: ReturnType<typeof realDb>;
   let request: (path: string, method: string, body?: unknown) => Promise<Response>;
   const createdIds: string[] = [];
