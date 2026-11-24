@@ -199,6 +199,31 @@ describe('useDiceRollRequest', () => {
     expect(mockOnManualResult).not.toHaveBeenCalled();
   });
 
+  it('refuses a typed total above 20 on an engine prompt with a message (#115)', () => {
+    const request = { ...defaultRequest, engineOwned: true };
+    const { result } = renderHook(() =>
+      useDiceRollRequest({ request, onResult: mockOnManualResult }),
+    );
+
+    act(() => {
+      result.current.setManualResult('23');
+    });
+    act(() => {
+      result.current.handleManualSubmit();
+    });
+    expect(mockOnManualResult).not.toHaveBeenCalled();
+    expect(result.current.manualError).toBe('Enter the number the d20 shows, from 1 to 20.');
+
+    act(() => {
+      result.current.setManualResult('9');
+    });
+    expect(result.current.manualError).toBeNull();
+    act(() => {
+      result.current.handleManualSubmit();
+    });
+    expect(mockOnManualResult).toHaveBeenCalledWith(9);
+  });
+
   it('starts auto-roll', () => {
     const { result } = renderHook(() =>
       useDiceRollRequest({ request: defaultRequest, onResult: mockOnManualResult }),

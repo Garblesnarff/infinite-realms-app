@@ -11,6 +11,8 @@ interface DiceRollManualEntrySectionProps {
   onSubmit: () => void;
   onBackToRoll: () => void;
   onCancel?: () => void;
+  faceOnly?: boolean;
+  error?: string | null;
 }
 
 export const DiceRollManualEntrySection: React.FC<DiceRollManualEntrySectionProps> = React.memo(
@@ -22,8 +24,11 @@ export const DiceRollManualEntrySection: React.FC<DiceRollManualEntrySectionProp
     onSubmit,
     onBackToRoll,
     onCancel,
+    faceOnly = false,
+    error = null,
   }) => {
     const manualInputId = useId();
+    const errorId = useId();
 
     return (
       <div className="space-y-3">
@@ -32,20 +37,33 @@ export const DiceRollManualEntrySection: React.FC<DiceRollManualEntrySectionProp
             htmlFor={manualInputId}
             className="text-sm text-slate-600 mb-1 block [body.ir-table-look_&]:!text-[#2a1a0c]"
           >
-            {resolvedFormula === null && !manualMode
-              ? 'Roll formula could not be resolved — enter your dice result:'
-              : 'Enter your roll result:'}
+            {faceOnly
+              ? 'Enter the number on the d20 (1–20):'
+              : resolvedFormula === null && !manualMode
+                ? 'Roll formula could not be resolved — enter your dice result:'
+                : 'Enter your roll result:'}
           </label>
           <Input
             id={manualInputId}
             type="number"
             value={manualResult}
             onChange={(e) => onManualResultChange(e.target.value)}
-            placeholder="Enter total result..."
+            placeholder={faceOnly ? 'd20 face, 1–20' : 'Enter total result...'}
             className="text-center text-lg font-mono"
             min="1"
-            max="100"
+            max={faceOnly ? '20' : '100'}
+            aria-describedby={error ? errorId : undefined}
+            aria-invalid={error ? true : undefined}
           />
+          {error ? (
+            <p
+              id={errorId}
+              role="alert"
+              className="mt-1 text-sm font-medium text-red-300 [body.ir-table-look_&]:!text-[#7a1016]"
+            >
+              {error}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex gap-2">

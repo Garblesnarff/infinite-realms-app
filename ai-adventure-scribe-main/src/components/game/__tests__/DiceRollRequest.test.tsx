@@ -222,6 +222,56 @@ describe('DiceRollRequest', () => {
     expect(rollPanel).not.toContainElement(tooltip);
   });
 
+  it('asks for the d20 face on an engine prompt and refuses a typed total above 20 with a message (#115)', () => {
+    render(
+      <DiceRollRequest
+        request={{
+          ...defaultRequest,
+          type: 'initiative',
+          formula: '1d20+3',
+          purpose: 'Initiative',
+          engineOwned: true,
+        }}
+        onResult={mockOnManualResult}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }),
+    );
+
+    const input = screen.getByLabelText(/Enter the number on the d20 \(1–20\):/);
+    fireEvent.change(input, { target: { value: '23' } });
+    fireEvent.click(screen.getByRole('button', { name: /Submit/i }));
+
+    expect(mockOnManualResult).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'Enter the number the d20 shows, from 1 to 20.',
+    );
+
+    fireEvent.change(input, { target: { value: '9' } });
+    fireEvent.click(screen.getByRole('button', { name: /Submit/i }));
+    expect(mockOnManualResult).toHaveBeenCalledWith(9);
+  });
+
+  it('keeps the total entry for a narrative roll (#115)', () => {
+    render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /Roll physical dice and enter result manually/i }),
+    );
+
+    expect(screen.getByLabelText(/Enter your roll result:/i)).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/Enter the number on the d20 \(1–20\):/),
+    ).not.toBeInTheDocument();
+
+    const input = screen.getByLabelText(/Enter your roll result:/i);
+    fireEvent.change(input, { target: { value: '23' } });
+    fireEvent.click(screen.getByRole('button', { name: /Submit/i }));
+    expect(mockOnManualResult).toHaveBeenCalledWith(23);
+  });
+
   it('switches to manual mode, goes back, and submits a result', () => {
     render(<DiceRollRequest request={defaultRequest} onResult={mockOnManualResult} />);
 
