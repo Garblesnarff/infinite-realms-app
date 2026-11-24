@@ -8,6 +8,7 @@
 
 import { useCallback, useEffect, useState, useMemo } from 'react';
 
+import { listStartableHeroRows } from '@/features/campaign/start-heroes';
 import { normalizeAbilityScores } from '@/services/character/ability-score-normalization';
 import { userDataApi } from '@/services/user-data-api';
 
@@ -153,7 +154,7 @@ export function useStarterCharacterTemplates(
       setIsLoading(true);
       setError(null);
       try {
-        const data = await userDataApi.listStarterCharacterTemplates(campaignId!);
+        const data = await listStartableHeroRows(campaignId!);
         const mapped = data.flatMap((row) => {
           try {
             return [mapTemplateRow(row)];
