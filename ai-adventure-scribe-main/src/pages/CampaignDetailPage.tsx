@@ -34,7 +34,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
-import { checkHeroName } from '@/data/hero-names';
+import { checkHeroName, heroEpithetName } from '@/data/hero-names';
 import { HeroFan } from '@/features/campaigns/table/HeroFan';
 import { HeroNameField } from '@/features/campaigns/table/HeroNameField';
 import { tableImageUrl } from '@/features/campaigns/table/image-url';
@@ -172,7 +172,9 @@ const HeroCard: React.FC<HeroCardProps> = ({
         className="h-16 w-16 max-[700px]:h-12 max-[700px]:w-12 rounded-[10px] border border-infinite-gold/45"
       />
       <div className="min-w-0">
-        <h3 className="text-base font-semibold text-foreground truncate">{template.name}</h3>
+        <h3 className="text-base font-semibold text-foreground truncate">
+          {heroEpithetName(nameCheck.ok ? nameCheck.name : template.name, template.name)}
+        </h3>
         <p className="text-[13px] text-muted-foreground">
           {template.race} {template.class} · Level {template.level}
         </p>
@@ -326,6 +328,7 @@ const CampaignDetailPage: React.FC = () => {
           const listed = {
             sessions,
             starterCampaignId: campaign.id,
+            starterTemplateId: template.id,
             heroName: template.name,
             campaignId,
           };

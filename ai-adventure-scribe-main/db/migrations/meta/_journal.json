@@ -253,6 +253,13 @@
       "when": 1794412800000,
       "tag": "0037_starter_character_templates_spells",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795573789340,
+      "tag": "0038_character_starter_template",
+      "breakpoints": true
     }
   ]
 }

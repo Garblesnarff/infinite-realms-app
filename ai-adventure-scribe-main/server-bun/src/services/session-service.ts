@@ -571,7 +571,14 @@ export class SessionService {
     const rows = await db
       .select({
         session: gameSessions,
-        character: { id: characters.id, name: characters.name, image_url: characters.imageUrl },
+        character: {
+          id: characters.id,
+          name: characters.name,
+          image_url: characters.imageUrl,
+          // #1741: the premade this hero was copied from, so a renamed hero still resumes.
+          starter_template_id: characters.starterTemplateId,
+          starter_title: characters.starterTitle,
+        },
         chronicle: {
           id: sessionChronicles.id,
           status: sessionChronicles.status,
@@ -801,7 +808,8 @@ export class SessionService {
         .where(and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)));
       if (!row) throw new NotFoundError('Session', sessionId);
       const { campaignId, characterId } = row.session;
-      if (!campaignId || !characterId) return { ok: false as const, reason: 'not_resumable' as const };
+      if (!campaignId || !characterId)
+        return { ok: false as const, reason: 'not_resumable' as const };
       if (row.session.status !== 'completed') {
         return { ok: false as const, reason: 'not_completed' as const };
       }

@@ -1,19 +1,21 @@
 /**
- * #1741: a premade hero can carry the name its player typed at hero choice. The client
- * posts the shared premade body with `name` set; the real character route saves that name on
- * the player's copy and leaves the starter template row alone. The DM, sheet and chronicle
- * read the saved character row, so that row is what this test checks.
+ * #1741: a premade hero can carry the name its player typed at hero choice. Real database, real
+ * character routes and the real session services. Auth is stubbed.
  *
- * Real database, real character routes. Auth is stubbed. Requires TEST_DATABASE_URL or
- * DATABASE_URL (see services/__tests__/fixtures/real-db.ts).
+ * - The typed name, the premade's template id and title are saved on the player's copy.
+ * - A premade start with a name the shared rule refuses is a 400, and nothing is saved.
+ * - The DM context (the session load payload) and the sessions list carry the typed name and
+ *   the template id, so a renamed hero resumes.
+ *
+ * Requires TEST_DATABASE_URL or DATABASE_URL (see services/__tests__/fixtures/real-db.ts).
  */
 import { afterAll, beforeAll, expect, it, mock } from 'bun:test';
 import postgres from 'postgres';
 
 import {
   PREMADE_TYPED_HERO_NAME,
-  premadeCreateBody,
   PREMADE_TEMPLATE_ROW,
+  premadeCreateBody,
 } from '../../../../../shared/test-fixtures/premade-create-body';
 import {
   describeWithDb,
@@ -73,15 +75,22 @@ if (hasRealDb) {
   process.env.PORT ??= '8888';
 }
 
-const pipeline = await importWithRealDb(async () => {
+const loaded = await importWithRealDb(async () => {
   const { createRequestPipelineApp } = await import('../../../http-pipeline.js');
   const { charactersRoutes } = await import('../characters.js');
-  return createRequestPipelineApp().use(charactersRoutes);
+  const { SessionService } = await import('../../../services/session-service.js');
+  return {
+    pipeline: createRequestPipelineApp().use(charactersRoutes),
+    SessionService,
+  };
 });
+const { pipeline, SessionService } = loaded;
 
 describeWithDb('a premade hero keeps the name typed at hero choice (#1741)', () => {
   const createdIds: string[] = [];
   const campaignId = `hero-name-1741-${process.pid}`;
+  let userCampaignId = '';
+  let sessionId = '';
 
   const post = (body: unknown): Promise<Response> =>
     pipeline.handle(
@@ -112,13 +121,19 @@ describeWithDb('a premade hero keeps the name typed at hero choice (#1741)', () 
                   CAST(${JSON.stringify(PREMADE_TEMPLATE_ROW.skills)} AS jsonb),
                   CAST(${JSON.stringify(PREMADE_TEMPLATE_ROW.languages)} AS jsonb),
                   CAST(${'[]'} AS jsonb))`;
+    const [campaignRow] = (await sql`
+      INSERT INTO campaigns (user_id, name) VALUES (${userId}, ${testId('hero-name-camp')}) RETURNING id
+    `) as unknown as Array<{ id: string }>;
+    userCampaignId = campaignRow.id;
   });
 
   afterAll(async () => {
     if (!hasRealDb) return;
+    if (sessionId) await sql`DELETE FROM game_sessions WHERE id = ${sessionId}`.catch(() => {});
     for (const id of createdIds) {
       await sql`DELETE FROM characters WHERE id = ${id}`.catch(() => {});
     }
+    await sql`DELETE FROM campaigns WHERE id = ${userCampaignId}`.catch(() => {});
     await sql`DELETE FROM starter_character_templates WHERE id = ${HERO_NAME_TEMPLATE_ID}`.catch(
       () => {},
     );
@@ -127,7 +142,7 @@ describeWithDb('a premade hero keeps the name typed at hero choice (#1741)', () 
     await client?.end({ timeout: 5 }).catch(() => {});
   });
 
-  it('saves the typed name on the character row and leaves the template row unchanged', async () => {
+  it('saves the typed name with the template id and title, and leaves the template row unchanged', async () => {
     const res = await post(premadeCreateBody(HERO_NAME_TEMPLATE_ID, PREMADE_TYPED_HERO_NAME));
     expect(res.status).toBe(201);
     const created = (await res.json()) as { id: string; name: string };
@@ -135,14 +150,73 @@ describeWithDb('a premade hero keeps the name typed at hero choice (#1741)', () 
     expect(created.name).toBe(PREMADE_TYPED_HERO_NAME);
 
     const [row] = (await sql`
-      SELECT name, origin FROM characters WHERE id = ${created.id}
-    `) as unknown as Array<{ name: string; origin: string }>;
+      SELECT name, origin, starter_template_id, starter_title FROM characters WHERE id = ${created.id}
+    `) as unknown as Array<{
+      name: string;
+      origin: string;
+      starter_template_id: string;
+      starter_title: string;
+    }>;
     expect(row.name).toBe(PREMADE_TYPED_HERO_NAME);
     expect(row.origin).toBe('starter');
+    expect(row.starter_template_id).toBe(HERO_NAME_TEMPLATE_ID);
+    expect(row.starter_title).toBe(PREMADE_TEMPLATE_ROW.name);
 
     const [template] = (await sql`
       SELECT name FROM starter_character_templates WHERE id = ${HERO_NAME_TEMPLATE_ID}
     `) as unknown as Array<{ name: string }>;
     expect(template.name).toBe(PREMADE_TEMPLATE_ROW.name);
+  });
+
+  it('refuses a typed name the shared rule does not allow, and saves nothing', async () => {
+    const refused = ['Mara2', 'R2-D2!', ' Mara', 'Mara ', 'a'.repeat(41)];
+    for (const name of refused) {
+      const res = await post(premadeCreateBody(HERO_NAME_TEMPLATE_ID, name));
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { code: string };
+      expect(body.code).toBe('HERO_NAME_INVALID');
+    }
+    const saved = (await sql`
+      SELECT id FROM characters WHERE user_id = ${userId} AND starter_template_id = ${HERO_NAME_TEMPLATE_ID}
+    `) as unknown as Array<{ id: string }>;
+    expect(saved.map((row) => row.id).filter((id) => !createdIds.includes(id))).toEqual([]);
+  });
+
+  it('accepts a name at the 40-character limit, and the premade title with no typed name', async () => {
+    const forty = `${'a'.repeat(39)}b`;
+    const res = await post(premadeCreateBody(HERO_NAME_TEMPLATE_ID, forty));
+    expect(res.status).toBe(201);
+    createdIds.push(((await res.json()) as { id: string }).id);
+
+    const title = await post(premadeCreateBody(HERO_NAME_TEMPLATE_ID, PREMADE_TEMPLATE_ROW.name));
+    expect(title.status).toBe(201);
+    createdIds.push(((await title.json()) as { id: string }).id);
+  });
+
+  it('the DM context and the sessions list carry the typed name, and the template id resumes it', async () => {
+    const res = await post(premadeCreateBody(HERO_NAME_TEMPLATE_ID, 'Brenna'));
+    expect(res.status).toBe(201);
+    const heroId = ((await res.json()) as { id: string }).id;
+    createdIds.push(heroId);
+
+    const [sessionRow] = (await sql`
+      INSERT INTO game_sessions (campaign_id, character_id, session_number, status, starter_campaign_id)
+      VALUES (${userCampaignId}, ${heroId}, 1, 'active', ${campaignId})
+      RETURNING id
+    `) as unknown as Array<{ id: string }>;
+    sessionId = sessionRow.id;
+
+    // The DM context: the session load payload the DM prompt is built from.
+    const context = await SessionService.getSessionContext(sessionId, userId);
+    expect(context.character.name).toBe('Brenna');
+
+    // The sessions list: the nested character carries the template id, so the picker can
+    // find this hero by its premade and resume it under its own name.
+    const listed = await SessionService.listSessions({ campaignId: userCampaignId }, userId);
+    const row = listed.find((entry) => entry.id === sessionId);
+    expect(row).toBeDefined();
+    const character = row!.character as { name: string; starter_template_id: string };
+    expect(character.name).toBe('Brenna');
+    expect(character.starter_template_id).toBe(HERO_NAME_TEMPLATE_ID);
   });
 });

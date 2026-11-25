@@ -9,13 +9,16 @@ import { resolveCampaignArtwork } from '@/components/campaigns/campaign-artwork'
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Z_INDEX } from '@/constants/z-index';
+import { checkHeroName, heroEpithetName } from '@/data/hero-names';
 import { lookupRaces } from '@/data/races';
+import { HeroNameField } from '@/features/campaigns/table/HeroNameField';
 import { getEffectiveAbilityScores } from '@/hooks/use-character-stats';
 
 interface StarterTemplateCardProps {
   template: StarterTemplate;
   isCreating: boolean;
-  onSelect: (template: StarterTemplate) => void;
+  /** #1741: the premade's name, and the typed name when one is given (undefined keeps the title). */
+  onSelect: (template: StarterTemplate, heroName?: string) => void;
   getModifier: (score?: number) => string;
 }
 
@@ -30,6 +33,14 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
   getModifier,
 }) => {
   const abilityScores = template.ability_scores || {};
+  // #1741: the typed name. The field sits inside the card, so its clicks and keys stop here.
+  const [heroName, setHeroName] = React.useState('');
+  const nameCheck = checkHeroName(heroName, template.name);
+  const chosenName = nameCheck.ok && nameCheck.name !== template.name ? nameCheck.name : undefined;
+  const startWithName = (): void => {
+    if (!nameCheck.ok) return;
+    onSelect(template, chosenName);
+  };
   const cardTitle = `Select character: ${template.name}, Level ${template.level} ${template.race} ${template.class}`;
 
   // Show the same resolved scores the sheet does: base + racial bonuses (#153).
@@ -79,11 +90,11 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
     <Card
       role="button"
       tabIndex={0}
-      onClick={() => !isCreating && onSelect(template)}
+      onClick={() => !isCreating && startWithName()}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          if (!isCreating) onSelect(template);
+          if (!isCreating) startWithName();
         }
       }}
       aria-label={cardTitle}
@@ -122,13 +133,31 @@ export const StarterTemplateCard: React.FC<StarterTemplateCardProps> = ({
       <CardContent className="p-4 pt-10">
         <div className="space-y-3">
           <div>
-            <h3 className="font-semibold text-lg text-foreground">{template.name}</h3>
+            <h3 className="font-semibold text-lg text-foreground">
+              {heroEpithetName(nameCheck.ok ? nameCheck.name : template.name, template.name)}
+            </h3>
             <p className="text-sm text-muted-foreground">
               Level {template.level} {template.race} {template.class}
             </p>
             {template.tagline && (
               <p className="text-xs text-muted-foreground italic mt-1">{template.tagline}</p>
             )}
+          </div>
+
+          {/* #1741: name the hero. Clicks and keys inside the field do not start the card. */}
+          <div
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape') e.stopPropagation();
+            }}
+          >
+            <HeroNameField
+              hero={template}
+              value={heroName}
+              onChange={setHeroName}
+              disabled={isCreating}
+              check={nameCheck}
+            />
           </div>
 
           {/* Ability Scores Grid */}

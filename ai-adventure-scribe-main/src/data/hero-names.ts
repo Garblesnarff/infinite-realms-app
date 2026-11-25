@@ -6,7 +6,8 @@
  * real person or a trademarked character.
  */
 
-export const HERO_NAME_MAX_LENGTH = 40;
+export { HERO_NAME_MAX_LENGTH, checkHeroName, heroEpithetName } from '../../shared/hero-name';
+export type { HeroNameCheck } from '../../shared/hero-name';
 
 const NAME_POOLS: Readonly<Record<string, readonly string[]>> = {
   human: ['Mara', 'Tomas', 'Ilse', 'Bram', 'Corin', 'Essa', 'Doran', 'Liss'],
@@ -68,34 +69,4 @@ export function suggestHeroNames(hero: { id: string; race: string }, count = 3):
     [pool[index], pool[swap]] = [pool[swap], pool[index]];
   }
   return pool.slice(0, count);
-}
-
-// Letters, spaces, apostrophes (straight or curly) and hyphens. Starts with a letter.
-const HERO_NAME_PATTERN = /^\p{L}[\p{L} '’-]*$/u;
-
-export type HeroNameCheck = { ok: true; name: string } | { ok: false; message: string };
-
-/**
- * Check the typed name. An empty field keeps the premade's title as the name.
- * The name is trimmed before it is checked.
- */
-export function checkHeroName(typed: string, title: string): HeroNameCheck {
-  const name = typed.trim();
-  if (name === '') return { ok: true, name: title };
-  if (name.length > HERO_NAME_MAX_LENGTH) {
-    return { ok: false, message: `Use ${HERO_NAME_MAX_LENGTH} characters or fewer.` };
-  }
-  if (!HERO_NAME_PATTERN.test(name)) {
-    return {
-      ok: false,
-      message: 'Use letters, spaces, apostrophes and hyphens only.',
-    };
-  }
-  return { ok: true, name };
-}
-
-/** "Mara, the Seeker" for a hero named Mara with the title "The Seeker". */
-export function heroEpithetName(name: string, title: string): string {
-  if (name === title) return title;
-  return `${name}, ${title.replace(/^The /, 'the ')}`;
 }

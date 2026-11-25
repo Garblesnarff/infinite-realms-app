@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { StarterTemplateCard } from '../StarterTemplateCard';
@@ -131,5 +131,52 @@ describe('StarterTemplateCard', () => {
     expect(screen.getByLabelText('Charisma modifier: +4')).toBeInTheDocument(); // 16 + 2
     expect(screen.getByLabelText('Dexterity modifier: +2')).toBeInTheDocument(); // 14 + 0
     expect(screen.queryByLabelText('Charisma modifier: +3')).not.toBeInTheDocument();
+  });
+});
+
+describe('StarterTemplateCard hero name (#1741)', () => {
+  const renderWith = (onSelect: ReturnType<typeof vi.fn>): void => {
+    render(
+      <StarterTemplateCard
+        template={baseTemplate}
+        isCreating={false}
+        onSelect={onSelect}
+        getModifier={getModifier}
+      />,
+    );
+  };
+
+  it('starts the hero with the typed name and shows the title as an epithet', () => {
+    const onSelect = vi.fn();
+    renderWith(onSelect);
+    fireEvent.change(screen.getByLabelText('Name your hero'), { target: { value: 'Mara' } });
+    expect(screen.getByRole('heading', { name: 'Mara, the Scholar' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Select character: The Scholar/ }));
+    expect(onSelect).toHaveBeenCalledWith(baseTemplate, 'Mara');
+  });
+
+  it('keeps the title when the field is empty', () => {
+    const onSelect = vi.fn();
+    renderWith(onSelect);
+    fireEvent.click(screen.getByRole('button', { name: /Select character: The Scholar/ }));
+    expect(onSelect).toHaveBeenCalledWith(baseTemplate, undefined);
+  });
+
+  it('does not start the hero for a name the rule refuses', () => {
+    const onSelect = vi.fn();
+    renderWith(onSelect);
+    fireEvent.change(screen.getByLabelText('Name your hero'), { target: { value: 'R2-D2' } });
+    fireEvent.click(screen.getByRole('button', { name: /Select character: The Scholar/ }));
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent('letters, spaces, apostrophes');
+  });
+
+  it('a suggested name fills the field without starting the hero', () => {
+    const onSelect = vi.fn();
+    renderWith(onSelect);
+    const suggestion = within(screen.getByLabelText('Suggested names')).getAllByRole('button')[0];
+    fireEvent.click(suggestion);
+    expect(onSelect).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Name your hero')).toHaveValue(suggestion.textContent);
   });
 });

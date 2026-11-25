@@ -7,7 +7,7 @@ import { useScrollEdges } from './useScrollEdges';
 
 import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
 
-import { checkHeroName } from '@/data/hero-names';
+import { checkHeroName, heroEpithetName } from '@/data/hero-names';
 
 const COUNT_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five'];
 
@@ -154,7 +154,9 @@ export const HeroFan: React.FC<{
       </div>
       <p className="text-center text-sm italic text-[#f1e6cb]">{heroCountLine(templates.length)}</p>
       <div className="ir-parchment rounded p-4">
-        <h3 className="text-xl font-bold">{selected.name}</h3>
+        <h3 className="text-xl font-bold">
+          {heroEpithetName(nameCheck.ok ? nameCheck.name : selected.name, selected.name)}
+        </h3>
         <p>
           {selected.race} {selected.class} · Level {selected.level}
         </p>
