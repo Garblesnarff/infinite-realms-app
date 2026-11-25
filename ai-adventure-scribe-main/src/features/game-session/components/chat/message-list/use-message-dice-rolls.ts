@@ -327,6 +327,22 @@ export function useMessageDiceRolls({
     };
   }, [currentRoll]);
 
+  const sendDismissedInitiativeLine = useCallback(
+    (rollId: string, total: number) => {
+      dismissedInitiativeIdsRef.current.delete(rollId);
+      const dismissed = dismissedEngineRollMessage(total);
+      Promise.resolve()
+        .then(() => onSendMessage(dismissed))
+        .catch((error: unknown) =>
+          logger.warn('[useMessageDiceRolls] dismissed engine roll line not saved', {
+            rollId,
+            error,
+          }),
+        );
+    },
+    [onSendMessage],
+  );
+
   /**
    * Memoized cancel callback
    */
@@ -367,16 +383,7 @@ export function useMessageDiceRolls({
         }
         const total = dismissedInitiativeTotal(currentRoll.id);
         if (total !== undefined) {
-          dismissedInitiativeIdsRef.current.delete(currentRoll.id);
-          const dismissed = dismissedEngineRollMessage(total);
-          Promise.resolve()
-            .then(() => onSendMessage(dismissed))
-            .catch((error: unknown) =>
-              logger.warn('[useMessageDiceRolls] dismissed engine roll line not saved', {
-                rollId: currentRoll.id,
-                error,
-              }),
-            );
+          sendDismissedInitiativeLine(currentRoll.id, total);
         }
       } else if (!engineOwned) {
         const declined = declinedRollMessage(currentRoll.description, currentRoll.rollRequestId);
@@ -400,7 +407,7 @@ export function useMessageDiceRolls({
       setPendingRollId(null);
     }
     setRollFailure(null);
-  }, [currentRoll, cancelDiceRoll, onSendMessage]);
+  }, [currentRoll, cancelDiceRoll, onSendMessage, sendDismissedInitiativeLine]);
 
   const handleRetryRoll = useCallback(async () => {
     if (!failedSubmissionRef.current || retryingRef.current) return;
@@ -421,19 +428,18 @@ export function useMessageDiceRolls({
   useEffect(() => {
     const unsubscribe = subscribeDismissedInitiativeRoll((event) => {
       if (!dismissedInitiativeIdsRef.current.has(event.rollId)) return;
-      dismissedInitiativeIdsRef.current.delete(event.rollId);
-      const dismissed = dismissedEngineRollMessage(event.total);
-      Promise.resolve()
-        .then(() => onSendMessage(dismissed))
-        .catch((error: unknown) =>
-          logger.warn('[useMessageDiceRolls] dismissed engine roll line not saved', {
-            rollId: event.rollId,
-            error,
-          }),
-        );
+      sendDismissedInitiativeLine(event.rollId, event.total);
     });
+    // Flush any dismissed ids whose total is already cached, so a publish that
+    // landed while this effect was re-subscribing is not lost.
+    for (const id of [...dismissedInitiativeIdsRef.current]) {
+      const total = dismissedInitiativeTotal(id);
+      if (total !== undefined) {
+        sendDismissedInitiativeLine(id, total);
+      }
+    }
     return unsubscribe;
-  }, [onSendMessage]);
+  }, [onSendMessage, sendDismissedInitiativeLine]);
 
   // Handle manual dice result input with batching support
   // #1472: resolves true only when this roll's die was recorded (the message saved, or the

@@ -234,4 +234,32 @@ describe('combat-entry-delivery #115 dismissed initiative reports the engine tot
     clearCombatEntryTurnConfirmed(sessionId);
     unsubscribe();
   });
+  it('publishes the fixture player participant initiative when dismissed (no characterId)', async () => {
+    const noCharResponse = {
+      ...headlessEntryEnterResponse,
+      participants: (headlessEntryEnterResponse.participants as Array<Record<string, unknown>>).map(
+        (p) => ({ ...p, characterId: null }),
+      ),
+    };
+    vi.mocked(userDataApi.enterCombat).mockResolvedValue(http(201, noCharResponse));
+
+    const listener = vi.fn();
+    const unsubscribe = subscribeDismissedInitiativeRoll(listener);
+
+    const sessionId = 'session-dismissed-initiative-no-char';
+    const result = await startCombatEntryDelivery({
+      sessionId,
+      pending: headlessEntryPending as never,
+      player: { name: 'Rook', initiativeModifier: 2 },
+      entryConfirmed: true,
+      rollInitiative: async () => ({ d20: null, dismissed: true, rollId: 'init-roll-1' }),
+    });
+
+    expect(result).toMatchObject({ kind: 'seated' });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith({ rollId: 'init-roll-1', total: 16 });
+
+    clearCombatEntryTurnConfirmed(sessionId);
+    unsubscribe();
+  });
 });

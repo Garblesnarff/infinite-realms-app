@@ -232,8 +232,7 @@ async function runDelivery(args: DeliveryArgs): Promise<CombatEntryDeliveryResul
           (p) =>
             !!p &&
             typeof p === 'object' &&
-            (p as Record<string, unknown>).participantType === 'player' &&
-            (p as Record<string, unknown>).name === args.player.name,
+            (p as Record<string, unknown>).name === (args.player.name || 'Player'),
         );
       }
     }
