@@ -1,5 +1,7 @@
 import React, { useEffect, useId, useRef } from 'react';
 
+import { nameReadsAsPerson } from '../../../shared/creature-name-kind';
+
 import type { PendingCombatEntryConfirmation } from '@/hooks/combat/use-combat-entry-confirmation-host';
 import type { CombatEntryConfirmationSpec } from '@/services/combat/combat-entry-confirmation-bridge';
 
@@ -17,7 +19,9 @@ interface CombatEntryConfirmationProps {
  * anything else fights. The target is the declared target (or the first
  * roster name when none was declared) plus "and N more" for the rest;
  * with no names at all the card falls back to "the opposing side" (#2532).
- * Display names only — no slugs.
+ * Display names only — no slugs. A proper name (person) takes no article
+ * ("Attack Odile Vantrell?"); a creature kind keeps it ("Attack the goblin?"),
+ * using the server's person-vs-kind rule in shared/creature-name-kind.ts.
  */
 function entryTitle(spec: CombatEntryConfirmationSpec): string {
   const declaredTargets = spec.declaredTargets ?? [];
@@ -26,7 +30,7 @@ function entryTitle(spec: CombatEntryConfirmationSpec): string {
     ? (spec.otherCombatants ?? []).length
     : Math.max(0, spec.combatantLabels.length - 1);
   const targetPhrase = primary
-    ? `the ${primary}${extra > 0 ? ` and ${extra} more` : ''}`
+    ? `${nameReadsAsPerson(primary) ? '' : 'the '}${primary}${extra > 0 ? ` and ${extra} more` : ''}`
     : 'the opposing side';
   if (spec.attackSource === 'spell') {
     // A spell without a name has no ticket form ("Cast {Spell} at the …?");

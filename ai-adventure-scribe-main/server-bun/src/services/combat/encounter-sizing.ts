@@ -47,7 +47,8 @@ import {
   findBibleNameInProse,
   type CampaignMonsterIndex,
 } from './campaign-monster-index.js';
-import { monsterKeyTokens, normalizeMonsterKey } from './monster-key.js';
+import { normalizeMonsterKey } from './monster-key.js';
+import { nameReadsAsPerson } from '../../../../shared/creature-name-kind';
 
 export type EncounterDifficulty = 'easy' | 'medium' | 'hard' | 'deadly';
 
@@ -115,10 +116,7 @@ function parseEncounterNote(content: string | null | undefined): EncounterNote {
   const haystack = (segment.match(/group\s*:\s*([^;]+)/i)?.[1] ?? segment).toLowerCase();
   const segmentText = segment.toLowerCase();
 
-  if (
-    /\b(solo|solitary)\b/.test(haystack) ||
-    /\b(boss|unique|legendary)\b/.test(segmentText)
-  ) {
+  if (/\b(solo|solitary)\b/.test(haystack) || /\b(boss|unique|legendary)\b/.test(segmentText)) {
     return { kind: 'solo', sourceText: segment };
   }
   if (/\bswarm\b/.test(haystack)) return { kind: 'swarm', sourceText: segment };
@@ -154,10 +152,7 @@ const isPackLike = (kind: EncounterNoteKind | null): boolean =>
  * overrides every difficulty to 1; otherwise the difficulty bucket decides,
  * with a pack/swarm/group note lifting Hard from 2 to 3.
  */
-function desiredHostileCount(
-  difficulty: EncounterDifficulty | null,
-  note: EncounterNote,
-): number {
+function desiredHostileCount(difficulty: EncounterDifficulty | null, note: EncounterNote): number {
   if (note.kind === 'solo') return 1;
   if (difficulty === 'deadly') return 3;
   if (difficulty === 'hard') return isPackLike(note.kind) ? 3 : 2;
@@ -165,50 +160,6 @@ function desiredHostileCount(
 }
 
 const baseKindName = (name: string): string => name.replace(/\s+\d+$/, '').trim();
-
-// Titles and forms of address that mark a person rather than a creature
-// kind ("Professor Emil Darkwater", "Sister Vola", "Grand Chef Sazón").
-const PERSON_TITLES: ReadonlySet<string> = new Set([
-  'captain', 'sergeant', 'lieutenant', 'commander', 'general', 'admiral',
-  'lord', 'lady', 'sir', 'dame', 'doctor', 'dr', 'professor', 'father',
-  'mother', 'brother', 'sister', 'master', 'elder', 'chef', 'king', 'queen',
-  'prince', 'princess', 'baron', 'baroness', 'count', 'countess', 'duke',
-  'duchess', 'grand', 'saint', 'bishop', 'abbot', 'abbess', 'mayor',
-  'judge',
-]);
-
-// Creature-kind nouns: a name *ending* in one of these names a kind of
-// creature, not a person ("Faceless Stalker", "Vitruvian Spider",
-// "Gravity Golem", "Shadow Roach"). The list is deliberately generous —
-// erring toward "person" only fails safe (the encounter stays small),
-// while erring toward "creature" would clone a named character.
-const CREATURE_KIND_NOUNS: ReadonlySet<string> = new Set([
-  'stalker', 'roach', 'golem', 'spider', 'hatchling', 'ghoul', 'shark',
-  'elemental', 'hound', 'wolf', 'bear', 'rat', 'bat', 'snake', 'serpent',
-  'wyrm', 'dragon', 'wyvern', 'drake', 'troll', 'ogre', 'giant', 'orc',
-  'goblin', 'hobgoblin', 'kobold', 'skeleton', 'zombie', 'wraith', 'wight',
-  'specter', 'spectre', 'ghost', 'phantom', 'vampire', 'lich', 'mummy',
-  'banshee', 'harpy', 'gargoyle', 'gorgon', 'hydra', 'chimera',
-  'manticore', 'basilisk', 'cockatrice', 'griffin', 'gryphon',
-  'hippogriff', 'pegasus', 'unicorn', 'kraken', 'beholder', 'flayer',
-  'devil', 'demon', 'angel', 'fiend', 'celestial', 'ooze', 'slime',
-  'jelly', 'pudding', 'fungus', 'mold', 'mould', 'plant', 'vine',
-  'tendril', 'horror', 'terror', 'beast', 'creature', 'monster', 'spawn',
-  'broodling', 'swarmling', 'hulk', 'eater', 'drinker', 'reaper',
-  'stinger', 'crawler', 'lurker', 'prowler', 'hunter', 'devourer',
-  'render', 'shredder', 'crusher', 'smasher', 'gnawer', 'minion',
-  'sentinel', 'guardian', 'keeper', 'weaver', 'hag', 'witch', 'warlock',
-  'cultist', 'acolyte', 'knight', 'archer', 'warrior', 'brute',
-  'marauder', 'raider', 'bandit', 'thug', 'pirate', 'assassin',
-  'berserker', 'shaman', 'druid', 'mage', 'wizard', 'sorcerer', 'adept',
-  'guard', 'soldier',
-]);
-
-/** Word tokens of a creature/NPC name, lowercased ("The Ghoul" → ['ghoul']). */
-function nameTokens(name: string): string[] {
-  const tokens = monsterKeyTokens(baseKindName(name));
-  return tokens[0] === 'the' ? tokens.slice(1) : tokens;
-}
 
 /**
  * Is this combatant a named unique — a person, not a creature kind? Only
@@ -244,14 +195,8 @@ function isNamedUnique(
   if (index.blocklessNpcs.has(baseKey)) {
     return true;
   }
-  if (lookup.monsterId?.startsWith('srd:')) return false;
-  const tokens = nameTokens(base);
-  if (tokens.length > 0 && PERSON_TITLES.has(tokens[0]!)) return true;
-  // "X the Y" is an epithet, and epithets name individuals.
-  if (tokens.length >= 3 && tokens[1] === 'the') return true;
-  const last = tokens[tokens.length - 1];
-  // A creature-kind name ends in a kind noun; anything else is a person.
-  return !(last && CREATURE_KIND_NOUNS.has(last));
+  // Name-only judgement (shared with the client fight-start card title).
+  return nameReadsAsPerson(base, lookup.monsterId);
 }
 
 /**
@@ -266,8 +211,7 @@ const bibleMonsterId = (
   index: CampaignMonsterIndex,
   combatant: { monsterId?: string | null; name: string },
 ): string | undefined =>
-  combatant.monsterId ??
-  findAuthoredMonster(index, null, baseKindName(combatant.name))?.entityName;
+  combatant.monsterId ?? findAuthoredMonster(index, null, baseKindName(combatant.name))?.entityName;
 
 /**
  * Bible-named companions in the primary creature's encounter note, in note
@@ -294,7 +238,10 @@ function statedCompanionNames(
     });
     if (!found) break;
     companions.push(found);
-    const tokens = found.replace(/^the\s+/i, '').split(/\s+/).join('\\s+');
+    const tokens = found
+      .replace(/^the\s+/i, '')
+      .split(/\s+/)
+      .join('\\s+');
     remaining = remaining.replace(new RegExp(tokens, 'i'), ' ');
   }
   return companions;
@@ -438,11 +385,7 @@ export function expandParticipantInputs<T extends SizedParticipantInput>(
   if (hostiles.length === 0) return [...inputs];
 
   const primary = hostiles[0]!;
-  const note = encounterNoteFor(
-    context.index,
-    primary.monsterId,
-    baseKindName(primary.name),
-  );
+  const note = encounterNoteFor(context.index, primary.monsterId, baseKindName(primary.name));
   const unique = isNamedUnique(context.index, primary);
   let desired = desiredHostileCount(context.difficulty, note);
   if (unique && !isPackLike(note.kind) && note.kind !== 'pair') desired = 1;
