@@ -203,6 +203,12 @@ export function useCombatLegalActions(input: {
   const [armedMetamagic, setArmedMetamagic] = useState<string | null>(null);
   const encounter = combatState.activeEncounter;
   const roster = useMemo(() => engineRosterOf(encounter?.participants), [encounter?.participants]);
+  // #1732: whether the current actor has spent its Action or bonus action (see refreshLegalActions).
+  const currentActor = encounter?.participants.find(
+    (participant) => participant.id === encounter?.currentTurnParticipantId,
+  );
+  const actorActionSpent = currentActor?.actionTaken === true;
+  const actorBonusSpent = currentActor?.bonusActionTaken === true;
   const [legalState, setLegalState] = useState<{ actorId?: string; actions: LegalAction[] }>({
     actions: [],
   });
@@ -265,7 +271,16 @@ export function useCombatLegalActions(input: {
     } finally {
       if (sequence === refreshSequence.current) setIsRefreshingLegalActions(false);
     }
-  }, [showCombatMenu, encounter?.id, encounter?.currentTurnParticipantId, encounter?.currentRound]);
+    // #1732: a check (Shove, typed Search) spends the actor's Action or bonus action on the
+    // server. The list must be read again then, or Attack stays on it after the Action is gone.
+  }, [
+    showCombatMenu,
+    encounter?.id,
+    encounter?.currentTurnParticipantId,
+    encounter?.currentRound,
+    actorActionSpent,
+    actorBonusSpent,
+  ]);
 
   useEffect(() => {
     void refreshLegalActions();

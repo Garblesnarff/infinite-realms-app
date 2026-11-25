@@ -1,4 +1,4 @@
-import { AlertTriangle, Play, Trash2 } from 'lucide-react';
+import { AlertTriangle, Info, Play, Trash2 } from 'lucide-react';
 import React, { useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -283,10 +283,11 @@ const CharacterCardComponent = ({
           }}
         />
         {/* #209: at-rest caption — name plus distinguishing labels (campaign,
-            copy number, level, HP, created time), and Play and Delete as 44px
-            touch targets. These are visible without hovering, so touch and narrow
-            screens reach them; the hover popup is pointer-only. Fallen characters
-            are unplayable, so Play is omitted there; Delete stays. */}
+            copy number, level, HP, created time), and Play, View details and
+            Delete as 44px touch targets. These are visible without hovering,
+            so touch and narrow screens reach them; the hover popup is
+            pointer-only. Fallen characters are unplayable, so Play is omitted
+            there; View details and Delete stay. */}
         <div
           data-testid="character-card-caption"
           className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3"
@@ -335,6 +336,27 @@ const CharacterCardComponent = ({
                 Play
               </button>
             )}
+            {/* #228 MB-004: the hover popup's View Details is pointer-only, so
+                touch never reaches it. The caption carries the same action as a
+                44px icon button; tapping the hero still navigates too. */}
+            <button
+              type="button"
+              data-testid="character-card-view-details"
+              aria-label="View character details"
+              title="View character details"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/app/character/${character.id}`);
+              }}
+              onKeyDown={(e) => {
+                // The hero div handles Enter/Space as "open details"; stop the
+                // keydown so keyboard activation navigates exactly once.
+                e.stopPropagation();
+              }}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/50 text-white/80 backdrop-blur-sm transition hover:bg-infinite-teal hover:text-infinite-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <Info className="h-4 w-4" aria-hidden="true" />
+            </button>
             <button
               type="button"
               data-testid="character-card-delete"

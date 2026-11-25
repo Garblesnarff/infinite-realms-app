@@ -363,3 +363,60 @@ describe('CharacterCard #209 touch-reachable Play and campaign label', () => {
     expect(focusedDelete.size).toBe(1);
   });
 });
+
+describe('CharacterCard #228 touch-reachable View details', () => {
+  it('shows View details in the caption without hovering and navigates to the sheet on click', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/roster']}>
+        <Routes>
+          <Route
+            path="/roster"
+            element={
+              <>
+                <LocationProbe />
+                <CharacterCardComponent character={scholarCopy() as never} />
+              </>
+            }
+          />
+          <Route path="/app/character/:id" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    const viewDetails = screen.getByTestId('character-card-view-details');
+    expect(viewDetails).toBeVisible();
+    expect(viewDetails).toHaveAccessibleName('View character details');
+
+    await user.click(viewDetails);
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/character/char-scholar-1');
+  });
+
+  it('gives View details a 44px touch target', () => {
+    renderCard(scholarCopy());
+
+    expect(screen.getByTestId('character-card-view-details')).toHaveClass('h-11', 'w-11');
+  });
+
+  it('exposes one View character details button at rest', () => {
+    renderCard(scholarCopy());
+
+    // The hover popup carries a duplicate View Details; at rest it must be
+    // hidden from assistive tech so only the caption's control is announced.
+    expect(screen.getAllByRole('button', { name: 'View character details' })).toHaveLength(1);
+  });
+
+  it('keeps View details reachable by keyboard Tab', async () => {
+    const user = userEvent.setup();
+    renderCard(scholarCopy());
+
+    const reached = new Set<string>();
+    for (let step = 0; step < 12; step += 1) {
+      await user.tab();
+      const id = document.activeElement?.getAttribute('data-testid');
+      if (id) reached.add(id);
+    }
+
+    expect(reached).toContain('character-card-view-details');
+  });
+});

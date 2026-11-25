@@ -1,9 +1,54 @@
 import { describe, expect, test } from 'bun:test';
+import pino from 'pino';
 
-import { issuedCheckModifier, narrativeCheckShadow } from '../narrative-check-outcome.js';
+import {
+  issuedCheckModifier,
+  logNarrativeCheckShadowMismatch,
+  narrativeCheckShadow,
+  narrativeCheckShadowFacts,
+} from '../narrative-check-outcome.js';
 
 describe('narrative check shadow', () => {
   const request = { type: 'skill_check', formula: '1d20+5', dc: 15 };
+  test('the mismatch line carries the client and server numbers, verdicts and ids', () => {
+    const lines: string[] = [];
+    const log = pino(
+      {
+        base: { service: 'infiniterealms-bun' },
+        formatters: { level: (label) => ({ level: label }) },
+      },
+      { write: (line: string) => void lines.push(line) },
+    );
+    const facts = narrativeCheckShadowFacts({
+      text: 'Athletics: 18 (nat 12+6) fail',
+      request,
+      modifier: 5,
+    });
+    logNarrativeCheckShadowMismatch(log, { sessionId: 'sess-1', rollRequestId: 'roll-1' }, facts!);
+    expect(lines).toHaveLength(1);
+    const row = JSON.parse(lines[0]!);
+    expect(row).toMatchObject({
+      level: 'info',
+      service: 'infiniterealms-bun',
+      msg: 'narrative check shadow mismatch',
+      sessionId: 'sess-1',
+      rollRequestId: 'roll-1',
+      result: 'mismatch',
+      clientTotal: 18,
+      serverTotal: 17,
+      natural: 12,
+      modifier: 5,
+      dc: 15,
+      clientVerdict: 'fail',
+      serverVerdict: 'success',
+    });
+    expect(Object.keys(row)).not.toContain('userId');
+  });
+  test('facts keep the same result as the narrower shadow', () => {
+    expect(
+      narrativeCheckShadowFacts({ text: 'Athletics: 18 (nat 12+6) fail', request, modifier: 5 }),
+    ).toMatchObject({ result: 'mismatch', serverTotal: 17, serverVerdict: 'success' });
+  });
   test('compares the reported natural with server modifier and verdict', () => {
     expect(
       narrativeCheckShadow({ text: 'Athletics: 17 (nat 12+5) success', request, modifier: 5 }),
