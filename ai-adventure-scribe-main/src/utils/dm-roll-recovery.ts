@@ -29,11 +29,12 @@ export function declinedRollMessage(
 /**
  * The transcript line saved when the player dismisses an engine initiative prompt (#115):
  * the entry flow then rolls the die for the player, and this line tells them so. It is an
- * engine row (the "⚙️ Engine: " prefix), not an answer to a DM roll request.
+ * engine row (the "⚙️ Engine: " prefix), not an answer to a DM roll request. `total` is the
+ * initiative the engine rolled for the player after the dismissal.
  */
-export function dismissedEngineRollMessage(): ChatMessage {
+export function dismissedEngineRollMessage(total: number): ChatMessage {
   return {
-    text: '⚙️ Engine: You dismissed the Initiative roll, so the engine rolls it for you.',
+    text: `⚙️ Engine: You dismissed the Initiative roll, so the engine rolled ${total} for you.`,
     sender: 'system',
     timestamp: new Date().toISOString(),
     context: { intent: ENGINE_ROLL_DISMISSED_INTENT },

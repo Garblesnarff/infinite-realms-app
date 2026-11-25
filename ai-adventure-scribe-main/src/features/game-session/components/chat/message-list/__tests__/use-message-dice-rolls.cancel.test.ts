@@ -15,6 +15,7 @@ import {
   settleCombatInitiativeRoll,
 } from '@/hooks/combat/use-player-roll-host';
 import { markDeathSavePromptDismissed } from '@/services/combat/player-roll-bridge';
+import { publishDismissedInitiativeRoll } from '@/services/combat/roll-outcome-display';
 
 const { game } = vi.hoisted(() => ({
   game: {
@@ -122,7 +123,7 @@ describe('Cancel on a roll prompt (#2291)', () => {
     },
   );
 
-  it('an initiative prompt the entry flow is waiting on writes one engine line saying the engine rolls it (#115)', async () => {
+  it('an initiative prompt the entry flow is waiting on writes one engine line with the total the engine rolled (#115)', async () => {
     vi.mocked(settleCombatInitiativeRoll).mockReturnValue(true);
     queue({
       id: 'engine-1',
@@ -135,15 +136,22 @@ describe('Cancel on a roll prompt (#2291)', () => {
 
     const onSendMessage = cancel();
 
+    expect(onSendMessage).not.toHaveBeenCalled();
+    publishDismissedInitiativeRoll('engine-1', 16);
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
     expect(onSendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         sender: 'system',
-        text: '⚙️ Engine: You dismissed the Initiative roll, so the engine rolls it for you.',
+        text: '⚙️ Engine: You dismissed the Initiative roll, so the engine rolled 16 for you.',
         context: { intent: 'engine_roll_dismissed' },
       }),
     );
     expect(settleCombatInitiativeRoll).toHaveBeenCalledWith('engine-1', null);
+
+    // A publish for a different rollId writes nothing.
+    publishDismissedInitiativeRoll('other-roll', 9);
+    await Promise.resolve();
+    expect(onSendMessage).toHaveBeenCalledTimes(1);
   });
 
   it('a double click on an initiative prompt writes one engine line (#115)', async () => {
@@ -165,6 +173,8 @@ describe('Cancel on a roll prompt (#2291)', () => {
       cancelOnce();
     });
 
+    publishDismissedInitiativeRoll('engine-1', 16);
+    publishDismissedInitiativeRoll('engine-1', 16);
     await waitFor(() => expect(onSendMessage).toHaveBeenCalledTimes(1));
     await Promise.resolve();
     expect(onSendMessage).toHaveBeenCalledTimes(1);

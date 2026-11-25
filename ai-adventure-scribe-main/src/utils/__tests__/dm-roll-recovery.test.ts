@@ -181,14 +181,16 @@ describe('dismissedEngineRollMessage (#115)', () => {
   const player: ChatMessage = { id: 'p1', sender: 'player', text: 'I watch him.' };
 
   it('reads the engine prefix, system sender, and engine_roll_dismissed intent', () => {
-    const message = dismissedEngineRollMessage();
+    const message = dismissedEngineRollMessage(21);
     expect(message.sender).toBe('system');
-    expect(message.text).toMatch(/^⚙️ Engine: /);
+    expect(message.text).toBe(
+      '⚙️ Engine: You dismissed the Initiative roll, so the engine rolled 21 for you.',
+    );
     expect(message.context).toEqual({ intent: 'engine_roll_dismissed' });
   });
 
   it('is not an answer: a DM reply stays withheld and its request still owed', () => {
-    const messages = [player, reply, dismissedEngineRollMessage()];
+    const messages = [player, reply, dismissedEngineRollMessage(21)];
     expect(withheldDmRollReplies(messages)).toEqual(new Set([reply]));
     expect(latestUnansweredDmRollRequest(messages)?.requests).toEqual([
       { ...insight, rollRequestId: 'd1:roll:0' },

@@ -14,6 +14,7 @@ import { confirmCombatEntry } from '@/hooks/ai/combat-entry-hold';
 import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { requestPlayerInitiativeRoll } from '@/services/combat/player-roll-bridge';
+import { publishDismissedInitiativeRoll } from '@/services/combat/roll-outcome-display';
 import {
   buildCombatEntryPlayer,
   type CombatEntryPayload,
@@ -43,7 +44,12 @@ type DeliveryArgs = {
   entryConfirmed?: boolean;
   signal?: AbortSignal;
   confirm?: () => Promise<CombatEntryOutcome>;
-  rollInitiative?: () => Promise<{ d20: number | null }>;
+  rollInitiative?: () => Promise<{
+    d20: number | null;
+    dismissed?: boolean;
+    rollId?: string;
+    timedOut?: boolean;
+  }>;
 };
 
 let inflight: { key: string; promise: Promise<CombatEntryDeliveryResult> } | null = null;
@@ -210,6 +216,39 @@ async function runDelivery(args: DeliveryArgs): Promise<CombatEntryDeliveryResul
     typeof (entryPayload as { encounter?: { id?: unknown } } | null)?.encounter?.id === 'string'
       ? (entryPayload as { encounter: { id: string } }).encounter.id
       : args.sessionId;
+  if (initiative.dismissed === true && initiative.rollId) {
+    const participants = (entryPayload as { participants?: unknown } | null)?.participants;
+    let playerParticipant: unknown;
+    if (Array.isArray(participants)) {
+      if (args.player.characterId) {
+        playerParticipant = participants.find(
+          (p) =>
+            !!p &&
+            typeof p === 'object' &&
+            (p as Record<string, unknown>).characterId === args.player.characterId,
+        );
+      } else {
+        playerParticipant = participants.find(
+          (p) =>
+            !!p &&
+            typeof p === 'object' &&
+            (p as Record<string, unknown>).participantType === 'player' &&
+            (p as Record<string, unknown>).name === args.player.name,
+        );
+      }
+    }
+    const total =
+      playerParticipant && typeof playerParticipant === 'object'
+        ? (playerParticipant as Record<string, unknown>).initiative
+        : undefined;
+    if (typeof total === 'number' && Number.isFinite(total)) {
+      publishDismissedInitiativeRoll(initiative.rollId, total);
+    } else {
+      logger.warn('[CombatEntry] dismissed initiative but no player participant/number found', {
+        rollId: initiative.rollId,
+      });
+    }
+  }
   return { kind: 'seated', entryPayload, encounterId };
 }
 

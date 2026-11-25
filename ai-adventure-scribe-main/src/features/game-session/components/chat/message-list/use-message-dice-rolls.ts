@@ -30,6 +30,8 @@ import {
   engineRollWasRefused,
   subscribeEngineRollRefusal,
   subscribeEngineRollOutcome,
+  subscribeDismissedInitiativeRoll,
+  dismissedInitiativeTotal,
   type EngineRollOutcome,
 } from '@/services/combat/roll-outcome-display';
 import { declinedRollMessage, dismissedEngineRollMessage } from '@/utils/dm-roll-recovery';
@@ -136,6 +138,7 @@ export function useMessageDiceRolls({
   // while the first handler is still running. The guard is per roll, never one global slot (#2587).
   const handlingRollIdsRef = useRef<Set<string>>(new Set());
   const cancelledRollIdRef = useRef<string | null>(null);
+  const dismissedInitiativeIdsRef = useRef<Set<string>>(new Set());
   const [pendingRollId, setPendingRollId] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [rollFailure, setRollFailure] = useState<RollFailure | null>(null);
@@ -349,7 +352,7 @@ export function useMessageDiceRolls({
       // A cancelled narrative check is an answer too, so it goes in the transcript (#2291): the
       // DM's withheld reply shows, a reload does not re-open the popup, and the next DM turn
       // sees the choice. Engine-owned attack prompts keep #2237's behavior (withdrawn, no line);
-      // initiative now writes the engine line (#115).
+      // initiative now writes the engine line after the entry flow settles (#115).
       const engineOwned =
         attackSettled ||
         initiativeSettled ||
@@ -357,15 +360,24 @@ export function useMessageDiceRolls({
         isEngineTaggedRoll(currentRoll) ||
         isEngineChannelRollType(currentRoll.requestType);
       if (initiativeSettled) {
-        const dismissed = dismissedEngineRollMessage();
-        Promise.resolve()
-          .then(() => onSendMessage(dismissed))
-          .catch((error: unknown) =>
-            logger.warn('[useMessageDiceRolls] dismissed engine roll line not saved', {
-              rollId: currentRoll.id,
-              error,
-            }),
-          );
+        dismissedInitiativeIdsRef.current.add(currentRoll.id);
+        if (dismissedInitiativeIdsRef.current.size > 32) {
+          const first = dismissedInitiativeIdsRef.current.values().next().value;
+          if (first) dismissedInitiativeIdsRef.current.delete(first);
+        }
+        const total = dismissedInitiativeTotal(currentRoll.id);
+        if (total !== undefined) {
+          dismissedInitiativeIdsRef.current.delete(currentRoll.id);
+          const dismissed = dismissedEngineRollMessage(total);
+          Promise.resolve()
+            .then(() => onSendMessage(dismissed))
+            .catch((error: unknown) =>
+              logger.warn('[useMessageDiceRolls] dismissed engine roll line not saved', {
+                rollId: currentRoll.id,
+                error,
+              }),
+            );
+        }
       } else if (!engineOwned) {
         const declined = declinedRollMessage(currentRoll.description, currentRoll.rollRequestId);
         Promise.resolve()
@@ -405,6 +417,23 @@ export function useMessageDiceRolls({
       setIsRetrying(false);
     }
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeDismissedInitiativeRoll((event) => {
+      if (!dismissedInitiativeIdsRef.current.has(event.rollId)) return;
+      dismissedInitiativeIdsRef.current.delete(event.rollId);
+      const dismissed = dismissedEngineRollMessage(event.total);
+      Promise.resolve()
+        .then(() => onSendMessage(dismissed))
+        .catch((error: unknown) =>
+          logger.warn('[useMessageDiceRolls] dismissed engine roll line not saved', {
+            rollId: event.rollId,
+            error,
+          }),
+        );
+    });
+    return unsubscribe;
+  }, [onSendMessage]);
 
   // Handle manual dice result input with batching support
   // #1472: resolves true only when this roll's die was recorded (the message saved, or the
