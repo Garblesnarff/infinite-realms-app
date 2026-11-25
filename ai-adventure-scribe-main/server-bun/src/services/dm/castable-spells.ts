@@ -99,11 +99,15 @@ const NON_SPELL_NOUNS = /\b(?:line|net|hook|rod)\b/i;
  * Whether a name the catalog does not hold, cast in `sentence`, reads as a spell (#217 step d2,
  * #248 item 3): the sentence names a slot, a spell level, a saving throw or a DC, or the name is
  * aimed at a target ("at", "on", "upon", "against" straight after it) — unless the name is an
- * ordinary object. "Cast Fishing Line into the lake" is none of those, so it is not a claim;
+ * ordinary object. A bare multiword spell name can end the sentence without a cue.
+ * "Cast Fishing Line into the lake" is none of those, so it is not a claim;
  * "into" and "toward" name a place, not a target.
  */
 const readsLikeASpell = (sentence: string, phrase: string, afterName: string): boolean =>
-  (SPELL_WORDS.test(sentence) || SPELL_TARGET.test(afterName)) && !NON_SPELL_NOUNS.test(phrase);
+  !NON_SPELL_NOUNS.test(phrase) &&
+  (SPELL_WORDS.test(sentence) ||
+    SPELL_TARGET.test(afterName) ||
+    (/\s/.test(phrase) && /^[.!?;]?$/.test(afterName.trim())));
 
 export interface NamedSpell {
   name: string;
