@@ -205,6 +205,9 @@ build_replay_list() {
         # prefix would sort it before that backfill, so it would replay against a database
         # with no starter_character_templates table in it yet (#829).
         0028_starter_character_templates_subclass.sql) echo "20251211_000000	$f"; continue;;
+        # Adds the nullable spells column to starter_character_templates (#1025). Same reason
+        # as 0028 above: the table is created by the 20251210 backfill, so replay it after that.
+        0037_starter_character_templates_spells.sql) echo "20251211_000001	$f"; continue;;
         # ALTERs character_spells, which is created by
         # db/migrations/20251106_backfill_lost_drizzle_migrations.sql. Its drizzle index
         # prefix would sort it before that backfill, so it would replay against a database
