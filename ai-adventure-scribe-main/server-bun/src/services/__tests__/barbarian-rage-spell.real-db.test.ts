@@ -26,17 +26,25 @@ import {
   characterConcentration,
   characterStats,
   characters,
+  characterSpellSlots,
   combatEncounters,
   combatParticipantStatus,
   combatParticipants,
   gameSessions,
 } from '../../../../db/schema/index';
-import { setRngSeed } from '../../lib/rng.js';
+import { mulberry32, setRngSeed } from '../../lib/rng.js';
 
 const { combatAttackService } = await importWithRealDb(
   () => import('../combat/combat-attack-service.js'),
 );
 const { claimRage } = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
+
+const { rollCombatSavingThrow } = await importWithRealDb(
+  () => import('../combat/combat-saving-throw.js'),
+);
+const { maybeStartConcentrationFromSpellCast } = await importWithRealDb(
+  () => import('../combat/spell-cast-concentration.js'),
+);
 
 if (!hasRealDb) {
   console.warn('[barbarian-rage-spell] SKIPPED: set TEST_DATABASE_URL to run these.');
@@ -70,7 +78,7 @@ describeWithDb('Rage on a spell (#1654)', () => {
         name: testId('sorcerer'),
         level: 5,
         class: 'Sorcerer',
-        knownSpells: 'Burning Hands',
+        knownSpells: 'Burning Hands,Dancing Lights',
       })
       .returning({ id: characters.id });
     await db.insert(characterStats).values({
@@ -228,4 +236,59 @@ describeWithDb('Rage on a spell (#1654)', () => {
 
     expect(ragingFire.finalDamage).toBe(plainFire.finalDamage);
   });
+  it('keeps the higher Strength save die during Rage and uses one die for Dexterity', async () => {
+    // Select a seed whose second roll is higher, so one die would fail the assertion.
+    const seed = Array.from({ length: 100 }, (_, index) => index).find((candidate) => {
+      const rng = mulberry32(candidate);
+      return Math.floor(rng() * 20) < Math.floor(rng() * 20);
+    })!;
+    const rng = mulberry32(seed);
+    const first = Math.floor(rng() * 20) + 1;
+    const second = Math.floor(rng() * 20) + 1;
+    try {
+      setRngSeed(seed);
+      expect(await rollCombatSavingThrow(encounterId, targetId, 'str')).toBe(first);
+      await claimRage(encounterId, targetId);
+      setRngSeed(seed);
+      expect(await rollCombatSavingThrow(encounterId, targetId, 'str')).toBe(second);
+      setRngSeed(seed);
+      expect(await rollCombatSavingThrow(encounterId, targetId, 'dex')).toBe(first);
+    } finally {
+      setRngSeed(undefined);
+    }
+  });
+
+  it.each([
+    ['burning-hands', 'Burning Hands', 1],
+    ['dancing-lights', 'Dancing Lights', 0],
+  ])(
+    'refuses %s while raging without spending a spell slot or an action',
+    async (id, name, level) => {
+      await claimRage(encounterId, casterId);
+      const slots = () =>
+        db
+          .select()
+          .from(characterSpellSlots)
+          .where(eq(characterSpellSlots.characterId, casterCharacterId));
+      const before = await slots();
+      await expect(castAtTarget(id, name, level)).rejects.toThrow(
+        'You cannot cast spells or concentrate while raging.',
+      );
+      const [caster] = await db
+        .select()
+        .from(combatParticipants)
+        .where(eq(combatParticipants.id, casterId));
+      expect(caster.actionUsed).toBe(false);
+      expect(await slots()).toEqual(before);
+      expect(
+        await maybeStartConcentrationFromSpellCast('[spell_id=dancing-lights]', sessionId),
+      ).toBe(false);
+      expect(
+        await db
+          .select()
+          .from(characterConcentration)
+          .where(eq(characterConcentration.characterId, casterCharacterId)),
+      ).toEqual([]);
+    },
+  );
 });

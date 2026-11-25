@@ -501,7 +501,11 @@ export function formatCombatActionParts(
       ? ` (${value.usesRemaining} use(s) left)`
       : '';
     // The mark expires at the start of its round, so the last raging round is one before it.
-    const line = `⚙️ Engine: ${actor} rages${usesLeft}. Rage lasts through round ${value.expiresRound - 1}.`;
+    const concentration =
+      typeof value.droppedConcentration === 'string'
+        ? ` ${actor} loses concentration on ${value.droppedConcentration}.`
+        : '';
+    const line = `⚙️ Engine: ${actor} rages${usesLeft}. Rage lasts through round ${value.expiresRound - 1}.${concentration}`;
     return [
       {
         line,
