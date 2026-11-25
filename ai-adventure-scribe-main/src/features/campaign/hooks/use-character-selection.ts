@@ -6,6 +6,7 @@ import { abilityModifier } from '../../../../shared/ability-modifier';
 import { resolveStarterCampaignIdFromSessionList } from '../../../../shared/session-list-contract';
 
 import { useAuth } from '@/contexts/AuthContext';
+import { listStartableHeroRows } from '@/features/campaign/start-heroes';
 import {
   loadPairSessionStart,
   sessionStartGameTarget,
@@ -85,18 +86,11 @@ export interface UseCharacterSelectionReturn {
   templates: StarterTemplate[] | undefined;
   characters: Character[] | undefined;
   /**
-   * The whole account roster: loaded when the campaign-bound list came back
-   * empty (#2142), and additionally for starter campaigns alongside their
-   * templates (#321). Undefined otherwise.
+   * The whole account roster, loaded only when the campaign-bound list came
+   * back empty (#2142). Undefined otherwise, including starter campaigns: their
+   * heroes are the campaign's templates only (#1740).
    */
   accountCharacters: Character[] | undefined;
-  /**
-   * #321: the account-roster fetch error, surfaced only on starter campaigns
-   * where the roster is a peer section (elsewhere it folds into loadError).
-   * The modal renders an inline retry for it; the full-modal loadError must
-   * not hide the templates.
-   */
-  rosterError: Error | null;
   loadError: Error | null;
   retryLoad: () => void;
   starterCampaignId: string | null | undefined;
@@ -159,9 +153,7 @@ export function useCharacterSelection({
     queryFn: async () => {
       if (!starterCampaignId) return [];
 
-      return userDataApi.listStarterCharacterTemplates(starterCampaignId) as Promise<
-        StarterTemplate[]
-      >;
+      return listStartableHeroRows(starterCampaignId) as Promise<StarterTemplate[]>;
     },
     enabled: !!starterCampaignId,
   });
@@ -191,11 +183,9 @@ export function useCharacterSelection({
   // must not hide the account's characters behind "no characters yet".
   const boundListEmpty = !boundLoading && !boundError && boundList?.length === 0;
 
-  // #321: starter campaigns also load the account roster, so a saved custom
-  // character can start a session there. The roster is an addition to the
-  // templates, never a fallback for a failed template load — the modal only
-  // renders this section when templates loaded, keeping the #2193
-  // load-failure state roster-free.
+  // The account roster is only for a campaign with nothing bound to it (#2142).
+  // A starter campaign never loads it: its heroes are its templates, the same
+  // list the explore page shows (#1740).
   const {
     data: accountCharacters,
     isLoading: accountLoading,
@@ -204,7 +194,7 @@ export function useCharacterSelection({
   } = useQuery({
     queryKey: ['characters', 'account', user?.id],
     queryFn: async () => userDataApi.listCharacters() as Promise<Character[]>,
-    enabled: !!user?.id && isOpen && (boundListEmpty || isStarterCampaign),
+    enabled: !!user?.id && isOpen && !isStarterCampaign && boundListEmpty,
   });
 
   const isLoading = boundLoading || (boundListEmpty && accountLoading);
@@ -418,8 +408,7 @@ export function useCharacterSelection({
     isStarterCampaign,
     templates,
     characters,
-    accountCharacters: boundListEmpty || isStarterCampaign ? accountCharacters : undefined,
-    rosterError: isStarterCampaign ? (accountError as Error | null) : null,
+    accountCharacters: boundListEmpty ? accountCharacters : undefined,
     loadError,
     retryLoad,
     starterCampaignId,
