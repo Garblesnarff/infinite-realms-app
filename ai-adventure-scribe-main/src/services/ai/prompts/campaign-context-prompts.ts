@@ -319,6 +319,9 @@ PREMISE: ${lore.premise}
 OVERVIEW: ${lore.overviewText}
 </canonical_setting>
 ${playerIdentityBlock(lore.playerCharacterName)}
+<darkness_rule>
+No one sees in total darkness without a light source or darkvision. The character block's "Sight:" line says whether the player has darkvision; without it and without light, narrate only sound, touch and smell.
+</darkness_rule>
 <creative_direction>
 ${lore.creativeBrief}
 </creative_direction>`;
@@ -705,9 +708,7 @@ export class CampaignContextPrompts {
         );
         for (const unit of scored) {
           if (unit.sectionType !== 'handouts' || kept.includes(unit)) continue;
-          const giver = String(
-            (unit.entity.metadata as any)?.giver || '',
-          ).toLowerCase();
+          const giver = String((unit.entity.metadata as any)?.giver || '').toLowerCase();
           const cost = approximateTokens(renderEntityBlock(unit.sectionType, unit.entity));
           if (giver && keptNameSet.has(giver) && cost <= remaining) {
             kept.push(unit);

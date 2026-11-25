@@ -14,7 +14,7 @@ export const tiefling: CharacterRace = {
   id: 'tiefling',
   name: 'Tiefling',
   description: 'Tieflings are the infernal bloodline of humans and fiends.',
-  traits: ['Hellish Resistance', 'Infernal Legacy'],
+  traits: ['Darkvision', 'Hellish Resistance', 'Infernal Legacy'],
   abilityScoreIncrease: { intelligence: 1, charisma: 2 },
   speed: 30,
   languages: ['Common', 'Infernal'],

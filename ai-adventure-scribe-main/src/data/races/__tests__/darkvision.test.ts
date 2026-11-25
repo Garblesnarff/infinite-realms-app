@@ -28,4 +28,20 @@ describe('darkvisionRangeFor', () => {
     expect(darkvisionRangeFor('')).toBeUndefined();
     expect(darkvisionRangeFor(undefined)).toBeUndefined();
   });
+
+  it('returns 60 for tiefling', () => {
+    expect(darkvisionRangeFor('Tiefling')).toBe(60);
+  });
+
+  it('returns 120 for duergar subrace', () => {
+    expect(darkvisionRangeFor('Dwarf', 'Duergar (Gray Dwarf)')).toBe(120);
+  });
+
+  it('returns 120 for deep gnome subrace', () => {
+    expect(darkvisionRangeFor('Gnome', 'Deep Gnome (Svirfneblin)')).toBe(120);
+  });
+
+  it('returns undefined for custom lineage (player choice)', () => {
+    expect(darkvisionRangeFor('Human', 'Custom Lineage')).toBeUndefined();
+  });
 });

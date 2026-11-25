@@ -85,5 +85,9 @@ export function darkvisionRangeFor(
   const traits = [...(race.traits ?? []), ...(subrace?.traits ?? [])];
   if (traits.includes('Superior Darkvision')) return 120;
   if (traits.includes('Darkvision')) return 60;
+  // A trait that mentions darkvision but is not an unambiguous grant (e.g.
+  // Custom Lineage's "Darkvision or Skill Proficiency", a player choice) makes
+  // no claim: the DM must not assert either way.
+  if (traits.some((t) => /darkvision/i.test(t))) return undefined;
   return null;
 }
