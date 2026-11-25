@@ -1,5 +1,5 @@
 /**
- * #1019: pins the real premade (starter template) create payloads for the two
+ * #1019 / #1025: pins the real premade (starter template) create payloads for the two
  * level-3 heroes Hark's G22-002/010 found feature-less on The Gardener's Heir.
  *
  * Runs the exact producer chain a template pick runs in production:
@@ -89,7 +89,13 @@ const clariceRow: Record<string, unknown> = {
   personality: { traits: [], ideals: [], bonds: [], flaws: [] },
   skills: ['Arcana', 'Insight'],
   languages: ['Common', 'Draconic'],
-  equipment: ['dagger', 'dagger', 'light crossbow', 'case with 20 crossbow bolts', "explorer's pack"],
+  equipment: [
+    'dagger',
+    'dagger',
+    'light crossbow',
+    'case with 20 crossbow bolts',
+    "explorer's pack",
+  ],
   adapted_backstory: null,
   campaign_hook: null,
   portrait_url: null,
@@ -117,6 +123,25 @@ describe('premade seed payloads (#1019)', () => {
     expect(payload.subclass).toBe('Hunter');
     expect(payload.level).toBe(3);
     expect(payload.stats).toMatchObject({ constitution: 14, dexterity: 16 });
+    expect(payload).toEqual(readCommittedFixture('premade-ranger-l3-create-payload.json'));
+  });
+
+  it('pins the Tavo Brejo template payload when the template carries its spells (#1025)', () => {
+    const template = mapTemplateRow({
+      ...tavoRow,
+      spells: { knownSpells: ["Hunter's Mark", 'Cure Wounds', 'Goodberry'] },
+    });
+    const payload = prepareCharacterPayload(buildStarterCharacterSeed(template, CAMPAIGN_ID));
+    expect(payload.name).toBe('Tavo Brejo');
+    expect(payload.known_spells).toBe('hunters-mark, cure-wounds, goodberry');
+    expect(payload).toEqual(
+      readCommittedFixture('premade-ranger-l3-template-spells-create-payload.json'),
+    );
+  });
+
+  it("pins the Tavo Brejo template payload when spells is null (#1025, today's picker)", () => {
+    const template = mapTemplateRow({ ...tavoRow, spells: null });
+    const payload = prepareCharacterPayload(buildStarterCharacterSeed(template, CAMPAIGN_ID));
     expect(payload).toEqual(readCommittedFixture('premade-ranger-l3-create-payload.json'));
   });
 

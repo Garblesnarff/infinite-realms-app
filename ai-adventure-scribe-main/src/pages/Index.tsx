@@ -1,4 +1,4 @@
-import { Plus, Users } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -69,7 +69,9 @@ const Index = () => {
       >
         {/* Search and Sort Controls */}
         <IRPanel className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center mb-8 p-6">
-          <div className="flex-1 max-w-md">
+          {/* #228 MB-005: w-full so the field fills the panel on narrow screens;
+              the 448px cap only applies once the row is horizontal (lg). */}
+          <div className="w-full lg:w-auto lg:flex-1 lg:max-w-md">
             <div className="relative">
               <label htmlFor="campaign-search" className="sr-only">
                 Search campaigns
@@ -83,7 +85,10 @@ const Index = () => {
                 aria-label="Search campaigns"
                 className="w-full px-4 py-3 pl-12 pr-4 rounded-xl border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-infinite-gold focus:border-transparent transition-all duration-200"
               />
-              <Users className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
+              <Search
+                aria-hidden="true"
+                className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5"
+              />
             </div>
           </div>
 

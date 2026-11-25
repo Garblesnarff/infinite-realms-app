@@ -329,6 +329,16 @@ describe('useCombatActionHandlers', () => {
         expect(mockUpdateParticipant).not.toHaveBeenCalled();
       });
 
+      it('re-reads the encounter after a shove, so the Action spent on the server is seen (#1732)', async () => {
+        const refreshCombatState = vi.fn().mockResolvedValue(null);
+        const { result } = setupHook({ ...b2bProps, refreshCombatState } as any);
+        await act(async () => {
+          await result.current.handleCombatAction('shove', B2B_PLAYER_ID, B2B_ENEMY_ID);
+        });
+        expect(executeAuthoritativeCombatIntent).toHaveBeenCalledTimes(1);
+        expect(refreshCombatState).toHaveBeenCalledTimes(1);
+      });
+
       it('sends nothing to the server for grapple with no target', async () => {
         const { result } = setupHook(b2bProps);
         await act(async () => {
