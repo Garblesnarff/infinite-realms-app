@@ -58,6 +58,11 @@ describe('checkHeroName (#1741)', () => {
     expect(checkHeroName('Ilse ’the Brave’', 'The Veteran').ok).toBe(true);
   });
 
+  it('accepts a decomposed accent (combining mark), as in a Zoe with a diaeresis', () => {
+    // 'Zoe' + U+0308 combining diaeresis: the same name as a precomposed 'Zoë'.
+    expect(checkHeroName('Zoe\u0308', 'The Seeker')).toEqual({ ok: true, name: 'Zoe\u0308' });
+  });
+
   it('refuses digits and other symbols', () => {
     expect(checkHeroName('Mara2', 'The Seeker').ok).toBe(false);
     expect(checkHeroName('<b>Mara</b>', 'The Seeker').ok).toBe(false);

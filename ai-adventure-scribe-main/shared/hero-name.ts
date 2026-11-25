@@ -5,8 +5,9 @@
 
 export const HERO_NAME_MAX_LENGTH = 40;
 
-// Letters, spaces, apostrophes (straight or curly) and hyphens. Starts with a letter.
-export const HERO_NAME_PATTERN = /^\p{L}[\p{L} '’-]*$/u;
+// Letters, combining marks (so a decomposed 'Zoë' passes), spaces, apostrophes (straight or
+// curly) and hyphens. Starts with a letter.
+export const HERO_NAME_PATTERN = /^\p{L}[\p{L}\p{M} '’-]*$/u;
 
 export type HeroNameCheck = { ok: true; name: string } | { ok: false; message: string };
 
