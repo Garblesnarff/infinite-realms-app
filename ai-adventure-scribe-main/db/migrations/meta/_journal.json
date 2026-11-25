@@ -260,6 +260,13 @@
       "when": 1795632381029,
       "tag": "0038_story_map",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1795632941104,
+      "tag": "0039_story_map_progress",
+      "breakpoints": true
     }
   ]
 }

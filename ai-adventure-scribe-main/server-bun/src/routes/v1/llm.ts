@@ -1217,6 +1217,27 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             directiveTrackers = null;
           }
         }
+        // #1753: the story map block (starter campaigns only, out of combat): the current
+        // place, the known places and the routes from visited places, so the DM can report
+        // `place`. Fails open like the tracker directive: no block, no map.
+        let storyMapDirective: string | null = null;
+        if (dmReply && defenseSessionId && dmReply.inCombat !== true) {
+          try {
+            const { loadStoryMapDirective } =
+              await import('../../services/story-map/story-map-service.js');
+            storyMapDirective = await loadStoryMapDirective({
+              sessionId: defenseSessionId,
+              userId,
+            });
+          } catch (error) {
+            logger.warn({
+              msg: 'DM_STORY_MAP_DIRECTIVE_FAILED',
+              sessionId: defenseSessionId,
+              error,
+            });
+            storyMapDirective = null;
+          }
+        }
         const llmPromptBase = declaredAttack
           ? appendDeclaredAttackDirective(prompt, declaredAttack.actorName, encounterDirective)
           : declaredDefense
@@ -1229,6 +1250,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           secondWindDirective,
           equipDirective,
           trackerDirective,
+          storyMapDirective,
         ].filter((directive): directive is string => directive !== null);
         const llmPrompt =
           engineDirectives.length > 0
@@ -1628,6 +1650,8 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           envelope?.damage ||
           envelope?.campaign_ending ||
           envelope?.tracker_changes ||
+          // #1753: a story map place writes the campaign's map progress.
+          envelope?.place ||
           // #1042: a climax-counting or ending-re-asserting turn is a story
           // turn for this guard too, so a completed session closes it the
           // same way (the tracker applier re-checks under its lock as well).
@@ -1961,6 +1985,52 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // change landing.
         if (envelope?.final_beat_reached === true && !trackerFinalBeatLanded) {
           envelope.final_beat_reached = null;
+        }
+        // #1753: the DM's story map place. Applied only on an out-of-combat DM turn that asks
+        // for no roll (the arrival belongs to the result turn); a value that does not fit the
+        // map is dropped and logged, never an error. The envelope keeps only an applied key.
+        if (envelope && envelope.place != null) {
+          let placeApplied = false;
+          if (
+            dmReply &&
+            castSessionId &&
+            dmReply.inCombat !== true &&
+            !rollRequested &&
+            !storyEffectsClosed
+          ) {
+            try {
+              const { applyStoryMapPlace } =
+                await import('../../services/story-map/story-map-service.js');
+              const placeResult = await applyStoryMapPlace({
+                sessionId: castSessionId,
+                userId,
+                place: envelope.place,
+              });
+              placeApplied = placeResult.accepted;
+              logger.info({
+                msg: placeResult.accepted ? 'DM_STORY_MAP_PLACE' : 'DM_STORY_MAP_PLACE_DROPPED',
+                sessionId: castSessionId,
+                place: envelope.place,
+                ...(placeResult.accepted
+                  ? { via: placeResult.via }
+                  : { reason: placeResult.reason }),
+              });
+            } catch (error) {
+              logger.warn({ msg: 'DM_STORY_MAP_PLACE_FAILED', sessionId: castSessionId, error });
+            }
+          } else {
+            logger.info({
+              msg: 'DM_STORY_MAP_PLACE_DROPPED',
+              sessionId: castSessionId ?? null,
+              place: envelope.place,
+              reason: rollRequested
+                ? 'roll_requested'
+                : storyEffectsClosed
+                  ? 'session_closed'
+                  : 'not_a_story_turn',
+            });
+          }
+          if (!placeApplied) envelope.place = null;
         }
         // #1084: a tracker-forced ending completes the session through
         // the same applier as a declared one, but the force runs inside

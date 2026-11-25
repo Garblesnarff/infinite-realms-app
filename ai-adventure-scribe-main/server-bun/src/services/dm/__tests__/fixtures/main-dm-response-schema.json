@@ -333,6 +333,10 @@
       "properties": { "character_name": { "type": "string" } },
       "required": ["character_name"],
       "description": "#1537 inspiration: when the player does good roleplay this turn (acts on a bond, ideal, or flaw in a way that costs them something, or plays their character in a way the table would remember), set this to {\"character_name\": \"<the player character's exact name>\"}. The game grants Inspiration to that character, and only if they do not already hold it. Do not grant it for a routine action or on a turn that asks for a roll. Otherwise omit it."
+    },
+    "place": {
+      "type": "string",
+      "description": "#1753 story map: when this turn ends with the hero at a place listed in <story_map> (they arrived, or the scene opens there), set this to that place key exactly as listed. Use only keys from <story_map>; the game moves the map marker from it. If this reply asks for a roll, send it on the result turn instead. Omit it when the hero stays where they are or there is no <story_map> block."
     }
   },
   "required": [

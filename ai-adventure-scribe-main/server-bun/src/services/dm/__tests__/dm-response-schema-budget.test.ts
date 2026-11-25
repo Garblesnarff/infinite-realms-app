@@ -134,7 +134,8 @@ const PHASE_BASELINES: Record<
   { unions: number; optionals: number; keywords: number }
 > = {
   // #1537: narrative +1 optional (inspiration_grant). Still under the 24-optional Anthropic cap.
-  narrative: { unions: 5, optionals: 20, keywords: 6 },
+  // #1753: narrative +1 optional (place, the story map key). 21, still under the cap of 24.
+  narrative: { unions: 5, optionals: 21, keywords: 6 },
   combat: { unions: 15, optionals: 7, keywords: 4 },
   tactical: { unions: 16, optionals: 20, keywords: 5 },
 };
