@@ -102,6 +102,8 @@ export type PlayerRollOutcome = {
   d20Rolls?: [number, number];
   cancelled?: boolean;
   timedOut?: boolean;
+  /** The player dismissed an initiative prompt; the server rolls it. */
+  dismissed?: boolean;
 };
 
 export interface PlayerRollHostHandle {
