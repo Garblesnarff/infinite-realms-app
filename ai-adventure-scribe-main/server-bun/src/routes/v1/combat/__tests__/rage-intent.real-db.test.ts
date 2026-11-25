@@ -13,6 +13,7 @@ import { Elysia } from 'elysia';
 import {
   campaigns,
   characterFeatures,
+  characterEquipment,
   characterStats,
   characters,
   classFeaturesLibrary,
@@ -47,6 +48,10 @@ const { createRequestPipelineApp } = await importWithRealDb(
   () => import('../../../../http-pipeline.js'),
 );
 const { intentRoutes } = await importWithRealDb(() => import('../intents.js'));
+
+const { executeCombatCheck } = await importWithRealDb(
+  () => import('../../../../services/combat/combat-check-service.js'),
+);
 
 const app = hasRealDb
   ? createRequestPipelineApp().use(new Elysia({ prefix: '/v1/combat' }).use(intentRoutes))
@@ -259,5 +264,84 @@ describeWithDb('Rage posts through the real intent route (#1638)', () => {
     expect(second.status).toBe(422);
     expect(await usesLeft()).toBe(1);
     expect(await bonusActionUsed()).toBe(false);
+  });
+  test('level 20 offers Rage even with zero stored uses and spends no use', async () => {
+    await db
+      .update(characters)
+      .set({ level: 20, classLevels: [{ className: 'Barbarian', level: 20 }] })
+      .where(eq(characters.id, characterId));
+    try {
+      await db
+        .update(characterFeatures)
+        .set({ usesRemaining: 0 })
+        .where(eq(characterFeatures.characterId, characterId));
+      const response = await app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/legal-actions`, {
+          headers: { authorization: `Bearer ${userId}` },
+        }),
+      );
+      expect(response.status).toBe(200);
+      expect((await response.json()).actions).toContainEqual({ type: 'rage', label: 'Rage' });
+      const activation = await postRage();
+      expect(activation.status).toBe(200);
+      expect(activation.body.result).toMatchObject({ usesRemaining: -1 });
+      expect(await usesLeft()).toBe(0);
+      expect(await bonusActionUsed()).toBe(true);
+    } finally {
+      await db
+        .update(characters)
+        .set({ level: 1, classLevels: [{ className: 'Barbarian', level: 1 }] })
+        .where(eq(characters.id, characterId));
+    }
+  });
+
+  test('equipped heavy armor prevents Rage without spending a use or bonus action', async () => {
+    const [armor] = await db
+      .insert(characterEquipment)
+      .values({
+        characterId,
+        itemName: 'Chain Mail',
+        itemType: 'armor',
+        equipped: true,
+      })
+      .returning({ id: characterEquipment.id });
+    try {
+      const response = await postRage();
+      expect(response.status).toBe(422);
+      expect(JSON.stringify(response.body)).toContain('heavy armor');
+      expect(await usesLeft()).toBe(2);
+      expect(await bonusActionUsed()).toBe(false);
+    } finally {
+      await db.delete(characterEquipment).where(eq(characterEquipment.id, armor.id));
+    }
+  });
+
+  test('a raging Barbarian keeps the higher Strength check die', async () => {
+    expect((await postRage()).status).toBe(200);
+    const [foe] = await db
+      .select({ id: combatParticipants.id })
+      .from(combatParticipants)
+      .where(
+        and(eq(combatParticipants.encounterId, encounterId), eq(combatParticipants.turnOrder, 1)),
+      );
+    const [encounter] = await db
+      .select({ version: combatEncounters.version })
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    const dice = [18, 10];
+    const result = await executeCombatCheck(
+      {
+        encounterId,
+        actorId: FIGHTER_FEATURE_ACTOR_ID,
+        targetId: foe.id,
+        userId,
+        expectedVersion: encounter.version,
+        intent: { kind: 'shove', verb: 'shove' },
+        d20: 2,
+      },
+      () => dice.shift() ?? 1,
+    );
+    expect(result.actorRoll.d20).toBe(18);
+    expect(result.success).toBe(true);
   });
 });
