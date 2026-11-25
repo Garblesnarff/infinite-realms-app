@@ -1,6 +1,11 @@
 /**
  * Build opening scene requirements for first message
- * Uses tail-sampling instruction for creative diversity (arXiv:2510.01171)
+ * #210 GP-006: the same pre-built campaign opened very differently each
+ * session. The old creative_direction told the DM to sample from the tails
+ * of its output distribution (probability < 0.10, "unexpected angle,
+ * unusual entry point") — the prompt itself drove the variance. The opening
+ * now grounds in the campaign's canonical setting and premise as given in
+ * <starter_campaign_lore>, so the same campaign opens the same way.
  */
 export function buildOpeningScenePrompt(): string {
   return `<opening_scene_requirements>
@@ -46,10 +51,13 @@ Your opening scene MUST include ALL of these elements:
 </opening_scene_quality_requirements>
 
 <creative_direction>
-Please sample at random from the tails of your output distribution, such that
-the probability of this opening scene is less than 0.10. Aim for an unexpected
-angle, unusual entry point, or surprising first moment — while remaining fully
-grounded in this campaign's world, canonical NPCs, and setting.
+Open from the campaign's canonical setting and premise as given in
+<starter_campaign_lore> — the same campaign must open the same way in every
+new session. Ground the scene in the established first location, the
+canonical NPCs, and the premise; do not invent a surprising new entry point
+or a different opening situation. Within that grounding, write vividly:
+sensory detail, a distinct NPC voice, and a hook that connects to the
+campaign's premise.
 
 Generate ONE complete opening scene. Do not generate multiple variations.
 

@@ -134,6 +134,19 @@ describe('characterReducer', () => {
     expect(state.isDirty).toBe(true);
   });
 
+  it('should handle SET_GENERATE_BACKGROUND_IMAGE without marking the draft dirty (#210 QA-026)', () => {
+    let state: CharacterState = { ...initialState, character: mockCharacter };
+
+    expect(state.generateBackgroundImage).toBe(true);
+
+    state = characterReducer(state, { type: 'SET_GENERATE_BACKGROUND_IMAGE', payload: false });
+    expect(state.generateBackgroundImage).toBe(false);
+    expect(state.isDirty).toBe(false);
+
+    state = characterReducer(state, { type: 'SET_GENERATE_BACKGROUND_IMAGE', payload: true });
+    expect(state.generateBackgroundImage).toBe(true);
+  });
+
   it('should return error if UPDATE_CHARACTER is called with invalid payload', () => {
     const stateWithCharacter = { ...initialState, character: mockCharacter };
     const action = { type: 'UPDATE_CHARACTER' as const, payload: null as any };

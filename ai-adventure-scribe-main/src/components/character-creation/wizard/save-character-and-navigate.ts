@@ -13,10 +13,18 @@ import { type Character } from '@/types/character';
 
 interface SaveCharacterAndNavigateParams {
   character: Character;
-  saveCharacter: (character: Character) => Promise<Character | null>;
+  saveCharacter: (
+    character: Character,
+    options?: { generateBackgroundImage?: boolean },
+  ) => Promise<Character | null>;
   navigate: NavigateFunction;
   searchParams: URLSearchParams;
   toast: ReturnType<typeof useToast>['toast'];
+  /**
+   * #210 QA-026: the Finalization toggle. Defaults to true (always
+   * generate, the previous behavior); false skips the automatic backdrop.
+   */
+  generateBackgroundImage?: boolean;
   /** Called once the character is saved with an id (e.g. to clear a local draft). */
   onSaved?: () => void;
   /** Called when the server refuses a custom hero on a free plan (#1344). */
@@ -29,12 +37,13 @@ export async function saveCharacterAndNavigate({
   navigate,
   searchParams,
   toast,
+  generateBackgroundImage = true,
   onSaved,
   onLegendRequired,
 }: SaveCharacterAndNavigateParams): Promise<void> {
   try {
     logger.info('Calling saveCharacter...');
-    const savedCharacter = await saveCharacter(character);
+    const savedCharacter = await saveCharacter(character, { generateBackgroundImage });
     logger.debug('Save result:', savedCharacter);
 
     if (!savedCharacter) {
@@ -57,8 +66,9 @@ export async function saveCharacterAndNavigate({
       }
       toast({
         title: 'Success!',
-        description:
-          'Character created successfully! Background image generation may continue in the background.',
+        description: generateBackgroundImage
+          ? 'Character created successfully! Background image generation may continue in the background.'
+          : 'Character created successfully!',
       });
       const targetCampaignId = savedCharacter.campaign_id || character.campaign_id;
       const starterCampaignId = searchParams.get('starterCampaign');
