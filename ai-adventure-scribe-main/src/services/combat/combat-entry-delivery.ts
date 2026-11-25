@@ -15,6 +15,7 @@ import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
 import { requestPlayerInitiativeRoll } from '@/services/combat/player-roll-bridge';
 import { publishDismissedInitiativeRoll } from '@/services/combat/roll-outcome-display';
+import { seatedPlayerInitiative } from '@/services/combat/seated-player-initiative';
 import {
   buildCombatEntryPlayer,
   type CombatEntryPayload,
@@ -217,30 +218,8 @@ async function runDelivery(args: DeliveryArgs): Promise<CombatEntryDeliveryResul
       ? (entryPayload as { encounter: { id: string } }).encounter.id
       : args.sessionId;
   if (initiative.dismissed === true && initiative.rollId) {
-    const participants = (entryPayload as { participants?: unknown } | null)?.participants;
-    let playerParticipant: unknown;
-    if (Array.isArray(participants)) {
-      if (args.player.characterId) {
-        playerParticipant = participants.find(
-          (p) =>
-            !!p &&
-            typeof p === 'object' &&
-            (p as Record<string, unknown>).characterId === args.player.characterId,
-        );
-      } else {
-        playerParticipant = participants.find(
-          (p) =>
-            !!p &&
-            typeof p === 'object' &&
-            (p as Record<string, unknown>).name === (args.player.name || 'Player'),
-        );
-      }
-    }
-    const total =
-      playerParticipant && typeof playerParticipant === 'object'
-        ? (playerParticipant as Record<string, unknown>).initiative
-        : undefined;
-    if (typeof total === 'number' && Number.isFinite(total)) {
+    const total = seatedPlayerInitiative(entryPayload, args.player);
+    if (total !== undefined) {
       publishDismissedInitiativeRoll(initiative.rollId, total);
     } else {
       logger.warn('[CombatEntry] dismissed initiative but no player participant/number found', {

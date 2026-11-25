@@ -8,6 +8,8 @@ import {
 } from '../../../../../../../shared/test-fixtures/combat-entry-headless';
 import { useMessageDiceRolls } from '../use-message-dice-rolls';
 
+import type { DiceRollQueue, DiceRollRequest } from '@/types/combat';
+
 import { nextVisibleRollId } from '@/contexts/game/dice-queue-visibility';
 import { usePlayerRollHost } from '@/hooks/combat/use-player-roll-host';
 import {
@@ -26,7 +28,10 @@ const { game } = vi.hoisted(() => ({
     state: {
       isInCombat: false,
       currentPhase: 'exploration',
-      diceRollQueue: { currentRollId: null as string | null, pendingRolls: [] as any[] },
+      diceRollQueue: {
+        currentRollId: null as string | null,
+        pendingRolls: [] as DiceRollRequest[],
+      },
     },
     getCurrentDiceRoll: vi.fn(),
     completeDiceRoll: vi.fn(),
@@ -69,36 +74,45 @@ describe('dismissed initiative line end to end (#115)', () => {
       diceRollQueue: { currentRollId: null, pendingRolls: [] },
     };
     let counter = 0;
-    (game as any).requestDiceRoll = (request: any) => {
+    (game as Record<string, unknown>).requestDiceRoll = (request: DiceRollRequest) => {
       const id = `roll-${++counter}`;
       const roll = { ...request, id, timestamp: new Date(), status: 'pending' };
       const queue = {
         pendingRolls: game.state.diceRollQueue.pendingRolls,
         currentRollId: game.state.diceRollQueue.currentRollId,
       };
-      const nextCurrent = nextVisibleRollId(queue as any, roll as any);
-      game.state.diceRollQueue.pendingRolls = [...game.state.diceRollQueue.pendingRolls, roll];
+      const nextCurrent = nextVisibleRollId(
+        queue as unknown as DiceRollQueue,
+        roll as DiceRollRequest,
+      );
+      game.state.diceRollQueue.pendingRolls = [
+        ...game.state.diceRollQueue.pendingRolls,
+        roll as DiceRollRequest,
+      ];
       game.state.diceRollQueue.currentRollId = nextCurrent;
       return id;
     };
-    (game as any).cancelDiceRoll = (id: string) => {
-      const rolls = game.state.diceRollQueue.pendingRolls.map((r: any) =>
-        r.id === id ? { ...r, status: 'cancelled' } : r,
+    (game as Record<string, unknown>).cancelDiceRoll = (id: string) => {
+      const rolls = game.state.diceRollQueue.pendingRolls.map((r: DiceRollRequest) =>
+        r.id === id ? ({ ...r, status: 'cancelled' } as DiceRollRequest) : r,
       );
-      const remaining = rolls.filter((r: any) => r.status === 'pending');
+      const remaining = rolls.filter((r: DiceRollRequest) => r.status === 'pending');
       game.state.diceRollQueue.pendingRolls = rolls;
       game.state.diceRollQueue.currentRollId = remaining.length ? remaining[0].id : null;
     };
-    (game as any).getCurrentDiceRoll = () => {
+    (game as Record<string, unknown>).getCurrentDiceRoll = () => {
       const q = game.state.diceRollQueue;
       if (!q.currentRollId) return null;
       return (
-        q.pendingRolls.find((r: any) => r.id === q.currentRollId && r.status === 'pending') || null
+        q.pendingRolls.find(
+          (r: DiceRollRequest) => r.id === q.currentRollId && r.status === 'pending',
+        ) || null
       );
     };
-    (game as any).completeDiceRoll = vi.fn((id: string, result: any) => {
-      game.state.diceRollQueue.pendingRolls = game.state.diceRollQueue.pendingRolls.map((r: any) =>
-        r.id === id ? { ...r, status: 'completed', result } : r,
+    (game as Record<string, unknown>).completeDiceRoll = vi.fn((id: string, result: unknown) => {
+      game.state.diceRollQueue.pendingRolls = game.state.diceRollQueue.pendingRolls.map(
+        (r: DiceRollRequest) =>
+          r.id === id ? ({ ...r, status: 'completed', result } as DiceRollRequest) : r,
       );
     });
     game.clearBatch = vi.fn();
@@ -116,7 +130,7 @@ describe('dismissed initiative line end to end (#115)', () => {
     const sessionId = `session-dismissed-${Date.now()}`;
     const deliveryPromise = startCombatEntryDelivery({
       sessionId,
-      pending: headlessEntryPending as any,
+      pending: headlessEntryPending as never,
       player: { characterId: HEADLESS_ENTRY_CHARACTER_ID, name: 'Rook', initiativeModifier: 2 },
       entryConfirmed: true,
     });
