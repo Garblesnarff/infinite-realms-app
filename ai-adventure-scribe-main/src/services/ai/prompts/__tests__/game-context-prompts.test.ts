@@ -697,3 +697,75 @@ describe('the features and spells block is the character sheet (#217)', () => {
     expect(result).not.toContain('features_and_spells');
   });
 });
+
+describe('buildCharacterSection sight (darkness rule)', () => {
+  it('human -> no-darkvision line', async () => {
+    getCharacterLoadout.mockResolvedValueOnce({
+      weapons: [],
+      armor: [],
+      armorClass: 12,
+      carriedItems: [],
+    });
+    const result = await GameContextPrompts.buildCharacterSection({
+      id: 'char-human',
+      name: 'Hark',
+      level: 1,
+      race: 'Human',
+      class: 'Fighter',
+    });
+    expect(result).toContain('Sight: no darkvision.');
+    expect(result).not.toContain('Sight: darkvision');
+  });
+
+  it('elf -> darkvision 60 ft', async () => {
+    getCharacterLoadout.mockResolvedValueOnce({
+      weapons: [],
+      armor: [],
+      armorClass: 12,
+      carriedItems: [],
+    });
+    const result = await GameContextPrompts.buildCharacterSection({
+      id: 'char-elf',
+      name: 'Elfy',
+      level: 1,
+      race: 'Elf',
+      class: 'Wizard',
+    });
+    expect(result).toContain('Sight: darkvision 60 ft.');
+  });
+
+  it('drow subrace -> darkvision 120 ft', async () => {
+    getCharacterLoadout.mockResolvedValueOnce({
+      weapons: [],
+      armor: [],
+      armorClass: 12,
+      carriedItems: [],
+    });
+    const result = await GameContextPrompts.buildCharacterSection({
+      id: 'char-drow',
+      name: 'Drowy',
+      level: 1,
+      race: 'Elf',
+      subrace: 'Drow',
+      class: 'Wizard',
+    });
+    expect(result).toContain('Sight: darkvision 120 ft.');
+  });
+
+  it('unknown race -> no Sight line', async () => {
+    getCharacterLoadout.mockResolvedValueOnce({
+      weapons: [],
+      armor: [],
+      armorClass: 12,
+      carriedItems: [],
+    });
+    const result = await GameContextPrompts.buildCharacterSection({
+      id: 'char-x',
+      name: 'X',
+      level: 1,
+      race: 'Martian',
+      class: 'Fighter',
+    });
+    expect(result).not.toContain('Sight:');
+  });
+});

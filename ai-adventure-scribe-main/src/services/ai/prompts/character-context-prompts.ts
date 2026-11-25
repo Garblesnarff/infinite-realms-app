@@ -5,6 +5,7 @@ import { getCharacterPassiveScores } from '../../passive-skills-service';
 
 import type { EquippedLoadout } from '@/services/user-data-api';
 
+import { darkvisionRangeFor } from '@/data/races';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
 import { convertCharacterDetailsToCharacter } from '@/utils/character-converter';
@@ -193,11 +194,20 @@ ${lines.join('\n')}
     // prompt-section counter's system_rules remainder, whose #2533 budget
     // (ai-service-prompt-diet.test.ts) has only a few tokens of headroom,
     // while the lore head is campaign canon with room.
+    const raceName = typeof char.race === 'string' ? char.race : char.race?.name;
+    const subraceName = typeof char.subrace === 'string' ? char.subrace : char.subrace?.name;
+
     let section = `<character_details>
 PLAYER CHARACTER: ${char.name} (you, the player), a level ${char.level} ${char.race || 'Unknown Race'} ${char.class?.name || char.class || 'Unknown Class'}`;
 
     if (char.background) {
       section += ` (${char.background} background)`;
+    }
+
+    const sightRange = darkvisionRangeFor(raceName, subraceName);
+    if (sightRange !== undefined) {
+      section +=
+        sightRange === null ? '\nSight: no darkvision.' : `\nSight: darkvision ${sightRange} ft.`;
     }
 
     if (char.character_stats && char.character_stats.length > 0) {
