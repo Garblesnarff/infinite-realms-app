@@ -144,27 +144,14 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
     const locations = useMemo(() => assets.filter((asset) => asset.type === 'location'), [assets]);
 
     // Shared candidate list for both the scene band and the background effect,
-    // so the two cannot drift: explicit tags, then the tracked place from the
-    // reply's story trackers, then the official context location, then a
-    // place named in the prose. The trackers come from the context the server
-    // attached — the reply text is not a source for the tracked place, since
-    // the server strips tracker runs from the narration before saving it.
+    // so the two cannot drift: explicit tags, then the official context
+    // location, then a place named in the prose. There is no tracked-place
+    // source: no server field holds the hero's current place (story-maps
+    // #1742), so when the hero moves and the prose does not name the new
+    // place, the band falls back to the last place named.
     const candidateTags = useMemo(
-      () =>
-        sceneCandidateTags(
-          assetTags,
-          cleanContent,
-          message.context?.location,
-          locations,
-          message.context?.storyTrackers,
-        ),
-      [
-        assetTags,
-        cleanContent,
-        message.context?.location,
-        locations,
-        message.context?.storyTrackers,
-      ],
+      () => sceneCandidateTags(assetTags, cleanContent, message.context?.location, locations),
+      [assetTags, cleanContent, message.context?.location, locations],
     );
 
     // Generated art on the last message of a group; otherwise the place or scene the DM tagged.
@@ -209,10 +196,9 @@ export const DMMessage: React.FC<DMMessageProps> = React.memo(
         return;
       }
 
-      // The DM rarely tags a place, but names it in the prose, carries it in
-      // the reply's story trackers, or sets an official context location. Those
-      // become candidates after the tags; a place with no chunk adds nothing,
-      // so the previous image stays up.
+      // The DM rarely tags a place, but names it in the prose or sets an
+      // official context location. Those become candidates after the tags; a
+      // place with no chunk adds nothing, so the previous image stays up.
       if (candidateTags.length === 0) {
         return;
       }
