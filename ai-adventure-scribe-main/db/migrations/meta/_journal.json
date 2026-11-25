@@ -253,6 +253,13 @@
       "when": 1794412800000,
       "tag": "0037_starter_character_templates_spells",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1795632381029,
+      "tag": "0038_story_map",
+      "breakpoints": true
     }
   ]
 }

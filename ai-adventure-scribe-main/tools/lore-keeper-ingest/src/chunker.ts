@@ -8,7 +8,7 @@
 
 import { isSectionMarkerName, normalizeEntityNameForChunkType } from './entity-name.js';
 
-import type { CampaignChunk, CampaignRule, CampaignFiles } from './types.js';
+import type { CampaignChunk, CampaignRule, CampaignFiles, StoryMapRoute } from './types.js';
 
 const MAX_CHUNK_SIZE = 2000; // Max characters per chunk
 
@@ -18,7 +18,7 @@ const MAX_CHUNK_SIZE = 2000; // Max characters per chunk
 export function chunkCampaignFiles(
   campaignId: string,
   files: CampaignFiles,
-): { chunks: CampaignChunk[]; rules: CampaignRule[] } {
+): { chunks: CampaignChunk[]; rules: CampaignRule[]; routes: StoryMapRoute[] | null } {
   const chunks: CampaignChunk[] = [];
   const rules: CampaignRule[] = [];
 
@@ -42,7 +42,10 @@ export function chunkCampaignFiles(
     chunks.push(...chunkCampaignBible(normalizedId, files.campaignBible));
   }
 
-  return { chunks, rules };
+  // Story map routes (#1752): null when the bible has no `## Routes` section.
+  const routes = files.campaignBible ? parseBibleRoutes(files.campaignBible) : null;
+
+  return { chunks, rules, routes };
 }
 
 /**
@@ -1027,4 +1030,61 @@ function cleanContent(content: string): string {
     .replace(/\n{3,}/g, '\n\n')
     .replace(/[ \t]+$/gm, '')
     .trim();
+}
+
+// ---------------------------------------------------------------------------------------------
+// Story map routes (#1752)
+// ---------------------------------------------------------------------------------------------
+
+const ROUTE_LINE = /^\s*[-*]\s+(.+?)\s*(<->|->)\s*(.+?)\s*(?:\(([^()]*)\))?\s*$/;
+
+/** The body lines of the `## Routes` section, with their 1-based line numbers in the bible. */
+function routesSectionLines(bible: string): Array<{ line: number; text: string }> | null {
+  const lines = bible.split(/\r?\n/);
+  const start = lines.findIndex((text) => /^##\s+(?:\d+\.\s*)?Routes\s*$/i.test(text.trim()));
+  if (start === -1) return null;
+  const body: Array<{ line: number; text: string }> = [];
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^#{1,2}\s/.test(lines[index])) break;
+    body.push({ line: index + 1, text: lines[index] });
+  }
+  return body;
+}
+
+function parseLabel(raw: string | undefined): { hidden: boolean; label: string | null } {
+  const text = raw?.trim() ?? '';
+  const hidden = /^hidden\s*:/i.exec(text);
+  if (hidden) {
+    const label = text.slice(hidden[0].length).trim();
+    return { hidden: true, label: label || null };
+  }
+  if (/^hidden$/i.test(text)) return { hidden: true, label: null };
+  return { hidden: false, label: text || null };
+}
+
+/**
+ * Parse the bible's `## Routes` section. Returns null when the bible has no such section.
+ * A non-blank, non-comment line that is not a route fails, naming its line number.
+ */
+export function parseBibleRoutes(bible: string): StoryMapRoute[] | null {
+  const body = routesSectionLines(bible);
+  if (!body) return null;
+  const routes: StoryMapRoute[] = [];
+  for (const { line, text } of body) {
+    const trimmed = text.trim();
+    if (!trimmed || trimmed.startsWith('[TAG') || trimmed.startsWith('<!--')) continue;
+    const match = ROUTE_LINE.exec(text);
+    if (!match) {
+      throw new Error(`Routes line ${line} is not a route ("- A -> B (label)"): ${trimmed}`);
+    }
+    const [, from, arrow, to, rawLabel] = match;
+    routes.push({
+      from: from.trim(),
+      to: to.trim(),
+      twoWay: arrow === '<->',
+      ...parseLabel(rawLabel),
+      source: `line ${line}`,
+    });
+  }
+  return routes;
 }
