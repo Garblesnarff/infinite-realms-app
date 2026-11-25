@@ -13,9 +13,11 @@ import type { CombatEntryOutcome } from '@/services/combat/combat-entry-confirma
 import { confirmCombatEntry } from '@/hooks/ai/combat-entry-hold';
 import { SessionExpiredError } from '@/infrastructure/api/rest-client';
 import logger from '@/lib/logger';
-import { requestPlayerInitiativeRoll } from '@/services/combat/player-roll-bridge';
-import { publishDismissedInitiativeRoll } from '@/services/combat/roll-outcome-display';
-import { seatedPlayerInitiative } from '@/services/combat/seated-player-initiative';
+import {
+  requestPlayerInitiativeRoll,
+  type PlayerRollOutcome,
+} from '@/services/combat/player-roll-bridge';
+import { reportDismissedInitiative } from '@/services/combat/seated-player-initiative';
 import {
   buildCombatEntryPlayer,
   type CombatEntryPayload,
@@ -45,12 +47,7 @@ type DeliveryArgs = {
   entryConfirmed?: boolean;
   signal?: AbortSignal;
   confirm?: () => Promise<CombatEntryOutcome>;
-  rollInitiative?: () => Promise<{
-    d20: number | null;
-    dismissed?: boolean;
-    rollId?: string;
-    timedOut?: boolean;
-  }>;
+  rollInitiative?: () => Promise<PlayerRollOutcome>;
 };
 
 let inflight: { key: string; promise: Promise<CombatEntryDeliveryResult> } | null = null;
@@ -217,16 +214,7 @@ async function runDelivery(args: DeliveryArgs): Promise<CombatEntryDeliveryResul
     typeof (entryPayload as { encounter?: { id?: unknown } } | null)?.encounter?.id === 'string'
       ? (entryPayload as { encounter: { id: string } }).encounter.id
       : args.sessionId;
-  if (initiative.dismissed === true && initiative.rollId) {
-    const total = seatedPlayerInitiative(entryPayload, args.player);
-    if (total !== undefined) {
-      publishDismissedInitiativeRoll(initiative.rollId, total);
-    } else {
-      logger.warn('[CombatEntry] dismissed initiative but no player participant/number found', {
-        rollId: initiative.rollId,
-      });
-    }
-  }
+  reportDismissedInitiative(initiative, entryPayload, args.player);
   return { kind: 'seated', entryPayload, encounterId };
 }
 
