@@ -360,10 +360,19 @@ export function useMessageDiceRolls({
       // Dismissing a combat attack prompt withdraws the attack: the resolution waiting on it skips
       // that action instead of rolling it for the player (#2234). Only a timeout lets the engine
       // roll. A dismissed initiative prompt still seats the encounter, with the engine's die.
-      const attackSettled = settleCombatAttackRoll(currentRoll.id, null, { cancelled: true });
-      const initiativeSettled = settleCombatInitiativeRoll(currentRoll.id, null);
-      // A dismissed check prompt withdraws the check, like a dismissed attack (#2420).
-      const checkSettled = settleCombatCheckRoll(currentRoll.id, null, { cancelled: true });
+      // Settlers are keyed by roll id only (use-player-roll-host.ts), so an initiative prompt's
+      // settler must not be consumed by the attack settler first. Decide by the queued roll's tag.
+      let attackSettled = false;
+      let initiativeSettled = false;
+      let checkSettled = false;
+      if (currentRoll.combatInitiativeRoll === true) {
+        initiativeSettled = settleCombatInitiativeRoll(currentRoll.id, null);
+      } else {
+        attackSettled = settleCombatAttackRoll(currentRoll.id, null, { cancelled: true });
+        initiativeSettled = settleCombatInitiativeRoll(currentRoll.id, null);
+        // A dismissed check prompt withdraws the check, like a dismissed attack (#2420).
+        checkSettled = settleCombatCheckRoll(currentRoll.id, null, { cancelled: true });
+      }
       cancelDiceRoll(currentRoll.id);
       // A cancelled narrative check is an answer too, so it goes in the transcript (#2291): the
       // DM's withheld reply shows, a reload does not re-open the popup, and the next DM turn

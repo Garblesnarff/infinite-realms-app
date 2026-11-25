@@ -250,7 +250,7 @@ describe('combat-entry-delivery #115 dismissed initiative reports the engine tot
     const result = await startCombatEntryDelivery({
       sessionId,
       pending: headlessEntryPending as never,
-      player: { name: 'Rook', initiativeModifier: 2 },
+      player: { characterId: null, name: 'Rook', initiativeModifier: 2 },
       entryConfirmed: true,
       rollInitiative: async () => ({ d20: null, dismissed: true, rollId: 'init-roll-1' }),
     });
