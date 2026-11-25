@@ -830,4 +830,52 @@ describe('useCombatLegalActions inspiration (#1414)', () => {
     expect(inspirationHolder.disarm).toHaveBeenCalled();
     expect(inspirationHolder.arm).not.toHaveBeenCalled();
   });
+
+  // #1732: a shove or a typed Search spends the Action on the server, and the client then holds
+  // the actor's actionTaken. The next legal-actions list must come from that state: no Attack.
+  it.each([
+    ['a Shove', { type: 'check', label: 'Shove', checkKind: 'shove', targetId: 'm-1' }],
+    ['a typed Search', { type: 'check', label: 'Search', checkKind: 'search' }],
+  ])('refetches legal actions after %s spends the Action, so Attack is gone', async (_, next) => {
+    const original = combatHolder.current;
+    const withActor = (actionTaken: boolean) => ({
+      ...original,
+      state: {
+        ...original.state,
+        activeEncounter: {
+          ...original.state.activeEncounter,
+          participants: [
+            { id: 'pc-1', participantType: 'player', actionTaken, bonusActionTaken: false },
+          ],
+        },
+      },
+    });
+    combatHolder.current = withActor(false);
+    try {
+      const fetchSpy = vi
+        .spyOn(globalThis, 'fetch')
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ actorId: 'pc-1', actions: [{ type: 'attack', label: 'Attack' }] }),
+        } as Response)
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ actorId: 'pc-1', actions: [next] }),
+        } as Response);
+      const { result, rerender } = renderHook(() =>
+        useCombatLegalActions({ enabled: true, onSendText: vi.fn() }),
+      );
+      await waitFor(() => expect(result.current.actions.map((a) => a.type)).toEqual(['attack']));
+
+      combatHolder.current = withActor(true);
+      rerender();
+
+      await waitFor(() =>
+        expect(result.current.actions.map((a) => a.type)).not.toContain('attack'),
+      );
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    } finally {
+      combatHolder.current = original;
+    }
+  });
 });

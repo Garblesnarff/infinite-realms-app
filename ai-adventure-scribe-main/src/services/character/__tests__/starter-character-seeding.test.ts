@@ -18,10 +18,7 @@ import {
   transformStarterEquipment,
 } from '../starter-character-seeding';
 
-import type {
-  StarterCharacterTemplateLike,
-  StarterSpellSeed,
-} from '../starter-character-seeding';
+import type { StarterCharacterTemplateLike, StarterSpellSeed } from '../starter-character-seeding';
 
 import { getPactMagicProgression, getSpellSlotsByLevel } from '@/data/spellcastingFeatures';
 import { getSpellById, getSrdClassSpells } from '@/data/spells/api';
@@ -33,6 +30,7 @@ import { prepareCharacterPayload } from '@/services/user-data-payload-helpers';
 vi.mock('@/lib/logger', () => ({
   default: {
     error: vi.fn(),
+    warn: vi.fn(),
   },
 }));
 
@@ -333,9 +331,7 @@ describe('starter-character-seeding', () => {
     expect(transformStarterEquipment([{ name: 'Arrows (20)', quantity: 0 }])).toEqual([
       { item_name: 'Arrows (20)', item_type: 'gear', quantity: 20, equipped: false },
     ]);
-    expect(
-      transformStarterEquipment([{ name: 'an item not in the SRD', quantity: 3 }]),
-    ).toEqual([
+    expect(transformStarterEquipment([{ name: 'an item not in the SRD', quantity: 3 }])).toEqual([
       {
         item_name: 'an item not in the SRD',
         item_type: 'trinket',
@@ -345,9 +341,7 @@ describe('starter-character-seeding', () => {
         description: 'A campaign-specific item from the starter template: an item not in the SRD.',
       },
     ]);
-    expect(
-      transformStarterInventory([{ name: 'an item not in the SRD', quantity: 3 }]),
-    ).toEqual([
+    expect(transformStarterInventory([{ name: 'an item not in the SRD', quantity: 3 }])).toEqual([
       {
         name: 'an item not in the SRD',
         item_type: 'trinket',
@@ -418,6 +412,20 @@ describe('starter-character-seeding', () => {
       known: 11,
       prepared: 0,
     });
+  });
+
+  it('resolves authored spell names to ids and skips unknown/off-class names', () => {
+    const seed = buildStarterSpellSeed({
+      ...clericTemplate,
+      class: 'Warlock',
+      spells: { knownSpells: ['Arms of Hadar', 'Definitely Not A Spell', 'Cure Wounds'] },
+    });
+    const fallbackSeed = buildStarterSpellSeed({ ...clericTemplate, class: 'Warlock' });
+
+    expect(seed.knownSpells[0]).toBe('arms-of-hadar');
+    expect(seed.knownSpells).toHaveLength(fallbackSeed.knownSpells.length);
+    expect(seed.knownSpells).not.toContain('cure-wounds');
+    expect(logger.warn).toHaveBeenCalled();
   });
 
   it('uses an authored class spell before filling the remainder from SRD defaults', () => {
@@ -791,30 +799,318 @@ describe('starter spell picker respects the 2014 slot rules (#1025)', () => {
   // rows 'The Chaplain'; the second is labelled '(II)' here only so the
   // test titles are unique.
   const seededCasters = [
-    { name: 'The Scholar', className: 'Wizard', level: 1, abilityScores: { strength: 8, dexterity: 12, constitution: 12, intelligence: 18, wisdom: 14, charisma: 10 } },
-    { name: 'The Hunter', className: 'Ranger', level: 1, abilityScores: { strength: 14, dexterity: 16, constitution: 14, intelligence: 12, wisdom: 14, charisma: 8 } },
-    { name: 'The Pact-Bound', className: 'Warlock', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 14, intelligence: 12, wisdom: 10, charisma: 18 } },
-    { name: 'The Exile', className: 'Ranger', level: 1, abilityScores: { strength: 10, dexterity: 18, constitution: 12, intelligence: 12, wisdom: 14, charisma: 10 } },
-    { name: 'The Storyteller', className: 'Bard', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 12, intelligence: 14, wisdom: 12, charisma: 18 } },
-    { name: 'The Faithful', className: 'Cleric', level: 1, abilityScores: { strength: 14, dexterity: 10, constitution: 14, intelligence: 10, wisdom: 18, charisma: 12 } },
-    { name: 'The Seeker', className: 'Ranger', level: 1, abilityScores: { strength: 10, dexterity: 16, constitution: 12, intelligence: 14, wisdom: 16, charisma: 10 } },
-    { name: 'The Tracker', className: 'Ranger', level: 1, abilityScores: { strength: 12, dexterity: 16, constitution: 14, intelligence: 10, wisdom: 15, charisma: 9 } },
-    { name: 'The Circuit Preacher', className: 'Cleric', level: 1, abilityScores: { strength: 14, dexterity: 10, constitution: 15, intelligence: 11, wisdom: 16, charisma: 12 } },
-    { name: 'The Almanac-Keeper', className: 'Wizard', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 14, intelligence: 16, wisdom: 13, charisma: 11 } },
-    { name: 'The Cardsharp', className: 'Bard', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 12, intelligence: 12, wisdom: 10, charisma: 17 } },
-    { name: 'The Chaplain', className: 'Cleric', level: 1, abilityScores: { strength: 12, dexterity: 10, constitution: 14, intelligence: 10, wisdom: 17, charisma: 13 } },
-    { name: 'The Luck Scholar', className: 'Wizard', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 13, intelligence: 17, wisdom: 12, charisma: 10 } },
-    { name: 'The Cartographer', className: 'Wizard', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 14, intelligence: 16, wisdom: 13, charisma: 10 } },
-    { name: 'The Windspeaker', className: 'Cleric', level: 1, abilityScores: { strength: 12, dexterity: 12, constitution: 14, intelligence: 10, wisdom: 16, charisma: 14 } },
-    { name: 'The Deserter', className: 'Ranger', level: 1, abilityScores: { strength: 15, dexterity: 15, constitution: 14, intelligence: 10, wisdom: 14, charisma: 8 } },
-    { name: 'The Surveyor', className: 'Wizard', level: 1, abilityScores: { strength: 9, dexterity: 15, constitution: 14, intelligence: 16, wisdom: 13, charisma: 11 } },
-    { name: 'The Chaplain (II)', className: 'Cleric', level: 1, abilityScores: { strength: 14, dexterity: 11, constitution: 15, intelligence: 9, wisdom: 16, charisma: 13 } },
-    { name: 'The Echo', className: 'Bard', level: 1, abilityScores: { strength: 8, dexterity: 16, constitution: 13, intelligence: 10, wisdom: 13, charisma: 15 } },
-    { name: 'The Thespian', className: 'Bard', level: 1, abilityScores: { strength: 10, dexterity: 14, constitution: 12, intelligence: 12, wisdom: 10, charisma: 16 } },
-    { name: 'The Lovesick', className: 'Sorcerer', level: 1, abilityScores: { strength: 8, dexterity: 14, constitution: 14, intelligence: 12, wisdom: 10, charisma: 16 } },
-    { name: 'The Woodsman', className: 'Ranger', level: 1, abilityScores: { strength: 12, dexterity: 16, constitution: 12, intelligence: 10, wisdom: 14, charisma: 10 } },
-    { name: 'The Hedgewitch', className: 'Druid', level: 1, abilityScores: { strength: 8, dexterity: 12, constitution: 14, intelligence: 12, wisdom: 16, charisma: 10 } },
-    { name: 'The Oathbound', className: 'Paladin', level: 1, abilityScores: { strength: 16, dexterity: 10, constitution: 14, intelligence: 10, wisdom: 12, charisma: 14 } },
+    {
+      name: 'The Scholar',
+      className: 'Wizard',
+      level: 1,
+      abilityScores: {
+        strength: 8,
+        dexterity: 12,
+        constitution: 12,
+        intelligence: 18,
+        wisdom: 14,
+        charisma: 10,
+      },
+    },
+    {
+      name: 'The Hunter',
+      className: 'Ranger',
+      level: 1,
+      abilityScores: {
+        strength: 14,
+        dexterity: 16,
+        constitution: 14,
+        intelligence: 12,
+        wisdom: 14,
+        charisma: 8,
+      },
+    },
+    {
+      name: 'The Pact-Bound',
+      className: 'Warlock',
+      level: 1,
+      abilityScores: {
+        strength: 8,
+        dexterity: 14,
+        constitution: 14,
+        intelligence: 12,
+        wisdom: 10,
+        charisma: 18,
+      },
+    },
+    {
+      name: 'The Exile',
+      className: 'Ranger',
+      level: 1,
+      abilityScores: {
+        strength: 10,
+        dexterity: 18,
+        constitution: 12,
+        intelligence: 12,
+        wisdom: 14,
+        charisma: 10,
+      },
+    },
+    {
+      name: 'The Storyteller',
+      className: 'Bard',
+      level: 1,
+      abilityScores: {
+        strength: 8,
+        dexterity: 14,
+        constitution: 12,
+        intelligence: 14,
+        wisdom: 12,
+        charisma: 18,
+      },
+    },
+    {
+      name: 'The Faithful',
+      className: 'Cleric',
+      level: 1,
+      abilityScores: {
+        strength: 14,
+        dexterity: 10,
+        constitution: 14,
+        intelligence: 10,
+        wisdom: 18,
+        charisma: 12,
+      },
+    },
+    {
+      name: 'The Seeker',
+      className: 'Ranger',
+      level: 1,
+      abilityScores: {
+        strength: 10,
+        dexterity: 16,
+        constitution: 12,
+        intelligence: 14,
+        wisdom: 16,
+        charisma: 10,
+      },
+    },
+    {
+      name: 'The Tracker',
+      className: 'Ranger',
+      level: 1,
+      abilityScores: {
+        strength: 12,
+        dexterity: 16,
+        constitution: 14,
+        intelligence: 10,
+        wisdom: 15,
+        charisma: 9,
+      },
+    },
+    {
+      name: 'The Circuit Preacher',
+      className: 'Cleric',
+      level: 1,
+      abilityScores: {
+        strength: 14,
+        dexterity: 10,
+        constitution: 15,
+        intelligence: 11,
+        wisdom: 16,
+        charisma: 12,
+      },
+    },
+    {
+      name: 'The Almanac-Keeper',
+      className: 'Wizard',
+      level: 1,
+      abilityScores: {
+        strength: 8,
+        dexterity: 14,
+        constitution: 14,
+        intelligence: 16,
+        wisdom: 13,
+        charisma: 11,
+      },
+    },
+    {
+      name: 'The Cardsharp',
+      className: 'Bard',
+      level: 1,
+      abilityScores: {
+        strength: 8,
+        dexterity: 14,
+        constitution: 12,
+        intelligence: 12,
+        wisdom: 10,
+        charisma: 17,
+      },
+    },
+    {
+      name: 'The Chaplain',
+      className: 'Cleric',
+      level: 1,
+      abilityScores: {
+        strength: 12,
+        dexterity: 10,
+        constitution: 14,
+        intelligence: 10,
+        wisdom: 17,
+        charisma: 13,
+      },
+    },
+    {
+      name: 'The Luck Scholar',
+      className: 'Wizard',
+      level: 1,
+      abilityScores: {
+        strength: 8,
+        dexterity: 14,
+        constitution: 13,
+        intelligence: 17,
+        wisdom: 12,
+        charisma: 10,
+      },
+    },
+    {
+      name: 'The Cartographer',
+      className: 'Wizard',
+      level: 1,
+      abilityScores: {
+        strength: 8,
+        dexterity: 14,
+        constitution: 14,
+        intelligence: 16,
+        wisdom: 13,
+        charisma: 10,
+      },
+    },
+    {
+      name: 'The Windspeaker',
+      className: 'Cleric',
+      level: 1,
+      abilityScores: {
+        strength: 12,
+        dexterity: 12,
+        constitution: 14,
+        intelligence: 10,
+        wisdom: 16,
+        charisma: 14,
+      },
+    },
+    {
+      name: 'The Deserter',
+      className: 'Ranger',
+      level: 1,
+      abilityScores: {
+        strength: 15,
+        dexterity: 15,
+        constitution: 14,
+        intelligence: 10,
+        wisdom: 14,
+        charisma: 8,
+      },
+    },
+    {
+      name: 'The Surveyor',
+      className: 'Wizard',
+      level: 1,
+      abilityScores: {
+        strength: 9,
+        dexterity: 15,
+        constitution: 14,
+        intelligence: 16,
+        wisdom: 13,
+        charisma: 11,
+      },
+    },
+    {
+      name: 'The Chaplain (II)',
+      className: 'Cleric',
+      level: 1,
+      abilityScores: {
+        strength: 14,
+        dexterity: 11,
+        constitution: 15,
+        intelligence: 9,
+        wisdom: 16,
+        charisma: 13,
+      },
+    },
+    {
+      name: 'The Echo',
+      className: 'Bard',
+      level: 1,
+      abilityScores: {
+        strength: 8,
+        dexterity: 16,
+        constitution: 13,
+        intelligence: 10,
+        wisdom: 13,
+        charisma: 15,
+      },
+    },
+    {
+      name: 'The Thespian',
+      className: 'Bard',
+      level: 1,
+      abilityScores: {
+        strength: 10,
+        dexterity: 14,
+        constitution: 12,
+        intelligence: 12,
+        wisdom: 10,
+        charisma: 16,
+      },
+    },
+    {
+      name: 'The Lovesick',
+      className: 'Sorcerer',
+      level: 1,
+      abilityScores: {
+        strength: 8,
+        dexterity: 14,
+        constitution: 14,
+        intelligence: 12,
+        wisdom: 10,
+        charisma: 16,
+      },
+    },
+    {
+      name: 'The Woodsman',
+      className: 'Ranger',
+      level: 1,
+      abilityScores: {
+        strength: 12,
+        dexterity: 16,
+        constitution: 12,
+        intelligence: 10,
+        wisdom: 14,
+        charisma: 10,
+      },
+    },
+    {
+      name: 'The Hedgewitch',
+      className: 'Druid',
+      level: 1,
+      abilityScores: {
+        strength: 8,
+        dexterity: 12,
+        constitution: 14,
+        intelligence: 12,
+        wisdom: 16,
+        charisma: 10,
+      },
+    },
+    {
+      name: 'The Oathbound',
+      className: 'Paladin',
+      level: 1,
+      abilityScores: {
+        strength: 16,
+        dexterity: 10,
+        constitution: 14,
+        intelligence: 10,
+        wisdom: 12,
+        charisma: 14,
+      },
+    },
   ];
 
   it.each(seededCasters)(
