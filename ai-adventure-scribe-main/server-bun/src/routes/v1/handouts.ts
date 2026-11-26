@@ -17,18 +17,14 @@ import {
   prepareCorrectiveCall,
   type CorrectiveUsageService,
 } from '../../services/dm/corrective-model-guard.js';
-import { dmResponseSchema, parseDmResponse } from '../../services/dm/dm-response-schema.js';
+import {
+  dmResponseSchema,
+  MAX_HANDOUT_ACTIONS_PER_REQUEST,
+  parseDmResponse,
+} from '../../services/dm/dm-response-schema.js';
 import { applyDmHandoutActions } from '../../services/dm/handout-action-service.js';
 import { recordHandoutPossessionFact } from '../../services/dm/handout-ledger-service.js';
 import { LLMProviderService } from '../../services/llm-provider-service.js';
-
-/**
- * #841: one DM turn never legitimately carries more handout actions than
- * this. The bound stops oversized-batch abuse (an unbounded array costs a
- * parse and a refusal scan per element, and each refusal used to be able to
- * summon a model call).
- */
-export const MAX_HANDOUT_ACTIONS_PER_REQUEST = 10;
 
 const handoutResponseShell = (actions: unknown[]) => ({
   text: '',
