@@ -31,6 +31,7 @@ import {
   combatParticipantStatus,
   combatParticipants,
   gameSessions,
+  inventoryItems,
 } from '../../../../db/schema/index';
 import { mulberry32, setRngSeed } from '../../lib/rng.js';
 
@@ -253,6 +254,21 @@ describeWithDb('Rage on a spell (#1654)', () => {
       expect(await rollCombatSavingThrow(encounterId, targetId, 'str')).toBe(second);
       setRngSeed(seed);
       expect(await rollCombatSavingThrow(encounterId, targetId, 'dex')).toBe(first);
+      const [armor] = await db
+        .insert(inventoryItems)
+        .values({
+          characterId: targetCharacterId,
+          name: 'Chain Mail',
+          itemType: 'armor',
+          isEquipped: true,
+        })
+        .returning({ id: inventoryItems.id });
+      try {
+        setRngSeed(seed);
+        expect(await rollCombatSavingThrow(encounterId, targetId, 'str')).toBe(first);
+      } finally {
+        await db.delete(inventoryItems).where(eq(inventoryItems.id, armor.id));
+      }
     } finally {
       setRngSeed(undefined);
     }
