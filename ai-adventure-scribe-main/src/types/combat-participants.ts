@@ -34,6 +34,7 @@ export interface CombatParticipant {
   /** Engine-supplied health tier; absent when the server has no current status. */
   healthCondition?: 'unharmed' | 'wounded' | 'bloodied' | 'near death';
   characterId?: string;
+  raging?: boolean;
   characterClass?: string;
   level?: number;
 

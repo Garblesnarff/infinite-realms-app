@@ -76,6 +76,13 @@ const defaultProps = {
   onMove: vi.fn(),
 };
 
+it('shows the Raging indicator on the action bar only while marked', () => {
+  const { rerender } = render(<CombatActionBar {...defaultProps} raging />);
+  expect(screen.getByText('Raging')).toBeInTheDocument();
+  rerender(<CombatActionBar {...defaultProps} />);
+  expect(screen.queryByText('Raging')).not.toBeInTheDocument();
+});
+
 describe('CombatActionBar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
