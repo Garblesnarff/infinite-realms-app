@@ -39,6 +39,7 @@ mock.module('../../../services/collaboration/room-manager.js', () => ({
 }));
 mock.module('../../../services/dm/dm-response-schema.js', () => ({
   dmResponseSchema: {},
+  MAX_HANDOUT_ACTIONS_PER_REQUEST: 10,
   parseDmResponse: () => ({ success: false, issues: [] }),
 }));
 mock.module('../../../services/dm/handout-action-service.js', () => ({

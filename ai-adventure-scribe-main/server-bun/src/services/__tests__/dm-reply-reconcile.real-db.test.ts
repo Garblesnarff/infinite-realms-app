@@ -2139,6 +2139,20 @@ ${playerInput}
     }
   });
 
+  test('#248: a caster claiming a bare off-catalog spell receives a sheet refusal', async () => {
+    const turn = await dmTurn({
+      characterClass: 'Wizard',
+      race: 'Human',
+      scores: 'STR 8(-1), DEX 14(+2), CON 13(+1), INT 16(+3), WIS 12(+1), CHA 10(+0)',
+      dexterityModifier: 2,
+      playerInput: 'I cast Shadow Bolt.',
+      reply: castReply('A bolt of darkness strikes the cultist.'),
+    });
+    expect(JSON.parse(String(turn.body.text)).text).toContain(
+      "can't use Shadow Bolt: it isn't on their character sheet.",
+    );
+  });
+
   test('a name the catalog does not hold is no spell from a non-caster: a Fighter "casts Shadow Bolt at" nothing (#217 step d2)', async () => {
     // The unknown name here was Witch Bolt until #902 added it to the catalog
     // (it is a real PHB spell that was missing); a Fighter naming it now gets

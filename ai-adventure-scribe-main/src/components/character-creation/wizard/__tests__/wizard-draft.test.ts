@@ -21,6 +21,7 @@ function makeDraft(overrides: Partial<WizardDraft> = {}): WizardDraft {
     step: 3,
     campaignId: null,
     updatedAt: new Date().toISOString(),
+    generateBackgroundImage: true,
     ...overrides,
   };
 }
@@ -44,6 +45,19 @@ describe('wizard-draft storage', () => {
     const draft = makeDraft();
     writeWizardDraft(KEY, draft);
     expect(readWizardDraft(KEY)).toEqual(draft);
+  });
+
+  it('round-trips the background-image opt-out (#210 QA-026)', () => {
+    const draft = makeDraft({ generateBackgroundImage: false });
+    writeWizardDraft(KEY, draft);
+    expect(readWizardDraft(KEY)?.generateBackgroundImage).toBe(false);
+  });
+
+  it('defaults the background-image opt-out to on when the field is absent', () => {
+    const { generateBackgroundImage, ...withoutFlag } = makeDraft();
+    void generateBackgroundImage;
+    window.localStorage.setItem(KEY, JSON.stringify(withoutFlag));
+    expect(readWizardDraft(KEY)?.generateBackgroundImage).toBe(true);
   });
 
   it('returns null when nothing is stored', () => {

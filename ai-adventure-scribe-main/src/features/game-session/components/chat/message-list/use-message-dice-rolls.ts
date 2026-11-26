@@ -30,9 +30,11 @@ import {
   engineRollWasRefused,
   subscribeEngineRollRefusal,
   subscribeEngineRollOutcome,
+  subscribeDismissedInitiativeRoll,
+  dismissedInitiativeTotal,
   type EngineRollOutcome,
 } from '@/services/combat/roll-outcome-display';
-import { declinedRollMessage } from '@/utils/dm-roll-recovery';
+import { declinedRollMessage, dismissedEngineRollMessage } from '@/utils/dm-roll-recovery';
 import { handleAsyncError } from '@/utils/error-handler';
 import { isEngineChannelRollType } from '@/utils/roll-request/engine-channel';
 
@@ -136,6 +138,7 @@ export function useMessageDiceRolls({
   // while the first handler is still running. The guard is per roll, never one global slot (#2587).
   const handlingRollIdsRef = useRef<Set<string>>(new Set());
   const cancelledRollIdRef = useRef<string | null>(null);
+  const dismissedInitiativeIdsRef = useRef<Set<string>>(new Set());
   const [pendingRollId, setPendingRollId] = useState<string | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [rollFailure, setRollFailure] = useState<RollFailure | null>(null);
@@ -324,6 +327,22 @@ export function useMessageDiceRolls({
     };
   }, [currentRoll]);
 
+  const sendDismissedInitiativeLine = useCallback(
+    (rollId: string, total: number) => {
+      dismissedInitiativeIdsRef.current.delete(rollId);
+      const dismissed = dismissedEngineRollMessage(total);
+      Promise.resolve()
+        .then(() => onSendMessage(dismissed))
+        .catch((error: unknown) =>
+          logger.warn('[useMessageDiceRolls] dismissed engine roll line not saved', {
+            rollId,
+            error,
+          }),
+        );
+    },
+    [onSendMessage],
+  );
+
   /**
    * Memoized cancel callback
    */
@@ -341,21 +360,41 @@ export function useMessageDiceRolls({
       // Dismissing a combat attack prompt withdraws the attack: the resolution waiting on it skips
       // that action instead of rolling it for the player (#2234). Only a timeout lets the engine
       // roll. A dismissed initiative prompt still seats the encounter, with the engine's die.
-      const attackSettled = settleCombatAttackRoll(currentRoll.id, null, { cancelled: true });
-      const initiativeSettled = settleCombatInitiativeRoll(currentRoll.id, null);
-      // A dismissed check prompt withdraws the check, like a dismissed attack (#2420).
-      const checkSettled = settleCombatCheckRoll(currentRoll.id, null, { cancelled: true });
+      // Settlers are keyed by roll id only (use-player-roll-host.ts), so an initiative prompt's
+      // settler must not be consumed by the attack settler first. Decide by the queued roll's tag.
+      let attackSettled = false;
+      let initiativeSettled = false;
+      let checkSettled = false;
+      if (currentRoll.combatInitiativeRoll === true) {
+        initiativeSettled = settleCombatInitiativeRoll(currentRoll.id, null);
+      } else {
+        attackSettled = settleCombatAttackRoll(currentRoll.id, null, { cancelled: true });
+        initiativeSettled = settleCombatInitiativeRoll(currentRoll.id, null);
+        // A dismissed check prompt withdraws the check, like a dismissed attack (#2420).
+        checkSettled = settleCombatCheckRoll(currentRoll.id, null, { cancelled: true });
+      }
       cancelDiceRoll(currentRoll.id);
       // A cancelled narrative check is an answer too, so it goes in the transcript (#2291): the
       // DM's withheld reply shows, a reload does not re-open the popup, and the next DM turn
-      // sees the choice. Engine-owned attack and initiative prompts keep #2237's behavior.
+      // sees the choice. Engine-owned attack prompts keep #2237's behavior (withdrawn, no line);
+      // initiative now writes the engine line after the entry flow settles (#115).
       const engineOwned =
         attackSettled ||
         initiativeSettled ||
         checkSettled ||
         isEngineTaggedRoll(currentRoll) ||
         isEngineChannelRollType(currentRoll.requestType);
-      if (!engineOwned) {
+      if (initiativeSettled) {
+        dismissedInitiativeIdsRef.current.add(currentRoll.id);
+        if (dismissedInitiativeIdsRef.current.size > 32) {
+          const first = dismissedInitiativeIdsRef.current.values().next().value;
+          if (first) dismissedInitiativeIdsRef.current.delete(first);
+        }
+        const total = dismissedInitiativeTotal(currentRoll.id);
+        if (total !== undefined) {
+          sendDismissedInitiativeLine(currentRoll.id, total);
+        }
+      } else if (!engineOwned) {
         const declined = declinedRollMessage(currentRoll.description, currentRoll.rollRequestId);
         Promise.resolve()
           .then(() => onSendMessage(declined))
@@ -377,7 +416,7 @@ export function useMessageDiceRolls({
       setPendingRollId(null);
     }
     setRollFailure(null);
-  }, [currentRoll, cancelDiceRoll, onSendMessage]);
+  }, [currentRoll, cancelDiceRoll, onSendMessage, sendDismissedInitiativeLine]);
 
   const handleRetryRoll = useCallback(async () => {
     if (!failedSubmissionRef.current || retryingRef.current) return;
@@ -394,6 +433,22 @@ export function useMessageDiceRolls({
       setIsRetrying(false);
     }
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeDismissedInitiativeRoll((event) => {
+      if (!dismissedInitiativeIdsRef.current.has(event.rollId)) return;
+      sendDismissedInitiativeLine(event.rollId, event.total);
+    });
+    // Flush any dismissed ids whose total is already cached, so a publish that
+    // landed while this effect was re-subscribing is not lost.
+    for (const id of [...dismissedInitiativeIdsRef.current]) {
+      const total = dismissedInitiativeTotal(id);
+      if (total !== undefined) {
+        sendDismissedInitiativeLine(id, total);
+      }
+    }
+    return unsubscribe;
+  }, [onSendMessage, sendDismissedInitiativeLine]);
 
   // Handle manual dice result input with batching support
   // #1472: resolves true only when this roll's die was recorded (the message saved, or the
