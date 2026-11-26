@@ -364,11 +364,26 @@ export async function isRaging(encounterId: string, participantId: string): Prom
     .where(eq(gameSessions.id, sessionOfEncounter(encounterId)))
     .limit(1);
   const entry = flagEntry(row?.state ?? null, RAGE_KEY, participantId);
-  return (
-    entry?.encounterId === encounterId &&
-    typeof entry.expiresRound === 'number' &&
-    Number(row?.round) < entry.expiresRound
-  );
+  if (
+    entry?.encounterId !== encounterId ||
+    typeof entry.expiresRound !== 'number' ||
+    Number(row?.round) >= entry.expiresRound
+  )
+    return false;
+
+  const [participant] = await db
+    .select({ characterId: combatParticipants.characterId })
+    .from(combatParticipants)
+    .where(
+      and(
+        eq(combatParticipants.id, participantId),
+        eq(combatParticipants.encounterId, encounterId),
+      ),
+    )
+    .limit(1);
+  if (!participant?.characterId) return Boolean(participant);
+  const { wearsHeavyArmor } = await import('../character/character-armor-class.js');
+  return !(await wearsHeavyArmor(participant.characterId));
 }
 
 /**

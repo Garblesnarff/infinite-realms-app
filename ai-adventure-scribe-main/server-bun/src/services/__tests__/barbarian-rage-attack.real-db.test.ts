@@ -39,6 +39,8 @@ const { claimRage, isRaging } = await importWithRealDb(
   () => import('../combat/combat-turn-flags.js'),
 );
 
+const { CombatHPService } = await importWithRealDb(() => import('../combat-hp-service.js'));
+
 if (!hasRealDb) {
   console.warn('[barbarian-rage-attack] SKIPPED: set TEST_DATABASE_URL to run these.');
 }
@@ -245,6 +247,41 @@ describeWithDb('Rage on a real attack (#1638)', () => {
       .from(combatParticipants)
       .where(eq(combatParticipants.id, allyId));
     expect(ally.resistances).toEqual(['fire']);
+  });
+
+  it('equipping heavy armor during Rage removes the damage bonus and resistance', async () => {
+    await resetFight();
+    const plain = await attackWithSeed(SEED);
+    expect(plain.hit).toBe(true);
+
+    await resetFight();
+    expect(await claimRage(encounterId, barbarianId)).not.toBeNull();
+    const hazard = () =>
+      CombatHPService.applyDamage(
+        barbarianId,
+        encounterId,
+        { damageAmount: 4, damageType: 'slashing' },
+        userId,
+      );
+    expect((await hazard()).modifiedDamage).toBe(2);
+
+    const [armor] = await db
+      .insert(inventoryItems)
+      .values({
+        characterId: barbarianCharacterId,
+        name: 'Chain Mail',
+        itemType: 'armor',
+        isEquipped: true,
+      })
+      .returning({ id: inventoryItems.id });
+    try {
+      const armored = await attackWithSeed(SEED);
+      expect(armored.hit).toBe(true);
+      expect(armored.finalDamage).toBe(plain.finalDamage);
+      expect((await hazard()).modifiedDamage).toBe(4);
+    } finally {
+      await db.delete(inventoryItems).where(eq(inventoryItems.id, armor.id));
+    }
   });
 
   /** Gives the ally the Paralyzed condition: a melee hit within 5 ft is then a critical (2014 SRD 5.1). */

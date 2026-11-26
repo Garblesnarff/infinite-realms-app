@@ -38,6 +38,7 @@ export type CheckAbilityKey = 'str' | 'dex' | 'con' | 'int' | 'wis' | 'cha';
 export interface CheckActorProfile {
   scores: Partial<Record<CheckAbilityKey, number>>;
   level: number;
+  strengthAdvantage?: boolean;
   /**
    * The sheet's `skill_proficiencies`, when the sheet grants the check's skill (#2420). Absent or
    * empty for an NPC, whose stat block prints no skill proficiencies.
@@ -217,14 +218,22 @@ export function resolveContestedCheck(params: {
 }): ResolvedCombatCheck {
   const definition = CHECK_DEFINITIONS[params.kind];
   const actorModifier = checkModifier(params.actorProfile, definition, params.actorSkillProficient);
-  const actorD20 = params.actorD20 ?? params.roll();
+  const actorFirstDie = params.actorD20 ?? params.roll();
+  const actorD20 = params.actorProfile.strengthAdvantage
+    ? Math.max(actorFirstDie, params.roll())
+    : actorFirstDie;
   const targetProfile = params.targetProfile;
   // The target picks the higher of Athletics and Acrobatics (SRD).
   const targetModifier = Math.max(
     abilityModifier(scoreOf(targetProfile, 'str')),
     abilityModifier(scoreOf(targetProfile, 'dex')),
   );
-  const targetD20 = params.roll();
+  const targetFirstDie = params.roll();
+  const targetD20 =
+    targetProfile.strengthAdvantage &&
+    abilityModifier(scoreOf(targetProfile, 'str')) >= abilityModifier(scoreOf(targetProfile, 'dex'))
+      ? Math.max(targetFirstDie, params.roll())
+      : targetFirstDie;
   const actor: CheckRoll = {
     d20: actorD20,
     modifier: actorModifier,
@@ -273,9 +282,21 @@ export function resolveEscapeCheck(params: {
     },
     'escape',
   );
-  const actorD20 = params.actorD20 ?? params.roll();
+  const actorFirstDie = params.actorD20 ?? params.roll();
+  const athletics = checkModifier(
+    params.actorProfile,
+    CHECK_DEFINITIONS.grapple,
+    params.athleticsProficient,
+  );
+  const actorD20 =
+    params.actorProfile.strengthAdvantage && athletics === actorModifier
+      ? Math.max(actorFirstDie, params.roll())
+      : actorFirstDie;
   const grapplerModifier = abilityModifier(scoreOf(params.grapplerProfile, 'str'));
-  const grapplerD20 = params.roll();
+  const grapplerFirstDie = params.roll();
+  const grapplerD20 = params.grapplerProfile.strengthAdvantage
+    ? Math.max(grapplerFirstDie, params.roll())
+    : grapplerFirstDie;
   const actor: CheckRoll = {
     d20: actorD20,
     modifier: actorModifier,

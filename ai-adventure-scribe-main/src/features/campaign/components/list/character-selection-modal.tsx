@@ -25,9 +25,8 @@ interface CharacterSelectionModalProps {
 
 /**
  * Modal component for selecting a character to play a campaign
- * For starter campaigns: shows pre-built character templates, plus the
- * account roster below them (#321) so a saved custom character can start
- * a session there too.
+ * For starter campaigns: shows the campaign's pre-built character templates,
+ * the same list as the explore page (#1740). The account roster is not offered.
  * For regular campaigns: shows user's existing characters
  * For non-starter campaigns, when nothing is bound to the campaign: shows the
  * whole account roster, each with "Use here". Starter campaigns never fall back
@@ -46,7 +45,6 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
     templates,
     characters,
     accountCharacters,
-    rosterError,
     loadError,
     retryLoad,
     handleSelectTemplate,
@@ -65,10 +63,9 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
     campaignName,
   });
 
-  // #321: templates successfully loaded on a starter campaign — the state in
-  // which the account roster is offered as an addition. (A failed/empty
-  // template load keeps the #2193 failure state, roster-free.) Typed as
-  // T[] | undefined (not boolean) so the ternary below narrows it for TS.
+  // Templates successfully loaded on a starter campaign. (A failed or empty
+  // template load keeps the #2193 failure state.) Typed as T[] | undefined
+  // (not boolean) so the ternary below narrows it for TS.
   const starterTemplates =
     isStarterCampaign && templates && templates.length > 0 ? templates : undefined;
 
@@ -98,53 +95,18 @@ const CharacterSelectionModal: React.FC<CharacterSelectionModalProps> = ({
                 <Button onClick={retryLoad}>Retry</Button>
               </div>
             ) : starterTemplates ? (
-              // Show starter templates, then the account roster below them
-              // (#321): a saved custom character can start a session here too.
-              // The roster is only an addition to loaded templates — when the
-              // template load fails the modal still shows the failure alone
-              // (#2193), never the roster.
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {starterTemplates.map((template) => (
-                    <StarterTemplateCard
-                      key={template.id}
-                      template={template}
-                      isCreating={isCreating}
-                      onSelect={handleSelectTemplate}
-                      getModifier={getModifier}
-                    />
-                  ))}
-                </div>
-                {accountCharacters && accountCharacters.length > 0 && (
-                  <div className="mt-8">
-                    <p className="text-lg font-semibold text-foreground">Your characters</p>
-                    <p className="text-sm text-muted-foreground mt-1 mb-4">
-                      Or bring one of your own characters into &ldquo;{campaignName}&rdquo;.
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {accountCharacters.map((character) => (
-                        <PlayableCharacterCard
-                          key={character.id}
-                          character={character}
-                          onSelect={startGameWithCharacter}
-                          getModifier={getModifier}
-                          actionLabel="Use here"
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {rosterError && !(accountCharacters && accountCharacters.length > 0) && (
-                  <div className="mt-8" role="alert">
-                    <p className="text-sm text-muted-foreground">
-                      Couldn&apos;t load your characters.{' '}
-                      <Button variant="link" className="h-auto p-0 text-sm" onClick={retryLoad}>
-                        Retry
-                      </Button>
-                    </p>
-                  </div>
-                )}
-              </>
+              // Show the campaign's starter templates (#1740).
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {starterTemplates.map((template) => (
+                  <StarterTemplateCard
+                    key={template.id}
+                    template={template}
+                    isCreating={isCreating}
+                    onSelect={handleSelectTemplate}
+                    getModifier={getModifier}
+                  />
+                ))}
+              </div>
             ) : !isStarterCampaign && characters && characters.length > 0 ? (
               // Show user's characters
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

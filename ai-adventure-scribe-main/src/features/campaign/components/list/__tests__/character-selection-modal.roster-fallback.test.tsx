@@ -234,69 +234,51 @@ describe('CharacterSelectionModal — empty campaign falls back to the account r
     expect(api.listStarterCharacterTemplates).toHaveBeenCalledWith('starter-1');
   });
 
-  it('a starter campaign with loaded templates also offers the account roster (#321)', async () => {
+  it('a starter campaign offers only its templates, not a hero from another campaign (#1740)', async () => {
     api.listSessions.mockResolvedValue([{ starter_campaign_id: 'starter-1' }]);
     api.listStarterCharacterTemplates.mockResolvedValue([makeTemplate()]);
-    api.listCharacters.mockImplementation(async (campaignId?: string) =>
-      campaignId ? [] : [makeCharacter(9)],
-    );
+    api.listCharacters.mockImplementation(async () => [makeCharacter(9)]);
 
     renderPicker();
 
-    // The premade template is still offered…
+    // The premade template is offered…
     expect(
       await screen.findByRole('button', { name: /Select character: The Scholar/ }),
     ).toBeInTheDocument();
-    // …and the saved custom character is offered below it, not hidden.
+    // …and the account's hero from another campaign is not.
     expect(
-      await screen.findByRole('button', { name: /Select character: Hero 9/ }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('Your characters')).toBeInTheDocument();
-    expect(screen.getAllByText('Use here')).toHaveLength(1);
-  });
-
-  it('picking a custom character on a starter campaign keeps the starter link (#321)', async () => {
-    api.listSessions.mockResolvedValue([{ starter_campaign_id: 'starter-1' }]);
-    api.listStarterCharacterTemplates.mockResolvedValue([makeTemplate()]);
-    api.listCharacters.mockImplementation(async (campaignId?: string) =>
-      campaignId ? [] : [makeCharacter(9)],
-    );
-
-    renderPicker();
-    fireEvent.click(await screen.findByRole('button', { name: /Select character: Hero 9/ }));
-
-    // Same session plumbing as a premade pick: the starter id rides along so
-    // the session keeps starter_campaign_id (DM lore, difficulty, hero flow).
-    await waitFor(() =>
-      expect(screen.getByTestId('game-page')).toHaveTextContent(
-        `/app/game/${CAMPAIGN_ID}?character=char-9&starterCampaign=starter-1&new=true`,
-      ),
-    );
-  });
-
-  it('a failed roster load on a starter campaign shows an inline retry, not a full-modal error (#321)', async () => {
-    api.listSessions.mockResolvedValue([{ starter_campaign_id: 'starter-1' }]);
-    api.listStarterCharacterTemplates.mockResolvedValue([makeTemplate()]);
-    let rosterCalls = 0;
-    api.listCharacters.mockImplementation(async (campaignId?: string) => {
-      if (campaignId) return [];
-      rosterCalls += 1;
-      if (rosterCalls === 1) throw new Error('network down');
-      return [makeCharacter(5)];
-    });
-
-    renderPicker();
-
-    // The templates still render — a roster failure must not hide them.
-    expect(
-      await screen.findByRole('button', { name: /Select character: The Scholar/ }),
-    ).toBeInTheDocument();
-    expect(await screen.findByText(/Couldn't load your characters/)).toBeInTheDocument();
+      screen.queryByRole('button', { name: /Select character: Hero 9/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('Your characters')).not.toBeInTheDocument();
     expect(screen.queryByText('Use here')).not.toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+  it('a starter campaign never requests the account roster, even with templates loaded (#1740)', async () => {
+    api.listSessions.mockResolvedValue([{ starter_campaign_id: 'starter-1' }]);
+    api.listStarterCharacterTemplates.mockResolvedValue([makeTemplate()]);
+    api.listCharacters.mockImplementation(async () => [makeCharacter(9)]);
 
-    expect(await screen.findByText('Use here')).toBeInTheDocument();
+    renderPicker();
+
+    expect(
+      await screen.findByRole('button', { name: /Select character: The Scholar/ }),
+    ).toBeInTheDocument();
+    // The roster query is enabled on mount, so it would already have fired.
+    expect(api.listCharacters).not.toHaveBeenCalled();
+  });
+
+  it('a starter campaign shows no roster error, since no roster is requested (#1740)', async () => {
+    api.listSessions.mockResolvedValue([{ starter_campaign_id: 'starter-1' }]);
+    api.listStarterCharacterTemplates.mockResolvedValue([makeTemplate()]);
+    api.listCharacters.mockRejectedValue(new Error('network down'));
+
+    renderPicker();
+
+    // The templates render and no roster error appears.
+    expect(
+      await screen.findByRole('button', { name: /Select character: The Scholar/ }),
+    ).toBeInTheDocument();
     expect(screen.queryByText(/Couldn't load your characters/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
