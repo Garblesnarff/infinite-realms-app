@@ -82,6 +82,7 @@ import {
 } from '../../services/llm-model-config.js';
 import { LLMProviderService, type LLMResponse } from '../../services/llm-provider-service.js';
 import { countPromptSections } from '../../services/prompt-section-counter.js';
+import { normalizeDmPlace } from '../../services/story-map/story-map-rules.js';
 
 import type { CombatEntryPending } from '../../services/combat/combat-entry-gate.js';
 
@@ -1651,7 +1652,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
           envelope?.campaign_ending ||
           envelope?.tracker_changes ||
           // #1753: a story map place writes the campaign's map progress.
-          envelope?.place ||
+          normalizeDmPlace(envelope?.place) !== null ||
           // #1042: a climax-counting or ending-re-asserting turn is a story
           // turn for this guard too, so a completed session closes it the
           // same way (the tracker applier re-checks under its lock as well).
@@ -1989,7 +1990,9 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
         // #1753: the DM's story map place. Applied only on an out-of-combat DM turn that asks
         // for no roll (the arrival belongs to the result turn); a value that does not fit the
         // map is dropped and logged, never an error. The envelope keeps only an applied key.
-        if (envelope && envelope.place != null) {
+        const dmPlace = normalizeDmPlace(envelope?.place);
+        if (envelope && envelope.place != null && dmPlace === null) envelope.place = null;
+        if (envelope && dmPlace !== null) {
           let placeApplied = false;
           if (
             dmReply &&
@@ -2004,13 +2007,13 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
               const placeResult = await applyStoryMapPlace({
                 sessionId: castSessionId,
                 userId,
-                place: envelope.place,
+                place: dmPlace,
               });
               placeApplied = placeResult.accepted;
               logger.info({
                 msg: placeResult.accepted ? 'DM_STORY_MAP_PLACE' : 'DM_STORY_MAP_PLACE_DROPPED',
                 sessionId: castSessionId,
-                place: envelope.place,
+                place: dmPlace,
                 ...(placeResult.accepted
                   ? { via: placeResult.via }
                   : { reason: placeResult.reason }),
@@ -2022,7 +2025,7 @@ export const llmRoutes = new Elysia({ prefix: '/v1/llm' })
             logger.info({
               msg: 'DM_STORY_MAP_PLACE_DROPPED',
               sessionId: castSessionId ?? null,
-              place: envelope.place,
+              place: dmPlace,
               reason: rollRequested
                 ? 'roll_requested'
                 : storyEffectsClosed

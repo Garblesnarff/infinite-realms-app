@@ -214,6 +214,15 @@ a place the DM names for the first time with `state = known` (a neighbour of a
 visited place); anything else is dropped and logged, not an error. The client
 never sends it.
 
+**The opening (strategist decision, 11-26, #1762).** Before the first visit the
+campaign has no visited place, so there is no current place and no neighbour to
+check against. In that state the server accepts any `place_key` of the
+session's starter map: that is the place the opening scene puts the hero
+(`story-map-rules.ts`, the `opening` branch of `decidePlace`). To let the DM
+choose it, the `<story_map>` block lists every place of the map until the first
+visit, and only the known places and their routes after it. From the first
+visit on, the rules above apply.
+
 **Budget.** Narrative optionals go 20 → 21. The strict cap is 24
 (`dm-response-schema-budget.test.ts:59-139`), so it fits.
 

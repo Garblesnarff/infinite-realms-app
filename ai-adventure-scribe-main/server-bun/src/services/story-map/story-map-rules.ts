@@ -207,3 +207,14 @@ export function storyMapPromptBlock(
   lines.push('</story_map>');
   return lines.join('\n');
 }
+
+/**
+ * The DM's `place` as a key, or null when the reply carries none. On the Haiku tool path an
+ * optional `null` is already dropped, but the string "null" (Haiku's spelling of "no value")
+ * survives for a string field; it, an empty string, and any non-string are absent here.
+ */
+export function normalizeDmPlace(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed === '' || trimmed.toLowerCase() === 'null' ? null : trimmed;
+}

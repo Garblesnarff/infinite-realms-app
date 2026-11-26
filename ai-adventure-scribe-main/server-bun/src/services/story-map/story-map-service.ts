@@ -34,6 +34,8 @@ export interface MapScope {
   campaignId: string;
   starterCampaignId: string;
   sessionId: string | null;
+  /** The owner: every story_map_progress / story_map_revealed_edges query filters by it. */
+  userId: string;
 }
 
 /** The session's campaign and starter campaign, for the owner only; null when there is no map. */
@@ -51,7 +53,12 @@ export async function loadSessionMapScope(
     .where(and(eq(gameSessions.id, sessionId), eq(campaigns.userId, userId)))
     .limit(1);
   if (!row?.campaignId || !row.starterCampaignId) return null;
-  return { campaignId: row.campaignId, starterCampaignId: row.starterCampaignId, sessionId };
+  return {
+    campaignId: row.campaignId,
+    starterCampaignId: row.starterCampaignId,
+    sessionId,
+    userId,
+  };
 }
 
 /**
@@ -76,7 +83,7 @@ export async function loadCampaignMapScope(
     .orderBy(desc(gameSessions.createdAt))
     .limit(1);
   if (!session?.starterCampaignId) return null;
-  return { campaignId, starterCampaignId: session.starterCampaignId, sessionId: null };
+  return { campaignId, starterCampaignId: session.starterCampaignId, sessionId: null, userId };
 }
 
 async function loadMap(
@@ -105,7 +112,7 @@ async function loadMap(
   return { places, edges };
 }
 
-/** Progress for a campaign the caller already proved they own (scope came from an owner query). */
+/** The player's progress. RLS is off (AGENTS §4): both reads join campaigns on the owner. */
 async function loadProgress(scope: MapScope): Promise<MapProgress> {
   const rows = await db
     .select({
@@ -114,11 +121,20 @@ async function loadProgress(scope: MapScope): Promise<MapProgress> {
       visitedAt: storyMapProgress.visitedAt,
     })
     .from(storyMapProgress)
-    .where(eq(storyMapProgress.campaignId, scope.campaignId));
+    .innerJoin(campaigns, eq(campaigns.id, storyMapProgress.campaignId))
+    .where(
+      and(eq(storyMapProgress.campaignId, scope.campaignId), eq(campaigns.userId, scope.userId)),
+    );
   const revealed = await db
     .select({ fromKey: storyMapRevealedEdges.fromKey, toKey: storyMapRevealedEdges.toKey })
     .from(storyMapRevealedEdges)
-    .where(eq(storyMapRevealedEdges.campaignId, scope.campaignId));
+    .innerJoin(campaigns, eq(campaigns.id, storyMapRevealedEdges.campaignId))
+    .where(
+      and(
+        eq(storyMapRevealedEdges.campaignId, scope.campaignId),
+        eq(campaigns.userId, scope.userId),
+      ),
+    );
   return {
     rows: rows.map((row) => ({
       placeKey: row.placeKey,
@@ -161,51 +177,27 @@ export async function applyStoryMapPlace(input: {
   if (!decision.accepted) return decision;
 
   const move = planMove(decision.placeKey, edges, progress);
+  // RLS is off (AGENTS §4): each write is INSERT ... SELECT FROM campaigns filtered on the
+  // owner, so a row can only land on a campaign this user owns, whatever the scope said.
+  const owned = sql`FROM campaigns c WHERE c.id = ${scope.campaignId}::uuid AND c.user_id = ${scope.userId}`;
   await db.transaction(async (tx) => {
-    await tx
-      .insert(storyMapProgress)
-      .values({
-        campaignId: scope.campaignId,
-        placeKey: move.visit,
-        state: 'visited',
-        firstSessionId: input.sessionId,
-        visitedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: [storyMapProgress.campaignId, storyMapProgress.placeKey],
-        set: { state: 'visited', visitedAt: sql`now()` },
-      });
-    if (move.know.length > 0) {
-      await tx
-        .insert(storyMapProgress)
-        .values(
-          move.know.map((placeKey) => ({
-            campaignId: scope.campaignId,
-            placeKey,
-            state: 'known',
-            firstSessionId: input.sessionId,
-          })),
-        )
-        .onConflictDoNothing({ target: [storyMapProgress.campaignId, storyMapProgress.placeKey] });
+    const visited = await tx.execute(sql`
+      INSERT INTO story_map_progress (campaign_id, place_key, state, first_session_id, visited_at)
+      SELECT c.id, ${move.visit}, 'visited', ${input.sessionId}::uuid, now() ${owned}
+      ON CONFLICT (campaign_id, place_key) DO UPDATE SET state = 'visited', visited_at = now()
+      RETURNING place_key`);
+    if (visited.length === 0) throw new Error("story map write: campaign is not the caller's");
+    for (const placeKey of move.know) {
+      await tx.execute(sql`
+        INSERT INTO story_map_progress (campaign_id, place_key, state, first_session_id)
+        SELECT c.id, ${placeKey}, 'known', ${input.sessionId}::uuid ${owned}
+        ON CONFLICT (campaign_id, place_key) DO NOTHING`);
     }
-    if (move.reveal.length > 0) {
-      await tx
-        .insert(storyMapRevealedEdges)
-        .values(
-          move.reveal.map((edge) => ({
-            campaignId: scope.campaignId,
-            fromKey: edge.fromKey,
-            toKey: edge.toKey,
-            sessionId: input.sessionId,
-          })),
-        )
-        .onConflictDoNothing({
-          target: [
-            storyMapRevealedEdges.campaignId,
-            storyMapRevealedEdges.fromKey,
-            storyMapRevealedEdges.toKey,
-          ],
-        });
+    for (const edge of move.reveal) {
+      await tx.execute(sql`
+        INSERT INTO story_map_revealed_edges (campaign_id, from_key, to_key, session_id)
+        SELECT c.id, ${edge.fromKey}, ${edge.toKey}, ${input.sessionId}::uuid ${owned}
+        ON CONFLICT (campaign_id, from_key, to_key) DO NOTHING`);
     }
   });
   return decision;
