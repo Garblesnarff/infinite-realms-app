@@ -240,6 +240,23 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
       return groups;
     }, [messages, failedMessages]);
 
+    // The scene band's fallback shows the current place above the latest DM
+    // reply (#1026). That is the last DM message actually rendered — not the
+    // absolute last message, so the latest DM reply keeps its band while a
+    // player reply below it awaits a DM response — and not the last message
+    // of a group, since in an alternating transcript each DM reply is the
+    // sole message of its group. Withheld DM roll replies are already out of
+    // groupedMessages, so a hidden reply never carries the band.
+    const latestDmMessageForBand = useMemo(() => {
+      for (let i = groupedMessages.length - 1; i >= 0; i--) {
+        const group = groupedMessages[i];
+        if (group.sender === 'dm') {
+          return group.messages[group.messages.length - 1];
+        }
+      }
+      return null;
+    }, [groupedMessages]);
+
     return (
       <>
         <SpellTargetSaveCard pending={spellTargetSave} roster={engineRoster} />
@@ -339,6 +356,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
                       onRetryFailed={onRetryFailed}
                       encounterActive={combatState.isInCombat}
                       isLatestMessage={isLastMessage || message === latestDmMessage}
+                      isLatestDmMessage={message === latestDmMessageForBand}
                       rollTrayOpen={Boolean(currentRoll && rollRequest)}
                       optionsSuperseded={supersededByCombatEnd.has(message)}
                       characterName={group.messages[0].characterName}
