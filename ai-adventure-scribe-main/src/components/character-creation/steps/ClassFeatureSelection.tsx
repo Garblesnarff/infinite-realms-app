@@ -6,7 +6,6 @@ import { ClassFeatureChoiceCard } from './ClassFeatureChoiceCard';
 import type { CharacterClass } from '@/types/character';
 
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { useAutoScroll } from '@/hooks/use-auto-scroll';
@@ -32,21 +31,13 @@ const ClassFeatureSelection: React.FC = () => {
   // Note: No early returns before hooks to satisfy rules-of-hooks
 
   /**
-   * Updates character class features in context
+   * Updates character class features in context.
+   * #210 QA-027: the manual "Confirm Class Features" button is gone — the
+   * auto-update effect below applies as soon as every choice is made, and
+   * Next is blocked by validateClassFeatures until then. This only ever runs
+   * with all choices made, so there is no incomplete-selection branch.
    */
   const updateClassFeatures = () => {
-    // Validate all required choices are made
-    const missingChoices = featuresWithChoices.filter((feature) => !selectedFeatures[feature.id]);
-
-    if (missingChoices.length > 0) {
-      toast({
-        title: 'Incomplete Selection',
-        description: `Please select ${missingChoices.map((f) => f.name).join(', ')}.`,
-        variant: 'destructive',
-      });
-      return;
-    }
-
     // Build class features object
     const classFeatures: Record<string, { name: string; description: string; choice?: string }> =
       {};
@@ -179,15 +170,6 @@ const ClassFeatureSelection: React.FC = () => {
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* Manual Update Button (fallback) */}
-      {featuresWithChoices.length > 0 && (
-        <div className="flex justify-center">
-          <Button onClick={updateClassFeatures} className="mt-4">
-            Confirm Class Features
-          </Button>
-        </div>
       )}
     </div>
   );
