@@ -24,6 +24,14 @@ const harness = vi.hoisted(() => ({
   rollRequest: null as { formula: string } | null,
 }));
 
+vi.mock('@/infrastructure/api/rest-client', async (importOriginal) => {
+  const { storyMapResponse } = await import('../../story-map/__tests__/story-map-response');
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    fetchWithAuth: vi.fn(storyMapResponse),
+  };
+});
+
 vi.mock('@/contexts/MessageContext', () => ({
   useMessageContext: () => ({
     messages: harness.messages,
@@ -228,7 +236,9 @@ describe('GameMainContent region map (#1754)', () => {
 
   it('phone/tablet: the plaque opens the map sheet above the dock, never over the composer', async () => {
     render(<GameMainContent {...baseProps} sessionData={STARTER} tableHeaderSlot={header} />);
-    await user.click(screen.getByRole('button', { name: 'Open map, you are at Old Toll Bridge' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Open map, you are at Old Toll Bridge' }),
+    );
     const sheet = await screen.findByTestId('story-map-sheet');
     await screen.findByRole('tab', { name: 'Map' });
     const composer = screen.getByRole('textbox', {
@@ -240,7 +250,9 @@ describe('GameMainContent region map (#1754)', () => {
 
   it('Travel here fills the real composer, focuses it, and sends nothing', async () => {
     render(<GameMainContent {...baseProps} sessionData={STARTER} tableHeaderSlot={header} />);
-    await user.click(screen.getByRole('button', { name: 'Open map, you are at Old Toll Bridge' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Open map, you are at Old Toll Bridge' }),
+    );
     await user.click(await screen.findByRole('tab', { name: 'Places' }));
     await user.click(screen.getByRole('button', { name: 'Travel here: Barrow Gate' }));
     const composer = screen.getByRole('textbox', {
@@ -254,7 +266,9 @@ describe('GameMainContent region map (#1754)', () => {
 
   it('Escape closes the sheet and returns focus to the plaque', async () => {
     render(<GameMainContent {...baseProps} sessionData={STARTER} tableHeaderSlot={header} />);
-    const plaque = screen.getByRole('button', { name: 'Open map, you are at Old Toll Bridge' });
+    const plaque = await screen.findByRole('button', {
+      name: 'Open map, you are at Old Toll Bridge',
+    });
     plaque.focus();
     await user.keyboard('{Enter}');
     await screen.findByRole('tab', { name: 'Map' });
@@ -267,7 +281,9 @@ describe('GameMainContent region map (#1754)', () => {
     render(
       <GameMainContent {...baseProps} sessionData={STARTER} tableHeaderSlot={header} mapInRail />,
     );
-    await user.click(screen.getByRole('button', { name: 'Open map, you are at Old Toll Bridge' }));
+    await user.click(
+      await screen.findByRole('button', { name: 'Open map, you are at Old Toll Bridge' }),
+    );
     expect(screen.queryByTestId('story-map-sheet')).not.toBeInTheDocument();
   });
 });

@@ -20,6 +20,7 @@ import {
   useOpenStoryMapCampaign,
 } from '../../story-map/story-map-state';
 import { StoryMapPanel } from '../../story-map/StoryMapPanel';
+import { useStoryMapAvailable } from '../../story-map/useStoryMap';
 import { requestMapMoveMode } from '../../tactical/map-move-mode';
 import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
 import { useTacticalMapContext } from '../../tactical/TacticalMapProvider';
@@ -391,16 +392,19 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
         setMapSheetOpen(true);
       }
     }, [mapInRail, isLeftCollapsed, onLeftToggle]);
-    // #1754: player-made campaigns (no starter campaign) have no place graph, so no map button.
+    // #1754: no map button unless the server returns a map for this campaign. Player-made
+    // campaigns, other users' campaigns and any failed load all leave the plaque plain.
+    const mapCampaignId = sessionData.starter_campaign_id ? campaignIdForHandler : null;
+    const storyMapAvailable = useStoryMapAvailable(mapCampaignId ?? null);
     const openRegionMap = React.useMemo(
       () =>
-        sessionData.starter_campaign_id && campaignIdForHandler
+        mapCampaignId && storyMapAvailable
           ? (plaque: HTMLElement) => {
               setMapSheetOpen(false);
-              openStoryMap(campaignIdForHandler, plaque);
+              openStoryMap(mapCampaignId, plaque);
             }
           : undefined,
-      [sessionData.starter_campaign_id, campaignIdForHandler],
+      [mapCampaignId, storyMapAvailable],
     );
     const openFightBoard = React.useMemo(
       () =>

@@ -13,10 +13,10 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { FIXTURE_STORY_MAP } from './fixture-graph';
 import { ComposerDraftProvider, useComposerDraft } from '../../chat/composer-draft';
-import { FIXTURE_STORY_MAP } from '../fixture-graph';
 import { PlaceList } from '../PlaceList';
 import { centreView, FULL_VIEW, MAP_H, MAP_W, panView, zoomView } from '../region-map-view';
 import { RegionMap } from '../RegionMap';
@@ -28,11 +28,27 @@ import {
   useOpenStoryMapCampaign,
 } from '../story-map-state';
 import { StoryMapPanel } from '../StoryMapPanel';
-import { deriveStoryMapView, useStoryMap, type StoryMapGraph } from '../useStoryMap';
+import {
+  deriveStoryMapView,
+  resetStoryMapCache,
+  useStoryMap,
+  type StoryMapGraph,
+} from '../useStoryMap';
+
+vi.mock('@/infrastructure/api/rest-client', async (importOriginal) => {
+  const { storyMapResponse } = await import('./story-map-response');
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    fetchWithAuth: vi.fn(storyMapResponse),
+  };
+});
 
 const view = deriveStoryMapView(FIXTURE_STORY_MAP);
 
-afterEach(() => resetStoryMapState());
+afterEach(() => {
+  resetStoryMapState();
+  resetStoryMapCache();
+});
 
 describe('deriveStoryMapView: fog of war (design §8)', () => {
   it('draws only known and visited places, and never an unknown one', () => {

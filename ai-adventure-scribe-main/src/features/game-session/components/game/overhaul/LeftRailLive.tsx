@@ -4,6 +4,7 @@ import { LeftRail, TableCharacterCard } from './LeftRail';
 import { useOverhaulViewModel } from './useOverhaulViewModel';
 import { useOpenStoryMapCampaign } from '../../story-map/story-map-state';
 import { StoryMapPanel } from '../../story-map/StoryMapPanel';
+import { RAILS_SIDE_BY_SIDE } from '../game-content/use-game-rails';
 
 import { useOptionalCharacter } from '@/contexts/CharacterContext';
 import { useMessageContext } from '@/contexts/MessageContext';
@@ -21,10 +22,10 @@ export const LeftRailLive: React.FC<{
   const { messages } = useMessageContext();
   const vm = useOverhaulViewModel({ sessionId, messages, chapterLabel });
   const character = useOptionalCharacter()?.state.character;
-  // #1754: the region map opens here when the rail holds the fight board, the same
-  // 1024 px rule as GameLayout's mapInRail; narrower screens use the sheet.
+  // #1754: the region map opens here when the rail holds the fight board: the same
+  // RAILS_SIDE_BY_SIDE query as GameLayout's mapInRail; narrower screens use the sheet.
   const storyMapCampaignId = useOpenStoryMapCampaign();
-  const railHoldsMap = useMediaQuery('(min-width: 1024px)');
+  const railHoldsMap = useMediaQuery(RAILS_SIDE_BY_SIDE);
   return (
     <>
       {storyMapCampaignId && railHoldsMap && (

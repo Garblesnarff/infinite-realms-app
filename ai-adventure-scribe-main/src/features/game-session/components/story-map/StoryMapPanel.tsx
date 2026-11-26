@@ -44,7 +44,8 @@ export const StoryMapPanel: React.FC<{
 
   let body: React.ReactNode;
   if (result.status === 'loading') body = <p className="text-sm">Loading the map…</p>;
-  else if (result.status === 'error') body = <p className="text-sm">The map could not load.</p>;
+  else if (result.status === 'error' || result.status === 'unavailable')
+    body = <p className="text-sm">The map could not load.</p>;
   else if (layout === 'rail')
     body = (
       <>

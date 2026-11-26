@@ -9,7 +9,7 @@ import { GameMainContent } from './GameMainContent';
 import { GameRightPanel } from './GameRightPanel';
 import { RailOverStoryLayer } from './RailOverStoryLayer';
 import { TableContextCard } from './TableContextCard';
-import { RAIL_OVER_STORY } from './use-game-rails';
+import { RAILS_SIDE_BY_SIDE, RAIL_OVER_STORY } from './use-game-rails';
 import { TacticalMapProvider } from '../../tactical/TacticalMapProvider';
 import { resolveCampaignChapterLabel } from '../overhaul/campaign-chapter';
 
@@ -111,7 +111,7 @@ export const GameLayout: React.FC<GameLayoutProps> = memo(
     const handleRailOverStoryClose = useCallback((): void => {
       setTableDrawerOpen(false);
     }, []);
-    const tableDesktop = useMediaQuery('(min-width: 1024px)');
+    const tableDesktop = useMediaQuery(RAILS_SIDE_BY_SIDE);
     const mapInRail = !tableLeftHidden && tableDesktop;
     // #2517: when the character falls, the end state is the whole page — the
     // panels, tracker and floating controls are not rendered at all.

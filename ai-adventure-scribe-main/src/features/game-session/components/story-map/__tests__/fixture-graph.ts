@@ -1,4 +1,4 @@
-import type { StoryMapGraph } from './useStoryMap';
+import type { StoryMapGraph } from '../useStoryMap';
 
 /**
  * #1754: a stand-in graph in the shape of design §4 (story_map_places, story_map_edges,

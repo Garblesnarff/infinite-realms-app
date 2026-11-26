@@ -5,6 +5,14 @@ import { openStoryMap, resetStoryMapState } from '../../../story-map/story-map-s
 import { LeftRailLive } from '../LeftRailLive';
 
 const media = vi.hoisted(() => ({ desktop: true }));
+vi.mock('@/infrastructure/api/rest-client', async (importOriginal) => {
+  const { storyMapResponse } = await import('../../../story-map/__tests__/story-map-response');
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    fetchWithAuth: vi.fn(storyMapResponse),
+  };
+});
+
 vi.mock('@/hooks/use-media-query', () => ({ useMediaQuery: () => media.desktop }));
 vi.mock('@/contexts/CharacterContext', () => ({
   useOptionalCharacter: () => ({ state: { character: { id: 'char-1' } } }),
