@@ -10,6 +10,15 @@ export interface CharacterState {
   currentStep: number;
   isLoading: boolean;
   error: string | null;
+  /**
+   * #210 QA-026: whether completing the character generates a background
+   * image. A creation-time choice, not stored data — it rides the wizard
+   * state (not the Character row, whose shape open PR #1744 owns) and
+   * defaults to true, preserving the current always-generate behavior.
+   * It is persisted by the wizard draft (WizardDraft.generateBackgroundImage,
+   * v2), so a resumed draft keeps the user's opt-out.
+   */
+  generateBackgroundImage: boolean;
 }
 
 /**
@@ -33,4 +42,5 @@ export type CharacterAction =
   | { type: 'SET_WEIGHT'; payload: number }
   | { type: 'SET_EYES'; payload: string | undefined }
   | { type: 'SET_SKIN'; payload: string | undefined }
-  | { type: 'SET_HAIR'; payload: string | undefined };
+  | { type: 'SET_HAIR'; payload: string | undefined }
+  | { type: 'SET_GENERATE_BACKGROUND_IMAGE'; payload: boolean };

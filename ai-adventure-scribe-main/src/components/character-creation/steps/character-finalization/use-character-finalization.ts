@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import type { CharacterState } from '@/contexts/character/types';
 import type { CharacterData } from '@/services/ai/prompts/character-description-prompts';
 
 import { useCampaign } from '@/contexts/CampaignContext';
@@ -13,7 +14,6 @@ import { characterDescriptionGenerator } from '@/services/character-description-
 import { characterImageGenerator } from '@/services/character-image-generator';
 import { openRouterService } from '@/services/openrouter-service';
 import { toCharacterPromptData } from '@/services/prompts/characterPrompts';
-import { type Character } from '@/types/character';
 
 export type GenerationStep = 'idle' | 'avatar' | 'sheet' | 'background';
 
@@ -22,13 +22,9 @@ export type GenerationStep = 'idle' | 'avatar' | 'sheet' | 'background';
  * Extracted to improve maintainability and follow coding standards
  */
 export const useCharacterFinalization = (): {
-  state: {
-    character: Character | null;
-    isDirty: boolean;
-    currentStep: number;
-    isLoading: boolean;
-    error: string | null;
-  };
+  // The wizard state, not a copy: hand-writing this shape drifted (it missed
+  // generateBackgroundImage, #210 QA-026) and hid the mismatch.
+  state: CharacterState;
   isGeneratingDescription: boolean;
   isGeneratingAvatar: boolean;
   isGeneratingImage: boolean;

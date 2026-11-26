@@ -255,10 +255,10 @@
       "breakpoints": true
     },
     {
-      "idx": 38,
+      "idx": 40,
       "version": "7",
       "when": 1795573789340,
-      "tag": "0038_character_starter_template",
+      "tag": "0040_character_starter_template",
       "breakpoints": true
     }
   ]

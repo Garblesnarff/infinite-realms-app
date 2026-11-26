@@ -93,4 +93,44 @@ describe('POST /v1/sessions/:id/handout-actions schema contract', () => {
     expect(response.status).toBe(422);
     expect(await response.json()).toMatchObject({ error: 'Invalid DM handout batch' });
   });
+
+  it('accepts exactly ten valid actions (the batch the client filter sends)', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/sessions/session-1/handout-actions', {
+        method: 'POST',
+        headers: { authorization: 'Bearer valid-user-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          actions: Array.from({ length: 10 }, (_, i) => ({
+            mode: 'improvised',
+            key: null,
+            title: `Field Notes ${i + 1}`,
+            body: 'A page of observations.',
+            giver: 'Professor Darkwater',
+          })),
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+  });
+
+  it('rejects eleven valid actions at the body cap', async () => {
+    const response = await app.handle(
+      new Request('http://localhost/v1/sessions/session-1/handout-actions', {
+        method: 'POST',
+        headers: { authorization: 'Bearer valid-user-token', 'content-type': 'application/json' },
+        body: JSON.stringify({
+          actions: Array.from({ length: 11 }, (_, i) => ({
+            mode: 'improvised',
+            key: null,
+            title: `Field Notes ${i + 1}`,
+            body: 'A page of observations.',
+            giver: 'Professor Darkwater',
+          })),
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(422);
+  });
 });

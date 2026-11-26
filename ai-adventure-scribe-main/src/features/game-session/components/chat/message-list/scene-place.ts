@@ -39,9 +39,13 @@ export function findPlaceInText(text: string, locations: CampaignAsset[]): Campa
 
 /**
  * Builds the candidate tag list shared by the scene band and the background
- * effect, so the two cannot drift. Explicit tags come first, then the official context location, then a place named
- * in the prose. A place with no matching
- * chunk contributes nothing.
+ * effect, so the two cannot drift. Explicit tags come first, then the
+ * official context location, then a place named in the prose. A place with
+ * no matching chunk contributes nothing. There is no tracked-place source:
+ * no server field holds the hero's current place today (that is build step
+ * 2 of the story-maps design, #1742), so when the hero moves and the prose
+ * does not name the new place, the band falls back to the last place named
+ * instead of following the move.
  */
 export function sceneCandidateTags(
   assetTags: Array<{ type: string; key: string }>,

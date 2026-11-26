@@ -98,3 +98,27 @@ export function publishEngineRollRefusal(rollId: string | undefined): void {
   if (refusedRolls.size > 32) refusedRolls.delete(refusedRolls.values().next().value as string);
   refusalListeners.forEach((listener) => listener(rollId));
 }
+
+const dismissedInitiativeRolls = new Map<string, number>();
+const dismissedInitiativeListeners = new Set<(event: { rollId: string; total: number }) => void>();
+
+export function dismissedInitiativeTotal(rollId: string): number | undefined {
+  return dismissedInitiativeRolls.get(rollId);
+}
+
+export function subscribeDismissedInitiativeRoll(
+  listener: (event: { rollId: string; total: number }) => void,
+): () => void {
+  dismissedInitiativeListeners.add(listener);
+  return () => {
+    dismissedInitiativeListeners.delete(listener);
+  };
+}
+
+export function publishDismissedInitiativeRoll(rollId: string, total: number): void {
+  dismissedInitiativeRolls.set(rollId, total);
+  if (dismissedInitiativeRolls.size > 32) {
+    dismissedInitiativeRolls.delete(dismissedInitiativeRolls.keys().next().value as string);
+  }
+  dismissedInitiativeListeners.forEach((listener) => listener({ rollId, total }));
+}

@@ -56,6 +56,8 @@ export const initialState: CharacterState = {
   currentStep: 0,
   isLoading: false,
   error: null,
+  // #210 QA-026: background image generation defaults on (current behavior).
+  generateBackgroundImage: true,
 };
 
 /**
@@ -157,6 +159,13 @@ export function characterReducer(state: CharacterState, action: CharacterAction)
           ...state,
           character: { ...state.character!, hair: action.payload },
           isDirty: true,
+        };
+      case 'SET_GENERATE_BACKGROUND_IMAGE':
+        // #210 QA-026: a creation-time preference, not a character edit — it
+        // does not mark the draft dirty.
+        return {
+          ...state,
+          generateBackgroundImage: action.payload,
         };
       default: {
         logger.warn('Unknown action type dispatched:', action);

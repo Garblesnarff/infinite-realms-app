@@ -39,6 +39,12 @@ interface ProgressIndicatorProps {
   steps: Step[];
   title: string;
   /**
+   * #210 QA-053: full-list indexes of steps not on the current path (their
+   * skipCondition holds). The track always shows the whole list with a stable
+   * total; skipped steps render greyed and never show as completed.
+   */
+  skippedSteps?: number[];
+  /**
    * An object containing custom CSS classes to theme the component.
    * @see ProgressIndicatorTheme for available options.
    */
@@ -60,10 +66,12 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
   totalSteps,
   steps,
   title,
+  skippedSteps = [],
   theme = {},
   renderStepIcon,
 }) => {
   const progress = ((currentStep + 1) / totalSteps) * 100;
+  const skipped = new Set(skippedSteps);
 
   const defaultTheme: Required<ProgressIndicatorTheme> = {
     title: 'text-lg font-semibold',
@@ -77,19 +85,24 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
 
   const getStepPreview = () => {
     return steps.map((step, index) => {
-      const isCompleted = index < currentStep;
+      const isSkipped = skipped.has(index);
+      // A skipped step was never visited, even when it sits before the
+      // current one — it must not show the completed check.
+      const isCompleted = index < currentStep && !isSkipped;
       const isCurrent = index === currentStep;
 
-      const stepLabelStyle = isCurrent
-        ? theme.currentStepLabel || defaultTheme.currentStepLabel
-        : isCompleted
-          ? 'text-success'
-          : 'text-muted-foreground';
+      const stepLabelStyle = isSkipped
+        ? 'text-muted-foreground/50'
+        : isCurrent
+          ? theme.currentStepLabel || defaultTheme.currentStepLabel
+          : isCompleted
+            ? 'text-success'
+            : 'text-muted-foreground';
 
       return (
         <div
           key={index}
-          className={`flex items-center space-x-2 text-xs transition-all duration-300 ${stepLabelStyle}`}
+          className={`flex items-center space-x-2 text-xs transition-all duration-300 ${stepLabelStyle} ${isSkipped ? 'opacity-50' : ''}`}
         >
           {renderStepIcon ? (
             renderStepIcon(index, isCompleted, isCurrent)
@@ -147,7 +160,7 @@ const ProgressIndicator: React.FC<ProgressIndicatorProps> = ({
                 <div
                   key={i}
                   className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                    i <= currentStep
+                    i <= currentStep && !skipped.has(i)
                       ? theme.currentStepDot || defaultTheme.currentStepDot
                       : 'bg-muted-foreground/30'
                   }`}
