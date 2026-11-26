@@ -12,6 +12,7 @@ import { ConditionQueryService } from './condition-query-service.js';
 import { db } from '../../../../db/client';
 import { BusinessLogicError, NotFoundError } from '../../lib/errors.js';
 import { combatLogger } from '../../lib/logger.js';
+import { clearRage } from '../combat/combat-turn-flags.js';
 
 import type {
   ConditionDurationType,
@@ -169,8 +170,7 @@ export class ConditionLifecycleService {
 
     // Insert the condition
     // 🛡️ Sentinel: Refactored to use atomic INSERT ... SELECT for ownership verification.
-    const result = await db.execute<Record<string, unknown>>(
-      sql`
+    const insertCondition = sql`
         INSERT INTO combat_participant_conditions (
           participant_id,
           condition_id,
@@ -212,8 +212,15 @@ export class ConditionLifecycleService {
             : sql``
         }
         RETURNING *
-      `,
-    );
+      `;
+    const result =
+      conditionName.toLowerCase() === 'unconscious'
+        ? await db.transaction(async (tx) => {
+            const inserted = await tx.execute<Record<string, unknown>>(insertCondition);
+            if (inserted.length > 0) await clearRage(encounterId, participantId, tx);
+            return inserted;
+          })
+        : await db.execute<Record<string, unknown>>(insertCondition);
 
     const participantCondition = result[0] as unknown as ParticipantCondition;
 
