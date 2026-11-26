@@ -422,6 +422,9 @@ function monsterAttackProfiles(participant: any): WeaponRuleProfile[] {
           magicBonus: 0,
           finesse: false,
           ranged: Boolean(attack.ranged),
+          ...(attack.ranged && findCatalogWeapon(attack.name) && !catalogWeaponIsRanged(attack.name)
+            ? { meleeWeapon: true }
+            : {}),
           proficient: true,
           fixedAttackBonus: Number(attack.attackBonus) || 0,
           fixedDamageBonus: Number(attack.damageBonus) || 0,
