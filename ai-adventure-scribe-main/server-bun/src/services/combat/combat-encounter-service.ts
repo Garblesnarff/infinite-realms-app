@@ -959,11 +959,9 @@ export class CombatEncounterService {
 
     // Extract participants from the joined result
     const { participants: participantRows, session, ...encounter } = encounterWithParticipants;
-    const marks = (
-      session?.sessionState as {
-        raging?: Record<string, { encounterId?: unknown; expiresRound?: unknown }>;
-      } | null
-    )?.raging;
+    const marks = (session?.sessionState as {
+      raging?: Record<string, { encounterId?: unknown; expiresRound?: unknown }>;
+    } | null)?.raging;
     const map = await loadActiveTacticalMap(encounter.sessionId);
     const positions = new Map(
       map?.entities.map((entity) => [entity.id, { x: entity.x, y: entity.y, sceneId: map.id }]),

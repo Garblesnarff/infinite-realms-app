@@ -355,20 +355,13 @@ describeWithDb('When Rage ends and what it resists (#1654)', () => {
 
   it('an explicit Unconscious condition ends Rage at positive HP', async () => {
     await resetFight();
-    await db
-      .insert(conditionsLibrary)
+    await db.insert(conditionsLibrary)
       .values({ name: 'Unconscious', description: 'Unconscious', mechanicalEffects: '{}' })
       .onConflictDoNothing();
     expect(await claimRage(encounterId, barbarianId)).not.toBeNull();
     expect(await isRaging(encounterId, barbarianId)).toBe(true);
 
-    const applied = await ConditionsService.applyCondition(
-      barbarianId,
-      encounterId,
-      'Unconscious',
-      'rounds',
-      1,
-    );
+    const applied = await ConditionsService.applyCondition(barbarianId, encounterId, 'Unconscious', 'rounds', 1);
     try {
       const [status] = await db
         .select({ hp: combatParticipantStatus.currentHp })
