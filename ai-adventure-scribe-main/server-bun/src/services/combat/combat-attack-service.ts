@@ -19,6 +19,7 @@ import { logAttackResolution, participantSlug } from './attack-telemetry.js';
 import { appliesBlessDie } from './bless-rider.js';
 import { mookGroupAttackBonus } from './boss-moves.js';
 import { resolveAttackRules, weaponAtDistance, type WeaponRuleProfile } from './combat-rules.js';
+import { rollCombatSavingThrow } from './combat-saving-throw.js';
 import {
   activeAlliesOf,
   claimSneakAttack,
@@ -106,7 +107,7 @@ import {
   resolveCatalogSpell,
   twinnedAllowed,
 } from '../../data/spellData.js';
-import { rollD20, rollD20Pair } from '../../lib/dice.js';
+import { rollD20Pair } from '../../lib/dice.js';
 import { NotFoundError, InternalServerError, BusinessLogicError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import { rollDie } from '../../lib/rng.js';
@@ -1390,6 +1391,11 @@ export class CombatAttackService {
       throw new NotFoundError('Caster participant', casterId);
     }
     const casterData = allParticipantDataMap.get(casterId)!;
+    if (casterData.participant.characterId && (await isRaging(encounterId, casterId))) {
+      throw new BusinessLogicError('You cannot cast spells or concentrate while raging.', {
+        reason: 'caster_raging',
+      });
+    }
     const casterProfile = await getParticipantAbilityProfile(casterData.participant);
     // GP-061 (#313): the sheet check runs before the combat-spell assessment, so an
     // unknown spell is refused as "not on your sheet" rather than "no attack roll or
@@ -2199,7 +2205,10 @@ export class CombatAttackService {
               (proficient ? proficiencyBonus(targetProfile.level) : 0);
           // #902: the saving creature adds Bless's 1d4 when a live Bless covers it.
           const saveBlessDie = await this.blessDieFor(targetParticipant);
-          const saveRoll = rollD20() + saveBonus + saveBlessDie;
+          const saveRoll =
+            (await rollCombatSavingThrow(encounterId, targetId, ability)) +
+            saveBonus +
+            saveBlessDie;
           const savedSuccessfully = saveRoll >= saveDC;
 
           if (damageProfile && damageType) {

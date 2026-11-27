@@ -42,7 +42,13 @@ const silentLogger = {
   warn: noop,
   child: () => silentLogger,
 };
-mock.module('../../../../../db/client', () => ({ db: {} }));
+mock.module('../../../../../db/client', () => ({
+  db: {
+    select: () => ({
+      from: () => ({ where: () => ({ limit: async () => [{ state: {}, round: 1 }] }) }),
+    }),
+  },
+}));
 mock.module('../../../lib/env.js', () => ({
   env: { WORKOS_CLIENT_ID: 'test-client', NODE_ENV: 'test' },
 }));
@@ -253,9 +259,8 @@ mock.module('../../../services/combat/concentration-service.js', () => ({
   getConcentration: async (characterId: string) =>
     [...concentrationStarts].reverse().find((row) => row.characterId === characterId) ?? null,
   getConcentrationTargetingParticipant: async (participantId: string) =>
-    [...concentrationStarts]
-      .reverse()
-      .find((row) => row.targetParticipantId === participantId) ?? null,
+    [...concentrationStarts].reverse().find((row) => row.targetParticipantId === participantId) ??
+    null,
   dropConcentration: async () => null,
   checkConcentrationOnDamage: async () => ({ hadConcentration: false, saveTriggered: false }),
   describeConcentrationBroken: (name: string, spellName: string) =>

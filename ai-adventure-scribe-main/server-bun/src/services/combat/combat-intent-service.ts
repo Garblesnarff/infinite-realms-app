@@ -2076,17 +2076,17 @@ export async function executeCombatIntent(
       // #1638: Rage is a bonus action. The claim wraps the resolution, so a refusal inside (no
       // Barbarian level, already raging, no uses left) refunds the bonus action.
       const actorCharacterId = (actor as unknown as { characterId?: string | null }).characterId;
-      result = await claimTurnBonusActionAndResolve(
+      if (!actorCharacterId) {
+        throw new BusinessLogicError("Rage is not on this character's sheet", {
+          reason: 'feature_not_on_sheet',
+          featureName: 'Rage',
+        });
+      }
+      const rage = await claimTurnBonusActionAndResolve(
         intent.actorId,
         encounterId,
         intent.expectedVersion,
         async () => {
-          if (!actorCharacterId) {
-            throw new BusinessLogicError("Rage is not on this character's sheet", {
-              reason: 'feature_not_on_sheet',
-              featureName: 'Rage',
-            });
-          }
           return resolveRage({
             characterId: actorCharacterId,
             userId,
@@ -2095,6 +2095,18 @@ export async function executeCombatIntent(
           });
         },
       );
+
+      const { dropConcentration } = await import('./concentration-service.js');
+      const dropped = await dropConcentration(actorCharacterId).catch((error) => {
+        logger.error({
+          msg: 'RAGE_DROP_CONCENTRATION_FAILED',
+          encounterId,
+          actorCharacterId,
+          error,
+        });
+        return null;
+      });
+      result = { ...rage, ...(dropped ? { droppedConcentration: dropped } : {}) };
     } else if (intent.type === 'cunning_action') {
       // #1635: Cunning Action is a bonus action for a Rogue of level 2+. The level and a spent bonus
       // action are refused before anything is claimed, so a refusal costs nothing. Dash and Disengage

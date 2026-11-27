@@ -9,6 +9,7 @@ import { useOverhaulViewModel } from './overhaul/useOverhaulViewModel';
 
 import type { ChatMessage } from '@/types/game';
 
+import { Badge } from '@/components/ui/badge';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +42,7 @@ export interface CombatActionBarProps {
   enabled: boolean;
   /** The character has spells: Cast shows. */
   hasSpells: boolean;
+  raging?: boolean;
   /** Name for a participant id (targets). */
   nameOf: (participantId: string) => string;
   /** "{Weapon} · +{bonus}" for the default attack. */
@@ -216,6 +218,7 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
   actions,
   enabled,
   hasSpells,
+  raging,
   nameOf,
   attackSub,
   moveSub,
@@ -254,6 +257,7 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
       data-testid="combat-action-bar"
       className="flex flex-wrap items-center gap-2 px-3 pt-2 [body.ir-table-look_&]:flex-nowrap [body.ir-table-look_&]:overflow-x-auto"
     >
+      {raging && <Badge variant="outline">Raging</Badge>}
       <BarButton
         isPrimary
         sub={attackSub}
@@ -532,6 +536,7 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
         actions={actions}
         enabled={isPlayerTurn && !turnInFlight && !isRefreshing && !running}
         hasSpells={hasSpells}
+        raging={encounter.participants.some((participant) => participant.participantType === 'player' && participant.raging)}
         nameOf={nameOf}
         attackSub={attackSub}
         moveSub={moveSub}

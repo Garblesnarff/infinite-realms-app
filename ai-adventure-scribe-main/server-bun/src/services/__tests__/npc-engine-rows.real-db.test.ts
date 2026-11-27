@@ -35,8 +35,10 @@ import { parseAuthoredStatBlock } from '../combat/authored-stat-block-parser.js'
 import { resolveMonsterAttackProfile } from '../combat/monster-attack-profile.js';
 
 const userId = testId('npc-engine-rows-user');
+const engineD20Pair = (await import('../../lib/dice.js')).rollD20Pair;
+const rollBossSave = mock((_advantage?: boolean) => 14);
 mock.module('../../lib/dice.js', () => ({
-  rollD20: () => 14,
+  rollD20: rollBossSave,
   rollD20Pair: () => ({ kept: 14 }),
 }));
 mock.module('../../lib/auth.js', () => ({
@@ -85,6 +87,7 @@ const { getLegalCombatActions } = await importWithRealDb(
 const { runBossMoveWindow, armDefy } = await importWithRealDb(
   () => import('../combat/boss-move-window.js'),
 );
+const { claimRage, clearRage } = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
 const { saveTacticalMap } = await importWithRealDb(() => import('../combat/tactical-map-store.js'));
 
 describeWithDb('server NPC engine rows through the real routes (#2658 step 2)', () => {
@@ -985,6 +988,55 @@ describeWithDb('Boss Move window through the real database (#728)', () => {
     expect(row?.defyLeft).toBe(1);
     expect(row?.defyArmed).toBe(true);
   });
+
+  test.each([
+    ['str', true],
+    ['dex', false],
+  ] as const)(
+    'a raging hero rolls a boss move %s save with the expected advantage',
+    async (ability, advantage) => {
+      await setHero(40);
+      await setRound(1);
+      await realDb().delete(combatBossState).where(eq(combatBossState.encounterId, encounterId));
+      await realDb()
+        .update(combatParticipants)
+        .set({
+          bossMoves: [
+            {
+              slot: 'Opener',
+              name: 'Test Burst',
+              effect: { kind: 'burst', ability },
+              tell: 'The boss gathers power.',
+              telegraph: null,
+              counterplay: 'Brace.',
+            },
+          ],
+        })
+        .where(
+          and(
+            eq(combatParticipants.encounterId, encounterId),
+            eq(combatParticipants.participantType, 'monster'),
+          ),
+        );
+      await clearRage(encounterId, heroId);
+      expect(await claimRage(encounterId, heroId)).not.toBeNull();
+      let diceCount = 0;
+      rollBossSave.mockClear();
+      rollBossSave.mockImplementationOnce((rollWithAdvantage) => {
+        const dice = engineD20Pair(rollWithAdvantage);
+        diceCount = dice.other === undefined ? 1 : 2;
+        return dice.kept;
+      });
+      try {
+        setRngSeed(1);
+        expect((await windowNow()).lines[0]).toStartWith('Boss Move: Test Burst (Opener)');
+        expect(rollBossSave.mock.calls).toEqual([[advantage]]);
+        expect(diceCount).toBe(advantage ? 2 : 1);
+      } finally {
+        setRngSeed(undefined);
+      }
+    },
+  );
 });
 
 /**

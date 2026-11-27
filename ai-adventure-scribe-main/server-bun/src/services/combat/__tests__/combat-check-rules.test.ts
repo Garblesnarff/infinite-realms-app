@@ -211,18 +211,21 @@ describe('escaping a grapple (SRD 5.1, PB 195)', () => {
     });
 
   it.each([
-    [{ str: 16, dex: 12 }, 17, 19],
-    [{ str: 12, dex: 16 }, 4, 17],
-  ])('Rage helps the Strength rolls on each side of an escape', (scores, actorDie, targetDie) => {
-    const result = resolveEscapeCheck({
-      actorProfile: { ...profile(scores), strengthAdvantage: true },
-      actorD20: 4,
-      grapplerProfile: { ...profile({ str: 14 }), strengthAdvantage: true },
-      roll: faces(17, 6, 19),
-    });
-    expect(result.actor.d20).toBe(actorDie);
-    expect(result.target?.d20).toBe(targetDie);
-  });
+    [{ str: 16, dex: 12 }, [17, 6, 19], 17, 19],
+    [{ str: 12, dex: 16 }, [6, 17], 4, 17],
+  ])(
+    'Rage helps the Strength rolls on each side of an escape',
+    (scores, rolled, actorDie, targetDie) => {
+      const result = resolveEscapeCheck({
+        actorProfile: { ...profile(scores), strengthAdvantage: true },
+        actorD20: 4,
+        grapplerProfile: { ...profile({ str: 14 }), strengthAdvantage: true },
+        roll: faces(...rolled),
+      });
+      expect(result.actor.d20).toBe(actorDie);
+      expect(result.target?.d20).toBe(targetDie);
+    },
+  );
 
   it("uses the better of the escaper's Athletics and Acrobatics", () => {
     // STR 8 (-1) against DEX 16 (+3): Acrobatics is the better skill.
