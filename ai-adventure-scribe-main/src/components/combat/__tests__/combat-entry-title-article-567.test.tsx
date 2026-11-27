@@ -85,6 +85,29 @@ describe('combat entry title article (#567)', () => {
     if (outcomePromise) await outcomePromise;
   });
 
+  it('drops the article for Dutch Pellam', async () => {
+    render(<Host />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let outcomePromise: Promise<CombatEntryOutcome> | undefined;
+    await act(async () => {
+      outcomePromise = confirmCombatEntry(pendingFor('Dutch Pellam'), player);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('combat-entry-confirmation-overlay')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Attack Dutch Pellam?')).toBeInTheDocument();
+
+    act(() => {
+      settlePendingCombatEntryConfirmation(false);
+    });
+    if (outcomePromise) await outcomePromise;
+  });
+
   it('keeps the article for Owlbear with an srd: monster id', async () => {
     render(<Host />);
     await act(async () => {
@@ -146,6 +169,7 @@ describe('creature-name-kind nameReadsAsPerson (#567)', () => {
 
   it('reads proper names as persons', () => {
     expect(nameReadsAsPerson('Odile Vantrell')).toBe(true);
+    expect(nameReadsAsPerson('Dutch Pellam')).toBe(true);
     expect(nameReadsAsPerson('Vance')).toBe(true);
     expect(nameReadsAsPerson('Captain Mira Holt')).toBe(true);
     expect(nameReadsAsPerson('Kaelen the Warlock')).toBe(true);
