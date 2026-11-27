@@ -3,7 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { db } from '../../../../db/client';
 import { NotFoundError } from '../../lib/errors.js';
-import { CharacterSpellService } from '../character/character-spell-service.js';
+import {
+  CharacterSpellService,
+  mapRetiredSpellIdsToCanonical,
+} from '../character/character-spell-service.js';
 
 // Mock the db client
 vi.mock('../../../../db/client', () => ({
@@ -214,5 +217,29 @@ describe('CharacterSpellService.saveCharacterSpells', () => {
     expect(db.delete).toHaveBeenCalled();
     expect(db.insert).toHaveBeenCalled();
     expect(db.update).toHaveBeenCalled(); // Consistency sync
+  });
+});
+
+describe('mapRetiredSpellIdsToCanonical (#1803)', () => {
+  it('maps the two retired ids to their canonical ids', () => {
+    expect(
+      mapRetiredSpellIdsToCanonical([
+        '2f531b61-5626-5b7b-a9f9-bf935e580864',
+        'ce62cea7-640b-5439-a175-10289409f59b',
+      ]),
+    ).toEqual(['49679c17-4b59-5e1b-b9a2-8ed2f53f209e', '14bccb17-1728-5095-ab6a-35b28812c6b7']);
+  });
+
+  it('passes every other id through unchanged, including canonical ids', () => {
+    expect(
+      mapRetiredSpellIdsToCanonical([
+        '49679c17-4b59-5e1b-b9a2-8ed2f53f209e',
+        '00000000-0000-0000-0000-000000000000',
+      ]),
+    ).toEqual(['49679c17-4b59-5e1b-b9a2-8ed2f53f209e', '00000000-0000-0000-0000-000000000000']);
+  });
+
+  it('returns an empty array for an empty input', () => {
+    expect(mapRetiredSpellIdsToCanonical([])).toEqual([]);
   });
 });

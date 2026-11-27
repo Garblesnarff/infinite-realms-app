@@ -267,6 +267,13 @@
       "when": 1795632941104,
       "tag": "0039_story_map_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1795795668368,
+      "tag": "0042_remove_duplicate_spell_rows",
+      "breakpoints": true
     }
   ]
 }
