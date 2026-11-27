@@ -43,5 +43,5 @@ export function normalizeEntityNameForChunkType(
  */
 export function isSectionMarkerName(name: string): boolean {
   const normalized = normalizeEntityName(name).replace(/:\s*$/, '').trim();
-  return /^TAG:\s*/i.test(normalized) || /^(?:Concept|History)$/i.test(normalized);
+  return /^TAG:\s*/i.test(normalized) || /^(?:Concept|History|Sensory)$/i.test(normalized);
 }

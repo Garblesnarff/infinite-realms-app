@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.58.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.57.0...v0.58.0) (2026-11-27)
+
+
+### Features
+
+* **combat:** show a Raging badge on the action bar ([#1654](https://github.com/Garblesnarff/infinite-realms-app/issues/1654)) ([b298f20](https://github.com/Garblesnarff/infinite-realms-app/commit/b298f20e288f15b93bc242213a5f08ae6ccce7a6))
+* **maps:** place graph and routes at ingest ([#1752](https://github.com/Garblesnarff/infinite-realms-app/issues/1752)) ([#1760](https://github.com/Garblesnarff/infinite-realms-app/issues/1760)) ([a86b22c](https://github.com/Garblesnarff/infinite-realms-app/commit/a86b22c1734bc76416eb1aa4383ccf29796b9dc0)), closes [#1742](https://github.com/Garblesnarff/infinite-realms-app/issues/1742)
+* **maps:** region map and place list ([#1754](https://github.com/Garblesnarff/infinite-realms-app/issues/1754)) ([f79ce64](https://github.com/Garblesnarff/infinite-realms-app/commit/f79ce64bee83074366e623678003cd987ac81e2c))
+* **premades:** templates can carry their starter spells ([#1025](https://github.com/Garblesnarff/infinite-realms-app/issues/1025)) ([#1739](https://github.com/Garblesnarff/infinite-realms-app/issues/1739)) ([045b9ca](https://github.com/Garblesnarff/infinite-realms-app/commit/045b9caed00ba59f5cbf5f5f659c8541fa56be3b))
+* **shadow:** count DM text that states a foe's HP as a number ([c5d5df2](https://github.com/Garblesnarff/infinite-realms-app/commit/c5d5df2de31b6f55fd5fbddebdf2f2859b8a7d9c))
+
+
+### Bug Fixes
+
+* **campaign:** preview shows stored scores so it matches the sheet ([#153](https://github.com/Garblesnarff/infinite-realms-app/issues/153)) ([#1750](https://github.com/Garblesnarff/infinite-realms-app/issues/1750)) ([ff2a73e](https://github.com/Garblesnarff/infinite-realms-app/commit/ff2a73ec1ce80bef0c1ff4e5be22fafd513d3aa8))
+* **campaigns:** both entry points offer the campaign's own heroes ([#1740](https://github.com/Garblesnarff/infinite-realms-app/issues/1740)) ([8a52690](https://github.com/Garblesnarff/infinite-realms-app/commit/8a52690fbbd73f246336215f00815294aa983907))
+* **combat:** end Rage when Unconscious is applied ([#1654](https://github.com/Garblesnarff/infinite-realms-app/issues/1654)) ([f7a20be](https://github.com/Garblesnarff/infinite-realms-app/commit/f7a20beb444ebdb922680b07b7641a727601b916))
+* **combat:** enforce Rage saves and spellcasting rules ([#1654](https://github.com/Garblesnarff/infinite-realms-app/issues/1654)) ([265be46](https://github.com/Garblesnarff/infinite-realms-app/commit/265be4654f8c2300117d59de5930e7fe4c88b5c9))
+* **combat:** offer unlimited Rage and honor Strength checks and armor ([#1654](https://github.com/Garblesnarff/infinite-realms-app/issues/1654)) ([c371cf5](https://github.com/Garblesnarff/infinite-realms-app/commit/c371cf52c92a83536dedd776a75b3a9196099267))
+* **combat:** the Attack button follows the Action after a check ([#1732](https://github.com/Garblesnarff/infinite-realms-app/issues/1732)) ([731e7b7](https://github.com/Garblesnarff/infinite-realms-app/commit/731e7b7ad072a05125c804c9adf4242a462ad02f))
+* **combat:** thrown range for dagger, handaxe, light hammer, spear and trident ([#1642](https://github.com/Garblesnarff/infinite-realms-app/issues/1642)) ([7f2b042](https://github.com/Garblesnarff/infinite-realms-app/commit/7f2b042fa9282965555cd6116f69c269b62a2a1a))
+* **dice:** ask for the d20 face on engine roll prompts ([#115](https://github.com/Garblesnarff/infinite-realms-app/issues/115)) ([7305c15](https://github.com/Garblesnarff/infinite-realms-app/commit/7305c151eecc3e0b5346003b5952493e4d7598fd))
+* **dice:** say when the engine rolls a dismissed prompt ([#115](https://github.com/Garblesnarff/infinite-realms-app/issues/115)) ([290ecf8](https://github.com/Garblesnarff/infinite-realms-app/commit/290ecf8d5f0c28502535e0f774f1217c760e64dc))
+* **dice:** the roll-check shadow line says what did not match ([#1423](https://github.com/Garblesnarff/infinite-realms-app/issues/1423)) ([4417bba](https://github.com/Garblesnarff/infinite-realms-app/commit/4417bba60ebc8a2e4e0493c46cbcea65e6da3adc))
+* **dm:** recognize bare off-catalog spell claims ([#248](https://github.com/Garblesnarff/infinite-realms-app/issues/248)) ([f7abbde](https://github.com/Garblesnarff/infinite-realms-app/commit/f7abbde24281d69dd9f28da1f19ae9c69116c3f1))
+* **handouts:** cap the client handout batch at the route limit ([#98](https://github.com/Garblesnarff/infinite-realms-app/issues/98)) ([#1749](https://github.com/Garblesnarff/infinite-realms-app/issues/1749)) ([5d5e4b8](https://github.com/Garblesnarff/infinite-realms-app/commit/5d5e4b8534e2416b2e1e5be4ac5373d6eb624a9a))
+* **mobile:** game-screen tap targets and text at 390 px ([#228](https://github.com/Garblesnarff/infinite-realms-app/issues/228)) ([#1729](https://github.com/Garblesnarff/infinite-realms-app/issues/1729)) ([af96751](https://github.com/Garblesnarff/infinite-realms-app/commit/af96751f0de16fe7a318fd27c572a0b830f25d63))
+* **scene:** later locations show their art ([#1026](https://github.com/Garblesnarff/infinite-realms-app/issues/1026)) ([#1731](https://github.com/Garblesnarff/infinite-realms-app/issues/1731)) ([ea8d0f5](https://github.com/Garblesnarff/infinite-realms-app/commit/ea8d0f5673abf90839d98439dd658e60ba6200b8))
+* **ui:** QA polish bundle — wizard track, backstory label, resume, sign-out, race search, image toggle, physical step, legal nav ([#210](https://github.com/Garblesnarff/infinite-realms-app/issues/210)) ([#1751](https://github.com/Garblesnarff/infinite-realms-app/issues/1751)) ([0603aef](https://github.com/Garblesnarff/infinite-realms-app/commit/0603aef75126a933cb62b43d08320e7c786ef403))
+
+
+### Tests
+
+* **combat:** cover action-bar Smite through the real intent route ([#1362](https://github.com/Garblesnarff/infinite-realms-app/issues/1362)) ([629b542](https://github.com/Garblesnarff/infinite-realms-app/commit/629b542e3cb5df3d98c8b3bb5b6d4a3936aba42e))
+
 ## [0.57.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.56.0...v0.57.0) (2026-11-24)
 
 

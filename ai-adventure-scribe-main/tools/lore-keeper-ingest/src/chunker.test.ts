@@ -67,6 +67,27 @@ The realm's chosen faction.
   );
 });
 
+test('keeps Midsummer sensory notes in the zone without creating a place', () => {
+  const { chunks } = chunkCampaignFiles('a-midsummer-nights-chaos', {
+    campaignBible: `## 4. LOCATIONS & WORLD MAP
+
+### Zone 1: The Duke's Palace (Athens)
+*   **Sensory:** Beeswax, cold iron, right angles.
+1.  **Hall of Judgement:** Chessboard floor.
+
+### Zone 2: The Twilight Verge (Forest Edge)
+*   **Sensory:** Lemon fog, detaching shadows.
+1.  **Gate of Horn and Ivory:** Doors to truth and lies.
+`,
+  });
+  const locations = chunks.filter((chunk) => chunk.chunkType === 'location');
+  assert.deepEqual(
+    locations.filter((chunk) => !chunk.metadata?.isZone).map((chunk) => chunk.entityName),
+    ['Hall of Judgement', 'Gate of Horn and Ivory'],
+  );
+  assert.ok(locations.some((chunk) => chunk.metadata?.isZone && chunk.content.includes('Beeswax')));
+});
+
 test('keeps every Loc 5 entry quoted in #1789', () => {
   const { chunks } = chunkCampaignFiles('academy-of-arcane-gastronomy', {
     campaignBible: `## 4. LOCATIONS
