@@ -3,6 +3,7 @@ import React from 'react';
 
 import { facingName, rosterEntryForParticipant } from '../../../../../shared/engine-display-name';
 import { slotOrdinal } from '../../../../../shared/slot-ordinal';
+import { useMoveModeArmed } from '../tactical/map-move-mode';
 import { useTacticalMapContext } from '../tactical/TacticalMapProvider';
 import { summarizeCombatTurn } from './overhaul/combat-turn-order';
 import { useOverhaulViewModel } from './overhaul/useOverhaulViewModel';
@@ -51,6 +52,8 @@ export interface CombatActionBarProps {
   moveSub?: string;
   /** The map can show move mode (a map exists and movement remains). */
   canMove: boolean;
+  /** Move mode is armed on the map (#1797): the button reads as pressed. */
+  moveArmed?: boolean;
   spellInfo: (action: LegalAction) => ActionBarSpellInfo | null;
   onAction: (action: LegalAction) => void;
   onMove: () => void;
@@ -223,6 +226,7 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
   attackSub,
   moveSub,
   canMove,
+  moveArmed = false,
   spellInfo,
   onAction,
   onMove,
@@ -328,7 +332,13 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-      <BarButton sub={moveSub} disabled={!enabled || !canMove} onClick={onMove}>
+      <BarButton
+        sub={moveSub}
+        disabled={!enabled || !canMove}
+        onClick={onMove}
+        aria-pressed={moveArmed}
+        className={cn(moveArmed && 'border-infinite-gold text-infinite-gold')}
+      >
         Move
       </BarButton>
       <BarButton disabled={!enabled || !dodge} onClick={() => dodge && onAction(dodge)}>
@@ -470,6 +480,7 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
     () => (encounter?.participants ?? []).map(rosterEntryForParticipant),
     [encounter?.participants],
   );
+  const moveArmed = useMoveModeArmed();
   const nameOf = React.useCallback(
     (participantId: string) => facingName(undefined, participantId, roster),
     [roster],
@@ -541,6 +552,7 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
         attackSub={attackSub}
         moveSub={moveSub}
         canMove={Boolean(mapActor && mapActor.movementRemaining > 0)}
+        moveArmed={moveArmed}
         spellInfo={spellInfo}
         onAction={(action) => run(() => runAction(action, { exitConfirmed: true }))}
         onMove={onMove}
