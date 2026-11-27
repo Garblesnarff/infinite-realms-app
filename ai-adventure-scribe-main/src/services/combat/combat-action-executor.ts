@@ -305,10 +305,20 @@ export async function executeAuthoritativeCombatIntent(
         expectedVersion: Number((await statusResponse.json()).encounter?.version ?? 1),
       };
     }
+    // #51: one id per intent submission, sent as the idempotency key. A
+    // retry of this same call resends it, so the server replays the stored
+    // response instead of re-executing the intent; a fresh call mints a
+    // fresh id. The fetch keeps the default 20s retry budget (no
+    // `retryBudgetMs: 0`): a dropped response — network error after the
+    // server executed — is retried by `fetchWithAuth` with the same headers,
+    // so the retry carries the same key. Only that internal retry reuses
+    // the id: a per-attempt timeout surfaces instead of resubmitting, and a
+    // caller-level retry is a fresh call with a fresh id (a manual
+    // re-submit after a timeout relies on the engine's version guards).
+    const requestId = crypto.randomUUID();
     const response = await fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
-      retryBudgetMs: 0,
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-request-id': requestId },
       body: JSON.stringify({
         intent: authoritativeIntent,
         source,

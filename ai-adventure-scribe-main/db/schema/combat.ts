@@ -18,6 +18,7 @@ import {
   boolean,
   index,
   jsonb,
+  primaryKey,
   unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
@@ -93,6 +94,30 @@ export const combatEncounters = pgTable(
     activeSessionIdx: uniqueIndex('idx_combat_encounters_one_active_session')
       .on(table.sessionId)
       .where(sql`${table.status} = 'active'`),
+  }),
+);
+
+/**
+ * #51: completed combat-intent responses, keyed by the client's request id.
+ * A retried intent POST (same encounter + request id) returns the stored
+ * response instead of re-executing the intent. Only successful (2xx)
+ * responses are stored — refusals and failures stay retryable — and the
+ * encounter FK cascades, so deleting an encounter drops its cached
+ * responses with it. No cleanup job: rows are tiny and bound to the
+ * encounter's lifetime, so they die with it.
+ */
+export const combatIntentIdempotency = pgTable(
+  'combat_intent_idempotency',
+  {
+    encounterId: uuid('encounter_id')
+      .notNull()
+      .references(() => combatEncounters.id, { onDelete: 'cascade' }),
+    requestId: text('request_id').notNull(),
+    response: jsonb('response').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.encounterId, table.requestId] }),
   }),
 );
 

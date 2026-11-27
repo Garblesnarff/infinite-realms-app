@@ -287,14 +287,19 @@ describe('fetchWithAuth', () => {
     );
   };
 
-  it('aborts a hung request on a default route after 30 s (#565)', async () => {
+  it('a hung request on a default route aborts at the 10 s per-attempt timeout instead of the 30 s ceiling (#565, #51)', async () => {
     vi.useFakeTimers();
     try {
       blackholedFetch();
 
       const request = fetchWithAuth('/v1/characters', { method: 'POST' });
       const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
-      await vi.advanceTimersByTimeAsync(30_000);
+      // #51 changed what this pins: the old expectation was the 30 s
+      // whole-request ceiling. The per-attempt timeout aborts at 10 s
+      // instead — still exactly 1 call, because a timeout is never retried:
+      // the server may still be executing, and resubmitting a POST in that
+      // window risks double-applying it.
+      await vi.advanceTimersByTimeAsync(10_000);
       await rejection;
       expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
@@ -367,6 +372,117 @@ describe('fetchWithAuth', () => {
       );
       await vi.advanceTimersByTimeAsync(180_000);
       expect(settled).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries a network error inside the budget and resends the same request (#51)', async () => {
+    vi.useFakeTimers();
+    try {
+      // First attempt fails to connect; the retry succeeds. The retry is
+      // the same submission (same init, same headers), so a server that
+      // executed the first attempt dedups on the resent id.
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(response(200, { ok: true }));
+
+      const request = fetchWithAuth('/v1/sessions/session-1/messages', { method: 'POST' });
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(request).resolves.toMatchObject({ status: 200 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      // The retry is the same submission, so the server sees identical
+      // headers on both attempts — including the idempotency key.
+      const firstInit = fetchMock.mock.calls.at(0)?.[1];
+      const secondInit = fetchMock.mock.calls.at(1)?.[1];
+      expect(firstInit).toBeDefined();
+      expect(secondInit).toBeDefined();
+      expect(secondInit?.headers).toEqual(firstInit?.headers);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not retry when a network error races the 10 s abort (#51)', async () => {
+    vi.useFakeTimers();
+    try {
+      // The connection resets in the same tick the timer fires: the fetch
+      // rejects with a TypeError, not an AbortError. The attempt still
+      // exceeded its 10 s budget, so it must surface, not retry — the
+      // server may still be executing.
+      fetchMock.mockImplementationOnce(
+        (_input: unknown, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            const signal = init?.signal as AbortSignal | undefined;
+            const onAbort = (): void => reject(new TypeError('Failed to fetch'));
+            if (signal?.aborted) {
+              onAbort();
+            } else {
+              signal?.addEventListener('abort', onAbort, { once: true });
+            }
+          }),
+      );
+
+      const request = fetchWithAuth('/v1/sessions/session-1/messages', { method: 'POST' });
+      const rejection = expect(request).rejects.toMatchObject({
+        name: 'TypeError',
+        message: 'Failed to fetch',
+      });
+      await vi.advanceTimersByTimeAsync(10_000);
+      await rejection;
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not abort a hung /v1/llm/generate attempt at 10 s (#51)', async () => {
+    vi.useFakeTimers();
+    try {
+      blackholedFetch();
+
+      const request = fetchWithAuth('/v1/llm/generate', { method: 'POST' });
+      const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+      let settled = false;
+      void request.then(
+        () => {
+          settled = true;
+        },
+        () => {
+          settled = true;
+        },
+      );
+      // Past the per-attempt mark: still the first attempt, no retry.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(settled).toBe(false);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      // The 90 s route ceiling still ends it.
+      await vi.advanceTimersByTimeAsync(80_000);
+      await rejection;
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not retry a hung attempt after its 10 s abort (#51)', async () => {
+    vi.useFakeTimers();
+    try {
+      blackholedFetch();
+
+      const request = fetchWithAuth('/v1/sessions/session-1/messages', { method: 'POST' });
+      const rejection = expect(request).rejects.toMatchObject({ name: 'AbortError' });
+      // Attempt 1 aborts at 10 s and the abort surfaces immediately — no
+      // backoff, no second attempt. Resubmitting here could double-apply a
+      // POST the server is still executing. Only `fetchWithAuth`'s internal
+      // network-error retry reuses an id; a caller-level retry is a fresh
+      // call with a fresh id.
+      await vi.advanceTimersByTimeAsync(10_000);
+      await rejection;
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(20_000);
       expect(fetchMock).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();

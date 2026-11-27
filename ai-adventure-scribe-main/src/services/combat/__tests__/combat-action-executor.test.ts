@@ -119,6 +119,48 @@ describe('combat-action-executor', () => {
       expect(result).toBe('use-item-success');
     });
 
+    it('sends one x-request-id per intent submission, fresh on each call (#51)', async () => {
+      const intent = { type: 'dash' as const, actorId: 'actor-1', expectedVersion: 5 };
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ result: 'dash-success' }),
+      });
+
+      await executeAuthoritativeCombatIntent(encounterId, intent, 'player', 12345);
+      await executeAuthoritativeCombatIntent(encounterId, intent, 'player', 12345);
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      const firstHeaders = (globalThis.fetch as any).mock.calls[0][1].headers;
+      const secondHeaders = (globalThis.fetch as any).mock.calls[1][1].headers;
+      // The id is the server's dedup key: a UUID, minted once per call, so a
+      // retry of the same call resends it while a fresh call gets a new one.
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      expect(firstHeaders['x-request-id']).toMatch(uuid);
+      expect(secondHeaders['x-request-id']).toMatch(uuid);
+      expect(secondHeaders['x-request-id']).not.toBe(firstHeaders['x-request-id']);
+    });
+
+    it('resends the same x-request-id when fetchWithAuth retries a dropped response (#51)', async () => {
+      const intent = { type: 'dash' as const, actorId: 'actor-1', expectedVersion: 5 };
+      (globalThis.fetch as any)
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ result: 'dash-success' }),
+        });
+
+      const result = await executeAuthoritativeCombatIntent(encounterId, intent, 'player', 12345);
+
+      expect(result).toBe('dash-success');
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      const firstHeaders = (globalThis.fetch as any).mock.calls[0][1].headers;
+      const secondHeaders = (globalThis.fetch as any).mock.calls[1][1].headers;
+      // The retry is the same submission, so the server dedupes on it: a
+      // dropped response (server executed, reply lost) replays the stored
+      // response instead of re-executing the intent.
+      expect(secondHeaders['x-request-id']).toBe(firstHeaders['x-request-id']);
+    });
+
     it('should fetch the combat status first if a player intent has no expectedVersion', async () => {
       const intent = { type: 'dash' as const, actorId: 'actor-1', expectedVersion: undefined };
 

@@ -12,6 +12,11 @@ import { AppError } from '../../../lib/errors.js';
 import { logger } from '../../../lib/logger.js';
 import { CombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
 import {
+  clientRequestIdOf,
+  getCachedIntentResponse,
+  storeIntentResponse,
+} from '../../../services/combat/combat-intent-idempotency.js';
+import {
   executeCombatIntent,
   getLegalCombatActions,
   proposeCombatAttack,
@@ -174,6 +179,14 @@ export const intentRoutes = new Elysia()
         set.status = access.error!.status;
         return { error: access.error!.message };
       }
+      // #51: the client-supplied idempotency key for this submission, if
+      // the client sent one. Read from the header directly — the pipeline's
+      // `requestIdOf` falls back to a server-generated UUID, which no client
+      // will ever resend. The cache lookup itself runs after the propose
+      // early-return below, so a propose can never be answered with a
+      // commit's stored response; only commits dedupe, and only when the
+      // client supplied an id.
+      const dedupeId = clientRequestIdOf(request);
       // The envelope schema is deliberately untyped; `combatIntentRequestValidator` below is
       // what actually establishes this shape.
       const payload = body as {
@@ -226,6 +239,21 @@ export const intentRoutes = new Elysia()
           logIntentAccepted(context, request, params, payload);
           return { accepted: true, proposal };
         }
+        // #51: a retried commit with the same x-request-id returns the
+        // stored response instead of executing again. Proposals never reach
+        // here (they returned above), so a cached hit is always a completed
+        // commit. Only a client-supplied id dedupes; without one the route
+        // behaves exactly as before.
+        if (dedupeId) {
+          const cached = await getCachedIntentResponse(params.encounterId, dedupeId);
+          if (cached) {
+            logger.info(
+              { requestId: dedupeId, encounterId: params.encounterId },
+              'COMBAT_INTENT_DEDUPED',
+            );
+            return cached;
+          }
+        }
         // A player acting while a creature still holds the turn gets the creature run first.
         const npcTurnsBefore = await runNpcTurnsIfNpcHolds(
           params.encounterId,
@@ -265,11 +293,16 @@ export const intentRoutes = new Elysia()
           ...((result as { engineRows?: unknown[] }).engineRows ?? []),
           ...(npcTurns?.engineRows ?? []),
         ];
-        return {
+        const response = {
           accepted: true,
           result: npcTurns ? { ...(result as object), npcTurns, engineRows } : result,
           engineRows,
         };
+        // #51: store the completed response so a retry with the same id
+        // replays it instead of re-executing. Best-effort: a failed store
+        // never fails the turn.
+        if (dedupeId) await storeIntentResponse(params.encounterId, dedupeId, response);
+        return response;
       } catch (cause) {
         return mapIntentError(set, cause, {
           requestId: requestIdOf(context, request),

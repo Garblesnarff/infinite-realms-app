@@ -302,3 +302,75 @@ describeWithDb('#1371 a PATCHed scene image survives the reload read', () => {
     ]);
   });
 });
+
+describeWithDb(
+  '#51 a retried player-message POST returns the stored row instead of an empty list',
+  () => {
+    let campaignId = '';
+    let sessionId = '';
+    let app: any;
+    beforeAll(async () => {
+      userId = testId('51-retry-owner');
+      [{ id: campaignId }] = await realDb()
+        .insert(campaigns)
+        .values({ userId, name: testId('51-retry-campaign') })
+        .returning({ id: campaigns.id });
+      [{ id: sessionId }] = await realDb()
+        .insert(gameSessions)
+        .values({ campaignId, sessionNumber: 1, status: 'active' })
+        .returning({ id: gameSessions.id });
+      const { createRequestPipelineApp, sessionMessageRoutes } =
+        await importWithRealDb(async () => ({
+          ...(await import('../../../http-pipeline')),
+          ...(await import('../session-messages')),
+        }));
+      app = createRequestPipelineApp().use(sessionMessageRoutes);
+    });
+    afterAll(async () => {
+      await realDb().delete(dialogueHistory).where(eq(dialogueHistory.sessionId, sessionId));
+      await realDb().delete(gameSessions).where(eq(gameSessions.id, sessionId));
+      await realDb().delete(campaigns).where(eq(campaigns.id, campaignId));
+      await closeRealDb();
+    });
+    it('posts the same player message twice: one row, second response equals the first', async () => {
+      const messageId = crypto.randomUUID();
+      const body = {
+        id: messageId,
+        speaker_type: 'player',
+        message: 'I draw my sword and advance.',
+        timestamp: new Date().toISOString(),
+      };
+      const post = (): Promise<Response> =>
+        app.handle(
+          new Request(`http://localhost/v1/sessions/${sessionId}/messages`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          }),
+        );
+      const first = await post();
+      expect(first.status).toBe(200);
+      const firstBody = await first.json();
+      expect(firstBody.messages).toHaveLength(1);
+      expect(firstBody.messages[0].id).toBe(messageId);
+
+      const second = await post();
+      expect(second.status).toBe(200);
+      const secondBody = await second.json();
+      expect(secondBody.messages).toEqual(firstBody.messages);
+
+      const rows = await realDb()
+        .select()
+        .from(dialogueHistory)
+        .where(eq(dialogueHistory.sessionId, sessionId));
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.id).toBe(messageId);
+
+      const [session] = await realDb()
+        .select({ turnCount: gameSessions.turnCount })
+        .from(gameSessions)
+        .where(eq(gameSessions.id, sessionId));
+      expect(session?.turnCount).toBe(1);
+    });
+  },
+);

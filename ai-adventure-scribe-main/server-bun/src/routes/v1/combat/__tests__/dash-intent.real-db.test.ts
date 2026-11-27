@@ -252,4 +252,72 @@ describeWithDb('Dash More-menu body resolves through the real route (#613)', () 
     ).entities.find((entity) => entity.id === DASH_ACTOR_ID);
     expect(heroAfterRefusal?.movementRemaining).toBe(60);
   });
+
+  test('a retried move with the same x-request-id replays the stored response (#51)', async () => {
+    const requestId = crypto.randomUUID();
+    // Read the hero's state first: this test shares the encounter with the
+    // Dash test above, so it must not assume Dash already ran (movement 60)
+    // or not (movement 30). The assertions are relative — one 5-ft step.
+    const [mapBefore] = await db
+      .select({ state: tacticalMaps.state })
+      .from(tacticalMaps)
+      .where(eq(tacticalMaps.sessionId, sessionId));
+    const heroBefore = (
+      mapBefore.state as {
+        entities: Array<{ id: string; x: number; y: number; movementRemaining: number }>;
+      }
+    ).entities.find((entity) => entity.id === DASH_ACTOR_ID);
+    const fromX = heroBefore?.x ?? 0;
+    const fromY = heroBefore?.y ?? 0;
+    const movementBefore = heroBefore?.movementRemaining ?? 0;
+    const moveBody = {
+      intent: { type: 'move' as const, actorId: DASH_ACTOR_ID, x: fromX + 1, y: fromY },
+      source: 'dm' as const,
+      dmStartedAt: 1_700_000_000_000,
+      origin: 'typed' as const,
+    };
+    const postMove = (): Promise<Response> =>
+      app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${userId}`,
+            'content-type': 'application/json',
+            'x-request-id': requestId,
+          },
+          body: JSON.stringify(moveBody),
+        }),
+      );
+    const first = await postMove();
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    expect(firstBody.accepted).toBe(true);
+
+    const second = await postMove();
+    expect(second.status).toBe(200);
+    const secondBody = await second.json();
+    // The retry returns the first delivery's response, not a fresh execution:
+    // a re-executed move from the new position would report an empty path.
+    expect(secondBody).toEqual(firstBody);
+
+    const [map] = await db
+      .select({ state: tacticalMaps.state })
+      .from(tacticalMaps)
+      .where(eq(tacticalMaps.sessionId, sessionId));
+    const state = map.state as {
+      entities: Array<{ id: string; x: number; y: number; movementRemaining: number }>;
+      pendingDmFacts?: string[];
+    };
+    const hero = state.entities.find((entity) => entity.id === DASH_ACTOR_ID);
+    expect(hero?.x).toBe(fromX + 1);
+    expect(hero?.y).toBe(fromY);
+    // Exactly one 5-ft step: a second execution of the same move would
+    // append a second "moved to" DM fact.
+    expect(hero?.movementRemaining).toBe(movementBefore - 5);
+    expect(
+      (state.pendingDmFacts ?? []).filter((fact) =>
+        fact.includes(`moved to (${fromX + 1}, ${fromY})`),
+      ),
+    ).toHaveLength(1);
+  });
 });
