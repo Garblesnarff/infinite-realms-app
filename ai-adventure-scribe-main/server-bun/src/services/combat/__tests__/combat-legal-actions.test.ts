@@ -682,9 +682,8 @@ describe('getLegalCombatActions', () => {
     expect(result.actions).toContainEqual({ type: 'flee', label: 'Flee' });
   });
 
-  test('labels a plain Flee when the only hostile nearby carries a ranged weapon', async () => {
-    // An opportunity attack is melee. The same bow that reaches 80 ft must not read as "in
-    // reach" at 30 ft, nor at 5 ft: the label is the player's warning of what the exit costs.
+  test('warns about an adjacent ranged-only foe but respects unarmed reach', async () => {
+    // The bow range does not matter. An adjacent foe can still swing unarmed.
     const melee = equippedWeapons;
     equippedWeapons = [
       {
@@ -702,7 +701,7 @@ describe('getLegalCombatActions', () => {
     ];
     map.entities[0].x = 4;
     map.entities[0].y = 4;
-    map.entities[1].x = 10 - 4; // 30 ft
+    map.entities[1].x = 6; // 10 ft
     map.entities[1].y = 4;
     const far = await getLegalCombatActions('encounter-1', 'user-1');
     map.entities[1].x = 5; // 5 ft
@@ -710,7 +709,7 @@ describe('getLegalCombatActions', () => {
     equippedWeapons = melee;
 
     expect(far.actions).toContainEqual({ type: 'flee', label: 'Flee' });
-    expect(adjacent.actions).toContainEqual({ type: 'flee', label: 'Flee' });
+    expect(adjacent.actions).toContainEqual({ type: 'flee', label: 'Flee (Chiropteran Hulk attacks)' });
   });
 
   test('offers them to a player whose Action is already spent', async () => {
