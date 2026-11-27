@@ -19,6 +19,7 @@ import {
   type BossMoveFightState,
   type BossMoveHero,
 } from './boss-moves.js';
+import { rollCombatSavingThrow } from './combat-saving-throw.js';
 import { getActiveConditionNames, getParticipantAbilityProfile } from './data-access.js';
 import { writeEngineLineRow, type NpcEngineRow } from './npc-engine-row.js';
 import { db } from '../../../../db/client';
@@ -107,8 +108,10 @@ async function fireMove(params: {
   const dc = 8 + (attack?.attackBonus ?? 0);
   const profile = await getParticipantAbilityProfile(hero.participant);
   const bonus = profile.saveBonuses?.[effect.ability] ?? 0;
-  const first = rollD20();
-  const roll = defyArmed ? rollD20() : first;
+  const first = await rollCombatSavingThrow(encounterId, hero.participant.id, effect.ability);
+  const roll = defyArmed
+    ? await rollCombatSavingThrow(encounterId, hero.participant.id, effect.ability)
+    : first;
   const saved = roll + bonus >= dc;
 
   if (effect.kind === 'burst') {
