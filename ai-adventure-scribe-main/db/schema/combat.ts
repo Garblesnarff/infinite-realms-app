@@ -113,7 +113,18 @@ export const combatIntentIdempotency = pgTable(
       .notNull()
       .references(() => combatEncounters.id, { onDelete: 'cascade' }),
     requestId: text('request_id').notNull(),
-    response: jsonb('response').$type<Record<string, unknown>>().notNull(),
+    // #51 FIX round: the claim token. A `createdAt` timestamp cannot serve
+    // as the owner token: Postgres stores microseconds, a JS Date carries
+    // milliseconds, so the value read back never equals the stored value
+    // and the store/release WHERE matched zero rows (the retry test 409'd
+    // on the second POST). A UUID minted by the claimant is exact, and it
+    // is what lets a late first attempt's store/release miss a takeover
+    // owner's re-claimed row.
+    claimToken: uuid('claim_token').notNull(),
+    // #51 FIX round: nullable — a pending claim row is inserted before
+    // execution and has no response until the first delivery completes.
+    // A NULL response means "claimed, still executing".
+    response: jsonb('response').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   (table) => ({

@@ -13,7 +13,8 @@ import { logger } from '../../../lib/logger.js';
 import { CombatEncounterService } from '../../../services/combat/combat-encounter-service.js';
 import {
   clientRequestIdOf,
-  getCachedIntentResponse,
+  releaseIntentClaim,
+  resolveIntentClaim,
   storeIntentResponse,
 } from '../../../services/combat/combat-intent-idempotency.js';
 import {
@@ -223,6 +224,14 @@ export const intentRoutes = new Elysia()
         set.status = 422;
         return rejection;
       }
+      // `claimed` tracks whether this request owns a pending idempotency
+      // row, and `claimToken` is that row's owner token (the UUID the
+      // claim minted): the catch below releases only the row this claim
+      // created, so a refused execution never leaves its id 409ing for
+      // the 60 s takeover window — and a late release can never delete a
+      // takeover owner's live row.
+      let claimed = false;
+      let claimToken: string | undefined;
       try {
         // A proposal claims nothing and resolves nothing: it answers what the attack would be
         // so the player can roll their own die against real numbers. Routed here rather than
@@ -239,20 +248,32 @@ export const intentRoutes = new Elysia()
           logIntentAccepted(context, request, params, payload);
           return { accepted: true, proposal };
         }
-        // #51: a retried commit with the same x-request-id returns the
-        // stored response instead of executing again. Proposals never reach
-        // here (they returned above), so a cached hit is always a completed
-        // commit. Only a client-supplied id dedupes; without one the route
-        // behaves exactly as before.
+        // #51 FIX round: claim the id BEFORE executing. A retried commit
+        // with the same x-request-id returns the stored response instead
+        // of executing again; a request that arrives while the first is
+        // still executing gets a 409 and the client retries after a short
+        // wait. Proposals never reach here (they returned above), so a
+        // cached hit is always a completed commit. Only a client-supplied
+        // id dedupes; without one the route behaves exactly as before.
         if (dedupeId) {
-          const cached = await getCachedIntentResponse(params.encounterId, dedupeId);
-          if (cached) {
+          const claim = await resolveIntentClaim(params.encounterId, dedupeId);
+          if (claim.status === 'cached') {
             logger.info(
               { requestId: dedupeId, encounterId: params.encounterId },
               'COMBAT_INTENT_DEDUPED',
             );
-            return cached;
+            return claim.response;
           }
+          if (claim.status === 'conflict') {
+            set.status = 409;
+            set.headers['Retry-After'] = '1';
+            return {
+              error: 'Combat intent already in flight — retry with the same x-request-id',
+              code: 'COMBAT_INTENT_IN_FLIGHT',
+            };
+          }
+          claimed = true;
+          claimToken = claim.claimToken;
         }
         // A player acting while a creature still holds the turn gets the creature run first.
         const npcTurnsBefore = await runNpcTurnsIfNpcHolds(
@@ -298,12 +319,24 @@ export const intentRoutes = new Elysia()
           result: npcTurns ? { ...(result as object), npcTurns, engineRows } : result,
           engineRows,
         };
-        // #51: store the completed response so a retry with the same id
-        // replays it instead of re-executing. Best-effort: a failed store
-        // never fails the turn.
-        if (dedupeId) await storeIntentResponse(params.encounterId, dedupeId, response);
+        // #51: fill the pending claim with the completed response, so a
+        // retry with the same id replays it instead of re-executing.
+        // Best-effort: a failed store never fails the turn.
+        if (dedupeId) {
+          await storeIntentResponse(params.encounterId, dedupeId, response, claimToken);
+        }
         return response;
       } catch (cause) {
+        // A refused execution (4xx, pre-commit by construction) releases
+        // the claim, so a retry with the same id can proceed at once
+        // instead of 409ing until the takeover window. A 5xx or a
+        // non-AppError throw leaves the row pending: the execution may
+        // have partially committed, and a retry must wait for the
+        // takeover window rather than re-execute at once. Only a row this
+        // request claimed is released.
+        if (claimed && dedupeId && cause instanceof AppError && cause.statusCode < 500) {
+          await releaseIntentClaim(params.encounterId, dedupeId, claimToken);
+        }
         return mapIntentError(set, cause, {
           requestId: requestIdOf(context, request),
           encounterId: params.encounterId,

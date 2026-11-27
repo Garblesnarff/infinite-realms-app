@@ -32,6 +32,17 @@ import { playerCombatSpellLabel } from '@/services/combat/player-combat-spell';
  */
 const COMBAT_INTENT_RETRY_BUDGET_MS = 3_000;
 
+/**
+ * #51 FIX round: how many times the executor resends an intent the server
+ * answered 409 for (a first attempt with the same id is still executing),
+ * and how long it waits between resends. 3 retries ~1 s apart: the first
+ * delivery stores its response in ~100 ms, so the retry almost always
+ * replays it; a first attempt stuck longer than ~3 s surfaces its 409
+ * instead of hanging the turn.
+ */
+const INTENT_CONFLICT_MAX_RETRIES = 3;
+const INTENT_CONFLICT_WAIT_MS = 1_000;
+
 export interface StructuredCombatAction {
   actor_id: string;
   action_type:
@@ -237,6 +248,8 @@ export interface CombatRefusalDetails {
   resource?: string;
   id?: string;
   reason?: string;
+  /** The server's machine-readable code, e.g. COMBAT_INTENT_IN_FLIGHT for a 409. */
+  code?: string;
   stage?: string;
   dialect?: string;
   variant?: string;
@@ -329,20 +342,42 @@ export async function executeAuthoritativeCombatIntent(
     // fresh id (a manual re-submit after a timeout relies on the engine's
     // version guards).
     const requestId = crypto.randomUUID();
-    const response = await fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-request-id': requestId },
-      retryBudgetMs: COMBAT_INTENT_RETRY_BUDGET_MS,
-      body: JSON.stringify({
-        intent: authoritativeIntent,
-        source,
-        dmStartedAt,
-        ...(origin ? { origin } : {}),
-        // Blank/whitespace is omitted so an inline option sends no wording (#749).
-        ...(playerInput && playerInput.trim() ? { playerInput } : {}),
-      }),
-      ...(signal ? { signal } : {}),
-    });
+    const postIntent = (): Promise<Response> =>
+      fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-request-id': requestId },
+        retryBudgetMs: COMBAT_INTENT_RETRY_BUDGET_MS,
+        body: JSON.stringify({
+          intent: authoritativeIntent,
+          source,
+          dmStartedAt,
+          ...(origin ? { origin } : {}),
+          // Blank/whitespace is omitted so an inline option sends no wording (#749).
+          ...(playerInput && playerInput.trim() ? { playerInput } : {}),
+        }),
+        ...(signal ? { signal } : {}),
+      });
+    // #51 FIX round: the server answers 409 while a first attempt with
+    // the same id is still executing (its pending-row claim). Wait a beat
+    // and resend the same id — the first delivery stores its response, and
+    // this retry replays it instead of executing twice. Bounded: after the
+    // retries the 409 surfaces as a refusal carrying code
+    // COMBAT_INTENT_IN_FLIGHT, so upstream can tell a still-running first
+    // attempt from a refusal that needs a fix. A caller-level retry mints
+    // a fresh id — a different claim row that proceeds immediately, not a
+    // takeover: the 60 s window only gates retries reusing the SAME id, so
+    // a re-run of the same move while the first attempt is still executing
+    // stays possible (upstream treating a 409 as transient is a follow-up
+    // — see the PR Friction).
+    let response = await postIntent();
+    for (
+      let attempt = 0;
+      attempt < INTENT_CONFLICT_MAX_RETRIES && response.status === 409;
+      attempt++
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, INTENT_CONFLICT_WAIT_MS));
+      response = await postIntent();
+    }
     logServerRequestId('/v1/combat', response);
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -366,6 +401,10 @@ export async function executeAuthoritativeCombatIntent(
         ...(rawDetails as CombatRefusalDetails),
         ...(stage ? { stage } : {}),
         ...(reason ? { reason } : {}),
+        // #51: the 409 carries its code at the top level, not in details —
+        // without it upstream cannot tell a still-running first attempt
+        // (transient, never repair) from a refusal that needs fixing.
+        ...(typeof payloadRecord.code === 'string' ? { code: payloadRecord.code } : {}),
         ...(typeof payloadRecord.dialect === 'string' ? { dialect: payloadRecord.dialect } : {}),
         ...(typeof payloadRecord.variant === 'string' ? { variant: payloadRecord.variant } : {}),
         ...(typeof payloadRecord.detail === 'string' ? { detail: payloadRecord.detail } : {}),

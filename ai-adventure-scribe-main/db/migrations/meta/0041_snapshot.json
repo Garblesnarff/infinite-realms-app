@@ -1,5 +1,5 @@
 {
-  "id": "286b373e-dd85-4e79-89c6-8432fa255593",
+  "id": "f1fd995a-f300-47eb-86a2-fd658da9efdb",
   "prevId": "728beda0-42c2-446f-8d30-63281d281e3d",
   "version": "7",
   "dialect": "postgresql",
@@ -1777,11 +1777,17 @@
           "primaryKey": false,
           "notNull": true
         },
+        "claim_token": {
+          "name": "claim_token",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "response": {
           "name": "response",
           "type": "jsonb",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",
