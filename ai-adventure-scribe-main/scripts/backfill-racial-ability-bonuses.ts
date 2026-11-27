@@ -24,7 +24,12 @@
  *     (for seeded campaigns).
  *   - needingRepair: fixed race/subrace bonuses missing from stored scores.
  *     Reported per race/subrace with old -> new score deltas (capped at 20) and
- *     recomputed AC / level-1 HP, mirroring transformAbilityScoresForStorage.
+ *     an unarmoured-base AC / level-1 HP preview: base AC = 10 + DEX modifier;
+ *     level-1 HP = hit die + CON modifier + Dwarven Toughness. This is a
+ *     preview only - the server's real derivation (#620,
+ *     shared/creation-armor-class.ts, shared/level-1-hit-points.ts) is
+ *     equipment-aware and also adds Draconic Resilience, the Tough feat,
+ *     Unarmoured Defence and a 1 HP floor.
  *   - alreadyCorrect: adding the fixed bonuses changes nothing for this row
  *     (e.g. every bonused ability is already at the 20 cap). Pre/post-fix is
  *     determined by the created_at cutoff, not by comparing scores: pre-fix
@@ -191,8 +196,12 @@ function storedScores(stats: BackfillStatsRow): AbilityBonusMap | null {
 /**
  * Decide what a single pre-fix character row needs. Pure: no I/O, so it can be
  * checked without a database. Mirrors the save path: bonuses folded into scores
- * once, capped at 20, AC = 10 + DEX mod, level-1 HP = hit die + CON mod +
- * Dwarven Toughness (see transformAbilityScoresForStorage and #250).
+ * once, capped at 20, with an unarmoured-base AC / level-1 HP preview (AC =
+ * 10 + DEX mod; level-1 HP = hit die + CON mod + Dwarven Toughness). The
+ * preview is a simplification of the server's rule (#250, #620): the server
+ * also accounts for equipment, Draconic Resilience, the Tough feat,
+ * Unarmoured Defence and a 1 HP floor (shared/creation-armor-class.ts,
+ * shared/level-1-hit-points.ts).
  */
 export function planRow(
   character: BackfillCharacterRow,
