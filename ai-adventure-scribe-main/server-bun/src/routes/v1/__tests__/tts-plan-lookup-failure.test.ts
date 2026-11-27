@@ -54,6 +54,7 @@ mock.module('../../../services/ai-usage-service.js', () => ({
     },
     checkQuotaAndConsume: async () => ({ allowed: true, remaining: 1 }),
     recordProviderUsage: async () => {},
+    refundQuota: async () => {},
   },
   elevenLabsCharacterCostUsd: (characters: number) => (characters * 0.05) / 1000,
   voiceQuotaUnits: (characters: number) => Math.ceil(characters / 100),
