@@ -35,6 +35,7 @@ import { parseAuthoredStatBlock } from '../combat/authored-stat-block-parser.js'
 import { resolveMonsterAttackProfile } from '../combat/monster-attack-profile.js';
 
 const userId = testId('npc-engine-rows-user');
+const engineD20Pair = (await import('../../lib/dice.js')).rollD20Pair;
 const rollBossSave = mock((_advantage?: boolean) => 14);
 mock.module('../../lib/dice.js', () => ({
   rollD20: rollBossSave,
@@ -86,7 +87,7 @@ const { getLegalCombatActions } = await importWithRealDb(
 const { runBossMoveWindow, armDefy } = await importWithRealDb(
   () => import('../combat/boss-move-window.js'),
 );
-const { claimRage } = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
+const { claimRage, clearRage } = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
 const { saveTacticalMap } = await importWithRealDb(() => import('../combat/tactical-map-store.js'));
 
 describeWithDb('server NPC engine rows through the real routes (#2658 step 2)', () => {
@@ -1017,10 +1018,23 @@ describeWithDb('Boss Move window through the real database (#728)', () => {
             eq(combatParticipants.participantType, 'monster'),
           ),
         );
-      if (ability === 'str') expect(await claimRage(encounterId, heroId)).not.toBeNull();
+      await clearRage(encounterId, heroId);
+      expect(await claimRage(encounterId, heroId)).not.toBeNull();
+      let diceCount = 0;
       rollBossSave.mockClear();
-      expect((await windowNow()).lines[0]).toStartWith('Boss Move: Test Burst (Opener)');
-      expect(rollBossSave.mock.calls).toEqual([[advantage]]);
+      rollBossSave.mockImplementationOnce((rollWithAdvantage) => {
+        const dice = engineD20Pair(rollWithAdvantage);
+        diceCount = dice.other === undefined ? 1 : 2;
+        return dice.kept;
+      });
+      try {
+        setRngSeed(1);
+        expect((await windowNow()).lines[0]).toStartWith('Boss Move: Test Burst (Opener)');
+        expect(rollBossSave.mock.calls).toEqual([[advantage]]);
+        expect(diceCount).toBe(advantage ? 2 : 1);
+      } finally {
+        setRngSeed(undefined);
+      }
     },
   );
 });

@@ -13,10 +13,13 @@
  *   bun scripts/reingest-starter-campaigns.ts --repo-path ../infinite-realms --apply
  */
 
+import { writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { config } from 'dotenv';
 
+import { getOpenRouterModelCandidates } from '../server-bun/src/services/llm-model-config.ts';
+import { getModelPricing } from '../server-bun/src/services/model-pricing.ts';
 import { chunkCampaignFiles } from '../tools/lore-keeper-ingest/src/chunker.ts';
 import {
   estimateCost,
@@ -32,14 +35,26 @@ import {
 import {
   reingestCampaignChunks,
   replaceCampaignRules,
+  replaceStoryMap,
   upsertStarterCampaignPreservingState,
 } from '../tools/lore-keeper-ingest/src/reingest-database.ts';
 import { isReingestableEntityName } from '../tools/lore-keeper-ingest/src/reingest.ts';
+import {
+  buildStoryMap,
+  placesAndZones,
+  proposeRoutes,
+  readApprovedRoutesFile,
+  routesFileJson,
+  storyMapReportLine,
+  type ChatCompletion,
+  type StoryMap,
+} from '../tools/lore-keeper-ingest/src/story-map.ts';
 
 import type {
   CampaignChunk,
   CampaignRule,
   ParsedCampaign,
+  StoryMapRoute,
 } from '../tools/lore-keeper-ingest/src/types.ts';
 
 config();
@@ -68,6 +83,12 @@ interface LoadedCampaign {
   campaign: ParsedCampaign & { isComplete: boolean };
   chunks: CampaignChunk[];
   rules: CampaignRule[];
+  campaignPath: string;
+  bible: string;
+  /** Routes from the bible's `## Routes` section; null when it has none. */
+  bibleRoutes: StoryMapRoute[] | null;
+  /** Routes from an approved routes.json beside the bible; read only when the bible has none. */
+  approvedRoutes: StoryMapRoute[] | null;
 }
 
 function loadCampaign(repoPath: string, campaignId: string, relativePath: string): LoadedCampaign {
@@ -82,7 +103,7 @@ function loadCampaign(repoPath: string, campaignId: string, relativePath: string
   campaign.creativeBrief = files.creativeBrief;
   campaign.overview = files.overview;
 
-  const { chunks, rules } = chunkCampaignFiles(campaignId, files);
+  const { chunks, rules, routes: bibleRoutes } = chunkCampaignFiles(campaignId, files);
   const invalidMarkers = chunks.filter((chunk) => !isReingestableEntityName(chunk.entityName));
   if (invalidMarkers.length > 0) {
     throw new Error(
@@ -92,23 +113,39 @@ function loadCampaign(repoPath: string, campaignId: string, relativePath: string
     );
   }
 
-  return { campaign: { ...campaign, isComplete: isCampaignComplete(files) }, chunks, rules };
+  return {
+    campaign: { ...campaign, isComplete: isCampaignComplete(files) },
+    chunks,
+    rules,
+    campaignPath,
+    bible: files.campaignBible,
+    bibleRoutes,
+    approvedRoutes: bibleRoutes ? null : readApprovedRoutesFile(campaignPath),
+  };
 }
 
 interface Options {
   repoPath?: string;
   apply: boolean;
+  proposeRoutes: boolean;
   skipEmbeddings: boolean;
   verbose: boolean;
 }
 
 function parseOptions(argv: string[]): Options {
-  const options: Options = { apply: false, skipEmbeddings: false, verbose: false };
+  const options: Options = {
+    apply: false,
+    proposeRoutes: false,
+    skipEmbeddings: false,
+    verbose: false,
+  };
 
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === '--apply') {
       options.apply = true;
+    } else if (argument === '--propose-routes') {
+      options.proposeRoutes = true;
     } else if (argument === '--skip-embeddings') {
       options.skipEmbeddings = true;
     } else if (argument === '--verbose' || argument === '-v') {
@@ -123,7 +160,7 @@ function parseOptions(argv: string[]): Options {
       if (!options.repoPath) throw new Error('--repo-path requires a path');
     } else if (argument === '--help' || argument === '-h') {
       console.log(
-        'Usage: bun scripts/reingest-starter-campaigns.ts --repo-path <path> [--apply] [--skip-embeddings] [--verbose]',
+        'Usage: bun scripts/reingest-starter-campaigns.ts --repo-path <path> [--apply | --propose-routes] [--skip-embeddings] [--verbose]',
       );
       process.exit(0);
     } else {
@@ -156,12 +193,26 @@ async function main(options: Options): Promise<void> {
     throw new Error('No starter campaign bibles loaded; nothing to do.');
   }
 
+  if (options.proposeRoutes) {
+    await proposeRoutesForCampaigns(loadedCampaigns);
+    return;
+  }
+
+  // A route that names an unknown place fails the whole run here, before any write (#1752).
+  const storyMaps = new Map<string, StoryMap>(
+    loadedCampaigns.map((loaded) => [
+      loaded.campaign.id,
+      buildStoryMap(loaded.campaign.id, loaded.chunks, loaded.bibleRoutes, loaded.approvedRoutes),
+    ]),
+  );
+
   console.log(`${options.apply ? 'APPLY' : 'DRY RUN'}: ${repoPath}`);
   for (const { campaign, chunks, rules } of loadedCampaigns) {
     const { tokens } = estimateCost(chunks.map((chunk) => chunk.content));
     console.log(
       `${campaign.id}: ${chunks.length} chunks (${chunks.filter((chunk) => chunk.entityName).length} entities), ${rules.length} rules, ~${tokens} embedding tokens`,
     );
+    console.log(storyMapReportLine(storyMaps.get(campaign.id)!));
   }
 
   if (!options.apply) {
@@ -201,12 +252,84 @@ async function main(options: Options): Promise<void> {
     await upsertStarterCampaignPreservingState(client, campaign);
     const result = await reingestCampaignChunks(client, chunks, embeddings);
     await replaceCampaignRules(client, campaign.id, rules);
+    const mapResult = await replaceStoryMap(client, storyMaps.get(campaign.id)!);
+    console.log(
+      `${campaign.id}: story map wrote ${mapResult.placesWritten} places and ${mapResult.edgesWritten} route rows`,
+    );
+    if (mapResult.removedKeys.length > 0) {
+      console.log(`${campaign.id}: place keys removed: ${mapResult.removedKeys.join(', ')}`);
+      console.log(`${campaign.id}: place keys added: ${mapResult.addedKeys.join(', ') || 'none'}`);
+    }
 
     console.log(
       `${campaign.id}: wrote ${result.rowsWritten}/${result.parsedChunks}, inserted ${result.rowsInserted}, updated ${result.rowsUpdated}, removed ${result.duplicateRowsRemoved} duplicates and ${result.sectionMarkerRowsRemoved} section markers`,
     );
     if (options.verbose) console.log(JSON.stringify(result, null, 2));
   }
+}
+
+/** One OpenRouter chat call. Asks for usage accounting so the reply carries its own cost. */
+const openRouterCompletion: ChatCompletion = async ({ model, system, user }) => {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY is required for --propose-routes');
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      usage: { include: true },
+    }),
+  });
+  if (!response.ok) throw new Error(`OpenRouter ${response.status}: ${await response.text()}`);
+  const body = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number; cost?: number };
+  };
+  return {
+    text: body.choices?.[0]?.message?.content ?? '',
+    inputTokens: body.usage?.prompt_tokens ?? 0,
+    outputTokens: body.usage?.completion_tokens ?? 0,
+    ...(typeof body.usage?.cost === 'number' ? { costUsd: body.usage.cost } : {}),
+  };
+};
+
+/**
+ * --propose-routes (#1752): one model call per campaign whose bible has no `## Routes` section.
+ * Writes routes.proposed.json beside the bible for a person to check and rename to routes.json.
+ * Ingest never reads the proposed file. No database access.
+ */
+async function proposeRoutesForCampaigns(loadedCampaigns: LoadedCampaign[]): Promise<void> {
+  const model = getOpenRouterModelCandidates()[0];
+  for (const loaded of loadedCampaigns) {
+    if (loaded.bibleRoutes) {
+      console.log(`${loaded.campaign.id}: the bible has a ## Routes section; nothing to propose`);
+      continue;
+    }
+    const placeNames = placesAndZones(loaded.chunks).places.map((place) => place.name);
+    const result = await proposeRoutes(
+      loaded.bible,
+      placeNames,
+      model,
+      openRouterCompletion,
+      getModelPricing(model),
+    );
+    const path = join(loaded.campaignPath, 'routes.proposed.json');
+    writeFileSync(path, routesFileJson(result.routes));
+    const cost =
+      result.costUsd == null
+        ? 'cost unknown (no price for this model)'
+        : `$${result.costUsd.toFixed(5)}`;
+    console.log(
+      `${loaded.campaign.id}: proposed ${result.routes.length} routes with ${result.model} (${result.inputTokens} input + ${result.outputTokens} output tokens, ${cost}) -> ${path}`,
+    );
+  }
+  console.log(
+    'Check each routes.proposed.json, then rename it to routes.json. Ingest reads only routes.json.',
+  );
 }
 
 main(parseOptions(process.argv.slice(2))).catch((error: unknown) => {

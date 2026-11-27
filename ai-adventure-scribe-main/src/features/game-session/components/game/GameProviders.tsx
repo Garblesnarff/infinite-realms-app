@@ -33,7 +33,7 @@ const GameProviders: React.FC<GameProvidersProps> = ({
       key={starterCampaignId || 'no-starter-campaign'}
       starterCampaignId={starterCampaignId}
     >
-      <SceneBackgroundProvider>
+      <SceneBackgroundProvider key={sessionId}>
         <CombatProvider sessionId={sessionId}>
           <GameProvider characterId={characterId}>
             <MessageProvider sessionId={sessionId}>

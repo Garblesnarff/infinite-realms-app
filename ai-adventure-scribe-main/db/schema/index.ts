@@ -68,6 +68,9 @@ export * from './spell-slots';
 // Server-authoritative tactical combat maps
 export * from './tactical-maps';
 
+// Story map: region map places and routes per starter campaign (#1752).
+export * from './story-map';
+
 // Campaign-instance journal entries (handouts in v1).
 export * from './journal';
 

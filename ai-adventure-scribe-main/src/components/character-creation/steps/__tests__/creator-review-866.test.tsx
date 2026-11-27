@@ -56,7 +56,8 @@ function Harness({ children }: { children: React.ReactNode }) {
     fightingStyles: ['Defense'],
   } as unknown as Character);
   context.value = {
-    state: { character },
+    // #210 QA-026: the Finalization toggle reads this; the real default is on.
+    state: { character, generateBackgroundImage: true },
     dispatch: (action: any) => setCharacter((old) => ({ ...old, ...action.payload })),
   };
   return <>{children}</>;
