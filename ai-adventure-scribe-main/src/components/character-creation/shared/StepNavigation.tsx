@@ -12,6 +12,12 @@ interface StepNavigationProps {
   isLoading?: boolean;
   /** When provided, renders a Cancel button that calls this handler. */
   onCancel?: () => void;
+  /**
+   * #210 QA-053: full-track indexes of steps not on the current path.
+   * currentStep/totalSteps are full-track positions (total is always 15);
+   * skipped dots render muted and never show the completed check.
+   */
+  skippedSteps?: number[];
 }
 
 /**
@@ -25,9 +31,11 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
   onPrevious,
   isLoading = false,
   onCancel,
+  skippedSteps = [],
 }) => {
   const isFirstStep = currentStep === 0;
   const isLastStep = currentStep === totalSteps - 1;
+  const skipped = new Set(skippedSteps);
 
   return (
     <div className="mt-8 space-y-4" data-testid="step-navigation">
@@ -79,7 +87,8 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
               if (stepIndex >= totalSteps) return null;
 
               const isActive = stepIndex === currentStep;
-              const isCompleted = stepIndex < currentStep;
+              const isSkipped = skipped.has(stepIndex);
+              const isCompleted = stepIndex < currentStep && !isSkipped;
 
               return (
                 <div
@@ -90,7 +99,7 @@ const StepNavigation: React.FC<StepNavigationProps> = ({
                       : isCompleted
                         ? 'bg-green-500 text-white'
                         : 'bg-muted text-muted-foreground'
-                  }`}
+                  } ${isSkipped ? 'opacity-50' : ''}`}
                 >
                   {isCompleted ? <CheckCircle className="w-4 h-4" /> : stepIndex + 1}
                 </div>

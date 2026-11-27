@@ -43,9 +43,14 @@ export async function rageIsOffered(input: {
     userId: input.userId,
     className: BARBARIAN,
     family: 'barbarian-rage',
+    includeUnlimited: true,
   });
   if (!pool || pool.remaining <= 0) return false;
-  return !(await isRaging(input.encounterId, input.participantId));
+  const { wearsHeavyArmor } = await import('../character/character-armor-class.js');
+  return (
+    !(await wearsHeavyArmor(input.characterId)) &&
+    !(await isRaging(input.encounterId, input.participantId))
+  );
 }
 
 async function database(): Promise<typeof DatabaseClient> {
@@ -73,6 +78,14 @@ export async function resolveRage(input: {
   if (level <= 0) {
     throw new BusinessLogicError(`${RAGE_NAME} is not on this character's sheet`, {
       reason: 'feature_not_on_sheet',
+      featureName: RAGE_NAME,
+    });
+  }
+
+  const { wearsHeavyArmor } = await import('../character/character-armor-class.js');
+  if (await wearsHeavyArmor(characterId)) {
+    throw new BusinessLogicError('Rage grants no benefits in heavy armor.', {
+      reason: 'heavy_armor',
       featureName: RAGE_NAME,
     });
   }

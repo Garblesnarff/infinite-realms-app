@@ -3,7 +3,7 @@ import type { Character } from '@/types/character';
 import logger from '@/lib/logger';
 
 /** Bump when the stored shape changes so stale drafts are ignored, not misread. */
-export const WIZARD_DRAFT_VERSION = 1;
+export const WIZARD_DRAFT_VERSION = 2;
 
 export interface WizardDraft {
   version: typeof WIZARD_DRAFT_VERSION;
@@ -11,6 +11,12 @@ export interface WizardDraft {
   step: number;
   campaignId: string | null;
   updatedAt: string;
+  /**
+   * #210 QA-026: the background-image opt-out rides the draft so a resumed
+   * wizard keeps the user's choice. Optional in the shape so a v2 draft
+   * written without it reads as on (the default).
+   */
+  generateBackgroundImage?: boolean;
 }
 
 /**
@@ -40,6 +46,9 @@ export function readWizardDraft(key: string): WizardDraft | null {
           : 0,
       campaignId: typeof parsed.campaignId === 'string' ? parsed.campaignId : null,
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : '',
+      // #210 QA-026: absent means the draft predates the toggle — default on.
+      generateBackgroundImage:
+        typeof parsed.generateBackgroundImage === 'boolean' ? parsed.generateBackgroundImage : true,
     };
   } catch (error) {
     logger.warn(`Error reading wizard draft "${key}":`, error);
@@ -69,7 +78,12 @@ export function hasWizardDraftData(character: Character | null | undefined): boo
   if (character.name?.trim()) return true;
   if (character.race || character.subrace || character.class || character.background) return true;
   if (character.alignment?.trim()) return true;
-  if (character.gender || character.eyes?.trim() || character.hair?.trim() || character.skin?.trim())
+  if (
+    character.gender ||
+    character.eyes?.trim() ||
+    character.hair?.trim() ||
+    character.skin?.trim()
+  )
     return true;
   if (typeof character.age === 'number' || typeof character.height === 'number') return true;
   if (
@@ -99,10 +113,6 @@ export function hasWizardDraftData(character: Character | null | undefined): boo
   )
     return true;
   const scores = character.abilityScores;
-  if (
-    scores &&
-    Object.values(scores).some((entry) => entry && entry.score !== 10)
-  )
-    return true;
+  if (scores && Object.values(scores).some((entry) => entry && entry.score !== 10)) return true;
   return false;
 }

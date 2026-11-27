@@ -66,6 +66,22 @@ function validateClass(character: Character): ValidationResult {
   return VALID;
 }
 
+// #210 QA-027: the Physical step had no validator, so Next passed with
+// every field empty. Gender and age are the step's structured identity
+// fields; eyes/skin/hair stay optional free text, and height/weight are
+// auto-initialized to the race minima by the step itself (#213). Note an
+// empty age input stores 0 (parseCharacterAge maps '' to 0), so 0 means
+// "not entered" here.
+function validatePhysical(character: Character): ValidationResult {
+  if (!character.gender) {
+    return invalid('Please select a gender for your character');
+  }
+  if (!character.age) {
+    return invalid('Please enter an age for your character');
+  }
+  return VALID;
+}
+
 function validateClassFeatures(character: Character): ValidationResult {
   const classFeatures = character.class?.classFeatures?.filter((f) => f.choices) || [];
   if (classFeatures.length > 0) {
@@ -205,6 +221,7 @@ const stepValidators: Record<string, (character: Character) => ValidationResult>
   'Basic Info': validateBasicInfo,
   Race: validateRace,
   Subrace: validateSubrace,
+  Physical: validatePhysical,
   Class: validateClass,
   'Class Features': validateClassFeatures,
   'Ability Scores': validateAbilityScores,

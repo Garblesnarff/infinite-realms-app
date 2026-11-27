@@ -26,6 +26,7 @@ import {
   characterStats,
   characters,
   combatEncounters,
+  conditionsLibrary,
   combatParticipantStatus,
   combatParticipants,
   gameSessions,
@@ -36,6 +37,7 @@ const { CombatHPService } = await importWithRealDb(() => import('../combat-hp-se
 const { CombatInitiativeService } = await importWithRealDb(
   () => import('../combat-initiative-service.js'),
 );
+const { ConditionsService } = await importWithRealDb(() => import('../conditions-service.js'));
 const combatTurnFlags = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
 const { claimRage, clearRage, isRaging } = combatTurnFlags;
 const { logger } = await importWithRealDb(() => import('../../lib/logger.js'));
@@ -348,6 +350,35 @@ describeWithDb('When Rage ends and what it resists (#1654)', () => {
       .where(eq(combatParticipantStatus.participantId, barbarianId));
     expect(status.currentHp).toBe(0);
     expect(status.isConscious).toBe(false);
+    expect(await isRaging(encounterId, barbarianId)).toBe(false);
+  });
+
+  it('an explicit Unconscious condition ends Rage at positive HP', async () => {
+    await resetFight();
+    await db
+      .insert(conditionsLibrary)
+      .values({ name: 'Unconscious', description: 'Unconscious', mechanicalEffects: '{}' })
+      .onConflictDoNothing();
+    expect(await claimRage(encounterId, barbarianId)).not.toBeNull();
+    expect(await isRaging(encounterId, barbarianId)).toBe(true);
+
+    const applied = await ConditionsService.applyCondition(
+      barbarianId,
+      encounterId,
+      'Unconscious',
+      'rounds',
+      1,
+    );
+    try {
+      const [status] = await db
+        .select({ hp: combatParticipantStatus.currentHp })
+        .from(combatParticipantStatus)
+        .where(eq(combatParticipantStatus.participantId, barbarianId));
+      expect(status.hp).toBeGreaterThan(0);
+      expect(await isRaging(encounterId, barbarianId)).toBe(false);
+    } finally {
+      await ConditionsService.removeCondition(applied.condition.id, encounterId);
+    }
     expect(await isRaging(encounterId, barbarianId)).toBe(false);
   });
 

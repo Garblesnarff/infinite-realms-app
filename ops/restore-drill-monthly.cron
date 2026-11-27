@@ -1,0 +1,5 @@
+# Monthly restore drill (#38). Not installed by merging. On Rob's line, copy
+# this file to /etc/cron.d/infiniterealms-restore-drill (root:root, mode 0644)
+# after installing ops/restore-drill-monthly.sh as /usr/local/bin/restore-drill-monthly.sh.
+# Runs on the 1st at 04:15 UTC, after the 02:00 nightly backup.
+15 4 1 * * root /usr/local/bin/restore-drill-monthly.sh >> /var/log/infiniterealms/restore-drill-cron.log 2>&1

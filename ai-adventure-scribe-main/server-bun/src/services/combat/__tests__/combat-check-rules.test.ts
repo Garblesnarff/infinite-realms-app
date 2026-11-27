@@ -30,6 +30,20 @@ const profile = (scores: Partial<CheckActorProfile['scores']>, level = 1): Check
 });
 
 describe('SRD contested checks: shove and grapple', () => {
+  it.each([
+    [{ str: 16, dex: 12 }, 16],
+    [{ str: 12, dex: 16 }, 3],
+  ])('a raging grapple target rolls with advantage only for Athletics', (scores, kept) => {
+    const result = resolveContestedCheck({
+      kind: 'grapple',
+      actorProfile: profile({ str: 12 }),
+      actorD20: 10,
+      targetProfile: { ...profile(scores), strengthAdvantage: true },
+      roll: faces(3, 16),
+    });
+    expect(result.target?.d20).toBe(kept);
+  });
+
   it('resolves a shove as Athletics against the higher of the target Athletics/Acrobatics', () => {
     // Player STR 16 (+3), nat 11 => 14. Goblin STR 8 (-1), Athletics chosen over a -1 Dexterity
     // tie, nat 3 => 2. Player wins.
@@ -195,6 +209,23 @@ describe('escaping a grapple (SRD 5.1, PB 195)', () => {
       grapplerProfile: grappler,
       roll: faces(grapplerD20),
     });
+
+  it.each([
+    [{ str: 16, dex: 12 }, [17, 6, 19], 17, 19],
+    [{ str: 12, dex: 16 }, [6, 17], 4, 17],
+  ])(
+    'Rage helps the Strength rolls on each side of an escape',
+    (scores, rolled, actorDie, targetDie) => {
+      const result = resolveEscapeCheck({
+        actorProfile: { ...profile(scores), strengthAdvantage: true },
+        actorD20: 4,
+        grapplerProfile: { ...profile({ str: 14 }), strengthAdvantage: true },
+        roll: faces(...rolled),
+      });
+      expect(result.actor.d20).toBe(actorDie);
+      expect(result.target?.d20).toBe(targetDie);
+    },
+  );
 
   it("uses the better of the escaper's Athletics and Acrobatics", () => {
     // STR 8 (-1) against DEX 16 (+3): Acrobatics is the better skill.
