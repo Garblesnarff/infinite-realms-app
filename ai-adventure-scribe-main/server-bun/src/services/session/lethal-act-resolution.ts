@@ -79,15 +79,14 @@ const vitalsWriteFrom = (current: CharacterVitals): VitalsWrite => ({
  * They are never "dead" from this one roll: leftover damage is 0, so the
  * massive-damage instant-death rule does not fire.
  *
- * A successful save deals half the current HP, rounded down, at least 1.
- * At 1 current HP that minimum is 1, so they drop to 0 and start dying —
- * never dead from this one roll, the same as a failed save at higher HP.
+ * A successful save deals half the current HP, rounded down, but never
+ * below 1 HP: damage = min(floor(hp/2), hp - 1), and 0 when hp <= 1.
  */
 
-/** Half current HP, rounded down, at least 1. */
+/** Half current HP, rounded down, but never below 1 HP on a success. */
 export function successDamage(currentHitPoints: number): number {
-  if (currentHitPoints <= 0) return 0;
-  return Math.max(1, Math.floor(currentHitPoints / 2));
+  if (currentHitPoints <= 1) return 0;
+  return Math.min(Math.floor(currentHitPoints / 2), currentHitPoints - 1);
 }
 
 /** Enough to reach exactly 0 HP, so the leftover is not massive damage. */

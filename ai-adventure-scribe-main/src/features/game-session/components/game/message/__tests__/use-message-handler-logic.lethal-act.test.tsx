@@ -315,4 +315,35 @@ describe('useMessageHandlerLogic lethal free-text send (#468)', () => {
       }),
     );
   });
+
+  it('on Yes with a 409 shows a system line and does not send or generate', async () => {
+    fetchWithAuthMock.mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({ error: 'Already at 0 HP' }),
+    });
+    const list = renderList();
+    unmountList = list.unmount;
+    const { result } = renderHandler();
+
+    let sendPromise: Promise<void> | undefined;
+    await act(async () => {
+      sendPromise = result.current.handleSendMessage(LETHAL_TEXT);
+    });
+
+    await waitForConfirmOrDmSend();
+    expectAskedFirstNotSentToDm();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Yes' }));
+      await sendPromise;
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "You can't do that now.", sender: 'system' }),
+    );
+    expect(sendMessageMock).not.toHaveBeenCalledWith(expect.objectContaining({ sender: 'player' }));
+    expect(queueCtl.handleSendMessage).not.toHaveBeenCalled();
+    expect(getAIResponseMock).not.toHaveBeenCalled();
+  });
 });

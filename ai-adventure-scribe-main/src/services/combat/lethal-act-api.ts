@@ -15,6 +15,15 @@ export interface LethalActResponse {
   engineCard: EngineResultCard;
 }
 
+export class LethalActRejectedError extends Error {
+  status: number;
+  constructor(status: number, message?: string) {
+    super(message || `Lethal act rejected with status ${status}`);
+    this.name = 'LethalActRejectedError';
+    this.status = status;
+  }
+}
+
 export async function submitConfirmedLethalAct(
   sessionId: string,
   text: string,
@@ -26,6 +35,9 @@ export async function submitConfirmedLethalAct(
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    if (response.status === 409) {
+      throw new LethalActRejectedError(response.status, body?.error);
+    }
     throw new Error(body?.error || `Lethal act failed with status ${response.status}`);
   }
   return (await response.json()) as LethalActResponse;

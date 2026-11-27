@@ -45,6 +45,7 @@ import {
   settlePendingCombatEntryConfirmation,
 } from '@/services/combat/combat-entry-confirmation-bridge';
 import { registerCombatEntryPlayerSource } from '@/services/combat/combat-entry-delivery';
+import { LethalActRejectedError } from '@/services/combat/lethal-act-api';
 import { decideLethalFreeTextSend } from '@/services/combat/lethal-free-text-send';
 import { settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
 import { settlePendingSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
@@ -308,14 +309,30 @@ export const useMessageHandlerLogic = ({
         context?.intent !== 'resume_unanswered' &&
         !gameState.isInCombat &&
         isClearlyLethalAction(input);
-      const lethalDecision = mightBeLethal
-        ? await decideLethalFreeTextSend({
+      let lethalDecision: Awaited<ReturnType<typeof decideLethalFreeTextSend>> = {
+        kind: 'send-normal' as const,
+      };
+      if (mightBeLethal) {
+        try {
+          lethalDecision = await decideLethalFreeTextSend({
             text: input,
             inCombat: false,
             intent: context?.intent,
             sessionId,
-          })
-        : { kind: 'send-normal' as const };
+          });
+        } catch (err) {
+          if (err instanceof LethalActRejectedError) {
+            await sendMessage({
+              text: "You can't do that now.",
+              sender: 'system',
+              timestamp: new Date().toISOString(),
+              persist: false,
+            });
+            return;
+          }
+          throw err;
+        }
+      }
       if (lethalDecision.kind === 'cancelled') return;
       if (lethalDecision.kind === 'engine') {
         const { result } = lethalDecision;
