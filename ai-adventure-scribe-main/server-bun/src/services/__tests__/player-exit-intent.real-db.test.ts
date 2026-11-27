@@ -1021,7 +1021,7 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     expect(await swarmRow()).toMatchObject({ actionUsed: false, reactionUsed: false });
   });
 
-  test('a hostile archer provokes nothing, at 30 ft or at 5 ft', async () => {
+  test('a hostile archer has no opportunity attack at 30 ft', async () => {
     await setSwarmAttack({
       name: 'Shortbow',
       attackBonus: 4,
@@ -1045,7 +1045,7 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     expect(await swarmRow()).toMatchObject({ reactionUsed: false });
   });
 
-  test('a hostile archer adjacent still provokes nothing: only melee reach does', async () => {
+  test('an adjacent hostile archer makes an unarmed opportunity attack', async () => {
     await setSwarmAttack({
       name: 'Shortbow',
       attackBonus: 4,
@@ -1061,10 +1061,12 @@ describeWithDb('a player can leave a fight the end guard is holding open (#2580)
     await flee();
 
     expect(await consumeDmTacticalFacts(sessionId)).toEqual([
+      expect.stringContaining('with its Unarmed Strike: CRITICAL HIT for 1 damage'),
       'The Scholar flees the fight.',
       expect.stringContaining('abandoned mid-fight'),
     ]);
-    expect(await swarmRow()).toMatchObject({ reactionUsed: false });
+    expect(await heroHp()).toBe(4);
+    expect(await swarmRow()).toMatchObject({ actionUsed: false, reactionUsed: true });
   });
 
   test('a flee concludes the encounter as abandoned (never party_defeated); a following end_turn changes nothing', async () => {
