@@ -15,6 +15,7 @@ import { loadCharacterWithSpells } from '../load-character-with-spells';
 
 import type { Character } from '@/types/character';
 
+import { darkvisionRangeFor } from '@/data/races';
 import {
   calculateSkillModifiers,
   calculateSavingThrowModifiers,
@@ -155,5 +156,81 @@ describe('character loaders preserve stored armor class (#2079)', () => {
 
     expect(direct?.armorClass).toBe(15);
     expect(session?.armorClass).toBe(15);
+  });
+});
+
+describe('loadCharacterBySession resolves subrace darkvision', () => {
+  const elfDrowRow = {
+    id: 'char-elf-drow-test',
+    user_id: 'user_test_elf_drow',
+    name: 'Test Elf Drow',
+    race: 'Elf',
+    subrace: 'Drow',
+    class: 'Wizard',
+    level: 1,
+    background: 'Sage',
+    skill_proficiencies: null,
+    saving_throw_proficiencies: null,
+    tool_proficiencies: null,
+    expertise_proficiencies: null,
+    languages: null,
+    character_stats: [
+      {
+        strength: 10,
+        dexterity: 14,
+        constitution: 12,
+        intelligence: 16,
+        wisdom: 12,
+        charisma: 10,
+        armor_class: 12,
+      },
+    ],
+  };
+
+  const humanRow = {
+    id: 'char-human-plain-test',
+    user_id: 'user_test_human_plain',
+    name: 'Test Human Plain',
+    race: 'Human',
+    subrace: null,
+    class: 'Fighter',
+    level: 1,
+    background: null,
+    skill_proficiencies: null,
+    saving_throw_proficiencies: null,
+    tool_proficiencies: null,
+    expertise_proficiencies: null,
+    languages: null,
+    character_stats: [
+      {
+        strength: 12,
+        dexterity: 10,
+        constitution: 12,
+        intelligence: 10,
+        wisdom: 10,
+        charisma: 10,
+        armor_class: 12,
+      },
+    ],
+  };
+
+  it('Drow hero reports 120 ft darkvision', async () => {
+    getCharacter.mockResolvedValue(elfDrowRow);
+    getSession.mockResolvedValue({ character_id: elfDrowRow.id });
+
+    const character = await loadCharacterBySession('session-elf-drow');
+
+    expect(character?.subrace?.name).toBe('Drow (Dark Elf)');
+    expect(darkvisionRangeFor('Elf', character?.subrace?.name)).toBe(120);
+  });
+
+  it('plain Human has no subrace and no darkvision', async () => {
+    getCharacter.mockResolvedValue(humanRow);
+    getSession.mockResolvedValue({ character_id: humanRow.id });
+
+    const character = await loadCharacterBySession('session-human-plain');
+
+    expect(character?.subrace).toBeNull();
+    expect(darkvisionRangeFor('Human', character?.subrace?.name)).toBeNull();
   });
 });

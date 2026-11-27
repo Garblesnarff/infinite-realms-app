@@ -1,6 +1,6 @@
 import { useCallback, useSyncExternalStore } from 'react';
 
-import { showTargetNumbersByDefault } from '../../../../shared/show-target-numbers';
+import { showTargetNumbersFor } from '../../../../shared/show-target-numbers';
 
 import { useOptionalCampaign } from '@/contexts/CampaignContext';
 import { userDataApi } from '@/services/user-data-api';
@@ -42,9 +42,6 @@ export function useShowTargetNumbers(): {
   const campaignState = useOptionalCampaign();
   const campaign = campaignState?.state.campaign;
   const difficulty = campaign?.difficulty_level;
-  const rulesFlag = campaign?.rules_config?.show_target_numbers;
-  const fromRules = typeof rulesFlag === 'boolean' ? rulesFlag : null;
-
   const setShowTargetNumbers = useCallback(
     (show: boolean) => {
       try {
@@ -64,7 +61,7 @@ export function useShowTargetNumbers(): {
   );
 
   return {
-    showTargetNumbers: choice ?? fromRules ?? showTargetNumbersByDefault(difficulty),
+    showTargetNumbers: choice ?? showTargetNumbersFor(campaign?.rules_config, difficulty),
     setShowTargetNumbers,
   };
 }

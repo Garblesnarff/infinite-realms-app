@@ -6,6 +6,13 @@ export interface CombatEntryConfirmationSpec {
   combatantLabels: string[];
   /** Declared target labels take precedence over the full seated roster in the card copy. */
   declaredTargets?: string[];
+  /**
+   * Server-side kind for the card title (#567): display name -> monster id,
+   * threaded from `pendingEntry.combatants[].monsterId` and
+   * `declaredAttack.monsterId`. An `srd:` id marks a creature kind.
+   * Absent on older specs, which fall back to the name-only rule.
+   */
+  combatantMonsterIds?: Record<string, string>;
   /** Roster members not named as a declared target, shown on the second line. */
   otherCombatants?: string[];
   initiativeRoll: number | null;

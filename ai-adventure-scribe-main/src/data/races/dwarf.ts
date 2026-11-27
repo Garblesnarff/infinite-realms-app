@@ -49,7 +49,12 @@ export const dwarf: CharacterRace = {
         'A subrace from the Deep Caverns with innate magical abilities, including invisibility.',
       backgroundImage: '/images/races/subraces/duergar-dwarf-sub-race-card-background.png',
       abilityScoreIncrease: { strength: 1, constitution: 1 },
-      traits: ['Duergar Magic', 'Duergar Resilience', 'Sunlight Sensitivity'],
+      traits: [
+        'Superior Darkvision',
+        'Duergar Magic',
+        'Duergar Resilience',
+        'Sunlight Sensitivity',
+      ],
     },
   ],
 };

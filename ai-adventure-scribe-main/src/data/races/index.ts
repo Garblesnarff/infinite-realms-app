@@ -53,3 +53,41 @@ export const races = baseRaces;
 export const premadeOnlyRaces: CharacterRace[] = [satyr];
 
 export const lookupRaces: CharacterRace[] = [...baseRaces, ...premadeOnlyRaces];
+
+const normalizeRaceKey = (value: unknown): string =>
+  (typeof value === 'string' ? value : '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+
+/**
+ * Returns the darkvision range in feet for a race (and optional subrace): a number
+ * for a known race with darkvision, null for a known race without it, and
+ * undefined when the race is missing or unknown so callers make no claim.
+ */
+export function darkvisionRangeFor(
+  raceName: unknown,
+  subraceName?: unknown,
+): number | null | undefined {
+  const raceKey = normalizeRaceKey(raceName);
+  if (!raceKey) return undefined;
+  const race = lookupRaces.find(
+    (r) => normalizeRaceKey(r.name) === raceKey || normalizeRaceKey(r.id) === raceKey,
+  );
+  if (!race) return undefined;
+  const subraceKey = normalizeRaceKey(subraceName);
+  const subrace =
+    subraceKey && race.subraces
+      ? race.subraces.find(
+          (s) => normalizeRaceKey(s.name) === subraceKey || normalizeRaceKey(s.id) === subraceKey,
+        )
+      : undefined;
+  const traits = [...(race.traits ?? []), ...(subrace?.traits ?? [])];
+  if (traits.includes('Superior Darkvision')) return 120;
+  if (traits.includes('Darkvision')) return 60;
+  // A trait that mentions darkvision but is not an unambiguous grant (e.g.
+  // Custom Lineage's "Darkvision or Skill Proficiency", a player choice) makes
+  // no claim: the DM must not assert either way.
+  if (traits.some((t) => /darkvision/i.test(t))) return undefined;
+  return null;
+}

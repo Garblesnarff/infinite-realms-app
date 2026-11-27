@@ -47,9 +47,9 @@ import type { EngineResultCard } from '../../../../../shared/engine-result-card'
  *    cannot load AIService).
  *
  * NOT covered (listed, not changed):
- *  - DM-facing narration repair (`repairNarration`, narration-outcome.ts): its text is as on main,
- *    so the repaired sentence shows "vs DC N" / "vs AC N" even when the setting is off. The
- *    repaired sentence is saved and can re-enter DM history. The rows below pin the text as on main.
+ *  - DM-facing narration repair (`repairNarration`, narration-outcome.ts): honors the setting —
+ *    "vs DC N" / "vs AC N" only when target numbers are on; dropped (never "(hidden)" or "?")
+ *    when off. Rows below pin both.
  *  - DM-bound text, unchanged by the stop rule: the server `engineLine`
  *    (combat-resolution-step.ts:1519 sends it as `authoritativeCheckResult.engineLine`), the
  *    non-parley `dmFact`, `dmEngineLine` for non-parley checks, and the NPC continuation prompt.
@@ -305,15 +305,25 @@ describe('target numbers: ability check, DM input (server text, unchanged from m
   });
 });
 
-describe('target numbers: DM-facing narration repair (text as on main, listed, not changed)', () => {
+describe('target numbers: DM-facing narration repair', () => {
   const saveOutcome = { success: false, total: 7, dc: 14, description: 'Dexterity save' };
   const attackOutcome = { success: true, total: 18, ac: 15, description: 'longsword attack' };
 
-  it('repair sentence shows the DC even when the setting is off (listed gap)', () => {
-    expect(repairNarration(saveOutcome)).toBe('The Dexterity save failed (7 vs DC 14).');
+  it('repair sentence shows the DC when the setting is on', () => {
+    expect(repairNarration(saveOutcome, true)).toBe('The Dexterity save failed (7 vs DC 14).');
   });
 
-  it('repair sentence shows the AC (listed gap)', () => {
-    expect(repairNarration(attackOutcome)).toBe('The longsword attack succeeded (18 vs AC 15).');
+  it('repair sentence shows the AC when the setting is on', () => {
+    expect(repairNarration(attackOutcome, true)).toBe(
+      'The longsword attack succeeded (18 vs AC 15).',
+    );
+  });
+
+  it('repair sentence drops the DC when the setting is off', () => {
+    expect(repairNarration(saveOutcome, false)).toBe('The Dexterity save failed (7).');
+  });
+
+  it('repair sentence drops the AC when the setting is off', () => {
+    expect(repairNarration(attackOutcome, false)).toBe('The longsword attack succeeded (18).');
   });
 });
