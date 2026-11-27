@@ -20,6 +20,8 @@ export interface QuotaEntry {
   used: number;
   limit: number;
   remaining: number;
+  /** This quota's own reset time (voice resets monthly, the rest daily). */
+  resetAt?: string;
 }
 
 export interface QuotaStatus {
@@ -99,7 +101,7 @@ export function useAccountBilling(
 
         if (quotaRes.ok) {
           const data = await quotaRes.json();
-          // The quota endpoint returns { plan, limits: { daily: {...} }, usage,
+          // The quota endpoint returns { plan, limits: { daily: {...}, monthly: { voice } }, usage,
           // remaining, resetAt, quotas: { llm, image, voice } }; map it onto
           // the client QuotaStatus shape so the usage card shows numbers
           // instead of "/" (#2343 C6). All numbers come from the server
@@ -107,7 +109,9 @@ export function useAccountBilling(
           // limits fallback only covers an older server during deploy skew.
           const daily = data.limits?.daily ?? {};
           const entry = (
-            serverEntry: { limit?: number; usage?: number; remaining?: number } | undefined,
+            serverEntry:
+              | { limit?: number; usage?: number; remaining?: number; resetAt?: string }
+              | undefined,
             limitFallback: number,
           ): QuotaEntry => ({
             used: serverEntry?.usage ?? 0,
@@ -115,6 +119,7 @@ export function useAccountBilling(
             remaining:
               serverEntry?.remaining ??
               Math.max(0, (serverEntry?.limit ?? limitFallback) - (serverEntry?.usage ?? 0)),
+            ...(serverEntry?.resetAt ? { resetAt: serverEntry.resetAt } : {}),
           });
           const llmEntry = entry(data.quotas?.llm, daily.llm ?? -1);
           setQuota({
@@ -127,9 +132,9 @@ export function useAccountBilling(
             quotas: {
               llm: llmEntry,
               image: entry(data.quotas?.image, daily.image ?? -1),
-              // limits.daily.voice is in quota units, not characters, so it
-              // cannot stand in for the character limit an older server
-              // does not report; -1 renders as unknown instead.
+              // Voice is a monthly bucket in characters (#58); the server no
+              // longer reports a daily voice limit, so the -1 fallback covers
+              // an older server that reports no voice entry at all.
               voice: entry(data.quotas?.voice, -1),
             },
           });

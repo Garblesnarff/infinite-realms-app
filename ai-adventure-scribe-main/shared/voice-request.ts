@@ -12,6 +12,19 @@
 export const VOICE_REQUEST_TEXT_MAX = 5000;
 
 /**
+ * Characters of premium-voice audio in one premium minute (#58).
+ * 54,000 characters = 60 premium minutes a month, so one minute is 900
+ * characters. Both sides import this module, so the server's monthly cap and
+ * the account page's "minutes left" cannot drift apart.
+ */
+export const VOICE_CHARS_PER_MINUTE = 900;
+
+/** Whole premium minutes in a character count (floored, never negative). */
+export function voiceCharsToMinutes(characters: number): number {
+  return Math.floor(Math.max(0, characters) / VOICE_CHARS_PER_MINUTE);
+}
+
+/**
  * Split text into pieces of at most `max` characters. Pieces break at sentence
  * ends where they can. The pieces, joined with '', give back the input exactly.
  */

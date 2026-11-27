@@ -81,7 +81,7 @@ export const launchPageContent = {
 
   // Pricing Section
   // Limits mirror AIUsageService.DEFAULT_QUOTAS (server-bun/src/services/ai-usage-service.ts):
-  // free.daily { llm, image, voice }, pro.daily { llm, image, voice }. Update both together.
+  // free.daily { llm, image } + free.monthly { voice }, pro.daily { llm, image } + pro.monthly { voice }. Update both together.
   pricing: {
     headline: 'Play free. Upgrade when you want more.',
     subtitle: 'No credit card to start. Cancel Legend any time.',
@@ -108,14 +108,14 @@ export const launchPageContent = {
         features: [
           'Up to 40 DM messages a day',
           'Up to 2 AI images a day',
-          'Premium ElevenLabs narration — 2,000 characters a day',
+          'Premium ElevenLabs narration — 60 minutes a month',
           'Everything in Free',
           'Cancel any time',
         ],
         highlighted: true,
       },
     ] as PricingPlan[],
-    note: 'Daily limits reset at 00:00 UTC.',
+    note: 'Daily limits reset at 00:00 UTC; premium voice resets monthly.',
   },
 
   // Help Shape Offer

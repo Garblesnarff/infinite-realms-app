@@ -145,7 +145,10 @@ mock.module('../../../services/ai-usage-service.js', () => ({
     assertUsageStoreAvailable: async () => {},
     getQuotaStatus: async (opts: Record<string, unknown>) => ({
       plan: 'free',
-      limits: { daily: { llm: 15, llm_system: 500, image: 1, voice: 0 } },
+      limits: {
+        daily: { llm: 15, llm_system: 500, image: 1 },
+        monthly: { voice: 0 },
+      },
       usage: 0,
       remaining: opts.type === 'llm_system' ? quotaRemaining : 10,
       resetAt: '2026-10-20T00:00:00.000Z',

@@ -126,7 +126,10 @@ const usageService: UsageService = {
   },
   getQuotaStatus: async () => ({
     plan: 'free',
-    limits: { daily: { llm: 15, llm_system: 500, image: 1, voice: 0 } },
+    limits: {
+      daily: { llm: 15, llm_system: 500, image: 1 },
+      monthly: { voice: 0 },
+    },
     usage: 0,
     remaining: quotaRemaining,
     resetAt: '2026-10-20T00:00:00.000Z',
