@@ -488,4 +488,186 @@ describe('fetchWithAuth', () => {
       vi.useRealTimers();
     }
   });
+
+  it('sends a keyless POST once on a network error — no blind retry of a DM turn (#1787)', async () => {
+    vi.useFakeTimers();
+    try {
+      // /v1/llm/generate has no server-side dedup: a retried turn would
+      // pay for the generation twice. The first network error surfaces
+      // and the composer shows its Retry control; the player decides.
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+      const request = fetchWithAuth('/v1/llm/generate', { method: 'POST' });
+      await expect(request).rejects.toThrow('Failed to fetch');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not let an explicit retryBudgetMs retry a keyless POST (#1787)', async () => {
+    vi.useFakeTimers();
+    try {
+      // The gate overrides the budget: image generation has no server-side
+      // dedup either, so a 5 s budget must not buy a second charged call.
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+      const request = fetchWithAuth('/v1/images/generate', {
+        method: 'POST',
+        retryBudgetMs: 5_000,
+      });
+      await expect(request).rejects.toThrow('Failed to fetch');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries a keyed POST with the same idempotency key (#1787)', async () => {
+    vi.useFakeTimers();
+    try {
+      // The combat intent mints one x-request-id per submission (#51) and
+      // the server replays the stored 2xx for a resent id — so the retry
+      // is safe, and it must carry the SAME key or the server cannot dedup.
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(response(200, { accepted: true }));
+
+      const request = fetchWithAuth('/v1/combat/enc-1/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-request-id': 'key-1' },
+        body: JSON.stringify({ intent: { type: 'attack', actorId: 'pc-1' } }),
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(request).resolves.toMatchObject({ status: 200 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ 'x-request-id': 'key-1' });
+      expect(fetchMock.mock.calls[1][1].headers).toMatchObject({ 'x-request-id': 'key-1' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries the turn POST without a key — the server replays it (#1787, #1786)', async () => {
+    vi.useFakeTimers();
+    try {
+      // The turn POST is the one keyless exception: #1786 replays a
+      // retried save from the stored rows + cached DM response, keyed by
+      // the stored message/reply id. This pins that exception so a future
+      // tightening of the gate does not silently stop turn retries.
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(response(200, { ok: true }));
+
+      const request = fetchWithAuth('/v1/sessions/session-1/messages', { method: 'POST' });
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(request).resolves.toMatchObject({ status: 200 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries a keyed POST when the key arrives as a Headers instance (#1787)', async () => {
+    vi.useFakeTimers();
+    try {
+      // The gate normalizes headers before checking them: a Headers
+      // instance would spread to {} on the wire, so without normalization
+      // the gate would authorize a retry whose key never reaches the
+      // server. Both attempts must carry the same key on the wire.
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(response(200, { accepted: true }));
+
+      const request = fetchWithAuth('/v1/combat/enc-1/intent', {
+        method: 'POST',
+        headers: new Headers({ 'Content-Type': 'application/json', 'x-request-id': 'key-2' }),
+        body: JSON.stringify({ intent: { type: 'attack', actorId: 'pc-1' } }),
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(request).resolves.toMatchObject({ status: 200 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0][1].headers).toMatchObject({ 'x-request-id': 'key-2' });
+      expect(fetchMock.mock.calls[1][1].headers).toMatchObject({ 'x-request-id': 'key-2' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries the turn POST with a query string (#1787)', async () => {
+    vi.useFakeTimers();
+    try {
+      // The turn-route match strips the query first, so a query string
+      // does not drop the route out of the server-deduped exception.
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(response(200, { ok: true }));
+
+      const request = fetchWithAuth('/v1/sessions/session-1/messages?foo=bar', {
+        method: 'POST',
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(request).resolves.toMatchObject({ status: 200 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not retry a POST nested under the turn route (#1787)', async () => {
+    vi.useFakeTimers();
+    try {
+      // Only the exact turn POST is server-deduped. A deeper path under
+      // /messages is a different route with no replay, so it fails fast.
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+      const request = fetchWithAuth('/v1/sessions/session-1/messages/msg-1', { method: 'POST' });
+      await expect(request).rejects.toThrow('Failed to fetch');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not treat an empty idempotency key as a key (#1787)', async () => {
+    vi.useFakeTimers();
+    try {
+      // Presence alone is not enough: an empty value cannot dedup
+      // server-side, so it must not authorize a retry.
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+      const request = fetchWithAuth('/v1/combat/enc-1/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-request-id': '' },
+        body: JSON.stringify({ intent: { type: 'attack', actorId: 'pc-1' } }),
+      });
+      await expect(request).rejects.toThrow('Failed to fetch');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not treat a whitespace-only idempotency key as a key (#1787)', async () => {
+    vi.useFakeTimers();
+    try {
+      // Same as an empty key: the server trims the header and treats a
+      // whitespace-only value as no key, so it must not authorize a retry.
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+      const request = fetchWithAuth('/v1/combat/enc-1/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-request-id': '   ' },
+        body: JSON.stringify({ intent: { type: 'attack', actorId: 'pc-1' } }),
+      });
+      await expect(request).rejects.toThrow('Failed to fetch');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

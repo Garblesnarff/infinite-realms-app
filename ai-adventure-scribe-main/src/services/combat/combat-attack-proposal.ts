@@ -39,9 +39,13 @@ export async function proposeAuthoritativeAttack(
   encounterId: string,
   intent: Extract<ClientCombatIntent, { type: 'attack' }>,
 ): Promise<CombatAttackProposal> {
+  // #1787: mint an idempotency key so a transient network blip retries the
+  // proposal instead of erroring the popup. The key is inert server-side —
+  // proposals return before the route's dedup lookup (intents.ts) — but the
+  // retry is safe anyway: a proposal claims nothing and resolves nothing.
   const response = await fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-request-id': crypto.randomUUID() },
     body: JSON.stringify({ intent, source: 'dm', phase: 'propose' }),
   });
   logServerRequestId('/v1/combat', response);
@@ -82,9 +86,13 @@ export async function proposeAuthoritativeSpell(
   encounterId: string,
   intent: Extract<ClientCombatIntent, { type: 'spell' }>,
 ): Promise<CombatSpellProposal> {
+  // #1787: mint an idempotency key so a transient network blip retries the
+  // proposal instead of erroring the popup. The key is inert server-side —
+  // proposals return before the route's dedup lookup (intents.ts) — but the
+  // retry is safe anyway: a proposal claims nothing and resolves nothing.
   const response = await fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-request-id': crypto.randomUUID() },
     body: JSON.stringify({ intent, source: 'dm', phase: 'propose' }),
   });
   logServerRequestId('/v1/combat', response);
