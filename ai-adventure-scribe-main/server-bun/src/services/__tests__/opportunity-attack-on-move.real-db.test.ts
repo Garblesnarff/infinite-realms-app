@@ -311,5 +311,12 @@ describeWithDb(
         expect(await foeRow()).toMatchObject({ actionUsed: false, reactionUsed: true });
       },
     );
+    test('a ranged-only foe uses an unarmed strike when the hero leaves melee reach', async () => {
+      await setFoeAttacks([LIGHT_CROSSBOW]);
+      spyOn(Math, 'random').mockReturnValue(0.5);
+      await move(1, 4);
+      expect(await attackLines()).toEqual([expect.stringContaining('with its Unarmed Strike')]);
+      expect(await foeRow()).toMatchObject({ actionUsed: false, reactionUsed: true });
+    });
   },
 );
