@@ -39,6 +39,13 @@ const {
 const { refillCountedFeatures } = await importWithRealDb(
   () => import('../progression/limited-feature-uses.js'),
 );
+const { executeCombatIntent } = await importWithRealDb(
+  () => import('../combat/combat-intent-service.js'),
+);
+const { startConcentration, getConcentration } = await importWithRealDb(
+  () => import('../combat/concentration-service.js'),
+);
+
 const { resolveRage, rageIsOffered } = await importWithRealDb(
   () => import('../combat/barbarian-rage-service.js'),
 );
@@ -311,5 +318,30 @@ describeWithDb('Rage in a fight (#1638)', () => {
     // Level 3 Barbarian: three Rage uses (PHB table, rageUsesAt).
     await refillCountedFeatures(characterId, userId, 'long');
     expect(await ragesLeft()).toBe(3);
+  });
+  it('entering Rage ends the existing spell concentration and leaves the Action free', async () => {
+    await startConcentration(characterId, { name: 'Bless', id: 'bless' });
+    const [encounter] = await db
+      .select()
+      .from(combatEncounters)
+      .where(eq(combatEncounters.id, encounterId));
+    const result = await executeCombatIntent(
+      encounterId,
+      {
+        type: 'rage',
+        actorId: barbarianId,
+        expectedVersion: encounter.version,
+      },
+      userId,
+      'player',
+    );
+    expect(result).toMatchObject({ droppedConcentration: 'Bless' });
+    expect(await getConcentration(characterId)).toBeNull();
+    const [actor] = await db
+      .select()
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, barbarianId));
+    expect(actor.actionUsed).toBe(false);
+    expect(actor.bonusActionUsed).toBe(true);
   });
 });

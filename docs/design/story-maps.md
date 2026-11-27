@@ -269,11 +269,13 @@ the turn (`ops/smoke.sh:358-360`).
 button named "Open map, you are at <place>". In combat it keeps opening the
 fight board.
 
-**Desktop (≥700 px).** The map opens in the left rail, where the fight board
-sits today. The SVG takes the top; the **place list** sits under it in the
+**Desktop (≥1024 px).** The map opens in the left rail, where the fight board
+sits today. The rail exists only from 1024 px (`RAILS_SIDE_BY_SIDE` in
+`use-game-rails.ts`, the same query GameLayout uses for the fight board), so
+that is the breakpoint. The SVG takes the top; the **place list** sits under it in the
 same panel.
 
-**Phone (≤699 px).** The map opens in the same sheet the fight board uses
+**Phone (≤1023 px).** The map opens in the same sheet the fight board uses
 (`GameMainContent.tsx:342-351`): it covers the story column from its top down
 to the dock and never covers the roll tray or the composer, so the player can
 read the map and type at the same time. Two tabs at the top of the sheet:
@@ -356,7 +358,7 @@ before 1 merges, against a fixture graph JSON; it wires to the real route when
 ### Issue 3 — maps: region map and place list in the Table look (#1742)
 
 - **Done means:** On a starter campaign, the plaque opens the map (left rail
-  ≥700 px; dock-bounded sheet with Map/Places tabs ≤699 px). SVG shows zones,
+  ≥1024 px; dock-bounded sheet with Map/Places tabs ≤1023 px). SVG shows zones,
   places in three states and known routes; the place list shows the same
   content in text. Travel here fills the composer and focuses it; nothing is
   sent. Full keyboard path and Escape behavior per §9; 44 px targets;
