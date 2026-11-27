@@ -230,6 +230,9 @@ build_replay_list() {
         # Creates story_map_progress/story_map_revealed_edges, which reference campaigns and
         # game_sessions (#1753); pinned right after 0038 so every table it references exists.
         0039_story_map_progress.sql) echo "20261125_000001	$f"; continue;;
+        # Removes the two retired duplicate spell rows + their class_spells links (#1803);
+        # pinned after the seed so the 20261021 seed has inserted the rows it deletes.
+        0042_remove_duplicate_spell_rows.sql) echo "20261127_000001	$f"; continue;;
         # Deliberate no-op snapshot re-baseline; safe anywhere, pinned last.
         0004_schema_baseline.sql) echo "99999999_999999	$f"; continue;;
       esac

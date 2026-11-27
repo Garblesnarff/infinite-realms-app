@@ -30,6 +30,29 @@ import { NotFoundError } from '../../lib/errors.js';
 
 import type { Character } from '../../../../db/schema/index';
 
+// #1803: the two retired duplicate spell rows (Tasha's Hideous Laughter and
+// Tenser's Floating Disk, #254) map to their canonical ids. A save that names a
+// retired id must keep the spell under the canonical id instead of storing the
+// retired id — and, once migration 0042 removes the retired rows, instead of
+// failing on the character_spells -> spells foreign key. The canonical ids carry
+// the same class links as the retired ones (Hideous Laughter: Bard + Wizard, a
+// superset of Tasha's Bard; Floating Disk: Wizard, the same as Tenser's Wizard),
+// so class validation is unchanged by the mapping. Mirrors the alias map in
+// shared/spell-aliases.ts (#1784); this copy is self-contained because that file
+// is new in #1784 and this service cannot import it yet.
+const RETIRED_SPELL_ID_TO_CANONICAL: Record<string, string> = {
+  '2f531b61-5626-5b7b-a9f9-bf935e580864': '49679c17-4b59-5e1b-b9a2-8ed2f53f209e', // Tasha's Hideous Laughter -> Hideous Laughter
+  'ce62cea7-640b-5439-a175-10289409f59b': '14bccb17-1728-5095-ab6a-35b28812c6b7', // Tenser's Floating Disk -> Floating Disk
+};
+
+/**
+ * Map any raw retired spell id to its canonical id; every other id passes
+ * through unchanged. (#1803, #254.)
+ */
+export function mapRetiredSpellIdsToCanonical(spellIds: readonly string[]): string[] {
+  return spellIds.map((id) => RETIRED_SPELL_ID_TO_CANONICAL[id] ?? id);
+}
+
 export class CharacterSpellService {
   /**
    * Update character spells (comma-separated text fields)
@@ -136,6 +159,12 @@ export class CharacterSpellService {
     className: string,
     preparedSpellIds?: string[],
   ): Promise<{ success: boolean; message: string }> {
+    // #1803: canonicalize retired ids before validation, so the save stores the
+    // canonical spell. Applied to both arrays: `spells` and `prepared`.
+    const canonicalSpellIds = mapRetiredSpellIdsToCanonical(spellIds);
+    const canonicalPreparedSpellIds =
+      preparedSpellIds === undefined ? undefined : mapRetiredSpellIdsToCanonical(preparedSpellIds);
+
     // Get class ID
     const [classData] = await db
       .select({ id: classes.id })
@@ -157,7 +186,7 @@ export class CharacterSpellService {
     }
 
     const racialSpellIds = new Set<string>();
-    if (spellIds.includes(THAUMATURGY_SPELL_ID)) {
+    if (canonicalSpellIds.includes(THAUMATURGY_SPELL_ID)) {
       const [catalogSpell] = await db
         .select({ id: spells.id })
         .from(spells)
@@ -201,7 +230,7 @@ export class CharacterSpellService {
     }
 
     // Validate spells in batch if any were provided
-    if (spellIds.length > 0) {
+    if (canonicalSpellIds.length > 0) {
       const validClassSpells = await db
         .select({
           spellId: classSpells.spellId,
@@ -209,10 +238,15 @@ export class CharacterSpellService {
         })
         .from(classSpells)
         .innerJoin(spells, eq(classSpells.spellId, spells.id))
-        .where(and(eq(classSpells.classId, classData.id), inArray(classSpells.spellId, spellIds)));
+        .where(
+          and(
+            eq(classSpells.classId, classData.id),
+            inArray(classSpells.spellId, canonicalSpellIds),
+          ),
+        );
 
       const validSpellIds = new Set(validClassSpells.map((s: { spellId: string }) => s.spellId));
-      const invalidSpellIds = spellIds.filter(
+      const invalidSpellIds = canonicalSpellIds.filter(
         (id) => !validSpellIds.has(id) && !racialSpellIds.has(id),
       );
 
@@ -282,7 +316,7 @@ export class CharacterSpellService {
       // since it shipped. Split into an explicit authorization query plus a plain
       // insert. The pattern is now banned outright by the insert-select rule in
       // eslint.config.js.
-      if (spellIds.length > 0) {
+      if (canonicalSpellIds.length > 0) {
         const editable = await tx
           .select({ one: sql`1` })
           .from(characters)
@@ -319,7 +353,10 @@ export class CharacterSpellService {
           .select({ spellId: classSpells.spellId })
           .from(classSpells)
           .where(
-            and(eq(classSpells.classId, classData.id), inArray(classSpells.spellId, spellIds)),
+            and(
+              eq(classSpells.classId, classData.id),
+              inArray(classSpells.spellId, canonicalSpellIds),
+            ),
           );
 
         for (const spellId of racialSpellIds)
@@ -336,7 +373,8 @@ export class CharacterSpellService {
           // #2710: when the caller sends an explicit prepared set, write
           // isPrepared per spell. When omitted, keep the old behaviour
           // (all true) so existing callers don't break.
-          const preparedSet = preparedSpellIds !== undefined ? new Set(preparedSpellIds) : null;
+          const preparedSet =
+            canonicalPreparedSpellIds !== undefined ? new Set(canonicalPreparedSpellIds) : null;
           const inserted = await tx
             .insert(characterSpells)
             .values(
@@ -363,7 +401,7 @@ export class CharacterSpellService {
 
       // ⚡ Bolt: Verify character existence/ownership only if no rows were affected by DELETE or INSERT.
       // This maintains the NotFoundError contract while skipping the extra query in most cases.
-      if (deleted.length === 0 && (spellIds.length === 0 || insertedCount === 0)) {
+      if (deleted.length === 0 && (canonicalSpellIds.length === 0 || insertedCount === 0)) {
         const characterExists = await tx.query.characters.findFirst({
           where: and(
             eq(characters.id, characterId),
