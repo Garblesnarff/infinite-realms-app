@@ -274,6 +274,21 @@ describeWithDb('Rage on a spell (#1654)', () => {
     }
   });
 
+  it('blocks casting and new concentration while raging in Chain Mail', async () => {
+    const [armor] = await db.insert(inventoryItems).values({
+      characterId: casterCharacterId, name: 'Chain Mail', itemType: 'armor', isEquipped: true,
+    }).returning({ id: inventoryItems.id });
+    try {
+      expect(await claimRage(encounterId, casterId)).not.toBeNull();
+      await expect(castAtTarget('burning-hands', 'Burning Hands', 1)).rejects.toThrow(
+        'You cannot cast spells or concentrate while raging.',
+      );
+      expect(await maybeStartConcentrationFromSpellCast('[spell_id=dancing-lights]', sessionId)).toBe(false);
+    } finally {
+      await db.delete(inventoryItems).where(eq(inventoryItems.id, armor.id));
+    }
+  });
+
   it.each([
     ['burning-hands', 'Burning Hands', 1],
     ['dancing-lights', 'Dancing Lights', 0],

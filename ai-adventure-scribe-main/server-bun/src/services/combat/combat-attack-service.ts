@@ -30,6 +30,7 @@ import {
   rogueLevelOf,
   classLevelOfCharacter,
   isRaging,
+  hasActiveRage,
   markRageActive,
   isReckless,
   isRecklessOnCurrentTurn,
@@ -1391,7 +1392,7 @@ export class CombatAttackService {
       throw new NotFoundError('Caster participant', casterId);
     }
     const casterData = allParticipantDataMap.get(casterId)!;
-    if (casterData.participant.characterId && (await isRaging(encounterId, casterId))) {
+    if (casterData.participant.characterId && (await hasActiveRage(encounterId, casterId))) {
       throw new BusinessLogicError('You cannot cast spells or concentrate while raging.', {
         reason: 'caster_raging',
       });
