@@ -536,7 +536,9 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
         actions={actions}
         enabled={isPlayerTurn && !turnInFlight && !isRefreshing && !running}
         hasSpells={hasSpells}
-        raging={encounter.participants.some((participant) => participant.participantType === 'player' && participant.raging)}
+        raging={encounter.participants.some(
+          (participant) => participant.participantType === 'player' && participant.raging,
+        )}
         nameOf={nameOf}
         attackSub={attackSub}
         moveSub={moveSub}

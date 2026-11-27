@@ -801,7 +801,8 @@ export class SessionService {
         .where(and(eq(gameSessions.id, sessionId), getOwnershipCondition(userId)));
       if (!row) throw new NotFoundError('Session', sessionId);
       const { campaignId, characterId } = row.session;
-      if (!campaignId || !characterId) return { ok: false as const, reason: 'not_resumable' as const };
+      if (!campaignId || !characterId)
+        return { ok: false as const, reason: 'not_resumable' as const };
       if (row.session.status !== 'completed') {
         return { ok: false as const, reason: 'not_completed' as const };
       }
