@@ -61,6 +61,17 @@ export interface CampaignChunk {
   sequenceOrder?: number;
 }
 
+/** One route as written: `- A -> B (label)`, `- A <-> B (label)`, `(hidden: label)`. */
+export interface StoryMapRoute {
+  from: string;
+  to: string;
+  twoWay: boolean;
+  hidden: boolean;
+  label: string | null;
+  /** Where the route was written, for error messages: a bible line or a routes.json entry. */
+  source: string;
+}
+
 export interface CampaignRule {
   campaignId: string;
   ruleType: RuleType;

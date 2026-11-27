@@ -51,7 +51,9 @@ export async function maybeStartConcentrationFromSpellCast(
 
   // Lazy DB imports: only load db/client when we actually need it.
   const { db } = await import('../../../../db/client');
-  const { characters, gameSessions } = await import('../../../../db/schema/index');
+  const { characters, combatEncounters, combatParticipants, gameSessions } =
+    await import('../../../../db/schema/index');
+  const { and } = await import('drizzle-orm');
   const { getConcentration } = await import('./concentration-service.js');
   const { castableSpells, spellKey } = await import('../dm/castable-spells.js');
 
@@ -63,6 +65,23 @@ export async function maybeStartConcentrationFromSpellCast(
     .limit(1);
   const characterId = session?.characterId;
   if (!characterId) return false;
+
+  const [combatant] = await db
+    .select({ encounterId: combatEncounters.id, participantId: combatParticipants.id })
+    .from(combatEncounters)
+    .innerJoin(combatParticipants, eq(combatParticipants.encounterId, combatEncounters.id))
+    .where(
+      and(
+        eq(combatEncounters.sessionId, sessionId),
+        eq(combatEncounters.status, 'active'),
+        eq(combatParticipants.characterId, characterId),
+      ),
+    )
+    .limit(1);
+  if (combatant) {
+    const { isRaging } = await import('./combat-turn-flags.js');
+    if (await isRaging(combatant.encounterId, combatant.participantId)) return false;
+  }
 
   // The character must actually be able to cast the tagged spell. The #2718
   // gate reads cast claims by name from the player's words, and its phrase
