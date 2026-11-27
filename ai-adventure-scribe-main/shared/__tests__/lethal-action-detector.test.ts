@@ -8,6 +8,7 @@ describe('isClearlyLethalAction (#468)', () => {
     expect(isClearlyLethalAction('I drink poison to kill myself')).toBe(true);
     expect(isClearlyLethalAction('I step into lava')).toBe(true);
     expect(isClearlyLethalAction('I jump off the cliff to my death')).toBe(true);
+    expect(isClearlyLethalAction('I dive into the lava')).toBe(true);
   });
 
   it('stays quiet on ordinary play', () => {
@@ -16,6 +17,13 @@ describe('isClearlyLethalAction (#468)', () => {
     expect(isClearlyLethalAction('I jump the gap')).toBe(false);
     expect(isClearlyLethalAction('I attack the goblin')).toBe(false);
     expect(isClearlyLethalAction('')).toBe(false);
+  });
+
+  it('stays quiet on the rescue and search lines that only sound lethal', () => {
+    expect(isClearlyLethalAction('I jump off the cliff to rescue the child')).toBe(false);
+    expect(isClearlyLethalAction('I leap off the cliff onto the ledge')).toBe(false);
+    expect(isClearlyLethalAction('I walk into the lava cave to look for the gem')).toBe(false);
+    expect(isClearlyLethalAction('I drink the poison antidote')).toBe(false);
   });
 
   it('skips when a fight is live', () => {

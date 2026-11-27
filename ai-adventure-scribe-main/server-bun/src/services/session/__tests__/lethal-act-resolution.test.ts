@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { defaultLethalActProposal, resolveLethalAct } from '../lethal-act-resolution.js';
+import {
+  defaultLethalActProposal,
+  resolveLethalAct,
+  successDamage,
+} from '../lethal-act-resolution.js';
 
 import type { CharacterVitals } from '../../character-vitals-math.js';
 
@@ -38,7 +42,7 @@ describe('resolveLethalAct (#468)', () => {
   const proposal = defaultLethalActProposal('I step off the edge to my death');
   // Ability score 10 → modifier 0, so the natural die is the total.
 
-  test('a seeded success leaves the character unharmed', () => {
+  test('a seeded success deals half current HP (at least 1) and the hero stays up', () => {
     const result = resolveLethalAct({
       proposal,
       abilityScore: 10,
@@ -48,14 +52,15 @@ describe('resolveLethalAct (#468)', () => {
     expect(result.success).toBe(true);
     expect(result.total).toBe(15);
     expect(result.dc).toBe(15);
-    expect(result.damage).toBe(0);
-    expect(result.vitals.currentHitPoints).toBe(20);
+    expect(result.damage).toBe(10);
+    expect(result.vitals.currentHitPoints).toBe(10);
     expect(result.vitals.vitalState).toBe('standing');
+    expect(result.vitals.isConscious).toBe(true);
     expect(result.engineCard.line).toContain('15 vs DC 15, SUCCESS');
     expect(result.engineCard.badge?.word).toBe('SUCCESS');
   });
 
-  test('a seeded failure is the engine that kills, via 2014 massive damage', () => {
+  test('a seeded failure drops the hero to 0 HP and dying, never dead in one roll', () => {
     const result = resolveLethalAct({
       proposal,
       abilityScore: 10,
@@ -64,10 +69,10 @@ describe('resolveLethalAct (#468)', () => {
     });
     expect(result.success).toBe(false);
     expect(result.total).toBe(14);
-    // current 20 + max 20: drop to 0 with leftover 20, which equals the maximum.
-    expect(result.damage).toBe(40);
+    expect(result.damage).toBe(20);
     expect(result.vitals.currentHitPoints).toBe(0);
-    expect(result.vitals.vitalState).toBe('dead');
+    expect(result.vitals.vitalState).toBe('dying');
+    expect(result.vitals.isConscious).toBe(false);
     expect(result.engineCard.line).toContain('14 vs DC 15, FAIL');
     expect(result.engineCard.badge?.word).toBe('FAIL');
   });
@@ -83,5 +88,22 @@ describe('resolveLethalAct (#468)', () => {
     expect(result.modifier).toBe(3);
     expect(result.total).toBe(15);
     expect(result.success).toBe(true);
+    expect(result.damage).toBe(6);
+    expect(result.vitals.currentHitPoints).toBe(6);
+    expect(result.vitals.vitalState).toBe('standing');
+  });
+
+  test('success at 1 HP cannot deal 1 and still stay up, so damage is 0', () => {
+    expect(successDamage(1)).toBe(0);
+    const result = resolveLethalAct({
+      proposal,
+      abilityScore: 10,
+      vitals: standing(1),
+      natural: 15,
+    });
+    expect(result.success).toBe(true);
+    expect(result.damage).toBe(0);
+    expect(result.vitals.currentHitPoints).toBe(1);
+    expect(result.vitals.vitalState).toBe('standing');
   });
 });

@@ -1,14 +1,19 @@
 /**
  * Conservative detector for a clearly lethal free-text act the player types
  * outside a live fight (#468 item 2). False positives must stay rare: an
- * ordinary look, a careful climb, a jump across a gap, or an attack must not
- * raise the confirm card.
+ * ordinary look, a careful climb, a jump across a gap, a rescue, or an
+ * attack must not raise the confirm card.
  */
 
 const LETHAL_PATTERNS: ReadonlyArray<RegExp> = [
-  /\b(?:i|we)\s+(?:step|walk|jump|leap|throw myself|hurl myself|fling myself)\s+(?:off|into)\b[^.!?]{0,60}\b(?:death|die|dying|lava|magma|poison|chasm|cliff|abyss|volcano|void)\b/i,
-  /\b(?:i|we)\s+(?:step|walk|jump|leap)\s+into\s+(?:the\s+)?(?:lava|magma|volcano)\b/i,
-  /\b(?:i|we)\s+drink(?:ing)?\s+(?:a\s+|the\s+|some\s+)?poison\b/i,
+  // Off a drop or into something is only lethal when the line itself says so.
+  // "cliff" or "chasm" alone is not enough ("I jump off the cliff to rescue
+  // the child", "I leap off the cliff onto the ledge").
+  /\b(?:i|we)\s+(?:step|walk|jump|leap|throw myself|hurl myself|fling myself)\s+(?:off|into)\b[^.!?]{0,60}\b(?:to my death|death|die|dying)\b/i,
+  // Into the lava / magma / volcano itself, not a "lava cave".
+  /\b(?:i|we)\s+(?:step|walk|jump|leap|dive|throw myself|hurl myself|fling myself)\s+into\s+(?:the\s+)?(?:lava|magma|volcano)\b(?!\s+cave)/i,
+  // Drinking poison, not a "poison antidote".
+  /\b(?:i|we)\s+drink(?:ing)?\s+(?:a\s+|the\s+|some\s+)?poison\b(?!\s+antidote)/i,
   /\b(?:i|we)\s+(?:kill myself|commit suicide|end my (?:life|days)|end it all)\b/i,
   /\b(?:i|we)\s+(?:slit|cut)\s+(?:my|our|own)\s+throat\b/i,
   /\b(?:i|we)\s+hang myself\b/i,

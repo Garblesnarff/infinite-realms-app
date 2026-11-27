@@ -76,6 +76,14 @@ export const lethalActRoutes = new Elysia()
         return { error: 'Session has no character' };
       }
 
+      const current = await CharacterVitalsService.getVitals(characterId, userId);
+      if (current.currentHitPoints <= 0 || current.vitalState === 'dead') {
+        set.status = 409;
+        return {
+          error: current.vitalState === 'dead' ? 'Already dead' : 'Already at 0 HP',
+        };
+      }
+
       const proposal = await proposeLethalAct(text);
       const [stats] = await db
         .select()
@@ -86,7 +94,6 @@ export const lethalActRoutes = new Elysia()
       const abilityScore =
         typeof rawScore === 'number' && Number.isFinite(rawScore) ? rawScore : 10;
 
-      const current = await CharacterVitalsService.getVitals(characterId, userId);
       const natural = rollDie(20);
       const resolved = resolveLethalAct({
         proposal,
