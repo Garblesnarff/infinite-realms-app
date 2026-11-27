@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   planRacialBonusBackfill,
+  printSummary,
   type BackfillCharacterRow,
   type BackfillStatsRow,
 } from '../scripts/backfill-racial-ability-bonuses';
@@ -31,6 +32,28 @@ const character = (
   created_at: '2026-10-01T12:00:00Z',
   ...overrides,
 });
+
+/** The premade-copy fixture shared by the FIX round-1 tests below: a pre-cutoff
+ * Hill Dwarf whose game_sessions row carries a campaign_id but no
+ * starter_campaign_id, so it lands in no exclusion set. The scores are
+ * deliberately FINAL (CON 15 = base 13 + 2, WIS 11 = base 10 + 1), so the
+ * tests pin the upper-bound choice: a row already at final scores is still
+ * counted as needing repair, because the script cannot tell base from final. */
+const premadeCopyPlan = (): ReturnType<typeof planRacialBonusBackfill> =>
+  planRacialBonusBackfill({
+    characters: [
+      character({
+        id: 'premade-copy-dwarf',
+        race: 'Dwarf',
+        subrace: 'Hill Dwarf',
+        class: 'Fighter',
+        created_at: '2026-10-01T12:00:00Z',
+      }),
+    ],
+    stats: [stats('premade-copy-dwarf', { dexterity: 14, constitution: 15, wisdom: 11 })],
+    starterCharacterIds: new Set(),
+    excludedCampaignCharacterIds: new Set(),
+  });
 
 describe('backfill-racial-ability-bonuses-plan', () => {
   it('plans the candidate set: cutoff, starter-flow, seeded, and null-created_at', () => {
@@ -120,6 +143,39 @@ describe('backfill-racial-ability-bonuses-plan', () => {
     expect(summary.hpNotRecomputable).toBe(1); // leveled-dwarf is past level 1
     expect(summary.byRace.get('Dwarf / Hill Dwarf')).toBe(3);
     expect(verdicts).toHaveLength(5);
+  });
+
+  it('counts a premade copy with no starter_campaign_id link as a candidate', () => {
+    // A premade copy's game_sessions row carries a campaign_id but no
+    // starter_campaign_id, so main() does not put it in starterCharacterIds
+    // and the script cannot tell it from a wizard character. It is counted
+    // as a candidate (not excluded); excluding such copies by
+    // starter_template_id awaits #1744 (migration 0040, not yet landed).
+    // The fixture uses final scores (CON 15, WIS 11), so this also pins the
+    // upper-bound choice: an already-final row is still counted.
+    const { summary } = premadeCopyPlan();
+    expect(summary.scanned).toBe(1);
+    expect(summary.excludedStarterFlow).toBe(0);
+    expect(summary.candidates).toBe(1);
+    expect(summary.needingRepair).toBe(1);
+  });
+
+  it('reports needingRepair as an upper bound and names the premade-copy caveat', () => {
+    // FIX round 1, items 1–2: the method is UI-only and not persisted, so the
+    // script cannot tell a base score from a final score — the count is an
+    // upper bound. Premade copies without a starter link are counted.
+    const { summary } = premadeCopyPlan();
+    // NB: read mock.calls BEFORE mockRestore — restore clears the call log.
+    const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    printSummary(summary);
+    const output = spy.mock.calls.map((args) => String(args[0])).join('\n');
+    spy.mockRestore();
+    expect(output).toContain(
+      'Needing repair: 1 (upper bound — rows already at final scores are counted)',
+    );
+    expect(output).toContain(
+      'premade copies with no starter_campaign_id link are counted as candidates; exclusion by starter_template_id awaits #1744.',
+    );
   });
 
   it('excludes the exact cutoff instant, includes unparseable dates, starter wins ties', () => {

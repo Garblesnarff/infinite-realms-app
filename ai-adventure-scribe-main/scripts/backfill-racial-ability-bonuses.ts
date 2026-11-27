@@ -21,7 +21,11 @@
  *   - scanned: all characters rows read.
  *   - candidates: created before the #250 merge, excluding starter-flow rows
  *     (game_sessions with a starter_campaign_id) and any --exclude-campaign ids
- *     (for seeded campaigns).
+ *     (for seeded campaigns). Premade copies with no starter_campaign_id link
+ *     are counted as candidates: their session carries a campaign_id but no
+ *     starter link, so the script cannot tell them from wizard characters.
+ *     Excluding them by starter_template_id awaits #1744 (migration 0040,
+ *     not yet landed).
  *   - needingRepair: fixed race/subrace bonuses missing from stored scores.
  *     Reported per race/subrace with old -> new score deltas (capped at 20) and
  *     an unarmoured-base AC / level-1 HP preview: base AC = 10 + DEX modifier;
@@ -30,6 +34,12 @@
  *     shared/creation-armor-class.ts, shared/level-1-hit-points.ts) is
  *     equipment-aware and also adds Draconic Resilience, the Tough feat,
  *     Unarmoured Defence and a 1 HP floor.
+ *     This count is an UPPER BOUND: a row already at final scores is counted
+ *     here, because the script cannot tell a base score from a final score
+ *     from the stored row alone — the ability-score method is UI-only
+ *     (Character.abilityScoreMethod, src/types/character.ts) and is not
+ *     persisted, so no per-method check (e.g. a score above the method max)
+ *     is available. A stored 17 could be a rolled base 17 or a base 15 + 2.
  *   - alreadyCorrect: adding the fixed bonuses changes nothing for this row
  *     (e.g. every bonused ability is already at the 20 cap). Pre/post-fix is
  *     determined by the created_at cutoff, not by comparing scores: pre-fix
@@ -397,17 +407,23 @@ export function planRacialBonusBackfill(input: BackfillInput): {
   };
 }
 
-function printSummary(summary: RacialBonusBackfillSummary): void {
+export function printSummary(summary: RacialBonusBackfillSummary): void {
   console.log('\n#253 racial-bonus backfill — DRY RUN (no writes performed)');
   console.log(`  Cutoff: created before ${RACIAL_BONUS_FIX_CUTOFF_ISO} (PR #250 merge)`);
   console.log(`  Characters scanned: ${summary.scanned}`);
   console.log(`  Excluded (starter flow via game_sessions): ${summary.excludedStarterFlow}`);
   console.log(`  Excluded (seeded campaigns): ${summary.excludedSeededCampaign}`);
   console.log(`  Candidates: ${summary.candidates}`);
-  console.log(`  Needing repair: ${summary.needingRepair}`);
+  console.log(
+    `  Needing repair: ${summary.needingRepair} (upper bound — rows already at final scores are counted)`,
+  );
   console.log(`  Already correct: ${summary.alreadyCorrect}`);
   console.log(`  Needs manual review (choices not stored): ${summary.needsManualReview}`);
   console.log(`  Skipped: ${summary.skipped}`);
+  console.log(
+    '  Note: premade copies with no starter_campaign_id link are counted as candidates; ' +
+      'exclusion by starter_template_id awaits #1744.',
+  );
   if (summary.byRace.size > 0) {
     console.log('\n  Needing repair by race:');
     for (const [race, count] of [...summary.byRace.entries()].sort()) {
