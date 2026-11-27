@@ -329,3 +329,33 @@ describe('#1354 equipment choice gate', () => {
     });
   });
 });
+
+describe('#210 QA-027 physical step gate', () => {
+  it('blocks advancement with every physical field empty', () => {
+    expect(validateStep('Physical', {} as Character)).toEqual({
+      isValid: false,
+      message: 'Please select a gender for your character',
+    });
+  });
+
+  it('blocks advancement with a gender but no age', () => {
+    expect(validateStep('Physical', { gender: 'female' } as Character)).toEqual({
+      isValid: false,
+      message: 'Please enter an age for your character',
+    });
+  });
+
+  it('treats age 0 as not entered (an empty input stores 0)', () => {
+    expect(validateStep('Physical', { gender: 'male', age: 0 } as Character)).toEqual({
+      isValid: false,
+      message: 'Please enter an age for your character',
+    });
+  });
+
+  it('allows advancement with a gender and an age; appearance text stays optional', () => {
+    expect(validateStep('Physical', { gender: 'male', age: 25 } as Character)).toEqual({
+      isValid: true,
+      message: '',
+    });
+  });
+});

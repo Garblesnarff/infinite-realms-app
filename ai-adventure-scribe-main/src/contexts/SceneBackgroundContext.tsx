@@ -16,6 +16,14 @@ interface SceneBackgroundContextValue {
   currentAssetName: string | null;
   /** Type of the current asset */
   currentAssetType: AssetType | null;
+  /**
+   * The last location-or-scene image the background effect set (#1026):
+   * the same two types pickSceneArt treats as band art. A monster, NPC,
+   * item or character background must not clear it.
+   */
+  lastSceneArtUrl: string | null;
+  /** Name of the last location-or-scene asset */
+  lastSceneArtName: string | null;
   /** Set the scene background */
   setSceneBackground: (url: string | null, name: string | null, type: AssetType | null) => void;
   /** Whether background is transitioning */
@@ -37,12 +45,22 @@ export function SceneBackgroundProvider({ children }: SceneBackgroundProviderPro
   const [currentBackgroundUrl, setCurrentBackgroundUrl] = useState<string | null>(null);
   const [currentAssetName, setCurrentAssetName] = useState<string | null>(null);
   const [currentAssetType, setCurrentAssetType] = useState<AssetType | null>(null);
+  const [lastSceneArtUrl, setLastSceneArtUrl] = useState<string | null>(null);
+  const [lastSceneArtName, setLastSceneArtName] = useState<string | null>(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
 
   const setSceneBackground = useCallback(
     (url: string | null, name: string | null, type: AssetType | null) => {
-      // Don't update if same URL
-      if (url === currentBackgroundUrl) return;
+      // A location or scene reusing an image URL already current under another
+      // type (e.g. a monster) still counts as the last scene art (#1026):
+      // the early return below must not leave a stale place behind.
+      if (url === currentBackgroundUrl) {
+        if (type === 'location' || type === 'scene') {
+          setLastSceneArtUrl(url);
+          setLastSceneArtName(name);
+        }
+        return;
+      }
 
       // Start transition
       setIsTransitioning(true);
@@ -52,6 +70,14 @@ export function SceneBackgroundProvider({ children }: SceneBackgroundProviderPro
         setCurrentBackgroundUrl(url);
         setCurrentAssetName(name);
         setCurrentAssetType(type);
+        // The band's fallback reads the last location-or-scene image (#1026),
+        // updated atomically with the current background. A monster, NPC, item
+        // or character background leaves it alone, so the next place-less
+        // reply still shows the session's current place.
+        if (type === 'location' || type === 'scene') {
+          setLastSceneArtUrl(url);
+          setLastSceneArtName(name);
+        }
 
         // End transition after fade in
         setTimeout(() => {
@@ -67,10 +93,20 @@ export function SceneBackgroundProvider({ children }: SceneBackgroundProviderPro
       currentBackgroundUrl,
       currentAssetName,
       currentAssetType,
+      lastSceneArtUrl,
+      lastSceneArtName,
       setSceneBackground,
       isTransitioning,
     }),
-    [currentBackgroundUrl, currentAssetName, currentAssetType, setSceneBackground, isTransitioning],
+    [
+      currentBackgroundUrl,
+      currentAssetName,
+      currentAssetType,
+      lastSceneArtUrl,
+      lastSceneArtName,
+      setSceneBackground,
+      isTransitioning,
+    ],
   );
 
   return (
@@ -90,6 +126,8 @@ export function useSceneBackground(): SceneBackgroundContextValue {
       currentBackgroundUrl: null,
       currentAssetName: null,
       currentAssetType: null,
+      lastSceneArtUrl: null,
+      lastSceneArtName: null,
       setSceneBackground: () => {},
       isTransitioning: false,
     };

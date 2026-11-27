@@ -81,7 +81,10 @@ export const mapWizardEquipmentToInventory = (
  * Provides methods and state for saving character data through the authenticated API
  */
 export const useCharacterSave = (): {
-  saveCharacter: (character: Character) => Promise<Character | null>;
+  saveCharacter: (
+    character: Character,
+    options?: { generateBackgroundImage?: boolean },
+  ) => Promise<Character | null>;
   isSaving: boolean;
 } => {
   const [isSaving, setIsSaving] = useState(false);
@@ -157,10 +160,16 @@ export const useCharacterSave = (): {
    * Saves character data through the authenticated character API
    * Handles both creation and updates of character data
    * @param character - The character data to save
+   * @param options.generateBackgroundImage - #210 QA-026: when false, a new
+   * character is created without the automatic background image. Defaults to
+   * true (the previous always-generate behavior).
    * @returns Promise<Character | null> The saved character data or null if save failed
    */
   const saveCharacter = useCallback(
-    async (character: Character): Promise<Character | null> => {
+    async (
+      character: Character,
+      options?: { generateBackgroundImage?: boolean },
+    ): Promise<Character | null> => {
       if (!character) return null;
 
       try {
@@ -338,7 +347,8 @@ export const useCharacterSave = (): {
 
         // Generate background image asynchronously for new characters
         // Don't block character creation on image generation
-        if (!character.id && characterData.id) {
+        // #210 QA-026: skipped when the Finalization toggle is off.
+        if (!character.id && characterData.id && options?.generateBackgroundImage !== false) {
           generateBackgroundImage(characterData.id, savedCharacter);
         }
 

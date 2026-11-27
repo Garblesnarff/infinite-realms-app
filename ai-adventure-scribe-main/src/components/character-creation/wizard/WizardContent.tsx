@@ -79,6 +79,21 @@ const WizardContent: React.FC = () => {
 
   const filteredSteps = getFilteredSteps();
 
+  // #210 QA-053: the track renders the FULL 15-step list with a stable total.
+  // Navigation still moves by filtered index (currentStep, the URL param and
+  // the draft all store that), but what the user sees is the position in the
+  // full list, with steps not on this path greyed. Before this the badge,
+  // percentage and dot row all derived from filteredSteps.length, so the
+  // total jumped 12 -> 13 -> 14 as Subrace/Personality/Advanced Spellcasting
+  // appeared — and the "Currently:" heading moved with it.
+  const currentFullStep = Math.max(
+    0,
+    wizardSteps.findIndex((step) => step.label === filteredSteps[currentStep]?.label),
+  );
+  const skippedStepIndexes = wizardSteps
+    .map((step, index) => (filteredSteps.includes(step) ? -1 : index))
+    .filter((index) => index >= 0);
+
   /** Move to a step, recording it in the URL (new history entry by default). */
   const goToStep = React.useCallback(
     (step: number, opts?: { replace?: boolean }) => {
@@ -103,8 +118,15 @@ const WizardContent: React.FC = () => {
     campaignId: searchParams.get('campaign'),
     onRestore: (draft: WizardDraft) => {
       dispatch({ type: 'SET_CHARACTER', payload: draft.character });
+      // #210 QA-026: restore the background-image opt-out too — a resumed
+      // draft must not silently switch image generation back on.
+      dispatch({
+        type: 'SET_GENERATE_BACKGROUND_IMAGE',
+        payload: draft.generateBackgroundImage ?? true,
+      });
       goToStep(draft.step, { replace: true });
     },
+    generateBackgroundImage: state.generateBackgroundImage,
   });
 
   const handleDiscardDraft = React.useCallback(() => {
@@ -112,6 +134,8 @@ const WizardContent: React.FC = () => {
     // Reset the form too: otherwise the stale character stays on screen and
     // the next edit would resurrect the "discarded" draft via autosave.
     dispatch({ type: 'SET_CHARACTER', payload: { ...initialCharacterState.character } });
+    // #210 QA-026: a discarded draft starts over with image generation on.
+    dispatch({ type: 'SET_GENERATE_BACKGROUND_IMAGE', payload: true });
     goToStep(0, { replace: true });
   }, [discardDraft, dispatch, goToStep]);
 
@@ -327,6 +351,9 @@ const WizardContent: React.FC = () => {
           navigate,
           searchParams,
           toast,
+          // #210 QA-026: the Finalization toggle rides the wizard state, not
+          // the Character row — it is a creation-time choice, not stored data.
+          generateBackgroundImage: state.generateBackgroundImage,
           onSaved: () => clearDraft(),
           onLegendRequired: () => setLegendRequired(true),
         });
@@ -385,9 +412,10 @@ const WizardContent: React.FC = () => {
                 Create Your Character
               </h1>
               <ProgressIndicator
-                currentStep={currentStep}
-                totalSteps={filteredSteps.length}
-                steps={filteredSteps}
+                currentStep={currentFullStep}
+                totalSteps={wizardSteps.length}
+                steps={wizardSteps}
+                skippedSteps={skippedStepIndexes}
               />
               <div className="min-h-[600px] transition-all duration-500 ease-in-out">
                 <div
@@ -398,12 +426,13 @@ const WizardContent: React.FC = () => {
                 </div>
               </div>
               <StepNavigation
-                currentStep={currentStep}
-                totalSteps={filteredSteps.length}
+                currentStep={currentFullStep}
+                totalSteps={wizardSteps.length}
                 onNext={handleNext}
                 onPrevious={handlePrevious}
                 onCancel={handleCancelClick}
                 isLoading={isSaving}
+                skippedSteps={skippedStepIndexes}
               />
             </Card>
           </div>
