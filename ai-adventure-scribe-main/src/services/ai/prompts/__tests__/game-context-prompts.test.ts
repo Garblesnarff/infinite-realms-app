@@ -731,7 +731,7 @@ describe('buildCharacterSection sight (darkness rule)', () => {
       race: 'Elf',
       class: 'Wizard',
     });
-    expect(result).toContain('Sight: darkvision 60 ft.');
+    expect(result).toContain('Sight: darkvision within 60 ft.');
   });
 
   it('drow subrace -> darkvision 120 ft', async () => {
@@ -749,7 +749,7 @@ describe('buildCharacterSection sight (darkness rule)', () => {
       subrace: 'Drow',
       class: 'Wizard',
     });
-    expect(result).toContain('Sight: darkvision 120 ft.');
+    expect(result).toContain('Sight: darkvision within 120 ft.');
   });
 
   it('unknown race -> no Sight line', async () => {

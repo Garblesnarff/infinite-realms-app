@@ -320,7 +320,7 @@ OVERVIEW: ${lore.overviewText}
 </canonical_setting>
 ${playerIdentityBlock(lore.playerCharacterName)}
 <darkness_rule>
-No one sees in total darkness without a light source or darkvision. The character block's "Sight:" line says whether the player has darkvision; without it and without light, narrate only sound, touch and smell.
+No one sees in total darkness without a light source or darkvision. The character block's "Sight:" line says whether the player has darkvision and its range (60 ft, or 120 ft for superior darkvision); within that range, dim light counts as bright light and darkness as dim light, in shades of gray. Without darkvision and without light, narrate only sound, touch and smell.
 </darkness_rule>
 <creative_direction>
 ${lore.creativeBrief}

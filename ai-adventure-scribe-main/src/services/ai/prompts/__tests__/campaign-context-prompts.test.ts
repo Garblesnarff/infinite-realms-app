@@ -73,7 +73,7 @@ OVERVIEW: Founded centuries ago by traveling chefs.
 </canonical_setting>
 
 <darkness_rule>
-No one sees in total darkness without a light source or darkvision. The character block's "Sight:" line says whether the player has darkvision; without it and without light, narrate only sound, touch and smell.
+No one sees in total darkness without a light source or darkvision. The character block's "Sight:" line says whether the player has darkvision and its range (60 ft, or 120 ft for superior darkvision); within that range, dim light counts as bright light and darkness as dim light, in shades of gray. Without darkvision and without light, narrate only sound, touch and smell.
 </darkness_rule>
 <creative_direction>
 Cozy and whimsical.
@@ -235,7 +235,7 @@ Include the tags.
 
     const result = CampaignContextPrompts.renderStarterCampaignLore(lore, {
       // Fixed head/tail/assets run ~260 tokens; one ~514-token entity fits, two do not.
-      tokenBudget: 950,
+      tokenBudget: 1000,
       recentTurnsText: 'Kept One waved at the party.',
     });
 
@@ -275,7 +275,7 @@ Include the tags.
     };
 
     const result = CampaignContextPrompts.renderStarterCampaignLore(lore, {
-      tokenBudget: 950,
+      tokenBudget: 1000,
       recentTurnsText: 'Kept One waved at the party.',
     });
 
@@ -316,7 +316,7 @@ ${markedLine}
     };
 
     const result = CampaignContextPrompts.renderStarterCampaignLore(lore, {
-      tokenBudget: 950,
+      tokenBudget: 1000,
       recentTurnsText: 'Kept One waved at the party.',
     });
 

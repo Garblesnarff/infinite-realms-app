@@ -5,16 +5,12 @@
 import { buildAbilityScores } from './build-ability-scores';
 import { hydrateCharacterStats } from './hydrate-character-stats';
 
-import type {
-  Character,
-  CharacterRace,
-  CharacterClass,
-  CharacterBackground,
-} from '@/types/character';
+import type { Character, CharacterClass, CharacterBackground } from '@/types/character';
 
 import logger from '@/lib/logger';
 import { issue1784Api } from '@/services/issue-1784-api';
 import { userDataApi } from '@/services/user-data-api';
+import { resolveRace, resolveSubrace } from '@/utils/character/data-transformers';
 import {
   parseOptionalProficiencyList,
   parseSavingThrowProficiencies,
@@ -45,9 +41,8 @@ export async function loadCharacterBySession(
 
     if (!characterData) return undefined;
 
-    const characterRace = characterData.race
-      ? ({ name: characterData.race } as Partial<CharacterRace>)
-      : null;
+    const characterRace = resolveRace(characterData.race);
+    const characterSubrace = resolveSubrace(characterRace, characterData.subrace);
     const characterClass = characterData.class
       ? ({ name: characterData.class } as Partial<CharacterClass>)
       : null;
@@ -59,7 +54,8 @@ export async function loadCharacterBySession(
       id: characterData.id,
       user_id: characterData.user_id,
       name: characterData.name,
-      race: characterRace as CharacterRace | null,
+      race: characterRace,
+      subrace: characterSubrace,
       class: characterClass as CharacterClass | null,
       level: characterData.level,
       background: characterBackground as CharacterBackground | null,

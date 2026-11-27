@@ -207,7 +207,9 @@ PLAYER CHARACTER: ${char.name} (you, the player), a level ${char.level} ${char.r
     const sightRange = darkvisionRangeFor(raceName, subraceName);
     if (sightRange !== undefined) {
       section +=
-        sightRange === null ? '\nSight: no darkvision.' : `\nSight: darkvision ${sightRange} ft.`;
+        sightRange === null
+          ? '\nSight: no darkvision.'
+          : `\nSight: darkvision within ${sightRange} ft.`;
     }
 
     if (char.character_stats && char.character_stats.length > 0) {
