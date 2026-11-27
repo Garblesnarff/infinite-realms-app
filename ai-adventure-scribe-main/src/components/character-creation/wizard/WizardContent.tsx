@@ -79,7 +79,7 @@ const WizardContent: React.FC = () => {
 
   const filteredSteps = getFilteredSteps();
 
-  // #210 QA-053: the track renders the FULL 15-step list with a stable total.
+  // #210 QA-053: the track renders the FULL 16-step list with a stable total.
   // Navigation still moves by filtered index (currentStep, the URL param and
   // the draft all store that), but what the user sees is the position in the
   // full list, with steps not on this path greyed. Before this the badge,

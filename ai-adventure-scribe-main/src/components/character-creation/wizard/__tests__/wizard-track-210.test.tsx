@@ -24,7 +24,7 @@ import { halfOrc } from '@/data/races/half-orc';
  *
  * QA-053: Hark saw the counter total jump 12 -> 13 -> 14 as Subrace,
  * Personality and Advanced Spellcasting appeared. The track now always
- * shows the full 15 steps with a stable total; flipping the race from
+ * shows the full 16 steps with a stable total; flipping the race from
  * half-orc (no subraces, 13 filtered steps) to dwarf (3 subraces, 14
  * filtered steps) mid-session must not move the counter.
  *
@@ -126,14 +126,15 @@ describe('wizard step track (#210 QA-053)', () => {
     harness.saveCharacter.mockClear();
   });
 
-  it('keeps the total at 15 when a race flip adds the Subrace step', async () => {
+  it('keeps the total at 16 when a race flip adds the Subrace step', async () => {
     const seed = { ...initialState.character, race: halfOrc } as Character;
     renderWizard(seed, '/app/characters/new');
 
-    // Half-orc rogue filters to 13 steps (no Subrace, no Advanced
-    // Spellcasting) — but the counter is the full 15-step track.
-    expect(await screen.findByText('1 of 15')).toBeTruthy();
-    expect(screen.getByText('Step 1 of 15')).toBeTruthy();
+    // Half-orc seed (no class, no background) filters to 13 steps —
+    // Subrace, Personality and Advanced Spellcasting all skip — but the
+    // counter is the full 16-step track.
+    expect(await screen.findByText('1 of 16')).toBeTruthy();
+    expect(screen.getByText('Step 1 of 16')).toBeTruthy();
     // Subrace is in the track but skipped for a half-orc, so its label
     // renders greyed (opacity-50) — this proves the filtered list really
     // excludes it, not just that the counter is stable.
@@ -148,9 +149,9 @@ describe('wizard step track (#210 QA-053)', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByText('1 of 15')).toBeTruthy();
+      expect(screen.getByText('1 of 16')).toBeTruthy();
     });
-    expect(screen.getByText('Step 1 of 15')).toBeTruthy();
+    expect(screen.getByText('Step 1 of 16')).toBeTruthy();
     // The flip really happened: Subrace left the skipped set, so no
     // Subrace label renders greyed any more.
     expect(screen.getAllByText('Subrace').some(isGreyed)).toBe(false);
@@ -166,9 +167,9 @@ describe('wizard background-image toggle (#210 QA-026)', () => {
   });
 
   it('defaults on and passes generateBackgroundImage: true to the save', async () => {
-    renderWizard(namedRogue(), '/app/characters/new?step=12');
+    renderWizard(namedRogue(), '/app/characters/new?step=13');
 
-    expect(await screen.findByText('Step 15 of 15')).toBeTruthy();
+    expect(await screen.findByText('Step 16 of 16')).toBeTruthy();
     const toggle = screen.getByTestId('background-image-toggle');
     expect(toggle.getAttribute('aria-checked')).toBe('true');
 
@@ -181,7 +182,7 @@ describe('wizard background-image toggle (#210 QA-026)', () => {
   });
 
   it('turning it off passes generateBackgroundImage: false to the save', async () => {
-    renderWizard(namedRogue(), '/app/characters/new?step=12');
+    renderWizard(namedRogue(), '/app/characters/new?step=13');
 
     const toggle = await screen.findByTestId('background-image-toggle');
     fireEvent.click(toggle);
