@@ -42,9 +42,13 @@ export type EquippedLoadout = {
  * A stat-less NPC therefore reaches the ordinary D&D fallback — an unarmed strike — instead
  * of making up a weapon in the orchestration layer.
  */
-export async function getDefaultCombatWeapon(participant: unknown): Promise<WeaponRuleProfile> {
+export async function getDefaultCombatWeapon(
+  participant: unknown,
+  options: { preferMelee?: boolean } = {},
+): Promise<WeaponRuleProfile> {
   const weapons = await listEquippedWeaponProfiles(participant);
-  return weapons[0] ?? { ...UNARMED_STRIKE };
+  const melee = options.preferMelee ? weapons.find((weapon) => !weapon.ranged || weapon.meleeWeapon === true) : undefined;
+  return melee ?? weapons[0] ?? { ...UNARMED_STRIKE };
 }
 
 /** `inventory_items` has no shield type; the legacy table does, so both are accepted. */
