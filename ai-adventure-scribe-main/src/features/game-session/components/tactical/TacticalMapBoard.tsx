@@ -2,7 +2,11 @@ import { Maximize2, Minimize2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
-import { consumeMapMoveMode, useMapMoveModeRequested } from './map-move-mode';
+import {
+  consumeMapMoveMode,
+  setMoveModeArmed,
+  useMapMoveModeRequested,
+} from './map-move-mode';
 import { entityFootprint, type Point, type TacticalEntity } from './tactical-map-state';
 import { TacticalMapCanvas } from './TacticalMapCanvas';
 import { useTacticalMapContext, type TacticalMapState } from './TacticalMapProvider';
@@ -41,6 +45,9 @@ function TacticalMapBoardView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [moves, setMoves] = useState<Point[]>([]);
   const [hovered, setHovered] = useState<Point | null>(null);
+  // Says why a click did nothing, so a map that ignores a click does not look broken (#1797).
+  const [hint, setHint] = useState<string | null>(null);
+  const turnRef = useRef(currentTurnId);
   const [lineOfSight, setLineOfSight] = useState<{
     from: TacticalEntity;
     to: TacticalEntity;
@@ -64,19 +71,40 @@ function TacticalMapBoardView({
     },
     [],
   );
+  // #1797: Move mode ends when the turn ends. A new turn starts with no selection and no
+  // reachable squares, so a list from an earlier turn cannot move the hero or light up squares.
   useEffect(() => {
-    if (!moveModeRequested || !activePlayer) return;
+    if (turnRef.current === currentTurnId) return;
+    turnRef.current = currentTurnId;
+    setSelectedId(null);
+    setMoves([]);
+    setLineOfSight(null);
+    setHint(null);
+  }, [currentTurnId]);
+  useEffect(() => {
+    setMoveModeArmed(selectedId !== null);
+  }, [selectedId]);
+  useEffect(() => () => setMoveModeArmed(false), []);
+  useEffect(() => {
+    if (!moveModeRequested) return;
     // Taking the request re-renders with it cleared, so the reply is kept unless the board left.
     consumeMapMoveMode();
+    if (!activePlayer) {
+      setHint('Move is for your turn.');
+      return;
+    }
+    const turnAtRequest = currentTurnId;
     void request<{ moves: Point[] }>(`/valid-moves/${encodeURIComponent(activePlayer.id)}`).then(
       (response) => {
-        if (!mountedRef.current || !response.ok) return;
+        // A reply that lands after the turn changed is for the old turn: drop it.
+        if (!mountedRef.current || !response.ok || turnRef.current !== turnAtRequest) return;
         setSelectedId(activePlayer.id);
         setMoves(response.data.moves);
         setLineOfSight(null);
+        setHint(null);
       },
     );
-  }, [moveModeRequested, activePlayer, request]);
+  }, [moveModeRequested, activePlayer, request, currentTurnId]);
   const previewPath =
     activePlayer && hovered && moves.some((move) => move.x === hovered.x && move.y === hovered.y)
       ? [{ x: activePlayer.x, y: activePlayer.y }, hovered]
@@ -100,6 +128,7 @@ function TacticalMapBoardView({
         setSelectedId(occupant.id);
         setMoves(response.data.moves);
         setLineOfSight(null);
+        setHint(null);
       }
       return;
     }
@@ -112,12 +141,15 @@ function TacticalMapBoardView({
       if (response.ok) setLineOfSight({ from: activePlayer, to: occupant, ...response.data });
       return;
     }
-    if (
-      !selected ||
-      selected.id !== activePlayer?.id ||
-      !moves.some((move) => move.x === point.x && move.y === point.y)
-    )
+    if (!selected || selected.id !== activePlayer?.id) {
+      // Move is not armed: the Move button is the cue, so say so rather than ignore the click.
+      if (activePlayer) setHint('Press Move, then choose a square.');
       return;
+    }
+    if (!moves.some((move) => move.x === point.x && move.y === point.y)) {
+      setHint('That square is out of reach.');
+      return;
+    }
     const encounterId = combatState.activeEncounter?.id;
     if (!encounterId) return;
     try {
@@ -140,6 +172,7 @@ function TacticalMapBoardView({
     }
     setMoves([]);
     setSelectedId(null);
+    setHint(null);
   };
 
   const confirmAoE = async () => {
@@ -237,6 +270,11 @@ function TacticalMapBoardView({
             onCellClick={click}
             onCellHover={setHovered}
           />
+          {hint && (
+            <p role="status" className="mt-2 text-xs text-infinite-gold">
+              {hint}
+            </p>
+          )}
           {degradeLine && (
             <p role="status" className="mt-2 text-xs text-infinite-gold">
               {degradeLine}

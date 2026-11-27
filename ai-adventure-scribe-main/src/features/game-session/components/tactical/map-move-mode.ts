@@ -22,13 +22,28 @@ export function consumeMapMoveMode(): void {
   emit();
 }
 
+const subscribe = (listener: () => void): (() => void) => {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+};
+
 export function useMapMoveModeRequested(): boolean {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    () => pending,
-    () => false,
-  );
+  return useSyncExternalStore(subscribe, () => pending, () => false);
+}
+
+/**
+ * #1797: Move mode is armed while the board has a token selected with its reachable squares
+ * showing. The Move button reads this, so it can only look pressed when the map will take a move.
+ * The board sets it; a turn change clears it.
+ */
+let armed = false;
+
+export function setMoveModeArmed(next: boolean): void {
+  if (armed === next) return;
+  armed = next;
+  emit();
+}
+
+export function useMoveModeArmed(): boolean {
+  return useSyncExternalStore(subscribe, () => armed, () => false);
 }
