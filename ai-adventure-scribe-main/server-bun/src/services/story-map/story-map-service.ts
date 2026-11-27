@@ -176,7 +176,7 @@ export async function applyStoryMapPlace(input: {
   const decision = decidePlace(input.place, places, edges, progress);
   if (!decision.accepted) return decision;
 
-  const move = planMove(decision.placeKey, edges, progress);
+  const move = planMove(decision.placeKey, edges, progress, places);
   // RLS is off (AGENTS §4): each write is INSERT ... SELECT FROM campaigns filtered on the
   // owner, so a row can only land on a campaign this user owns, whatever the scope said.
   const owned = sql`FROM campaigns c WHERE c.id = ${scope.campaignId}::uuid AND c.user_id = ${scope.userId}`;

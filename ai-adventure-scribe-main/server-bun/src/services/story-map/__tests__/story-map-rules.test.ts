@@ -26,8 +26,9 @@ const both = (a: string, b: string, hidden = false, label: string | null = null)
   { fromKey: b, toKey: a, hidden, label },
 ];
 
-// ledge <-> archive <-(hidden)-> crypt ; ledge -> gate (one way)
-const PLACES = ['the-ledge', 'the-archive', 'the-crypt', 'the-gate'].map((key) => place(key));
+// ledge <-> archive <-(hidden)-> crypt ; ledge -> gate (one way). Each place is in a zone of its
+// own here, so only the routes connect them; the same-zone rule has its own test below.
+const PLACES = ['the-ledge', 'the-archive', 'the-crypt', 'the-gate'].map((key) => place(key, key));
 const EDGES: MapEdge[] = [
   ...both('the-ledge', 'the-archive'),
   ...both('the-archive', 'the-crypt', true, 'secret stair'),
@@ -96,6 +97,40 @@ describe('decidePlace', () => {
       accepted: false,
       reason: 'not_a_string',
     });
+  });
+});
+
+describe('same-zone neighbours (strategist decision on #1762)', () => {
+  // The chapel shares the crypt's zone; the tower is in another zone. No route reaches either.
+  const zoned = [
+    place('the-crypt', 'the-deep'),
+    place('the-chapel', 'the-deep'),
+    place('the-tower', 'the-heights'),
+    place('the-shrine', null),
+  ];
+  const progress = at([['the-crypt', 'visited', 1]]);
+
+  it('accepts a place in the same zone with no route, and drops one in another zone', () => {
+    expect(decidePlace('the-chapel', zoned, [], progress)).toEqual({
+      accepted: true,
+      placeKey: 'the-chapel',
+      via: 'neighbour',
+    });
+    expect(decidePlace('the-tower', zoned, [], progress)).toEqual({
+      accepted: false,
+      reason: 'not_reachable',
+    });
+    expect(decidePlace('the-shrine', zoned, [], progress)).toEqual({
+      accepted: false,
+      reason: 'not_reachable',
+    });
+  });
+
+  it('a visit makes same-zone places known, and the prompt lists them as onward', () => {
+    expect(planMove('the-crypt', [], at([]), zoned).know).toEqual(['the-chapel']);
+    const block = storyMapPromptBlock(zoned, [], progress);
+    expect(block).toContain('- the-crypt (The Crypt) -> the-chapel (The Chapel) (same zone)');
+    expect(block).not.toContain('the-tower (The Tower) (same zone)');
   });
 });
 

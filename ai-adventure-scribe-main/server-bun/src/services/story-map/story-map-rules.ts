@@ -52,6 +52,15 @@ export function usableEdges(edges: MapEdge[], progress: MapProgress): MapEdge[] 
   return edges.filter((edge) => !edge.hidden || revealed.has(edgeId(edge.fromKey, edge.toKey)));
 }
 
+/**
+ * Same-zone neighbours (strategist decision on #1762): places in one zone reach each other
+ * without a route line; routes are for paths between zones and hidden paths. A place with no
+ * zone has no same-zone neighbours.
+ */
+export function sameZone(a: MapPlace | undefined, b: MapPlace | undefined): boolean {
+  return Boolean(a && b && a.placeKey !== b.placeKey && a.zoneKey && a.zoneKey === b.zoneKey);
+}
+
 export type PlaceDecision =
   | { accepted: true; placeKey: string; via: 'current' | 'neighbour' | 'opening' }
   | {
@@ -84,7 +93,10 @@ export function decidePlace(
   if (visited.size === 0) return { accepted: true, placeKey: key, via: 'opening' };
   const current = currentPlaceKey(progress);
   if (key === current) return { accepted: true, placeKey: key, via: 'current' };
-  const reachable = edges.some((edge) => visited.has(edge.fromKey) && edge.toKey === key);
+  const byKey = new Map(places.map((place) => [place.placeKey, place]));
+  const reachable =
+    edges.some((edge) => visited.has(edge.fromKey) && edge.toKey === key) ||
+    [...visited].some((from) => sameZone(byKey.get(from), byKey.get(key)));
   return reachable
     ? { accepted: true, placeKey: key, via: 'neighbour' }
     : { accepted: false, reason: 'not_reachable' };
@@ -100,7 +112,9 @@ export function planMove(
   placeKey: string,
   edges: MapEdge[],
   progress: MapProgress,
+  places: MapPlace[] = [],
 ): { visit: string; know: string[]; reveal: RevealedEdge[] } {
+  const byKey = new Map(places.map((place) => [place.placeKey, place]));
   const visited = new Set(
     progress.rows.filter((row) => row.state === 'visited').map((row) => row.placeKey),
   );
@@ -108,7 +122,9 @@ export function planMove(
   const usable = new Set(usableEdges(edges, progress).map((e) => edgeId(e.fromKey, e.toKey)));
   const into = edges.filter((edge) => edge.toKey === placeKey && visited.has(edge.fromKey));
   const reveal: RevealedEdge[] = [];
-  if (!into.some((edge) => usable.has(edgeId(edge.fromKey, edge.toKey)))) {
+  // A same-zone place needs no route, so nothing hidden is found by walking to it.
+  const zoneReach = [...visited].some((from) => sameZone(byKey.get(from), byKey.get(placeKey)));
+  if (!zoneReach && !into.some((edge) => usable.has(edgeId(edge.fromKey, edge.toKey)))) {
     const found = into.find((edge) => edge.fromKey === current) ?? into[0];
     if (found) {
       for (const [from, to] of [
@@ -122,9 +138,14 @@ export function planMove(
     }
   }
   const after: MapProgress = { rows: progress.rows, revealed: [...progress.revealed, ...reveal] };
-  const know = usableEdges(edges, after)
-    .filter((edge) => edge.fromKey === placeKey && edge.toKey !== placeKey)
-    .map((edge) => edge.toKey);
+  const know = [
+    ...usableEdges(edges, after)
+      .filter((edge) => edge.fromKey === placeKey && edge.toKey !== placeKey)
+      .map((edge) => edge.toKey),
+    ...places
+      .filter((place) => sameZone(byKey.get(placeKey), place))
+      .map((place) => place.placeKey),
+  ];
   return { visit: placeKey, know: [...new Set(know)], reveal };
 }
 
@@ -198,6 +219,16 @@ export function storyMapPromptBlock(
       const secret = usable.has(id) ? '' : ' [hidden: the hero must find it]';
       const via = edge.label ? ` by ${edge.label}` : '';
       lines.push(`- ${label(edge.fromKey)} -> ${label(edge.toKey)}${via}${secret}`);
+    }
+    // Same-zone neighbours need no route line (strategist decision on #1762).
+    const zoneSeen = new Set<string>();
+    for (const from of visited) {
+      for (const place of places) {
+        if (place.placeKey === current || !sameZone(byKey.get(from), place)) continue;
+        if (seen.has(edgeId(from, place.placeKey)) || zoneSeen.has(place.placeKey)) continue;
+        zoneSeen.add(place.placeKey);
+        lines.push(`- ${label(from)} -> ${label(place.placeKey)} (same zone)`);
+      }
     }
   }
   lines.push(
