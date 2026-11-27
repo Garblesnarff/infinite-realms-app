@@ -407,9 +407,14 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
         // path, and a failure in it (including the latest-message lookup)
         // must never fail the manual end itself — the route-contract tests
         // exercise this handler without a real database.
+        // prettier-ignore
         try {
-          const { payPendingEndingXp } = await import('../../services/dm/story-xp.js');
-          const { playerMessage } = await import('../../services/dm/story-spell-slots.js');
+          const { payPendingEndingXp } = await import(
+            '../../services/dm/story-xp.js'
+          );
+          const { playerMessage } = await import(
+            '../../services/dm/story-spell-slots.js'
+          );
           const lastPlayerMessage = await playerMessage(id);
           if (lastPlayerMessage?.createdAt) {
             await payPendingEndingXp({
@@ -422,7 +427,10 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
           logger.warn({
             msg: '[Sessions] Deferred ending XP payment skipped on manual end',
             sessionId: id,
-            error: pendingError instanceof Error ? pendingError.message : String(pendingError),
+            error:
+              pendingError instanceof Error
+                ? pendingError.message
+                : String(pendingError),
           });
         }
         const session = await SessionService.completeSession(

@@ -93,8 +93,8 @@ describe('resolveLethalAct (#468)', () => {
     expect(result.vitals.vitalState).toBe('standing');
   });
 
-  test('success at 1 HP cannot deal 1 and still stay up, so damage is 0', () => {
-    expect(successDamage(1)).toBe(0);
+  test('success at 1 HP deals the minimum 1 and the hero is dying, never dead in one roll', () => {
+    expect(successDamage(1)).toBe(1);
     const result = resolveLethalAct({
       proposal,
       abilityScore: 10,
@@ -102,8 +102,9 @@ describe('resolveLethalAct (#468)', () => {
       natural: 15,
     });
     expect(result.success).toBe(true);
-    expect(result.damage).toBe(0);
-    expect(result.vitals.currentHitPoints).toBe(1);
-    expect(result.vitals.vitalState).toBe('standing');
+    expect(result.damage).toBe(1);
+    expect(result.vitals.currentHitPoints).toBe(0);
+    expect(result.vitals.vitalState).toBe('dying');
+    expect(result.vitals.isConscious).toBe(false);
   });
 });
