@@ -90,6 +90,24 @@ export function TacticalMapCanvas({
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [view, setView] = useState({ zoom: 1, x: 0, y: 0 });
+  // #1797: the picture is drawn at the box's size, so the box is watched. A panel that is hidden
+  // and shown again (or resized, e.g. the full-map dialog) changes the box without changing any
+  // map data, and the drawing must follow it rather than wait for the next data change.
+  const [boxSize, setBoxSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      const rect = canvas.getBoundingClientRect();
+      setBoxSize((current) =>
+        current.width === rect.width && current.height === rect.height
+          ? current
+          : { width: rect.width, height: rect.height },
+      );
+    });
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
   const pinch = useRef<{ distance: number; zoom: number } | null>(null);
   const drag = useRef<{ x: number; y: number; viewX: number; viewY: number } | null>(null);
   const templateDrag = useRef(false);
@@ -108,6 +126,9 @@ export function TacticalMapCanvas({
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect(),
       dpr = window.devicePixelRatio || 1;
+    // A hidden box has no size. Keep the last picture and its buffer until it has one again,
+    // rather than setting the buffer to 0 x 0, which stays blank once the box is shown (#1797).
+    if (rect.width === 0 || rect.height === 0) return;
     canvas.width = Math.round(rect.width * dpr);
     canvas.height = Math.round(rect.height * dpr);
     const ctx = canvas.getContext('2d');
@@ -262,7 +283,7 @@ export function TacticalMapCanvas({
         py + (to.y + 0.5) * size - 14,
       );
     }
-  }, [map, reachable, path, animation, los, aoeTemplate, view]);
+  }, [map, reachable, path, animation, los, aoeTemplate, view, boxSize]);
 
   return (
     <canvas
