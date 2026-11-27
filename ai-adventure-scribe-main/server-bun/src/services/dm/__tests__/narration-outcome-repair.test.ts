@@ -12,24 +12,27 @@ import { repairNarration, repairPrematureRollClaims } from '../narration-outcome
 describe('repairNarration (#266)', () => {
   test('a failed check becomes a plain failure statement', () => {
     expect(
-      repairNarration({
-        success: false,
-        total: 7,
-        dc: 14,
-        description: 'Stealth check to climb the shaft unheard',
-      }),
+      repairNarration(
+        {
+          success: false,
+          total: 7,
+          dc: 14,
+          description: 'Stealth check to climb the shaft unheard',
+        },
+        true,
+      ),
     ).toBe('The Stealth check to climb the shaft unheard failed (7 vs DC 14).');
   });
 
   test('a successful attack narrated as a miss becomes a plain success statement', () => {
     expect(
-      repairNarration({ success: true, total: 18, ac: 15, description: 'longsword attack' }),
+      repairNarration({ success: true, total: 18, ac: 15, description: 'longsword attack' }, true),
     ).toBe('The longsword attack succeeded (18 vs AC 15).');
   });
 
   test('missing details degrade gracefully', () => {
-    expect(repairNarration({ success: false, total: 7 })).toBe('The attempt failed (7).');
-    expect(repairNarration({ success: true, total: 20 })).toBe('The attempt succeeded (20).');
+    expect(repairNarration({ success: false, total: 7 }, true)).toBe('The attempt failed (7).');
+    expect(repairNarration({ success: true, total: 20 }, true)).toBe('The attempt succeeded (20).');
   });
 });
 
@@ -60,7 +63,7 @@ describe('NT-013 repair (strategist FIX)', () => {
   test('the dismissal is caught and the sentence is replaced by the engine truth', () => {
     const claims = contradictsEngineOutcome(nt013Text, nt013Outcome);
     expect(claims.length).toBeGreaterThan(0);
-    const truth = repairNarration(nt013Outcome);
+    const truth = repairNarration(nt013Outcome, true);
     expect(truth).toBe(`The ${nt013Description} succeeded (22 vs AC 15).`);
     const spliced = spliceContradictingSentences(nt013Text, claims, truth);
     expect(spliced).toBe(truth);
@@ -192,8 +195,7 @@ describe('repairPrematureRollClaims (#266)', () => {
   // pass now catches verdicts in the request's own vocabulary (and, when the
   // purpose names no distinctive action at all, falls back to the detector).
   test('a success verdict that does not name the pending action is left alone', () => {
-    const text =
-      'You succeed in slipping past the guard post without a sound. Roll for Stealth.';
+    const text = 'You succeed in slipping past the guard post without a sound. Roll for Stealth.';
     expect(repairPrematureRollClaims(text, [STEALTH_REQUEST])).toBeNull();
   });
 
@@ -241,7 +243,13 @@ describe('repairPrematureRollClaims (#266)', () => {
     for (const type of ['toString', 'constructor', 'hasOwnProperty']) {
       expect(
         repairPrematureRollClaims(text, [
-          { type, formula: '1d20+5', purpose: 'Stealth check to climb the shaft', dc: 14, ac: null },
+          {
+            type,
+            formula: '1d20+5',
+            purpose: 'Stealth check to climb the shaft',
+            dc: 14,
+            ac: null,
+          },
         ]),
       ).toBeNull();
     }
@@ -281,7 +289,7 @@ describe('repairPrematureRollClaims — #959 forward-fix scoping', () => {
 
   test('case A mirror: a decided roll’s failure recap is equally untouched', () => {
     const text =
-      'You fail to budge the portcullis. Roll a Thieves\' Tools check to pick the lock instead.';
+      "You fail to budge the portcullis. Roll a Thieves' Tools check to pick the lock instead.";
     expect(repairPrematureRollClaims(text, [THIEVES_TOOLS_REQUEST])).toBeNull();
   });
 
@@ -315,7 +323,7 @@ describe('repairPrematureRollClaims — #959 forward-fix scoping', () => {
   });
 
   test('an anchored failure claim about the pending action still repairs', () => {
-    const text = 'You fail to open the gate despite your tools. Roll a Thieves\' Tools check.';
+    const text = "You fail to open the gate despite your tools. Roll a Thieves' Tools check.";
     const repaired = repairPrematureRollClaims(text, [THIEVES_TOOLS_REQUEST]);
     expect(repaired).toBe(
       'That outcome is not decided yet — the roll still has to be made. ' +
@@ -433,14 +441,16 @@ describe('repairPrematureRollClaims — self-review rewordings', () => {
   test('a miss that names none of the attack vocabulary still repairs', () => {
     const attack = req('attack', 'Longsword attack vs Goblin', null);
     expect(
-      repairPrematureRollClaims('Your strike misses entirely, ringing off stone. Roll your attack.', [
-        attack,
-      ]),
+      repairPrematureRollClaims(
+        'Your strike misses entirely, ringing off stone. Roll your attack.',
+        [attack],
+      ),
     ).toBe(`${PENDING} Roll your attack.`);
     expect(
-      repairPrematureRollClaims('The creature ignores your assault, laughing in the dark. Roll your attack.', [
-        attack,
-      ]),
+      repairPrematureRollClaims(
+        'The creature ignores your assault, laughing in the dark. Roll your attack.',
+        [attack],
+      ),
     ).toBe(`${PENDING} Roll your attack.`);
   });
 
@@ -598,8 +608,7 @@ describe('repairPrematureRollClaims — #266 round 2', () => {
   });
 
   test('a doubled-consonant inflection names the pending action (grabbing)', () => {
-    const text =
-      'You succeed in grabbing the ledge. Roll a Dexterity check to grab the rope.';
+    const text = 'You succeed in grabbing the ledge. Roll a Dexterity check to grab the rope.';
     expect(
       repairPrematureRollClaims(text, [req('check', 'Dexterity check to grab the rope')]),
     ).toBe(`${PENDING} Roll a Dexterity check to grab the rope.`);

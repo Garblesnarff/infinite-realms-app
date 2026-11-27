@@ -113,7 +113,7 @@ export async function latestRollOutcome(sessionId: string): Promise<RollOutcome 
  * replaces the false claim — it does not embroider it, and it never invents a consequence.
  * When target numbers are off the clause is dropped, not replaced (#157).
  */
-export function repairNarration(outcome: RollOutcome, showTargetNumbers: boolean = true): string {
+export function repairNarration(outcome: RollOutcome, showTargetNumbers: boolean): string {
   const what = outcome.description ? `The ${outcome.description}` : 'The attempt';
   const target = !showTargetNumbers
     ? ''
