@@ -93,7 +93,7 @@ describe('MessageList combat-entry reservation', () => {
     });
 
     await waitFor(() => {
-      expect(screen.getByRole('dialog', { name: 'Fight the Vance?' })).toBeInTheDocument();
+      expect(screen.getByRole('dialog', { name: 'Fight Vance?' })).toBeInTheDocument();
       expect(messageList.style.paddingBottom).toBe('');
     });
 

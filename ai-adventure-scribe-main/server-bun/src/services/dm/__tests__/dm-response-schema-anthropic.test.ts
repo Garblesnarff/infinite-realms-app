@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { validateToolReplyText } from '../../llm-provider-service.js';
+import { normalizeDmPlace } from '../../story-map/story-map-rules.js';
 import { createDmResponseSchema, dmResponseSchema } from '../dm-response-schema.js';
 
 /**
@@ -17,7 +19,15 @@ import { createDmResponseSchema, dmResponseSchema } from '../dm-response-schema.
  *      with two non-null members (ambiguous unions).
  */
 
-const JSON_SCHEMA_TYPES = new Set(['string', 'number', 'integer', 'boolean', 'array', 'object', 'null']);
+const JSON_SCHEMA_TYPES = new Set([
+  'string',
+  'number',
+  'integer',
+  'boolean',
+  'array',
+  'object',
+  'null',
+]);
 
 type Violation = { path: string; message: string };
 
@@ -45,9 +55,14 @@ function lintNode(node: unknown, path: string, violations: Violation[], seen: Se
     if (type.length > 2) {
       violations.push({ path, message: `type array has ${type.length} members (max 2)` });
     }
-    const unknownMembers = type.filter((member) => typeof member !== 'string' || !JSON_SCHEMA_TYPES.has(member));
+    const unknownMembers = type.filter(
+      (member) => typeof member !== 'string' || !JSON_SCHEMA_TYPES.has(member),
+    );
     if (unknownMembers.length > 0) {
-      violations.push({ path, message: `type array has unknown members ${JSON.stringify(unknownMembers)}` });
+      violations.push({
+        path,
+        message: `type array has unknown members ${JSON.stringify(unknownMembers)}`,
+      });
     }
     if (type.length === 2 && !type.includes('null')) {
       violations.push({ path, message: `type array ${JSON.stringify(type)} is a non-null union` });
@@ -111,5 +126,41 @@ describe('dmResponseSchema Anthropic input_schema lint', () => {
     expect(messages.some((message) => message.includes('enum contains null'))).toBe(true);
     expect(messages.some((message) => message.includes('max 2'))).toBe(true);
     expect(messages.some((message) => message.includes('non-null union'))).toBe(true);
+  });
+});
+
+describe('#1753 place on the Haiku forced-tool path', () => {
+  const toolReply = (place: unknown): string =>
+    JSON.stringify({
+      text: 'The ledge creaks under you.',
+      options: [],
+      narration_segments: [],
+      roll_requests: [],
+      combat_transition: 'none',
+      handout_actions: [],
+      combatants: [],
+      map_actions: [],
+      combat_actions: [],
+      place,
+    });
+  const placeAfterToolPath = (place: unknown): unknown =>
+    (JSON.parse(validateToolReplyText(toolReply(place), dmResponseSchema)) as { place?: unknown })
+      .place;
+
+  test('a null place is dropped like any optional null, so the reply has no place', () => {
+    expect(placeAfterToolPath(null)).toBeUndefined();
+    expect(normalizeDmPlace(placeAfterToolPath(null))).toBeNull();
+  });
+
+  test('the string "null" (Haiku for no value) is treated as absent, not as a key', () => {
+    // The tool path turns "null" into null only for object/array fields; place is a string,
+    // so the server normalizer is what treats it as absent.
+    expect(normalizeDmPlace(placeAfterToolPath('null'))).toBeNull();
+    expect(normalizeDmPlace(placeAfterToolPath(' NULL '))).toBeNull();
+    expect(normalizeDmPlace(placeAfterToolPath(''))).toBeNull();
+  });
+
+  test('a real key passes through unchanged', () => {
+    expect(normalizeDmPlace(placeAfterToolPath('the-rope-ledge'))).toBe('the-rope-ledge');
   });
 });

@@ -114,6 +114,8 @@ export interface PartyScalingRecord {
   scaledMaxHp: number;
   /** `"3d8+6 (avg 19.5)"` per attack, in the profile's own attack order. */
   rawAttacks: string[];
+  /** Set when party scaling was intentionally skipped (e.g. bible-authored HP). */
+  skipped?: string;
 }
 
 const describeAttack = (attack: MonsterAttack): string =>
@@ -128,6 +130,8 @@ export interface ScaledMonster {
   currentHp: number;
   attackProfile: MonsterAttackProfile | null;
   scaling: PartyScalingRecord;
+  /** Set when party scaling was intentionally skipped (e.g. bible-authored HP). */
+  skipped?: string;
 }
 
 /**
@@ -144,11 +148,15 @@ export function scaleMonsterForParty(input: {
   rawCurrentHp: number;
   attackProfile: MonsterAttackProfile | null;
   partySize: number;
+  skipPartyScale?: boolean;
 }): ScaledMonster {
   const { rawMaxHp, rawCurrentHp, attackProfile, partySize } = input;
-  const factor = partyScaleFactor(partySize);
-  const maxHp = scaleHitPoints(rawMaxHp, factor);
-  const currentHp = Math.min(maxHp, Math.max(1, Math.round(rawCurrentHp * factor)));
+  const skipped = input.skipPartyScale ? 'authored_bible_hp' : undefined;
+  const factor = skipped ? 1 : partyScaleFactor(partySize);
+  const maxHp = skipped ? Math.max(1, Math.round(rawMaxHp)) : scaleHitPoints(rawMaxHp, factor);
+  const currentHp = skipped
+    ? Math.min(maxHp, Math.max(1, Math.round(rawCurrentHp)))
+    : Math.min(maxHp, Math.max(1, Math.round(rawCurrentHp * factor)));
   const scaling: PartyScalingRecord = {
     partySize: Math.max(1, Math.floor(partySize) || 1),
     baseline: PARTY_SIZE_BASELINE,
@@ -156,6 +164,7 @@ export function scaleMonsterForParty(input: {
     rawMaxHp,
     scaledMaxHp: maxHp,
     rawAttacks: (attackProfile?.attacks ?? []).map(describeAttack),
+    ...(skipped ? { skipped } : {}),
   };
   return {
     factor,
@@ -170,5 +179,6 @@ export function scaleMonsterForParty(input: {
         }
       : null,
     scaling,
+    ...(skipped ? { skipped } : {}),
   };
 }

@@ -106,6 +106,7 @@ describe('phase schemas (Refs #782 item 8)', () => {
         'final_beat_reached',
         'combat_exits',
         'inspiration_grant',
+        'place',
       ].sort(),
     );
     expect((schema as { required: string[] }).required).toEqual([

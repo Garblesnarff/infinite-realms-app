@@ -617,6 +617,57 @@ describeWithDb('the server runs NPC turns on End turn (#2658 step 3)', () => {
     await finish(encounterId);
   });
 
+  test('the map Move request persists one player engine card with the actual distance (#153)', async () => {
+    const { sessionId, encounterId, playerId } = await seedFight();
+    await saveTacticalMap({
+      id: crypto.randomUUID(),
+      sessionId,
+      width: 6,
+      height: 6,
+      cells: Array.from({ length: 6 }, () =>
+        Array.from({ length: 6 }, () => ({
+          terrain: 'floor' as const,
+          blocksMovement: false,
+          blocksSight: false,
+          cover: 0 as const,
+          elevation: 0,
+        })),
+      ),
+      entities: [{
+        id: playerId!,
+        slug: 'the-scholar',
+        x: 1,
+        y: 1,
+        size: 'medium',
+        type: 'pc',
+        speedFeet: 30,
+        movementRemaining: 30,
+      }],
+      round: 1,
+      sceneDescription: 'Movement test room',
+    });
+
+    const reply = await post(`${encounterId}/intent`, {
+      intent: { type: 'move', actorId: playerId, x: 3, y: 1 },
+      source: 'player',
+      origin: 'action_bar',
+    });
+    expect(reply.result.engineRows).toHaveLength(1);
+    expect(reply.result.engineRows[0]).toMatchObject({
+      kind: 'player',
+      text: 'You moved 10 ft.',
+      context: {
+        combatEngineBlocks: [{
+          source: 'player',
+          cards: [{ kind: 'move', side: 'party', line: 'You moved 10 ft.' }],
+        }],
+      },
+    });
+    expect((await rowsOf(sessionId)).filter((row) => row.message === 'You moved 10 ft.')).toHaveLength(1);
+    await database.delete(tacticalMaps).where(eq(tacticalMaps.sessionId, sessionId));
+    await finish(encounterId);
+  });
+
   test('a flee whose opportunity attack downs the player (#1169): no exit, the fight stays open, one player row carries the downed line', async () => {
     const { sessionId, encounterId, playerId } = await seedFight({ playerHp: 1 });
     const participants = await database

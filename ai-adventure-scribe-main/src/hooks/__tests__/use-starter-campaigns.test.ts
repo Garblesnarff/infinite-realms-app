@@ -176,7 +176,9 @@ describe('useStarterCampaign', () => {
     (mockFrom as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      single: vi.fn().mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'Not found' } }),
+      single: vi
+        .fn()
+        .mockResolvedValue({ data: null, error: { code: 'PGRST116', message: 'Not found' } }),
     });
 
     const { result } = renderHook(() => useStarterCampaign('non-existent'));

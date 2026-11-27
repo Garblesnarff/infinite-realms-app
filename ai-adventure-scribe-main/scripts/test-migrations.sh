@@ -227,6 +227,9 @@ build_replay_list() {
         # db/migrations/20251106_backfill_lost_drizzle_migrations.sql (#1752); pinned after the
         # newest migration so the table exists.
         0038_story_map.sql) echo "20261125_000000	$f"; continue;;
+        # Creates story_map_progress/story_map_revealed_edges, which reference campaigns and
+        # game_sessions (#1753); pinned right after 0038 so every table it references exists.
+        0039_story_map_progress.sql) echo "20261125_000001	$f"; continue;;
         # Creates combat_intent_idempotency, which references combat_encounters, created by
         # supabase/migrations/20251112_01_add_combat_system_unified.sql (#51); pinned after the
         # newest migration so the combat tables exist.

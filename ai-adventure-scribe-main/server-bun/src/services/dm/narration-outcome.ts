@@ -24,6 +24,7 @@ import {
   type OutcomeClaim,
 } from '../../../../shared/narration-harm.js';
 import { logger } from '../../lib/logger.js';
+import { showTargetNumbersForSession } from '../combat/session-target-numbers.js';
 
 export interface RollOutcome {
   success: boolean;
@@ -110,11 +111,13 @@ export async function latestRollOutcome(sessionId: string): Promise<RollOutcome 
 /**
  * The engine's truth, plainly stated, for a narration that claimed the opposite. The repair
  * replaces the false claim — it does not embroider it, and it never invents a consequence.
+ * When target numbers are off the clause is dropped, not replaced (#157).
  */
-export function repairNarration(outcome: RollOutcome): string {
+export function repairNarration(outcome: RollOutcome, showTargetNumbers: boolean): string {
   const what = outcome.description ? `The ${outcome.description}` : 'The attempt';
-  const target =
-    typeof outcome.dc === 'number'
+  const target = !showTargetNumbers
+    ? ''
+    : typeof outcome.dc === 'number'
       ? ` vs DC ${outcome.dc}`
       : typeof outcome.ac === 'number'
         ? ` vs AC ${outcome.ac}`
@@ -430,13 +433,14 @@ export async function repairNarrationContradiction(input: {
       requestType: outcome.requestType,
     });
     if (!claims.length) return null;
+    const showTargetNumbers = await showTargetNumbersForSession(sessionId);
     logger.warn({
       msg: 'DM_NARRATION_OUTCOME_REPAIRED',
       sessionId,
       claims,
       engineSuccess: outcome.success,
     });
-    return spliceContradictingSentences(text, claims, repairNarration(outcome));
+    return spliceContradictingSentences(text, claims, repairNarration(outcome, showTargetNumbers));
   } catch (error) {
     logger.warn({
       msg: 'DM_NARRATION_OUTCOME_CHECK_FAILED',

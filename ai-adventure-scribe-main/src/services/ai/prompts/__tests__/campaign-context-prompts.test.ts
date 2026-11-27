@@ -72,6 +72,9 @@ PREMISE: A culinary academy hides a delicious secret.
 OVERVIEW: Founded centuries ago by traveling chefs.
 </canonical_setting>
 
+<darkness_rule>
+No one sees in total darkness without a light source or darkvision. The character block's "Sight:" line says whether the player has darkvision and its range (60 ft, or 120 ft for superior darkvision); within that range, dim light counts as bright light and darkness as dim light, in shades of gray. Without darkvision and without light, narrate only sound, touch and smell.
+</darkness_rule>
 <creative_direction>
 Cozy and whimsical.
 </creative_direction>
@@ -232,7 +235,7 @@ Include the tags.
 
     const result = CampaignContextPrompts.renderStarterCampaignLore(lore, {
       // Fixed head/tail/assets run ~260 tokens; one ~514-token entity fits, two do not.
-      tokenBudget: 900,
+      tokenBudget: 1000,
       recentTurnsText: 'Kept One waved at the party.',
     });
 
@@ -272,7 +275,7 @@ Include the tags.
     };
 
     const result = CampaignContextPrompts.renderStarterCampaignLore(lore, {
-      tokenBudget: 900,
+      tokenBudget: 1000,
       recentTurnsText: 'Kept One waved at the party.',
     });
 
@@ -313,7 +316,7 @@ ${markedLine}
     };
 
     const result = CampaignContextPrompts.renderStarterCampaignLore(lore, {
-      tokenBudget: 900,
+      tokenBudget: 1000,
       recentTurnsText: 'Kept One waved at the party.',
     });
 
@@ -394,6 +397,14 @@ describe('CampaignContextPrompts.renderStarterCampaignLore — the PC is not an 
 
     expect(result.section).toContain('<npc name="The Apprentice">');
     expect(result.section).not.toContain('<player_identity>');
+  });
+});
+
+describe('CampaignContextPrompts darkness rule', () => {
+  it('renders the darkness_rule block in the starter lore head', () => {
+    const result = CampaignContextPrompts.renderStarterCampaignLore(smallLore);
+    expect(result.section).toContain('<darkness_rule>');
+    expect(result.section).toContain('No one sees in total darkness');
   });
 });
 
