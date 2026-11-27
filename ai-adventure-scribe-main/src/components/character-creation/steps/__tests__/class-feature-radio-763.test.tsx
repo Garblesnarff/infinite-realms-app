@@ -16,7 +16,10 @@ const dispatch = vi.fn();
 let currentClass: unknown;
 
 vi.mock('@/contexts/CharacterContext', () => ({
-  useCharacter: () => ({ state: { character: { name: 'W', class: currentClass, level: 1 } }, dispatch }),
+  useCharacter: () => ({
+    state: { character: { name: 'W', class: currentClass, level: 1 } },
+    dispatch,
+  }),
 }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 

@@ -276,6 +276,13 @@ export type DMResponse = {
    * the next. Absent or null while story beats remain.
    */
   final_beat_reached?: boolean | null;
+  /**
+   * The story map place the hero is at after this turn (#1753): a key from the <story_map>
+   * block, for starter campaigns only. The server accepts it only when it fits the map (the
+   * current place, a known neighbour, or a neighbour of a visited place) and drops anything
+   * else. Absent or null when the hero did not arrive anywhere new.
+   */
+  place?: string | null;
 };
 
 const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
@@ -944,6 +951,17 @@ const inspirationGrantProperty = {
     'Do not grant it for a routine action or on a turn that asks for a roll. Otherwise omit it.',
 };
 
+/** #1753 story map: the place key the hero is at after this turn. Narrative turns only. */
+const placeProperty = {
+  type: 'string',
+  description:
+    '#1753 story map: when this turn ends with the hero at a place listed in <story_map> ' +
+    '(they arrived, or the scene opens there), set this to that place key exactly as listed. ' +
+    'Use only keys from <story_map>; the game moves the map marker from it. If this reply asks ' +
+    'for a roll, send it on the result turn instead. Omit it when the hero stays where they ' +
+    'are or there is no <story_map> block.',
+};
+
 /** The live extension set, shared by the full schema and every phase schema. */
 const liveExtensionProperties = {
   combat_exits: combatExitsProperty,
@@ -956,6 +974,7 @@ const liveExtensionProperties = {
   tracker_changes: trackerChangesProperty,
   final_beat_reached: finalBeatReachedProperty,
   inspiration_grant: inspirationGrantProperty,
+  place: placeProperty,
 };
 
 /**
@@ -988,6 +1007,7 @@ const liveExtensionPhases: DmResponseExtensionPhases = {
   tracker_changes: ['narrative'],
   final_beat_reached: ['narrative', 'combat', 'tactical'],
   inspiration_grant: ['narrative'],
+  place: ['narrative'],
 };
 
 export const dmResponseSchema = createDmResponseSchema(liveExtensionProperties);
