@@ -1,6 +1,13 @@
 import React from 'react';
 
 import {
+  layoutMapLabels,
+  PLACE_FONT,
+  zoneRect,
+  ZONE_FONT,
+  type MapLabel,
+} from './region-map-labels';
+import {
   centreView,
   FULL_VIEW,
   MAP_H,
@@ -15,14 +22,13 @@ import { PLACE_STATE_WORDS, type StoryMapPlaceView, type StoryMapView } from './
 const NAVY = '#0e1a36';
 const GOLD = '#d5b070';
 const CREAM = '#f6e3b8';
-const ZONE_PAD = 0.07;
 
 function Pin({
   place,
-  labelled,
+  label,
 }: {
   place: StoryMapPlaceView;
-  labelled: boolean;
+  label: MapLabel | undefined;
 }): React.ReactElement {
   const cx = place.x * MAP_W;
   const cy = place.y * MAP_H;
@@ -53,12 +59,12 @@ function Pin({
           ?
         </text>
       )}
-      {labelled && (
+      {label && (
         <text
-          x={cx}
-          y={cy + 20}
-          textAnchor="middle"
-          fontSize={10}
+          x={label.x}
+          y={label.y}
+          textAnchor={label.anchor}
+          fontSize={PLACE_FONT}
           fill={CREAM}
           stroke={NAVY}
           strokeWidth={3}
@@ -83,6 +89,11 @@ export const RegionMap: React.FC<{
 }> = ({ view, selectedKey, onSelectPlace }) => {
   const [box, setBox] = React.useState<ViewBox>(FULL_VIEW);
   const frameRef = React.useRef<HTMLDivElement>(null);
+  // Labels sit where no route line crosses them (#1742). Places with a label: visited, or selected.
+  const labels = React.useMemo(
+    () => layoutMapLabels(view, (place) => place.state === 'visited' || place.key === selectedKey),
+    [view, selectedKey],
+  );
   const pointers = React.useRef(new Map<number, { x: number; y: number }>());
   const moved = React.useRef(false);
 
@@ -170,10 +181,8 @@ export const RegionMap: React.FC<{
           {view.zones.map((zone) => {
             if (!zone.bounds) return null;
             const known = zone.places.length > 0;
-            const x = (zone.bounds.minX - ZONE_PAD) * MAP_W;
-            const y = (zone.bounds.minY - ZONE_PAD) * MAP_H;
-            const w = (zone.bounds.maxX - zone.bounds.minX + ZONE_PAD * 2) * MAP_W;
-            const h = (zone.bounds.maxY - zone.bounds.minY + ZONE_PAD * 2) * MAP_H;
+            const { x, y, w, h } = zoneRect(zone.bounds);
+            const label = labels.zones.get(zone.key);
             return (
               <g key={zone.key} data-testid={`zone-${zone.key}`}>
                 {known && (
@@ -189,17 +198,19 @@ export const RegionMap: React.FC<{
                     strokeOpacity={0.35}
                   />
                 )}
-                <text
-                  x={known ? x + 8 : x + w / 2}
-                  y={known ? y + 13 : y + h / 2}
-                  textAnchor={known ? 'start' : 'middle'}
-                  fontSize={10}
-                  fill={GOLD}
-                  fillOpacity={known ? 1 : 0.55}
-                  className="ir-display"
-                >
-                  {zone.name}
-                </text>
+                {label && (
+                  <text
+                    x={label.x}
+                    y={label.y}
+                    textAnchor={label.anchor}
+                    fontSize={ZONE_FONT}
+                    fill={GOLD}
+                    fillOpacity={known ? 1 : 0.55}
+                    className="ir-display"
+                  >
+                    {zone.name}
+                  </text>
+                )}
               </g>
             );
           })}
@@ -218,11 +229,7 @@ export const RegionMap: React.FC<{
             />
           ))}
           {view.places.map((place) => (
-            <Pin
-              key={place.key}
-              place={place}
-              labelled={place.state === 'visited' || place.key === selectedKey}
-            />
+            <Pin key={place.key} place={place} label={labels.places.get(place.key)} />
           ))}
         </svg>
         {view.places.map((place) => (

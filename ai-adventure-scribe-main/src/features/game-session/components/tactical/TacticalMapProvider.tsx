@@ -1,11 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 import { useTacticalMap } from './useTacticalMap';
+import { RAILS_SIDE_BY_SIDE } from '../game/game-content/use-game-rails';
 
 export type TacticalMapState = ReturnType<typeof useTacticalMap>;
-
-// GameLayout's grid shows the left rail as its own column from this width up.
-const RAIL_COLUMN_WITH_RIGHT_OPEN = '(min-width: 1024px)';
 
 const TacticalMapContext = createContext<TacticalMapState | null>(null);
 
@@ -53,7 +51,7 @@ function OpenRailForNewMap({
   useEffect(() => {
     if (!mapId || mapId === openedFor) return;
     setOpenedFor(mapId);
-    if (window.matchMedia?.(RAIL_COLUMN_WITH_RIGHT_OPEN).matches) setLeftCollapsed(false);
+    if (window.matchMedia?.(RAILS_SIDE_BY_SIDE).matches) setLeftCollapsed(false);
   }, [mapId, openedFor, setLeftCollapsed]);
   return null;
 }
