@@ -1,6 +1,6 @@
 {
-  "id": "ad531afb-16de-40d1-826e-bd9b444731e1",
-  "prevId": "728beda0-42c2-446f-8d30-63281d281e3d",
+  "id": "c0a11188-9edb-481f-ad43-60924ac805a4",
+  "prevId": "bf033c79-4d53-4276-8676-5a89765ccf7a",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -10509,6 +10509,193 @@
           "value": "\"story_map_places\".\"fight_size\" in ('small', 'medium', 'large')"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.story_map_progress": {
+      "name": "story_map_progress",
+      "schema": "",
+      "columns": {
+        "campaign_id": {
+          "name": "campaign_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "place_key": {
+          "name": "place_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_session_id": {
+          "name": "first_session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "visited_at": {
+          "name": "visited_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "story_map_progress_campaign_place_key": {
+          "name": "story_map_progress_campaign_place_key",
+          "columns": [
+            {
+              "expression": "campaign_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "place_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "story_map_progress_campaign_id_campaigns_id_fk": {
+          "name": "story_map_progress_campaign_id_campaigns_id_fk",
+          "tableFrom": "story_map_progress",
+          "tableTo": "campaigns",
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "story_map_progress_first_session_id_game_sessions_id_fk": {
+          "name": "story_map_progress_first_session_id_game_sessions_id_fk",
+          "tableFrom": "story_map_progress",
+          "tableTo": "game_sessions",
+          "columnsFrom": ["first_session_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "story_map_progress_state_check": {
+          "name": "story_map_progress_state_check",
+          "value": "\"story_map_progress\".\"state\" in ('known', 'visited')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.story_map_revealed_edges": {
+      "name": "story_map_revealed_edges",
+      "schema": "",
+      "columns": {
+        "campaign_id": {
+          "name": "campaign_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "from_key": {
+          "name": "from_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "to_key": {
+          "name": "to_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session_id": {
+          "name": "session_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "story_map_revealed_edges_campaign_from_to": {
+          "name": "story_map_revealed_edges_campaign_from_to",
+          "columns": [
+            {
+              "expression": "campaign_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "from_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "to_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "story_map_revealed_edges_campaign_id_campaigns_id_fk": {
+          "name": "story_map_revealed_edges_campaign_id_campaigns_id_fk",
+          "tableFrom": "story_map_revealed_edges",
+          "tableTo": "campaigns",
+          "columnsFrom": ["campaign_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "story_map_revealed_edges_session_id_game_sessions_id_fk": {
+          "name": "story_map_revealed_edges_session_id_game_sessions_id_fk",
+          "tableFrom": "story_map_revealed_edges",
+          "tableTo": "game_sessions",
+          "columnsFrom": ["session_id"],
+          "columnsTo": ["id"],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.campaign_journal_entries": {

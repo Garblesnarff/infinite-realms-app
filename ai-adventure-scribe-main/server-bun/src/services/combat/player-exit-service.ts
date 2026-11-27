@@ -195,6 +195,9 @@ type ReactionOutcome = {
 export async function resolveMovementReactions(params: {
   encounterId: string;
   sessionId: string;
+  userId: string;
+  state: CombatState;
+  intent?: PlayerExitIntent;
   actorId: string;
   actor: ExitParticipant;
   selectAttackers: (actor: ExitParticipant) => Promise<OpportunityAttacker[]>;
@@ -231,17 +234,28 @@ export async function resolveMovementReactions(params: {
         hit: outcome.hit === true,
         finalDamage: Number(outcome.finalDamage ?? 0),
       };
-      await recordDmTacticalFact(
-        sessionId,
-        describeResolvedAttack(attackerName, targetName, outcome, attacker.weapon.name),
-        {
-          kind: 'attack',
-          actorSlug: params.slugOf(attacker.participant.id),
-          actorIsPlayer: attacker.participant.participantType === 'player',
-          targetSlug: params.slugOf(actorId),
-          hit: outcome.hit,
-        },
-      );
+      const line = describeResolvedAttack(attackerName, targetName, outcome, attacker.weapon.name);
+      await recordDmTacticalFact(sessionId, line, {
+        kind: 'attack',
+        actorSlug: params.slugOf(attacker.participant.id),
+        actorIsPlayer: attacker.participant.participantType === 'player',
+        targetSlug: params.slugOf(actorId),
+        hit: outcome.hit,
+      });
+      // Flee already writes the reaction as part of its exit result. A map Move has no such row.
+      if (params.intent !== 'flee') {
+        try {
+          const { writeEngineLineRow } = await import('./npc-engine-row.js');
+          await writeEngineLineRow(
+            params.state,
+            `move-reaction:${crypto.randomUUID()}`,
+            `Opportunity attack: ${line}`,
+            params.userId,
+          );
+        } catch (error) {
+          logger.warn({ msg: 'MOVEMENT_REACTION_LINE_FAILED', encounterId, sessionId, error });
+        }
+      }
       playerDowned =
         outcome.targetIsDead === true ||
         outcome.targetIsConscious === false ||

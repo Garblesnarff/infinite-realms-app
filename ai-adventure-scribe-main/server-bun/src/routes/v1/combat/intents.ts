@@ -247,6 +247,29 @@ export const intentRoutes = new Elysia()
           payload.origin,
           playerInput,
         );
+        let moveRows: unknown[] = [];
+        if (payload.intent.type === 'move' && payload.source !== 'dm') {
+          const path = (result as { path?: unknown[] }).path;
+          if (path && path.length > 1) {
+            try {
+              const { persistPlayerMove } =
+                await import('../../../services/combat/player-move-line.js');
+              moveRows = await persistPlayerMove({
+                encounterId: params.encounterId,
+                actorId: payload.intent.actorId,
+                actionId: payload.intent.actionId,
+                steps: path.length - 1,
+                userId: user.userId,
+              });
+            } catch (error) {
+              logger.warn({
+                msg: 'PLAYER_MOVE_LINE_FAILED',
+                encounterId: params.encounterId,
+                error,
+              });
+            }
+          }
+        }
         // The turn never waits on a browser: whatever creatures now hold it act here (#2658).
         const npcTurnsAfter = await runNpcTurnsIfNpcHolds(params.encounterId, user.userId);
         const npcTurns =
@@ -263,11 +286,15 @@ export const intentRoutes = new Elysia()
         logIntentAccepted(context, request, params, payload);
         const engineRows = [
           ...((result as { engineRows?: unknown[] }).engineRows ?? []),
+          ...moveRows,
           ...(npcTurns?.engineRows ?? []),
         ];
         return {
           accepted: true,
-          result: npcTurns ? { ...(result as object), npcTurns, engineRows } : result,
+          result:
+            npcTurns || moveRows.length
+              ? { ...(result as object), ...(npcTurns ? { npcTurns } : {}), engineRows }
+              : result,
           engineRows,
         };
       } catch (cause) {

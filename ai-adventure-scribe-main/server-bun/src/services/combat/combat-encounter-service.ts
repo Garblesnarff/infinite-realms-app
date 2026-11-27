@@ -940,6 +940,7 @@ export class CombatEncounterService {
             : sql`true`,
         ),
       with: {
+        session: { columns: { sessionState: true } },
         participants: {
           orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
           with: {
@@ -957,7 +958,12 @@ export class CombatEncounterService {
     }
 
     // Extract participants from the joined result
-    const { participants: participantRows, ...encounter } = encounterWithParticipants;
+    const { participants: participantRows, session, ...encounter } = encounterWithParticipants;
+    const marks = (
+      session?.sessionState as {
+        raging?: Record<string, { encounterId?: unknown; expiresRound?: unknown }>;
+      } | null
+    )?.raging;
     const map = await loadActiveTacticalMap(encounter.sessionId);
     const positions = new Map(
       map?.entities.map((entity) => [entity.id, { x: entity.x, y: entity.y, sceneId: map.id }]),
@@ -967,8 +973,17 @@ export class CombatEncounterService {
       const position = positions.get(participant.id);
       const downedBehavior = authoredDownedBehavior(npc?.stats);
       const authored = authoredNumbers(npc?.stats);
+      const rage = marks?.[participant.id];
+      const raging =
+        encounter.status === 'active' &&
+        participant.isActive &&
+        participant.participantType === 'player' &&
+        rage?.encounterId === encounterId &&
+        typeof rage.expiresRound === 'number' &&
+        encounter.currentRound < rage.expiresRound;
       const view = {
         ...participant,
+        ...(raging ? { raging: true } : {}),
         ...(position ? { position } : {}),
         ...(disposition ? { disposition } : {}),
         ...authored,

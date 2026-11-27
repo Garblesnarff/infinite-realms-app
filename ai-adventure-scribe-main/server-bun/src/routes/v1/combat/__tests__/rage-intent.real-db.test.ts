@@ -238,6 +238,29 @@ describeWithDb('Rage posts through the real intent route (#1638)', () => {
     expect(await bonusActionUsed()).toBe(true);
   });
 
+  test('combat state exposes a live Rage mark and drops it on expiry', async () => {
+    const isMarked = async () => {
+      const response = await app!.handle(
+        new Request(`http://localhost/v1/combat/sessions/${sessionId}/active`, {
+          headers: { authorization: `Bearer ${userId}` },
+        }),
+      );
+      expect(response.status).toBe(200);
+      const { combat } = (await response.json()) as {
+        combat: { participants: Array<{ id: string; raging?: boolean }> };
+      };
+      return combat.participants.find((participant) => participant.id === FIGHTER_FEATURE_ACTOR_ID);
+    };
+    expect(await isMarked()).not.toHaveProperty('raging');
+    expect((await postRage()).status).toBe(200);
+    expect(await isMarked()).toHaveProperty('raging', true);
+    await db
+      .update(combatEncounters)
+      .set({ currentRound: 11 })
+      .where(eq(combatEncounters.id, encounterId));
+    expect(await isMarked()).not.toHaveProperty('raging');
+  });
+
   test('a refused Rage with no uses left spends nothing and leaves the bonus action free', async () => {
     await db
       .update(characterFeatures)

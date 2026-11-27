@@ -348,6 +348,7 @@ describe('phaseOmittedExtensionSections', () => {
       'campaign_ending',
       'tracker_changes',
       'inspiration_grant',
+      'place',
     ];
     expect(phaseOmittedExtensionSections('combat')).toEqual(story);
     expect(phaseOmittedExtensionSections('tactical')).toEqual(story);

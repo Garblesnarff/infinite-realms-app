@@ -214,6 +214,25 @@ a place the DM names for the first time with `state = known` (a neighbour of a
 visited place); anything else is dropped and logged, not an error. The client
 never sends it.
 
+**The opening (strategist decision, 11-26, #1762).** Before the first visit the
+campaign has no visited place, so there is no current place and no neighbour to
+check against. In that state the server accepts any `place_key` of the
+session's starter map: that is the place the opening scene puts the hero
+(`story-map-rules.ts`, the `opening` branch of `decidePlace`). To let the DM
+choose it, the `<story_map>` block lists every place of the map until the first
+visit, and only the known places and their routes after it. From the first
+visit on, the rules above apply.
+
+**Same zone (strategist decision, 11-27, #1762).** Places in the same zone are
+neighbours without a route line. The first real routes (#1757) showed why: one
+bible has 40 places and 7 routes, so 32 places had no route at all. Routes are
+for paths between zones and for hidden paths. So a place is a neighbour of a
+visited place when a route leads to it **or** it is in the same zone (both
+`zone_key` set and equal). The accept rule in `decidePlace` uses that, the
+`<story_map>` block lists same-zone places among the routes onward, and a
+visit makes same-zone places known. A place with no zone (a bible without
+zones) has no same-zone neighbours; only routes reach it.
+
 **Budget.** Narrative optionals go 20 → 21. The strict cap is 24
 (`dm-response-schema-budget.test.ts:59-139`), so it fits.
 
@@ -269,11 +288,13 @@ the turn (`ops/smoke.sh:358-360`).
 button named "Open map, you are at <place>". In combat it keeps opening the
 fight board.
 
-**Desktop (≥700 px).** The map opens in the left rail, where the fight board
-sits today. The SVG takes the top; the **place list** sits under it in the
+**Desktop (≥1024 px).** The map opens in the left rail, where the fight board
+sits today. The rail exists only from 1024 px (`RAILS_SIDE_BY_SIDE` in
+`use-game-rails.ts`, the same query GameLayout uses for the fight board), so
+that is the breakpoint. The SVG takes the top; the **place list** sits under it in the
 same panel.
 
-**Phone (≤699 px).** The map opens in the same sheet the fight board uses
+**Phone (≤1023 px).** The map opens in the same sheet the fight board uses
 (`GameMainContent.tsx:342-351`): it covers the story column from its top down
 to the dock and never covers the roll tray or the composer, so the player can
 read the map and type at the same time. Two tabs at the top of the sheet:
@@ -356,7 +377,7 @@ before 1 merges, against a fixture graph JSON; it wires to the real route when
 ### Issue 3 — maps: region map and place list in the Table look (#1742)
 
 - **Done means:** On a starter campaign, the plaque opens the map (left rail
-  ≥700 px; dock-bounded sheet with Map/Places tabs ≤699 px). SVG shows zones,
+  ≥1024 px; dock-bounded sheet with Map/Places tabs ≤1023 px). SVG shows zones,
   places in three states and known routes; the place list shows the same
   content in text. Travel here fills the composer and focuses it; nothing is
   sent. Full keyboard path and Escape behavior per §9; 44 px targets;

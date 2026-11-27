@@ -1287,7 +1287,7 @@ async function movementReactionContext(params: {
         map,
         reachOf: async (participant) => {
           const { getDefaultCombatWeapon } = await import('./equipped-loadout.js');
-          return getDefaultCombatWeapon(participant);
+          return getDefaultCombatWeapon(participant, { preferMelee: true });
         },
         hasLineOfSight: (fromId, toId) => (map ? checkLineOfSight(map, fromId, toId) : false),
         distanceFeet: getDistance,
@@ -3275,7 +3275,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       map: map ?? null,
       reachOf: async (participant) => {
         const { getDefaultCombatWeapon } = await import('./equipped-loadout.js');
-        return getDefaultCombatWeapon(participant);
+        return getDefaultCombatWeapon(participant, { preferMelee: true });
       },
       hasLineOfSight: (fromId, toId) => (map ? checkLineOfSight(map, fromId, toId) : false),
       distanceFeet: getDistance,
