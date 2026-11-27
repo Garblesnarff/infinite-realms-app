@@ -27,7 +27,11 @@ import {
   inventoryItems,
 } from '../../../../db/schema/index';
 import { abilityModifier } from '../../../../shared/ability-modifier';
-import { computeArmorClass, type ArmorClassEquipmentItem } from '../../../../shared/armor-class';
+import {
+  computeArmorClass,
+  describeArmorClass,
+  type ArmorClassEquipmentItem,
+} from '../../../../shared/armor-class';
 import { isDraconicBloodline } from '../../../../shared/class-feature-choices';
 import { logger } from '../../lib/logger.js';
 
@@ -105,6 +109,11 @@ export async function readArmorClassEquipment(
     item_type: row.itemType,
     equipped: row.equipped,
   }));
+}
+
+export async function wearsHeavyArmor(characterId: string): Promise<boolean> {
+  const equipment = await readArmorClassEquipment(characterId);
+  return describeArmorClass(equipment, 0).armor?.category === 'heavy';
 }
 
 /**

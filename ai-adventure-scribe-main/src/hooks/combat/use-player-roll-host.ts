@@ -101,7 +101,10 @@ export function usePlayerRollHost(): string | null {
         registerSettler(rollId, (outcome) => {
           setPendingRollId(null);
           const attack = !isDeathSaveSpec(spec) && !isInitiativeSpec(spec);
-          settle(attack && outcome.d20 !== null ? { ...outcome, rollId } : outcome);
+          const passRollId =
+            (attack && outcome.d20 !== null) ||
+            (isInitiativeSpec(spec) && outcome.dismissed === true);
+          settle(passRollId ? { ...outcome, rollId } : outcome);
         });
         return {
           rollId,
@@ -174,7 +177,7 @@ export function settleCombatAttackRoll(
 
 /** Hands an initiative d20 back to the entry flow instead of sending it to the DM. */
 export function settleCombatInitiativeRoll(rollId: string, d20: number | null): boolean {
-  return settleCombatPlayerRoll(rollId, { d20 });
+  return settleCombatPlayerRoll(rollId, d20 === null ? { d20: null, dismissed: true } : { d20 });
 }
 
 /**

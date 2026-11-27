@@ -109,9 +109,7 @@ describe('saveCharacterAndNavigate (#208 clear-on-complete)', () => {
 
     expect(deps.onSaved).toHaveBeenCalledTimes(1);
     expect(deps.navigate).toHaveBeenCalledWith('/app/characters');
-    expect(deps.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Success!' }),
-    );
+    expect(deps.toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Success!' }));
   });
 
   it('does not call onSaved when the save returns null', async () => {
@@ -140,8 +138,37 @@ describe('saveCharacterAndNavigate (#208 clear-on-complete)', () => {
 
     expect(deps.onSaved).not.toHaveBeenCalled();
     expect(deps.navigate).not.toHaveBeenCalled();
+    expect(deps.toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Save Error' }));
+  });
+});
+
+describe('saveCharacterAndNavigate (#210 QA-026 background image toggle)', () => {
+  it('forwards generateBackgroundImage: false and drops the background line from the toast', async () => {
+    const deps = makeDeps({ generateBackgroundImage: false });
+    await saveCharacterAndNavigate(deps);
+
+    expect(deps.saveCharacter).toHaveBeenCalledWith(character, {
+      generateBackgroundImage: false,
+    });
     expect(deps.toast).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Save Error' }),
+      expect.objectContaining({
+        title: 'Success!',
+        description: 'Character created successfully!',
+      }),
+    );
+  });
+
+  it('defaults to generating and keeps the background line in the toast', async () => {
+    const deps = makeDeps();
+    await saveCharacterAndNavigate(deps);
+
+    expect(deps.saveCharacter).toHaveBeenCalledWith(character, {
+      generateBackgroundImage: true,
+    });
+    expect(deps.toast).toHaveBeenCalledWith(
+      expect.objectContaining({
+        description: expect.stringContaining('Background image generation may continue'),
+      }),
     );
   });
 });

@@ -22,6 +22,7 @@ const state = vi.hoisted(() => ({
   resolveOrCreate: vi.fn(),
   seed: vi.fn(),
   listSessions: vi.fn(),
+  listCharacters: vi.fn(),
 }));
 
 vi.mock('@/hooks/use-starter-campaigns', () => ({
@@ -43,7 +44,9 @@ vi.mock('@/services/character/starter-character-seeding', async (importOriginal)
   const actual = await importOriginal<typeof StarterCharacterSeeding>();
   return { ...actual, seedStarterCharacter: state.seed };
 });
-vi.mock('@/services/user-data-api', () => ({ userDataApi: { listSessions: state.listSessions } }));
+vi.mock('@/services/user-data-api', () => ({
+  userDataApi: { listSessions: state.listSessions, listCharacters: state.listCharacters },
+}));
 
 function campaign(overrides: Partial<StarterCampaign>): StarterCampaign {
   return {
@@ -401,6 +404,23 @@ describe('CampaignDetailPage heroes (#89)', () => {
     expect(await screen.findByText('game page')).toBeInTheDocument();
     expect(state.seed).toHaveBeenCalledTimes(1);
     document.body.classList.remove('ir-table-look');
+  });
+
+  it('offers only the campaign premade, not a hero from another campaign (#1740)', () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    state.listCharacters.mockClear();
+    state.listCharacters.mockResolvedValue([
+      { id: 'other-1', name: 'Mira', race: 'Elf', class: 'Ranger', level: 3 },
+    ]);
+    renderPage();
+
+    expect(screen.getByRole('button', { name: 'Play as Bram' })).toBeInTheDocument();
+    expect(screen.queryByText('Mira')).not.toBeInTheDocument();
+    expect(screen.queryByText('Your characters')).not.toBeInTheDocument();
+    // /explore never requests the account's own characters.
+    expect(state.listCharacters).not.toHaveBeenCalled();
   });
 
   it('shows the header, step hint, and back link', () => {

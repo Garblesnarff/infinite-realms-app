@@ -131,11 +131,14 @@ describe('useCharacterSave', () => {
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
   );
 
-  const save = async (character: Character): Promise<Character | null> => {
+  const save = async (
+    character: Character,
+    options?: { generateBackgroundImage?: boolean },
+  ): Promise<Character | null> => {
     const { result } = renderHook(() => useCharacterSave(), { wrapper });
     let savedCharacter: Character | null = null;
     await act(async () => {
-      savedCharacter = await result.current.saveCharacter(character);
+      savedCharacter = await result.current.saveCharacter(character, options);
     });
     return savedCharacter;
   };
@@ -398,6 +401,28 @@ describe('useCharacterSave', () => {
           title: 'Character Background Generated',
         }),
       );
+    });
+  });
+
+  // #210 QA-026: the Finalization toggle opts out of the automatic backdrop.
+  it('should skip background image generation when the toggle is off', async () => {
+    const character = makeCharacter({ id: undefined, name: 'New Hero' });
+
+    await save(character, { generateBackgroundImage: false });
+
+    await waitFor(() => {
+      expect(userDataApi.createCharacter).toHaveBeenCalled();
+    });
+    expect(characterBackgroundGenerator.generateCharacterBackground).not.toHaveBeenCalled();
+  });
+
+  it('generates a background image by default for a new character', async () => {
+    const character = makeCharacter({ id: undefined, name: 'New Hero' });
+
+    await save(character);
+
+    await waitFor(() => {
+      expect(characterBackgroundGenerator.generateCharacterBackground).toHaveBeenCalled();
     });
   });
 
