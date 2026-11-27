@@ -11,7 +11,7 @@
  * The target's AC selects the intended hit/miss path, with bounded retries. The damage-bound
  * cases seed the engine's dice to exercise both normal and critical hits deterministically.
  */
-import { afterAll, afterEach, beforeAll, beforeEach, expect, it } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, expect, it, mock } from 'bun:test';
 import { and, eq } from 'drizzle-orm';
 
 import { closeRealDb, describeWithDb, hasRealDb, realDb, testId } from './fixtures/real-db.js';
@@ -26,8 +26,23 @@ import {
   gameSessions,
   inventoryItems,
 } from '../../../../db/schema/index';
+import { divineSmiteAttackBody } from '../../../../shared/test-fixtures/divine-smite-attack-intent';
 import { setRngSeed } from '../../lib/rng.js';
 import { describeResolvedAttack } from '../combat/attack-narration.js';
+
+const userId = testId('smite-user');
+mock.module('../../lib/auth.js', () => ({
+  authenticateRequest: async (request: Request) =>
+    request.headers.get('authorization') === `Bearer ${userId}`
+      ? { user: { userId, email: 'smite@example.test', plan: 'free' }, error: null }
+      : { user: null, error: 'Unauthorized' },
+}));
+
+const app = hasRealDb
+  ? (await import('../../http-pipeline.js'))
+      .createRequestPipelineApp()
+      .use((await import('../../routes/v1/combat/index.js')).combatRoutes)
+  : undefined;
 
 const combatAttackService = hasRealDb
   ? (await import('../combat/combat-attack-service.js')).combatAttackService
@@ -44,7 +59,6 @@ const ORC_START_HP = 500;
 
 describeWithDb('Divine Smite on a melee hit (#1362)', () => {
   const db = hasRealDb ? realDb() : (null as never);
-  const userId = testId('smite-user');
   afterEach(() => setRngSeed(undefined));
 
   let campaignId: string;
@@ -217,6 +231,52 @@ describeWithDb('Divine Smite on a melee hit (#1362)', () => {
       },
       userId,
     );
+
+  const postSmite = async () => {
+    const body = divineSmiteAttackBody(await giveTurnToPaladin());
+    return app!.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+        method: 'POST',
+        headers: { authorization: `Bearer ${userId}`, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          ...body,
+          intent: { ...body.intent, actorId: paladinId, targetId: orcId, d20: 19 },
+        }),
+      }),
+    );
+  };
+
+  it('commits the action-bar Smite through HTTP, spends its slot and returns the engine line', async () => {
+    const response = await postSmite();
+    expect(response.status).toBe(200);
+    const reply = (await response.json()) as {
+      accepted: boolean;
+      result: { hit: boolean; transcriptLines: string[] };
+    };
+    expect(reply.accepted).toBe(true);
+    expect(reply.result.hit).toBe(true);
+    expect(reply.result.transcriptLines.join('\n')).toContain('Divine Smite: 2d8 radiant');
+    expect(await usedSlots()).toBe(1);
+    expect(await orcHp()).toBeLessThan(ORC_START_HP);
+  });
+
+  it('refuses the action-bar Smite through HTTP without spending the action or damaging the foe at zero slots', async () => {
+    await db
+      .update(characterSpellSlots)
+      .set({ usedSlots: 2 })
+      .where(eq(characterSpellSlots.characterId, characterId));
+
+    const response = await postSmite();
+    expect(response.status).toBe(422);
+    expect(await response.text()).toContain('Divine Smite refused: no level 1 spell slot left');
+    expect(await usedSlots()).toBe(2);
+    expect(await orcHp()).toBe(ORC_START_HP);
+    const [paladin] = await db
+      .select({ actionUsed: combatParticipants.actionUsed })
+      .from(combatParticipants)
+      .where(eq(combatParticipants.id, paladinId));
+    expect(paladin.actionUsed).toBe(false);
+  });
 
   it.each([
     [1, false],

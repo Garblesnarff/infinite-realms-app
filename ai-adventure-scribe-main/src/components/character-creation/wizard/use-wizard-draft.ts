@@ -23,6 +23,8 @@ export interface UseWizardDraftOptions {
   campaignId: string | null;
   /** Called with the stored draft when the user chooses Resume. */
   onRestore: (draft: WizardDraft) => void;
+  /** #210 QA-026: the background-image opt-out, written into the draft. */
+  generateBackgroundImage: boolean;
 }
 
 export interface UseWizardDraftApi {
@@ -45,6 +47,7 @@ export function useWizardDraft({
   userId,
   campaignId,
   onRestore,
+  generateBackgroundImage,
 }: UseWizardDraftOptions): UseWizardDraftApi {
   const key = userId ? getWizardDraftKey(userId, campaignId) : null;
   const [pendingDraft, setPendingDraft] = React.useState<WizardDraft | null>(null);
@@ -82,10 +85,11 @@ export function useWizardDraft({
         step: currentStep,
         campaignId,
         updatedAt: new Date().toISOString(),
+        generateBackgroundImage,
       });
     }, AUTOSAVE_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [key, character, currentStep, campaignId]);
+  }, [key, character, currentStep, campaignId, generateBackgroundImage]);
 
   const resumeDraft = React.useCallback(() => {
     setPendingDraft((draft) => {

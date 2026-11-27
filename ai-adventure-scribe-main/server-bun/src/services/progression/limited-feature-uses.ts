@@ -168,6 +168,7 @@ export async function countedFamilyPool(input: {
   userId: string;
   className: string;
   family: string;
+  includeUnlimited?: boolean;
 }): Promise<{ max: number; remaining: number } | null> {
   const ctx = await limitedFeatureContext(input.characterId, input.userId, input.className);
   if (!ctx) return null;
@@ -179,6 +180,9 @@ export async function countedFamilyPool(input: {
   );
   if (!canonical) return null;
   const max = rule.usesAt(ctx);
+  if (max === 'unlimited' && input.includeUnlimited) {
+    return { max: Infinity, remaining: Infinity };
+  }
   if (typeof max !== 'number') return null;
   return { max, remaining: Math.min(max, canonical.usesRemaining ?? max) };
 }

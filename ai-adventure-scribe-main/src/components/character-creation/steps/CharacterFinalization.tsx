@@ -26,6 +26,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useCharacter } from '@/contexts/CharacterContext';
 import { getBaseSpeed } from '@/utils/character-calculations';
@@ -39,6 +40,7 @@ const CharacterFinalization: React.FC = () => {
   const descriptionId = useId();
   const themeId = useId();
   const nameId = useId();
+  const backgroundImageId = useId();
 
   const {
     state,
@@ -371,6 +373,28 @@ const CharacterFinalization: React.FC = () => {
               )}
             </div>
           )}
+
+          {/* Background image on completion (#210 QA-026): completing the
+            character always generated a backdrop with no opt-out. The switch
+            rides the wizard state, not the stored row. */}
+          <div className="flex items-center justify-between gap-4 p-3 rounded-lg border bg-muted/50">
+            <div className="space-y-1">
+              <Label htmlFor={backgroundImageId}>Generate background image</Label>
+              <p className="text-xs text-muted-foreground">
+                Uses one daily image generation. Turn off to skip the automatic backdrop when you
+                complete your character.
+              </p>
+            </div>
+            <Switch
+              id={backgroundImageId}
+              checked={state.generateBackgroundImage}
+              onCheckedChange={(checked) =>
+                dispatch({ type: 'SET_GENERATE_BACKGROUND_IMAGE', payload: checked })
+              }
+              aria-label="Generate background image on completion"
+              data-testid="background-image-toggle"
+            />
+          </div>
 
           {/* Avatar Portrait */}
           <div className="space-y-2">

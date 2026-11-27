@@ -106,7 +106,8 @@ describeWithDb('#1753 story map progress and GET /v1/story-map/:campaignId', () 
         name: key
           .replace('the-', 'The ')
           .replace(/^The (\w)/, (_, c: string) => `The ${c.toUpperCase()}`),
-        zoneKey: 'the-upper-reach',
+        // One zone per place: only routes connect them (same-zone places are neighbours).
+        zoneKey: key,
         x: 0.1 + index * 0.1,
         y: 0.5,
         fightEnv: 'dungeon_room',
