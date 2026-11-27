@@ -5,6 +5,7 @@ export {
   createDmResponseSchema,
   dmResponseSchema,
   isHandoutAction,
+  MAX_HANDOUT_ACTIONS_PER_REQUEST,
   parseDmResponse,
 } from '../../../server-bun/src/services/dm/dm-response-schema';
 

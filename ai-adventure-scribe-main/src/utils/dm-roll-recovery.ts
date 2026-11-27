@@ -6,6 +6,9 @@ import type { RollRequest } from '@/types/roll-request';
 /** Intent of the system line saved when the player cancels a narrative roll (#2291). */
 export const ROLL_DECLINED_INTENT = 'roll_declined';
 
+/** Intent of the system line saved when the player dismisses an engine initiative prompt (#115). */
+export const ENGINE_ROLL_DISMISSED_INTENT = 'engine_roll_dismissed';
+
 /**
  * The transcript line for a cancelled narrative roll (#2291). It answers the DM's request the
  * way a roll would: the withheld reply shows, a reload does not re-open the popup, and the next
@@ -20,6 +23,21 @@ export function declinedRollMessage(
     sender: 'system',
     timestamp: new Date().toISOString(),
     context: { intent: ROLL_DECLINED_INTENT, ...(rollRequestId ? { rollRequestId } : {}) },
+  };
+}
+
+/**
+ * The transcript line saved when the player dismisses an engine initiative prompt (#115):
+ * the entry flow then rolls the die for the player, and this line tells them so. It is an
+ * engine row (the "⚙️ Engine: " prefix), not an answer to a DM roll request. `total` is the
+ * initiative the engine rolled for the player after the dismissal.
+ */
+export function dismissedEngineRollMessage(total: number): ChatMessage {
+  return {
+    text: `⚙️ Engine: You dismissed the Initiative roll, so the engine rolled ${total} for you.`,
+    sender: 'system',
+    timestamp: new Date().toISOString(),
+    context: { intent: ENGINE_ROLL_DISMISSED_INTENT },
   };
 }
 

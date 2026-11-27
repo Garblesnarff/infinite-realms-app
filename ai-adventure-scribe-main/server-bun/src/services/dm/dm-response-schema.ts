@@ -513,6 +513,17 @@ const aoeCombatActionSchema = {
   required: ['actor_id', 'action_type', 'spell_id', 'origin', 'direction'],
 } as const;
 
+/**
+ * #841: one DM turn never legitimately carries more handout actions than
+ * this. The bound stops oversized-batch abuse (an unbounded array costs a
+ * parse and a refusal scan per element, and each refusal used to be able to
+ * summon a model call). Lives in the canonical DM response contract so the
+ * route's body cap and the client filter cap cannot drift: a batch longer
+ * than this 422s at the framework level before the handler runs, so the
+ * client filter keeps only the first N valid actions.
+ */
+export const MAX_HANDOUT_ACTIONS_PER_REQUEST = 10;
+
 const handoutActionSchema = {
   type: 'object',
   additionalProperties: false,

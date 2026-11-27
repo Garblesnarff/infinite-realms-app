@@ -116,6 +116,47 @@ describe('wizard draft persistence (#208)', () => {
     });
   });
 
+  it('restores the background-image opt-out with the draft (#210 QA-026)', async () => {
+    writeWizardDraft(DRAFT_KEY, {
+      version: WIZARD_DRAFT_VERSION,
+      character: { name: 'Draft Hero' } as Character,
+      step: 2,
+      campaignId: null,
+      updatedAt: new Date().toISOString(),
+      generateBackgroundImage: false,
+    });
+
+    renderWizard();
+    expect(await screen.findByText('Resume your character?')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Resume draft'));
+
+    expect(mockState.dispatch).toHaveBeenCalledWith({
+      type: 'SET_GENERATE_BACKGROUND_IMAGE',
+      payload: false,
+    });
+  });
+
+  it('restores the background-image opt-out to on when the draft predates it', async () => {
+    writeWizardDraft(DRAFT_KEY, {
+      version: WIZARD_DRAFT_VERSION,
+      character: { name: 'Draft Hero' } as Character,
+      step: 2,
+      campaignId: null,
+      updatedAt: new Date().toISOString(),
+    });
+
+    renderWizard();
+    expect(await screen.findByText('Resume your character?')).toBeTruthy();
+
+    fireEvent.click(screen.getByText('Resume draft'));
+
+    expect(mockState.dispatch).toHaveBeenCalledWith({
+      type: 'SET_GENERATE_BACKGROUND_IMAGE',
+      payload: true,
+    });
+  });
+
   it('discards the draft when the user chooses Start over', async () => {
     writeWizardDraft(DRAFT_KEY, {
       version: WIZARD_DRAFT_VERSION,
@@ -155,13 +196,20 @@ describe('wizard draft persistence (#208)', () => {
     expect(screen.getByTestId('step-b')).toBeTruthy();
   });
 
-  it('passes the filtered step list to the progress track (no phantom steps)', () => {
-    // Step B is skipped for a named character: the track must show A and C only.
+  it('shows the full step list in the progress track with skipped steps greyed (#210 QA-053)', () => {
+    // Step B is skipped for a named character. The track still lists it
+    // (greyed) with a stable total — the old filtered-track premise, that a
+    // skipped step vanishes from the track, is what made the counter jump
+    // 12 -> 13 -> 14 in the real wizard. Only the mounted step content
+    // follows the filtered list.
     mockState.character = { name: 'Test Hero' } as Character;
     renderWizard();
 
     expect(screen.getByText('Step C')).toBeTruthy();
-    expect(screen.queryByText('Step B')).toBeNull();
+    expect(screen.getAllByText('Step B').length).toBe(1);
+    expect(screen.getByTestId('step-a')).toBeTruthy();
+    expect(screen.queryByTestId('step-b')).toBeNull();
+    expect(screen.getByText('1 of 3')).toBeTruthy();
   });
 
   it('starts on the step named by the URL (what browser Back produces)', () => {

@@ -53,6 +53,13 @@ interface MessageRendererProps {
    */
   isLatestMessage?: boolean;
   /**
+   * The latest DM message actually rendered (#1026): the scene band's fallback
+   * shows the current place above this reply, even while a player reply below
+   * it awaits a DM response. The container computes it; this component only
+   * forwards it to DMMessage.
+   */
+  isLatestDmMessage?: boolean;
+  /**
    * A later message in the transcript ended a fight after this one (#864): its saved options
    * belong to the pre-fight world and no longer render.
    */
@@ -88,6 +95,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
     previousEngineKey,
     encounterActive = false,
     isLatestMessage = true,
+    isLatestDmMessage = false,
     optionsSuperseded = false,
     rollTrayOpen = false,
   }) => {
@@ -215,6 +223,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
             imageError={genErrorByMessage[messageId]}
             onGenerateImage={() => onGenerateScene(message)}
             previousEngineKey={previousEngineKey}
+            isLatestDmMessage={isLatestDmMessage}
           />
         ) : isCompanion ? (
           <CompanionMessage message={message} displayText={displayText} />
@@ -281,6 +290,7 @@ export const MessageRenderer: React.FC<MessageRendererProps> = React.memo(
       !basicPropsMatch ||
       prev.encounterActive !== next.encounterActive ||
       prev.isLatestMessage !== next.isLatestMessage ||
+      prev.isLatestDmMessage !== next.isLatestDmMessage ||
       prev.optionsSuperseded !== next.optionsSuperseded ||
       prev.rollTrayOpen !== next.rollTrayOpen
     ) {

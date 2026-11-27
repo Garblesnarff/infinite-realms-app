@@ -463,3 +463,50 @@ describe('usePlayerRollHost: check roll target numbers (#157)', () => {
     unmount();
   });
 });
+
+describe('usePlayerRollHost: dismissed initiative reports dismissed flag (#115)', () => {
+  const requestDiceRoll = vi.fn().mockReturnValue('initiative-roll-1');
+  const cancelDiceRoll = vi.fn();
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    settlePendingPlayerRoll({ d20: null });
+    setPlayerRollHost(null);
+    vi.clearAllMocks();
+    requestDiceRoll.mockReturnValue('initiative-roll-1');
+    vi.mocked(useGame).mockReturnValue({ requestDiceRoll, cancelDiceRoll } as never);
+    vi.mocked(useOptionalCampaign).mockReturnValue(undefined);
+    window.localStorage.clear();
+    vi.mocked(useCharacter).mockReturnValue({ state: { character: null } } as never);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('resolves a dismissed initiative prompt with dismissed: true and the rollId', async () => {
+    renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerInitiativeRoll({
+      actorLabel: 'The Seeker',
+      initiativeModifier: 2,
+    });
+
+    const rollId = requestDiceRoll.mock.results[0].value as string;
+    expect(settleCombatInitiativeRoll(rollId, null)).toBe(true);
+
+    await expect(pending).resolves.toEqual({ d20: null, dismissed: true, rollId });
+  });
+
+  it('resolves a rolled initiative prompt with no dismissed flag', async () => {
+    renderHook(() => usePlayerRollHost());
+    const pending = requestPlayerInitiativeRoll({
+      actorLabel: 'The Seeker',
+      initiativeModifier: 2,
+    });
+
+    const rollId = requestDiceRoll.mock.results[0].value as string;
+    expect(settleCombatInitiativeRoll(rollId, 12)).toBe(true);
+
+    await expect(pending).resolves.toEqual({ d20: 12 });
+  });
+});

@@ -223,6 +223,10 @@ build_replay_list() {
         # Indexes character_spells, created by db/migrations/20251106_backfill_lost_drizzle_migrations.sql
         # (#1567); pinned after the newest migration so the table exists.
         0036_character_spells_character_spell_unique.sql) echo "20261116_000000	$f"; continue;;
+        # Creates story_map_places/story_map_edges, which reference starter_campaigns, created by
+        # db/migrations/20251106_backfill_lost_drizzle_migrations.sql (#1752); pinned after the
+        # newest migration so the table exists.
+        0038_story_map.sql) echo "20261125_000000	$f"; continue;;
         # Deliberate no-op snapshot re-baseline; safe anywhere, pinned last.
         0004_schema_baseline.sql) echo "99999999_999999	$f"; continue;;
       esac

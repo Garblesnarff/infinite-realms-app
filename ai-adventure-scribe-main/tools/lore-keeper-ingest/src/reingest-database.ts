@@ -14,6 +14,7 @@ import {
 import { embeddingProvenance } from '../../../shared/embedding-limits.js';
 
 import type { ExistingCampaignChunk, StaleRow } from './reingest.js';
+import type { StoryMap } from './story-map.js';
 import type { CampaignChunk, CampaignRule, ParsedCampaign } from './types.js';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -362,4 +363,94 @@ export async function replaceCampaignRules(
     throw new Error(`Failed to insert rules for ${campaignId}: ${insertError.message}`);
 
   return rules.length;
+}
+
+export interface StoryMapWriteResult {
+  placesWritten: number;
+  edgesWritten: number;
+  /** Keys in the table before this write that the new map no longer has. */
+  removedKeys: string[];
+  /** Keys the new map has that the table did not. */
+  addedKeys: string[];
+}
+
+/**
+ * Write one campaign's story map (#1752). Places are upserted on (campaign_id, place_key), so a
+ * re-ingest updates rows in place; places the bible no longer has are deleted. Edges have no
+ * other references, so they are replaced as a set.
+ */
+export async function replaceStoryMap(
+  client: SupabaseClient,
+  map: StoryMap,
+): Promise<StoryMapWriteResult> {
+  const campaignId = map.campaignId;
+  const { data: existing, error: readError } = await client
+    .from('story_map_places')
+    .select('place_key')
+    .eq('campaign_id', campaignId);
+  if (readError)
+    throw new Error(`Failed to read story map for ${campaignId}: ${readError.message}`);
+  const before = new Set((existing ?? []).map((row: { place_key: string }) => row.place_key));
+  const after = new Set(map.places.map((place) => place.placeKey));
+  const removedKeys = [...before].filter((key) => !after.has(key)).sort();
+  const addedKeys = [...after].filter((key) => !before.has(key)).sort();
+
+  if (map.places.length > 0) {
+    const { error } = await client.from('story_map_places').upsert(
+      map.places.map((place) => ({
+        campaign_id: campaignId,
+        place_key: place.placeKey,
+        name: place.name,
+        zone_key: place.zoneKey,
+        x: place.x,
+        y: place.y,
+        fight_env: place.fightEnv,
+        fight_size: place.fightSize,
+        fight_seed: place.fightSeed,
+        updated_at: new Date().toISOString(),
+      })),
+      { onConflict: 'campaign_id,place_key' },
+    );
+    if (error)
+      throw new Error(`Failed to write story map places for ${campaignId}: ${error.message}`);
+  }
+
+  if (removedKeys.length > 0) {
+    const { error } = await client
+      .from('story_map_places')
+      .delete()
+      .eq('campaign_id', campaignId)
+      .in('place_key', removedKeys);
+    if (error)
+      throw new Error(`Failed to remove old story map places for ${campaignId}: ${error.message}`);
+  }
+
+  const { error: edgeDeleteError } = await client
+    .from('story_map_edges')
+    .delete()
+    .eq('campaign_id', campaignId);
+  if (edgeDeleteError)
+    throw new Error(
+      `Failed to replace story map routes for ${campaignId}: ${edgeDeleteError.message}`,
+    );
+  if (map.edges.length > 0) {
+    const { error } = await client.from('story_map_edges').insert(
+      map.edges.map((edge) => ({
+        campaign_id: campaignId,
+        from_key: edge.fromKey,
+        to_key: edge.toKey,
+        label: edge.label,
+        hidden: edge.hidden,
+      })),
+    );
+    if (error)
+      throw new Error(`Failed to write story map routes for ${campaignId}: ${error.message}`);
+  }
+
+  return {
+    placesWritten: map.places.length,
+    edgesWritten: map.edges.length,
+    removedKeys,
+    addedKeys,
+  };
 }
