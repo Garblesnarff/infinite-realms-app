@@ -7,6 +7,7 @@ import { buildSpellsViewModel } from './spell-view-model';
 import { abilityModifier } from '../../../../../../shared/ability-modifier';
 import { MAX_SESSION_COMPANIONS } from '../../../../../../shared/companion-constants';
 import { isCatalogWeaponName } from '../../../../../../shared/equipment-weapon-resolver';
+import { useCombatHP } from '../use-combat-hp';
 
 import type {
   AttackVM,
@@ -20,6 +21,7 @@ import type {
   PartyMemberVM,
   SpellsVM,
 } from './types';
+import type { CombatHP } from '../use-combat-hp';
 import type { Character } from '@/types/character';
 import type { CharacterResources } from '@/types/combat';
 import type { CombatEncounter } from '@/types/combat-encounter';
@@ -512,6 +514,19 @@ export function buildEncounterCombatants(
 }
 
 /**
+ * The hero's HP as the table panel shows it. The header reads the server's combat status when
+ * there is one (`useCombatHP`), so the panel does the same. Two sources showed 19/28 in the panel
+ * and 14/28 in the header in one fight (#1797). The sheet's HP is the fallback, as in the header.
+ */
+export function heroHitPoints(
+  combatHP: CombatHP | null,
+  sheet: { hpCurrent: number | null; hpMax: number | null },
+): { currentHp: number | null; maxHp: number | null } {
+  if (combatHP) return { currentHp: combatHP.current_hp, maxHp: combatHP.max_hp };
+  return { currentHp: sheet.hpCurrent, maxHp: sheet.hpMax };
+}
+
+/**
  * Adapts the live game contexts (campaign / character / combat) into the
  * presentational GameOverhaulViewModel consumed by the navy+gold side rails.
  */
@@ -527,6 +542,7 @@ export function useOverhaulViewModel(opts?: {
 
   const campaign = campaignState?.campaign ?? null;
   const character = (characterState?.character ?? null) as Character | null;
+  const combatHP = useCombatHP(character?.id);
   const encounter = combatState?.activeEncounter ?? null;
   const sessionId = opts?.sessionId;
   const messageRevision = opts?.messages
@@ -598,6 +614,7 @@ export function useOverhaulViewModel(opts?: {
     const turn = summarizeCombatTurn(encounter);
     const combatants: CombatantVM[] = buildEncounterCombatants(encounter, turn);
 
+    const heroHp = heroHitPoints(combatHP, sheet);
     const protagonist = character
       ? {
           characterId: character.id ?? 'self',
@@ -605,8 +622,8 @@ export function useOverhaulViewModel(opts?: {
             id: character.id ?? 'self',
             name: sheet.name,
             subtitle: [`Level ${sheet.level}`, character.class?.name].filter(Boolean).join(' '),
-            currentHp: sheet.hpCurrent,
-            maxHp: sheet.hpMax,
+            currentHp: heroHp.currentHp,
+            maxHp: heroHp.maxHp,
             avatarUrl: character.image_url ?? character.avatar_url,
           },
         }
