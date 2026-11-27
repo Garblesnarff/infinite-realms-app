@@ -35,8 +35,10 @@ import { parseAuthoredStatBlock } from '../combat/authored-stat-block-parser.js'
 import { resolveMonsterAttackProfile } from '../combat/monster-attack-profile.js';
 
 const userId = testId('npc-engine-rows-user');
+const engineD20Pair = (await import('../../lib/dice.js')).rollD20Pair;
+const rollBossSave = mock((_advantage?: boolean) => 14);
 mock.module('../../lib/dice.js', () => ({
-  rollD20: () => 14,
+  rollD20: rollBossSave,
   rollD20Pair: () => ({ kept: 14 }),
 }));
 mock.module('../../lib/auth.js', () => ({
@@ -85,6 +87,7 @@ const { getLegalCombatActions } = await importWithRealDb(
 const { runBossMoveWindow, armDefy } = await importWithRealDb(
   () => import('../combat/boss-move-window.js'),
 );
+const { claimRage, clearRage } = await importWithRealDb(() => import('../combat/combat-turn-flags.js'));
 const { saveTacticalMap } = await importWithRealDb(() => import('../combat/tactical-map-store.js'));
 
 describeWithDb('server NPC engine rows through the real routes (#2658 step 2)', () => {
@@ -614,6 +617,57 @@ describeWithDb('the server runs NPC turns on End turn (#2658 step 3)', () => {
     await finish(encounterId);
   });
 
+  test('the map Move request persists one player engine card with the actual distance (#153)', async () => {
+    const { sessionId, encounterId, playerId } = await seedFight();
+    await saveTacticalMap({
+      id: crypto.randomUUID(),
+      sessionId,
+      width: 6,
+      height: 6,
+      cells: Array.from({ length: 6 }, () =>
+        Array.from({ length: 6 }, () => ({
+          terrain: 'floor' as const,
+          blocksMovement: false,
+          blocksSight: false,
+          cover: 0 as const,
+          elevation: 0,
+        })),
+      ),
+      entities: [{
+        id: playerId!,
+        slug: 'the-scholar',
+        x: 1,
+        y: 1,
+        size: 'medium',
+        type: 'pc',
+        speedFeet: 30,
+        movementRemaining: 30,
+      }],
+      round: 1,
+      sceneDescription: 'Movement test room',
+    });
+
+    const reply = await post(`${encounterId}/intent`, {
+      intent: { type: 'move', actorId: playerId, x: 3, y: 1 },
+      source: 'player',
+      origin: 'action_bar',
+    });
+    expect(reply.result.engineRows).toHaveLength(1);
+    expect(reply.result.engineRows[0]).toMatchObject({
+      kind: 'player',
+      text: 'You moved 10 ft.',
+      context: {
+        combatEngineBlocks: [{
+          source: 'player',
+          cards: [{ kind: 'move', side: 'party', line: 'You moved 10 ft.' }],
+        }],
+      },
+    });
+    expect((await rowsOf(sessionId)).filter((row) => row.message === 'You moved 10 ft.')).toHaveLength(1);
+    await database.delete(tacticalMaps).where(eq(tacticalMaps.sessionId, sessionId));
+    await finish(encounterId);
+  });
+
   test('a flee whose opportunity attack downs the player (#1169): no exit, the fight stays open, one player row carries the downed line', async () => {
     const { sessionId, encounterId, playerId } = await seedFight({ playerHp: 1 });
     const participants = await database
@@ -985,6 +1039,55 @@ describeWithDb('Boss Move window through the real database (#728)', () => {
     expect(row?.defyLeft).toBe(1);
     expect(row?.defyArmed).toBe(true);
   });
+
+  test.each([
+    ['str', true],
+    ['dex', false],
+  ] as const)(
+    'a raging hero rolls a boss move %s save with the expected advantage',
+    async (ability, advantage) => {
+      await setHero(40);
+      await setRound(1);
+      await realDb().delete(combatBossState).where(eq(combatBossState.encounterId, encounterId));
+      await realDb()
+        .update(combatParticipants)
+        .set({
+          bossMoves: [
+            {
+              slot: 'Opener',
+              name: 'Test Burst',
+              effect: { kind: 'burst', ability },
+              tell: 'The boss gathers power.',
+              telegraph: null,
+              counterplay: 'Brace.',
+            },
+          ],
+        })
+        .where(
+          and(
+            eq(combatParticipants.encounterId, encounterId),
+            eq(combatParticipants.participantType, 'monster'),
+          ),
+        );
+      await clearRage(encounterId, heroId);
+      expect(await claimRage(encounterId, heroId)).not.toBeNull();
+      let diceCount = 0;
+      rollBossSave.mockClear();
+      rollBossSave.mockImplementationOnce((rollWithAdvantage) => {
+        const dice = engineD20Pair(rollWithAdvantage);
+        diceCount = dice.other === undefined ? 1 : 2;
+        return dice.kept;
+      });
+      try {
+        setRngSeed(1);
+        expect((await windowNow()).lines[0]).toStartWith('Boss Move: Test Burst (Opener)');
+        expect(rollBossSave.mock.calls).toEqual([[advantage]]);
+        expect(diceCount).toBe(advantage ? 2 : 1);
+      } finally {
+        setRngSeed(undefined);
+      }
+    },
+  );
 });
 
 /**
