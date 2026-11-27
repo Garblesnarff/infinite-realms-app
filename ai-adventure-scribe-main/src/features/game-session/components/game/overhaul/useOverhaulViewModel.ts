@@ -152,9 +152,16 @@ export function mergePartyMembers(
 
   if (protagonist) {
     const encounterPlayer = encounterPlayersByCharacterId.get(protagonist.characterId);
+    // #1797: the hero's HP is the one the header shows (heroHitPoints), not the encounter row's.
     addMember(
       protagonist.characterId,
-      encounterPlayer ? liveMemberFields(protagonist.member, encounterPlayer) : protagonist.member,
+      encounterPlayer
+        ? {
+            ...liveMemberFields(protagonist.member, encounterPlayer),
+            currentHp: protagonist.member.currentHp,
+            maxHp: protagonist.member.maxHp,
+          }
+        : protagonist.member,
     );
   }
 
@@ -658,5 +665,13 @@ export function useOverhaulViewModel(opts?: {
       },
       character: sheet,
     };
-  }, [activeCompanions, campaign, character, encounter, opts?.chapterLabel, opts?.sceneBlurb]);
+  }, [
+    activeCompanions,
+    campaign,
+    character,
+    combatHP,
+    encounter,
+    opts?.chapterLabel,
+    opts?.sceneBlurb,
+  ]);
 }
