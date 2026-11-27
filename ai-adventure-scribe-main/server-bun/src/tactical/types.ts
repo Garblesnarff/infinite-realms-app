@@ -70,6 +70,21 @@ export interface TacticalMap {
    */
   parleyHolds?: Array<{ participantId: string; round: number }>;
   /**
+   * Melee approaches that already resolved as unreachable this turn (#1802). A second
+   * proposal — or a commit — for the same actor and target reuses that resolution
+   * instead of moving again and appending a second DM fact. Markers carry no round:
+   * the map's own `round` field is set once at generation and never advances, so it
+   * cannot scope a turn, and the encounter's `currentRound` lives behind a lookup no
+   * caller of this field owns. The turn boundary is the expiry instead: the actor's
+   * markers are cleared when their next turn starts (`resetTacticalMovementForTurn`)
+   * and when they gain fresh movement (`grantTacticalDash`), which is also what
+   * restores their movement. `movedFeet` is what the first resolution spent: a
+   * resolution that spent nothing (the engine refused the move, or there was nowhere
+   * to go) does not block a re-plan once the board changes, because there is nothing
+   * to double-spend.
+   */
+  resolvedUnreachableApproaches?: Array<{ actorId: string; targetId: string; movedFeet: number }>;
+  /**
    * Structured sibling of `pendingDmFacts`: the discrete actions the engine resolved this
    * turn (kind, actor, target, hit/miss), recorded alongside their narration sentence.
    * The narration contract is built from these, and the client post-check validates the
