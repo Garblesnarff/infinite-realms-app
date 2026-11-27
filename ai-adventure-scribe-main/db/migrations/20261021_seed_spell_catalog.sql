@@ -1843,7 +1843,9 @@ An affected creature is aware of the spell and can thus avoid answering question
   ('bd1cd827-d6b0-5656-a30f-081316b019ea', 'Hex', 1, 'Enchantment', '1 bonus action', '90 feet', 'Concentration, up to 1 hour', true, false, true, true, true, 'the petrified eye of a newt', 'You place a curse on a creature that you can see within range.', NULL, NULL, NULL, NULL),
   ('25736b1e-f6ef-5662-8bda-a7dbe6b212af', 'Ray of Sickness', 1, 'Necromancy', '1 action', '60 feet', 'Instantaneous', false, false, true, true, false, NULL, 'A ray of sickening greenish energy lashes out toward a creature within range. Make a ranged spell attack against the target.', NULL, NULL, NULL, NULL),
   ('b584ceb9-c51f-5088-9876-d9b3066e1718', 'Searing Smite', 1, 'Evocation', '1 bonus action', 'Self', 'Concentration, up to 1 minute', true, false, true, false, false, NULL, 'The next time you hit a creature with a melee weapon attack during this spell''s duration, your weapon flares with white-hot intensity, and the attack deals an extra 1d6 fire damage to the target and causes the target to ignite in flames. At the start of each of its turns until the spell ends, the target must make a Constitution saving throw or take 1d6 fire damage.', NULL, NULL, NULL, NULL),
+  ('2f531b61-5626-5b7b-a9f9-bf935e580864', 'Tasha''s Hideous Laughter', 1, 'Enchantment', '1 action', '30 feet', 'Concentration, up to 1 minute', true, false, true, true, true, 'tiny tarts and a feather that is waved in the air', 'A creature of your choice that you can see within range perceives everything as hilariously funny and falls into fits of laughter if this spell affects it.', NULL, NULL, NULL, NULL),
   ('49939a12-4e05-5d3e-8bc9-729e86bdbd2d', 'Thunderous Smite', 1, 'Evocation', '1 bonus action', 'Self', 'Concentration, up to 1 minute', true, false, true, false, false, NULL, 'The first time you hit with a melee weapon attack during this spell''s duration, your weapon rings with thunder that is audible within 300 feet of you, and the attack deals an extra 2d6 thunder damage to the target. If the target is a creature, it must succeed on a Strength saving throw or be pushed 10 feet away from you and knocked prone.', NULL, NULL, NULL, NULL),
+  ('ce62cea7-640b-5439-a175-10289409f59b', 'Tenser''s Floating Disk', 1, 'Conjuration', '1 action', '30 feet', '1 hour', false, true, true, true, true, 'a drop of mercury', 'This spell creates a circular, horizontal plane of force, 3 feet in diameter and 1 inch thick, that floats 3 feet above the ground in an unoccupied space of your choice that you can see within range.', NULL, NULL, NULL, NULL),
   ('419b96d4-0055-5024-941f-ddb7a76cb494', 'Witch Bolt', 1, 'Evocation', '1 action', '30 feet', 'Concentration, up to 1 minute', true, false, true, true, true, 'a twig from a tree that has been struck by lightning', 'A beam of crackling, blue energy lances out toward a creature within range, forming a sustained arc of lightning between you and the target. Make a ranged spell attack against that creature. On a hit, the target takes 1d12 lightning damage, and on each of your turns for the duration, you can use your action to deal 1d12 lightning damage to the target automatically.', NULL, 'ranged', 'lightning', '{"1":"1d12","2":"2d12","3":"3d12","4":"4d12","5":"5d12","6":"6d12","7":"7d12","8":"8d12","9":"9d12"}'::jsonb),
   ('c9e0f70c-761a-5f3c-a961-e553666df33f', 'Wrathful Smite', 1, 'Evocation', '1 bonus action', 'Self', 'Concentration, up to 1 minute', true, false, true, false, false, NULL, 'The next time you hit with a melee weapon attack during this spell''s duration, your attack deals an extra 1d6 psychic damage to the target. If the target is a creature, it must make a Wisdom saving throw or be frightened of you until the spell ends.', NULL, NULL, NULL, NULL)
 ON CONFLICT (name) DO UPDATE SET
@@ -1983,7 +1985,8 @@ JOIN spells s ON s.name = ANY (ARRAY[
   'Zone of Truth',
   'Blade Ward',
   'Friends',
-  'Dissonant Whispers'
+  'Dissonant Whispers',
+  'Tasha''s Hideous Laughter'
 ])
 WHERE c.name = 'Bard'
   AND NOT EXISTS (SELECT 1 FROM class_spells cs WHERE cs.class_id = c.id AND cs.spell_id = s.id);
@@ -2725,6 +2728,7 @@ JOIN spells s ON s.name = ANY (ARRAY[
   'Wish',
   'Chromatic Orb',
   'Ray of Sickness',
+  'Tenser''s Floating Disk',
   'Witch Bolt'
 ])
 WHERE c.name = 'Wizard'
