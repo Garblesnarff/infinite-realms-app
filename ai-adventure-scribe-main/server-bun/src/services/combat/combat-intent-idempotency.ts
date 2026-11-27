@@ -35,9 +35,14 @@
  */
 import { and, eq } from 'drizzle-orm';
 
-import { db } from '../../../../db/client';
 import { combatIntentIdempotency } from '../../../../db/schema/index';
 import { logger } from '../../lib/logger.js';
+
+// `db` is imported lazily, not at module top: `combat-intent-service.ts`
+// does the same, so importing the intent routes stays safe for unit tests
+// that run without a DATABASE_URL (the http suites). The lookup/store are
+// best-effort — a failed import degrades to no dedup, never to a failed
+// turn — so the dynamic import lives inside the existing try/catch.
 
 const INTENT_REQUEST_ID_HEADER = 'x-request-id';
 
@@ -63,6 +68,7 @@ export async function getCachedIntentResponse(
   requestId: string,
 ): Promise<Record<string, unknown> | undefined> {
   try {
+    const { db } = await import('../../../../db/client');
     const [row] = await db
       .select({ response: combatIntentIdempotency.response })
       .from(combatIntentIdempotency)
@@ -94,6 +100,7 @@ export async function storeIntentResponse(
   response: Record<string, unknown>,
 ): Promise<void> {
   try {
+    const { db } = await import('../../../../db/client');
     await db
       .insert(combatIntentIdempotency)
       .values({ encounterId, requestId, response })

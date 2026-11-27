@@ -24,6 +24,14 @@ import { logServerRequestId } from '@/infrastructure/api/request-id-log';
 import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { playerCombatSpellLabel } from '@/services/combat/player-combat-spell';
 
+/**
+ * #51: the intent POST's network-retry budget. Short on purpose — see the
+ * comment at the intent POST: long enough for one quick retry of a dropped
+ * response (which the server dedups), short enough that a dead connection
+ * surfaces its error in ~3 s instead of the 20 s default.
+ */
+const COMBAT_INTENT_RETRY_BUDGET_MS = 3_000;
+
 export interface StructuredCombatAction {
   actor_id: string;
   action_type:
@@ -308,17 +316,23 @@ export async function executeAuthoritativeCombatIntent(
     // #51: one id per intent submission, sent as the idempotency key. A
     // retry of this same call resends it, so the server replays the stored
     // response instead of re-executing the intent; a fresh call mints a
-    // fresh id. The fetch keeps the default 20s retry budget (no
-    // `retryBudgetMs: 0`): a dropped response — network error after the
-    // server executed — is retried by `fetchWithAuth` with the same headers,
-    // so the retry carries the same key. Only that internal retry reuses
-    // the id: a per-attempt timeout surfaces instead of resubmitting, and a
-    // caller-level retry is a fresh call with a fresh id (a manual
-    // re-submit after a timeout relies on the engine's version guards).
+    // fresh id. The fetch keeps a SHORT retry budget (3 s, not the 20 s
+    // default, and not `retryBudgetMs: 0`): a dropped response — network
+    // error after the server executed — is retried by `fetchWithAuth` with
+    // the same headers, so the retry carries the same key and the server
+    // dedups it. But a genuinely dead connection must still surface its
+    // error promptly (the combat bar shows it) instead of retrying for
+    // 20 s: with a 3 s budget the error lands at ~3 s (one 1 s backoff,
+    // one capped 2 s backoff), which the flee test waits for. Only that
+    // internal retry reuses the id: a per-attempt timeout surfaces instead
+    // of resubmitting, and a caller-level retry is a fresh call with a
+    // fresh id (a manual re-submit after a timeout relies on the engine's
+    // version guards).
     const requestId = crypto.randomUUID();
     const response = await fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-request-id': requestId },
+      retryBudgetMs: COMBAT_INTENT_RETRY_BUDGET_MS,
       body: JSON.stringify({
         intent: authoritativeIntent,
         source,
