@@ -27,6 +27,7 @@ import {
   combatParticipantStatus,
   combatParticipants,
   gameSessions,
+  inventoryItems,
   dialogueHistory,
   narrativeFacts,
   tacticalMaps,
@@ -142,6 +143,11 @@ describeWithDb(
         { participantId: heroId, currentHp: HERO_HP, maxHp: HERO_HP, isConscious: true },
         { participantId: foeId, currentHp: 20, maxHp: 20, isConscious: true },
       ]);
+      await db.delete(inventoryItems).where(eq(inventoryItems.characterId, characterId));
+      await db.insert(inventoryItems).values([
+        { characterId, name: 'Shortbow', itemType: 'weapon', isEquipped: true, createdAt: new Date(0) },
+        { characterId, name: 'Dagger', itemType: 'weapon', isEquipped: true, createdAt: new Date(1000) },
+      ]);
       await setFoeAttacks([FISTS]);
       // Hero and Dutch start adjacent on the 10 × 10 board. The tested move walks three cells west.
       await saveTacticalMap({
@@ -249,5 +255,39 @@ describeWithDb(
       const reactions = rows.filter(({ text }) => text.startsWith('Opportunity attack:'));
       expect(reactions).toEqual([{ text: expect.stringMatching(/Dutch Pellam.*Unarmed Strike.*miss/i) }]);
     });
+    test.each([{ hp: 30, downed: false }, { hp: 2, downed: true }])(
+      'the persisted reaction hit and move agree for $hp HP',
+      async ({ hp, downed }) => {
+        await db.update(combatParticipantStatus).set({ currentHp: hp })
+          .where(eq(combatParticipantStatus.participantId, heroId));
+        await db.update(characterStats).set({ currentHitPoints: hp })
+          .where(eq(characterStats.characterId, characterId));
+        spyOn(Math, 'random').mockReturnValue(0.8);
+        const response = await move();
+        expect(response.status).toBe(200);
+        const { result } = await response.json();
+        const position = downed ? { x: 5, y: 4 } : { x: 2, y: 4 };
+        expect(result.interrupted).toBe(downed);
+        expect(result.path).toHaveLength(downed ? 1 : 4);
+        expect(result.path.at(-1)).toMatchObject(position);
+        if (downed) {
+          expect(result.engineRows ?? []).toEqual([]);
+        } else {
+          expect(result.engineRows).toEqual([
+            expect.objectContaining({ text: 'You moved 15 ft; Dutch Pellam is 20 ft away (reach 5 ft).' }),
+          ]);
+        }
+        expect(await heroAt()).toMatchObject(position);
+        const rows = await db.select({ text: dialogueHistory.message }).from(dialogueHistory)
+          .where(eq(dialogueHistory.sessionId, sessionId));
+        expect(rows.filter(({ text }) => text.startsWith('Opportunity attack:'))).toEqual([
+          { text: expect.stringMatching(/Dutch Pellam.*Unarmed Strike.*hit/i) },
+        ]);
+        const [state] = await db.select().from(combatParticipantStatus)
+          .where(eq(combatParticipantStatus.participantId, heroId));
+        expect(state.currentHp).toBe(downed ? 0 : hp - 3);
+        expect(state.isConscious).toBe(!downed);
+      },
+    );
   },
 );

@@ -26,7 +26,7 @@ export async function persistPlayerMove(params: {
     .sort((a, b) => a.distance - b.distance)[0];
   let detail = '';
   if (closest) {
-    const profile = await getDefaultCombatWeapon(actor);
+    const profile = await getDefaultCombatWeapon(actor, { preferMelee: true });
     const reach = profile.ranged ? (profile.meleeWeapon ? 5 : null) : profile.normalRange;
     detail = `; ${closest.hostile.name} is ${closest.distance} ft away${reach ? ` (reach ${reach} ft)` : ''}`;
   }
