@@ -18,13 +18,15 @@ vi.mock('@/services/user-data-api', () => ({
 
 vi.mock('@/hooks/use-toast', () => ({ toast: mockToast }));
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-
 function sentRequestId(callIndex = 0): unknown {
   const calls = (globalThis.fetch as unknown as { mock: { calls: Array<[unknown, RequestInit]> } })
     .mock.calls;
   const headers = calls[callIndex]?.[1]?.headers as Record<string, string> | undefined;
-  return headers?.['x-request-id'];
+  if (!headers) return undefined;
+  // Case-insensitive: the server reads the header case-insensitively, so
+  // the test must not pass while an `X-Request-Id` is actually sent.
+  const key = Object.keys(headers).find((name) => name.toLowerCase() === 'x-request-id');
+  return key === undefined ? undefined : headers[key];
 }
 
 describe('combat-attack-proposal', () => {
@@ -39,7 +41,7 @@ describe('combat-attack-proposal', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('mints a fresh idempotency key per attack proposal (#1787)', async () => {
+  it('sends no idempotency key on an attack proposal (#1787, strategist FIX round 2)', async () => {
     (globalThis.fetch as unknown as { mockResolvedValue: (v: unknown) => void }).mockResolvedValue({
       ok: true,
       status: 200,
@@ -52,21 +54,22 @@ describe('combat-attack-proposal', () => {
       targetId: 'npc-1',
     });
     expect(proposal).toMatchObject({ movementOnly: false });
-    expect(sentRequestId(0)).toMatch(UUID_PATTERN);
+    expect(sentRequestId(0)).toBeUndefined();
 
-    // A second proposal mints a fresh key — a reused key would let the
-    // server answer a new proposal with an old commit's stored response.
+    // A second proposal sends no key either — the server returns a
+    // proposal before the dedup lookup, so a key would be ignored, not
+    // honoured; the retry on a blip comes from the gate's propose
+    // allowlist (rest-client.ts), not from a header.
     const proposal2 = await proposeAuthoritativeAttack('enc-1', {
       type: 'attack',
       actorId: 'pc-1',
       targetId: 'npc-1',
     });
     expect(proposal2).toMatchObject({ movementOnly: false });
-    expect(sentRequestId(1)).toMatch(UUID_PATTERN);
-    expect(sentRequestId(1)).not.toBe(sentRequestId(0));
+    expect(sentRequestId(1)).toBeUndefined();
   });
 
-  it('mints a fresh idempotency key per spell proposal (#1787)', async () => {
+  it('sends no idempotency key on a spell proposal (#1787, strategist FIX round 2)', async () => {
     (globalThis.fetch as unknown as { mockResolvedValue: (v: unknown) => void }).mockResolvedValue({
       ok: true,
       status: 200,
@@ -92,10 +95,10 @@ describe('combat-attack-proposal', () => {
       spellName: 'Fireball',
     });
     expect(proposal).toMatchObject({ spellId: 'fireball' });
-    expect(sentRequestId(0)).toMatch(UUID_PATTERN);
+    expect(sentRequestId(0)).toBeUndefined();
 
-    // A second proposal mints a fresh key — same distinctness check as the
-    // attack test, so a module-level constant cannot pass this test.
+    // A second proposal sends no key either — same reason as the attack
+    // test: no header the server would ignore, retry via the allowlist.
     const proposal2 = await proposeAuthoritativeSpell('enc-1', {
       type: 'spell',
       actorId: 'pc-1',
@@ -103,7 +106,6 @@ describe('combat-attack-proposal', () => {
       spellName: 'Fireball',
     });
     expect(proposal2).toMatchObject({ spellId: 'fireball' });
-    expect(sentRequestId(1)).toMatch(UUID_PATTERN);
-    expect(sentRequestId(1)).not.toBe(sentRequestId(0));
+    expect(sentRequestId(1)).toBeUndefined();
   });
 });

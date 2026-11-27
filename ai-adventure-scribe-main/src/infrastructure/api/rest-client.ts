@@ -173,6 +173,7 @@ function isGenerateRoute(path: string): boolean {
 const IDEMPOTENCY_KEY_HEADER = 'x-request-id';
 /** #1787: the turn POST, keyed by its stored message/reply id (see below). */
 const TURN_POST_ROUTE_PATTERN = /^\/v1\/sessions\/[^/]+\/messages$/;
+const COMBAT_INTENT_ROUTE_PATTERN = /^\/v1\/combat\/[^/]+\/intent$/;
 
 /**
  * #1787: `HeadersInit` has three shapes — a Headers instance, an array of
@@ -213,6 +214,44 @@ function hasIdempotencyKey(headers: Record<string, string> | undefined): boolean
  */
 function isServerDedupedTurnPost(path: string): boolean {
   return TURN_POST_ROUTE_PATTERN.test(path.split('?')[0]);
+}
+
+/**
+ * #1787 (strategist FIX round 2): a read-only combat proposal is the
+ * second explicit allowlist entry in the gate. The propose call POSTs to
+ * the intent route with `phase: 'propose'` in the JSON body, and the
+ * server returns the proposal BEFORE the idempotency-claim lookup
+ * (intents.ts) — so a key on this call would be ignored, not honoured,
+ * and must not be sent. The retry is safe with ONE KNOWN EXCEPTION: a
+ * non-off-hand melee attack proposal walks the actor into reach (a real
+ * tactical-map move) and, if the target is still unreachable, appends a
+ * DM tactical fact — so a retried proposal can move again and duplicate
+ * the fact (combat-approach-service.ts, tactical-action-service.ts).
+ * Low stakes: a duplicated DM-context sentence and possibly extra
+ * movement — no charge, no damage, no spent slot; the spell path has no
+ * approach call. A second propose-visible side effect, also single-apply:
+ * both propose paths call resolveActorTurn, which can advance the turn
+ * (DB-backed) when the actor is known but not current and the current
+ * participant has spent its action — a retry finds the actor current and
+ * cannot re-advance. Tracked as follow-up #1802. The allowlist is
+ * narrow on purpose: only `phase: 'propose'` on the intent route. A
+ * commit to the same route (no phase, or `phase: 'commit'`) is NOT
+ * allowlisted — it needs a real key. Fail closed: a non-string body, or
+ * one that is not JSON, is not a proposal.
+ */
+function isReadOnlyCombatProposal(path: string, body: unknown): boolean {
+  if (!COMBAT_INTENT_ROUTE_PATTERN.test(path.split('?')[0])) return false;
+  if (typeof body !== 'string') return false;
+  try {
+    const parsed: unknown = JSON.parse(body);
+    return (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      (parsed as { phase?: unknown }).phase === 'propose'
+    );
+  } catch {
+    return false;
+  }
 }
 
 function getRouteTimeoutMs(path: string): number | undefined {
@@ -602,20 +641,23 @@ export async function fetchWithAuth(
         : Math.min(requestedTimeoutMs, routePerAttemptMs);
   // #1787: a POST is network-retried only when the server can dedupe the
   // retry — a client-minted `x-request-id` the server honours, or the turn
-  // POST, whose stored-response replay dedups it (#1786). Any other POST
-  // fails after the first network error: resubmitting it could pay for a
-  // DM turn (or an image, a voice clip, an extraction job) twice. Non-POSTs
-  // are unchanged. The 401 grace/refresh retry below is an HTTP-response
-  // path, not a network retry, so the gate does not block the 401 retry
-  // itself — but a re-attempt that then hits a network error is still
-  // gated (it fails fast on a keyless POST). Keys minted downstream per
-  // attempt (the window.fetch wrapper in main.tsx stamps a fresh
-  // x-request-id per call) are not visible here by design — a per-attempt
-  // key could never dedup a retry.
+  // POST, whose stored-response replay dedups it (#1786), or a read-only
+  // combat proposal (see isReadOnlyCombatProposal — read-only except one
+  // known melee exception, #1802). Any other POST fails after the first
+  // network error: resubmitting it could pay for a DM turn (or an image, a
+  // voice clip, an extraction job) twice. Non-POSTs are unchanged. The 401
+  // grace/refresh retry below is an HTTP-response path, not a network
+  // retry, so the gate does not block the 401 retry itself — but a
+  // re-attempt that then hits a network error is still gated (it fails
+  // fast on a keyless POST). Keys minted downstream per attempt (the
+  // window.fetch wrapper in main.tsx stamps a fresh x-request-id per call)
+  // are not visible here by design — a per-attempt key could never dedup
+  // a retry.
   const allowNetworkRetry =
     (requestInit.method ?? 'GET').toUpperCase() !== 'POST' ||
     hasIdempotencyKey(normalizedInit.headers) ||
-    isServerDedupedTurnPost(path);
+    isServerDedupedTurnPost(path) ||
+    isReadOnlyCombatProposal(path, normalizedInit.body);
   // #1113: the bearer token each fetch attempt actually sent, in attempt order.
   // The last entry belongs to the attempt whose response is returned.
   const sentAccessTokens: Array<string | undefined> = [];

@@ -79,8 +79,8 @@ export async function maybeStartConcentrationFromSpellCast(
     )
     .limit(1);
   if (combatant) {
-    const { isRaging } = await import('./combat-turn-flags.js');
-    if (await isRaging(combatant.encounterId, combatant.participantId)) return false;
+    const { hasActiveRage } = await import('./combat-turn-flags.js');
+    if (await hasActiveRage(combatant.encounterId, combatant.participantId)) return false;
   }
 
   // The character must actually be able to cast the tagged spell. The #2718

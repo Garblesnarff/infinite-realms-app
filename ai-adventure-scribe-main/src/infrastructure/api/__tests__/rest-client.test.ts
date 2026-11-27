@@ -549,6 +549,117 @@ describe('fetchWithAuth', () => {
     }
   });
 
+  it('retries a read-only combat proposal without a key (#1787, #1786)', async () => {
+    vi.useFakeTimers();
+    try {
+      // The propose call POSTs phase: 'propose' to the intent route and
+      // the server returns it before the dedup lookup (intents.ts), so no
+      // key is honoured there — but the retry is safe anyway, because a
+      // proposal resolves nothing (one known exception: a non-off-hand
+      // melee proposal can move the actor and append a DM tactical fact,
+      // #1802). The body below is the exact shape
+      // proposeAuthoritativeAttack sends.
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(
+          response(200, { accepted: true, proposal: { movementOnly: false } }),
+        );
+
+      const request = fetchWithAuth('/v1/combat/enc-1/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent: { type: 'attack', actorId: 'pc-1', targetId: 'npc-1' },
+          source: 'dm',
+          phase: 'propose',
+        }),
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(request).resolves.toMatchObject({ status: 200 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty('x-request-id');
+      expect(fetchMock.mock.calls[1][1].headers).not.toHaveProperty('x-request-id');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries a read-only spell proposal without a key (#1787)', async () => {
+    vi.useFakeTimers();
+    try {
+      // Same allowlist, spell-shaped body — the exact shape
+      // proposeAuthoritativeSpell sends. The spell path is genuinely
+      // read-only server-side (no approach call), so the retry is safe.
+      fetchMock
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce(
+          response(200, { accepted: true, proposal: { movementOnly: false } }),
+        );
+
+      const request = fetchWithAuth('/v1/combat/enc-1/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent: { type: 'spell', actorId: 'pc-1', targetIds: ['npc-1'], spellName: 'Fireball' },
+          source: 'dm',
+          phase: 'propose',
+        }),
+      });
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(request).resolves.toMatchObject({ status: 200 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty('x-request-id');
+      expect(fetchMock.mock.calls[1][1].headers).not.toHaveProperty('x-request-id');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not retry a keyless combat commit — only proposals are allowlisted (#1787)', async () => {
+    vi.useFakeTimers();
+    try {
+      // Same route, no phase field: this is the exact body
+      // executeAuthoritativeCombatIntent sends (combat-action-executor.ts).
+      // A commit executes, so without a key it must fail fast — the
+      // propose allowlist must not open the commit path.
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+      const request = fetchWithAuth('/v1/combat/enc-1/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          intent: { type: 'attack', actorId: 'pc-1', targetId: 'npc-1' },
+          source: 'dm',
+        }),
+      });
+      await expect(request).rejects.toThrow('Failed to fetch');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not retry an intent POST whose body is not JSON — the allowlist fails closed (#1787)', async () => {
+    vi.useFakeTimers();
+    try {
+      // The propose check parses the body; a body it cannot parse is
+      // not a proposal, so the gate must not authorize a retry.
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+      const request = fetchWithAuth('/v1/combat/enc-1/intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: 'not-json',
+      });
+      await expect(request).rejects.toThrow('Failed to fetch');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('retries the turn POST without a key — the server replays it (#1787, #1786)', async () => {
     vi.useFakeTimers();
     try {

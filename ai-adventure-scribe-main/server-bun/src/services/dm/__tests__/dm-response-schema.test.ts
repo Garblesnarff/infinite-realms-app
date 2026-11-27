@@ -4,6 +4,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   VOICE_CATEGORY_VALUES,
   dmResponseSchema,
+  dmResponseSchemaForPhase,
   parseDmResponse,
   reviewNarrationSpeakerSplit,
   stripOptionsRepeatedInText,
@@ -426,6 +427,43 @@ describe('dmResponseSchema story rest contract (#264)', () => {
   });
 });
 
+describe('dmResponseSchema story map place contract (#1753)', () => {
+  const propertiesOf = (schema: Record<string, unknown>): Record<string, unknown> =>
+    schema.properties as Record<string, unknown>;
+
+  test('the live schema carries place as one optional string', () => {
+    const place = propertiesOf(dmResponseSchema).place as Record<string, unknown>;
+    expect(place.type).toBe('string');
+    expect(Object.keys(place).sort()).toEqual(['description', 'type']);
+    expect(dmResponseSchema.required).not.toContain('place');
+  });
+
+  test('place is on the narrative phase and absent from combat and tactical', () => {
+    expect(propertiesOf(dmResponseSchemaForPhase('narrative'))).toHaveProperty('place');
+    expect(propertiesOf(dmResponseSchemaForPhase('combat'))).not.toHaveProperty('place');
+    expect(propertiesOf(dmResponseSchemaForPhase('tactical'))).not.toHaveProperty('place');
+    for (const phase of ['narrative', 'combat', 'tactical'] as const) {
+      expect((dmResponseSchemaForPhase(phase) as { required: string[] }).required).not.toContain(
+        'place',
+      );
+    }
+  });
+
+  test('the narrative schema accepts a place key and a reply without one', () => {
+    const validate = new Ajv({ strict: false }).compile(dmResponseSchemaForPhase('narrative'));
+    // The narrative phase has no map or combat actions, and scene_spec is a plain optional.
+    const {
+      map_actions: _map,
+      combat_actions: _combat,
+      scene_spec: _scene,
+      ...narrative
+    } = response({ options: [] });
+    expect(validate({ ...narrative, place: 'the-rope-ledge' })).toBe(true);
+    expect(validate(narrative)).toBe(true);
+    expect(validate({ ...narrative, place: 7 })).toBe(false);
+  });
+});
+
 describe('dmResponseSchema story damage contract (#610)', () => {
   test('the damage field carries a description telling the model when to populate it', () => {
     // #610: the model narrated injury but left no damage signal, so the writer never
@@ -515,9 +553,8 @@ describe('dmResponseSchema combat_actions anyOf contract (#782 item 8)', () => {
   // requires origin (forbidden on the targeted schema) — so oneOf and anyOf
   // accept exactly the same payloads. This test rebuilds the old oneOf shape
   // from the same two variants and proves the verdicts match on a corpus.
-  const combatItems = (
-    dmResponseSchema.properties as Record<string, Record<string, unknown>>
-  ).combat_actions.items as { anyOf: unknown[] };
+  const combatItems = (dmResponseSchema.properties as Record<string, Record<string, unknown>>)
+    .combat_actions.items as { anyOf: unknown[] };
   const variants = combatItems.anyOf;
 
   const oldValidator = new Ajv({ strict: false }).compile({
@@ -577,16 +614,8 @@ describe('dmResponseSchema combat_actions anyOf contract (#782 item 8)', () => {
       [{ ...targetedAction, origin: { x: 1, y: 1 } }],
       false,
     ],
-    [
-      'rejects an unknown action_type',
-      [{ ...targetedAction, action_type: 'teleport' }],
-      false,
-    ],
-    [
-      'rejects an extra property',
-      [{ ...targetedAction, extra: 'nope' }],
-      false,
-    ],
+    ['rejects an unknown action_type', [{ ...targetedAction, action_type: 'teleport' }], false],
+    ['rejects an extra property', [{ ...targetedAction, extra: 'nope' }], false],
     ['rejects an AoE action with spell_id null', [{ ...aoeAction, spell_id: null }], false],
   ];
 

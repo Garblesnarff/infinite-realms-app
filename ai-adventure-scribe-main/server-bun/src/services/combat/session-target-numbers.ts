@@ -1,4 +1,4 @@
-import { showTargetNumbersByDefault } from '../../../../shared/show-target-numbers.js';
+import { showTargetNumbersFor } from '../../../../shared/show-target-numbers.js';
 import { logger } from '../../lib/logger.js';
 
 /**
@@ -6,9 +6,11 @@ import { logger } from '../../lib/logger.js';
  * numbers ("vs AC 12", "vs DC 13") in the facts it hands the DM.
  *
  * The client gates those numbers behind the player's "Show target numbers" choice,
- * but the server cannot see that local toggle. All it can follow is the campaign's
- * difficulty, through the one shared rule the client default also uses — so on a
- * Hard campaign the DM is never told the number it would otherwise say out loud.
+ * but the server cannot see that local toggle. It follows the campaign's
+ * rules_config.show_target_numbers when present, falling back to the difficulty
+ * default through the one shared rule the client also uses — so on a Hard campaign
+ * (or one with the flag off) the DM is never told the number it would otherwise say
+ * out loud.
  *
  * Never throws: narration must not fail because the setting could not be read. An
  * unreadable setting falls back to the shared rule for an unknown difficulty
@@ -33,11 +35,11 @@ export async function showTargetNumbersForSession(sessionId: string): Promise<bo
       .limit(1);
     if (session?.campaignId) {
       const [campaign] = await db
-        .select({ difficultyLevel: campaigns.difficultyLevel })
+        .select({ difficultyLevel: campaigns.difficultyLevel, rulesConfig: campaigns.rulesConfig })
         .from(campaigns)
         .where(eq(campaigns.id, session.campaignId))
         .limit(1);
-      return showTargetNumbersByDefault(campaign?.difficultyLevel);
+      return showTargetNumbersFor(campaign?.rulesConfig, campaign?.difficultyLevel);
     }
     if (session?.starterCampaignId) {
       const [starter] = await db
@@ -45,9 +47,9 @@ export async function showTargetNumbersForSession(sessionId: string): Promise<bo
         .from(starterCampaigns)
         .where(eq(starterCampaigns.id, session.starterCampaignId))
         .limit(1);
-      return showTargetNumbersByDefault(starter?.difficulty);
+      return showTargetNumbersFor(undefined, starter?.difficulty);
     }
-    return showTargetNumbersByDefault(undefined);
+    return showTargetNumbersFor(undefined, undefined);
   } catch (error) {
     logger.warn({ msg: 'SESSION_TARGET_NUMBERS_UNAVAILABLE', sessionId, error });
     return true;

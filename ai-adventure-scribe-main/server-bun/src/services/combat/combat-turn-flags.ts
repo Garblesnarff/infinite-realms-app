@@ -352,8 +352,8 @@ export async function readLightAttackMark(
     : null;
 }
 
-/** Whether this participant is raging in this encounter at the current round. */
-export async function isRaging(encounterId: string, participantId: string): Promise<boolean> {
+/** Whether the Rage mark is live, independent of armor. */
+export async function hasActiveRage(encounterId: string, participantId: string): Promise<boolean> {
   const db = await database();
   const [row] = await db
     .select({
@@ -364,13 +364,17 @@ export async function isRaging(encounterId: string, participantId: string): Prom
     .where(eq(gameSessions.id, sessionOfEncounter(encounterId)))
     .limit(1);
   const entry = flagEntry(row?.state ?? null, RAGE_KEY, participantId);
-  if (
-    entry?.encounterId !== encounterId ||
-    typeof entry.expiresRound !== 'number' ||
-    Number(row?.round) >= entry.expiresRound
-  )
-    return false;
+  return (
+    entry?.encounterId === encounterId &&
+    typeof entry.expiresRound === 'number' &&
+    Number(row?.round) < entry.expiresRound
+  );
+}
 
+/** Whether the active Rage grants combat benefits at the current round. */
+export async function isRaging(encounterId: string, participantId: string): Promise<boolean> {
+  if (!(await hasActiveRage(encounterId, participantId))) return false;
+  const db = await database();
   const [participant] = await db
     .select({ characterId: combatParticipants.characterId })
     .from(combatParticipants)

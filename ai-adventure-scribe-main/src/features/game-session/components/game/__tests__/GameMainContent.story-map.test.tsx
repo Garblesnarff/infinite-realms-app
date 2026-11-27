@@ -3,7 +3,7 @@
  * ComposerDraftProvider, ChatInput, StoryMapPanel and its parts, story-map-state.
  * Same harness as the #760 option-composer test; only the plaque is left real.
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +14,7 @@ import { GameMainContent } from '../game-content/GameMainContent';
 import type { SpellCastHandlerRef } from '../../game/spell-cast-handler';
 import type { ChatMessage } from '@/types/game';
 
+import { fetchWithAuth } from '@/infrastructure/api/rest-client';
 import { PENDING_INPUT_STORAGE_KEY } from '@/services/auth/TokenService';
 
 const harness = vi.hoisted(() => ({
@@ -226,6 +227,28 @@ describe('GameMainContent region map (#1754)', () => {
   afterEach(() => {
     resetStoryMapState();
     document.body.classList.remove('ir-table-look');
+  });
+
+  it('a starter campaign whose route returns 404 shows no map button (#1742)', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    render(
+      <GameMainContent
+        {...baseProps}
+        campaignIdForHandler="no-map"
+        sessionData={STARTER}
+        tableHeaderSlot={header}
+      />,
+    );
+    await waitFor(() => expect(fetchWithAuth).toHaveBeenCalledWith('/v1/story-map/no-map'));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByText('Old Toll Bridge')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open map, you are at/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('story-map-sheet')).not.toBeInTheDocument();
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
   });
 
   it('player-made campaigns (no starter campaign) show no map button', () => {

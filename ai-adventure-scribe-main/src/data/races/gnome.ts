@@ -46,7 +46,7 @@ export const gnome: CharacterRace = {
       description: 'Dwellers of the Deep Caverns, with superior darkvision and natural stealth.',
       backgroundImage: '/images/races/subraces/deep-gnome-gnome-sub-race-card-background.png',
       abilityScoreIncrease: { dexterity: 2 },
-      traits: ['Stone Camouflage', 'Gnome Cunning'],
+      traits: ['Superior Darkvision', 'Stone Camouflage', 'Gnome Cunning'],
     },
   ],
 };

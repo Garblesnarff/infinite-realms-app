@@ -1287,7 +1287,7 @@ async function movementReactionContext(params: {
         map,
         reachOf: async (participant) => {
           const { getDefaultCombatWeapon } = await import('./equipped-loadout.js');
-          return getDefaultCombatWeapon(participant);
+          return getDefaultCombatWeapon(participant, { preferMelee: true });
         },
         hasLineOfSight: (fromId, toId) => (map ? checkLineOfSight(map, fromId, toId) : false),
         distanceFeet: getDistance,
@@ -1854,7 +1854,8 @@ export async function executeCombatIntent(
       const spellActorSlug = engineSlugForParticipant(spellFactMap, intent.actorId, actorLabel);
       // The DM repeats the numbers it is told, so on a campaign that hides target
       // numbers the spell facts are worded without them. The server cannot see the
-      // player's local toggle; campaign difficulty is all it follows.
+      // player's local (unsaved) toggle; a saved campaign rules_config.show_target_numbers
+      // wins, then difficulty, via showTargetNumbersForSession.
       const spellShowTargetNumbers = await showTargetNumbersForSession(encounter.sessionId);
       for (const [index, outcome] of spellResults.entries()) {
         const targetId = intent.targetIds[index];
@@ -3275,7 +3276,7 @@ export async function getLegalCombatActions(encounterId: string, userId: string)
       map: map ?? null,
       reachOf: async (participant) => {
         const { getDefaultCombatWeapon } = await import('./equipped-loadout.js');
-        return getDefaultCombatWeapon(participant);
+        return getDefaultCombatWeapon(participant, { preferMelee: true });
       },
       hasLineOfSight: (fromId, toId) => (map ? checkLineOfSight(map, fromId, toId) : false),
       distanceFeet: getDistance,

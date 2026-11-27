@@ -49,7 +49,7 @@ describe('CombatEntryConfirmation', () => {
     expect(card?.className).toContain('shadow-2xl');
 
     expect(screen.getByText('A fight is starting')).toBeTruthy();
-    expect(screen.getByText('Fight the Vance?')).toBeTruthy();
+    expect(screen.getByText('Fight Vance?')).toBeTruthy();
     expect(
       screen.getByText(
         'If you go ahead, everyone rolls initiative, then turns go in order. You can still talk or do something else instead.',
@@ -80,7 +80,7 @@ describe('CombatEntryConfirmation', () => {
 
     renderCard(confirmation);
 
-    expect(screen.getByText('Fight the Professor Emil Darkwater and 1 more?')).toBeTruthy();
+    expect(screen.getByText('Fight Professor Emil Darkwater and 1 more?')).toBeTruthy();
     expect(screen.getByText('Also joining the fight: Captain Sarah Reeves.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Start the fight' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Do something else' })).toBeTruthy();
@@ -164,7 +164,7 @@ describe('CombatEntryConfirmation', () => {
 
     renderCard(confirmation);
 
-    expect(screen.getByText('Fight the Professor Emil Darkwater and 1 more?')).toBeTruthy();
+    expect(screen.getByText('Fight Professor Emil Darkwater and 1 more?')).toBeTruthy();
     expect(screen.getByText('Also joining the fight: Captain Sarah Reeves.')).toBeTruthy();
   });
 
@@ -181,7 +181,7 @@ describe('CombatEntryConfirmation', () => {
 
     renderCard(confirmation);
 
-    expect(screen.getByText('Fight the Silk Woman and 1 more?')).toBeTruthy();
+    expect(screen.getByText('Fight Silk Woman and 1 more?')).toBeTruthy();
     expect(screen.getByText(/I attack Silk Woman with my longbow/)).toBeTruthy();
     expect(screen.getByText('Also joining the fight: Silk Man.')).toBeTruthy();
   });
@@ -234,7 +234,7 @@ describe('CombatEntryConfirmation', () => {
 
     renderCard(confirmation);
 
-    expect(screen.getByText('Cast a spell at the Vance?')).toBeTruthy();
+    expect(screen.getByText('Cast a spell at Vance?')).toBeTruthy();
   });
 
   it('does not decline on an Escape another handler already consumed (#86)', () => {

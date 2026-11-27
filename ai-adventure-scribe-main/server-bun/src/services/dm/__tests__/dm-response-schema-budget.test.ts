@@ -86,6 +86,12 @@ import mainDmResponseSchema from './fixtures/main-dm-response-schema.json' with 
  *
  * Test-only: no model-facing text changes, except #777 (damage description
  * + fallHeightFeet) — see the #777 paragraph below.
+ *
+ * #1753 (story map `place`, one optional string on the narrative phase) re-measured with
+ * this file's walker against main 5d5e4b85: the live schema 10,702 -> 11,131 bytes and
+ * 46 -> 47 optionals (7 unions, 0 oneOf, 7 keywords unchanged); narrative 8,092 -> 8,521
+ * bytes and 20 -> 21 optionals (5 unions, 6 keywords); combat (5,768 bytes, 15 / 7 / 4) and
+ * tactical (8,115 bytes, 16 / 20 / 5) unchanged. 21 stays under the 24-optional cap.
  */
 
 /**
@@ -134,7 +140,8 @@ const PHASE_BASELINES: Record<
   { unions: number; optionals: number; keywords: number }
 > = {
   // #1537: narrative +1 optional (inspiration_grant). Still under the 24-optional Anthropic cap.
-  narrative: { unions: 5, optionals: 20, keywords: 6 },
+  // #1753: narrative +1 optional (place, the story map key). 21, still under the cap of 24.
+  narrative: { unions: 5, optionals: 21, keywords: 6 },
   combat: { unions: 15, optionals: 7, keywords: 4 },
   tactical: { unions: 16, optionals: 20, keywords: 5 },
 };

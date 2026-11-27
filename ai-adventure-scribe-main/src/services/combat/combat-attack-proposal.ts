@@ -39,13 +39,18 @@ export async function proposeAuthoritativeAttack(
   encounterId: string,
   intent: Extract<ClientCombatIntent, { type: 'attack' }>,
 ): Promise<CombatAttackProposal> {
-  // #1787: mint an idempotency key so a transient network blip retries the
-  // proposal instead of erroring the popup. The key is inert server-side —
-  // proposals return before the route's dedup lookup (intents.ts) — but the
-  // retry is safe anyway: a proposal claims nothing and resolves nothing.
+  // #1787 (strategist FIX round 2): no idempotency key here — the server
+  // returns a proposal before the route's dedup lookup (intents.ts), so a
+  // key would be ignored, not honoured. The retry on a network blip comes
+  // from the gate's explicit propose allowlist (rest-client.ts). Known
+  // exception (#1802): a non-off-hand melee proposal can move the actor
+  // and append a DM tactical fact, so a retry can duplicate the fact.
+  // (The window.fetch wrapper in main.tsx still stamps a fresh
+  // per-attempt x-request-id on the wire; that is observability, not
+  // dedup — the server ignores propose keys and it is never resent.)
   const response = await fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-request-id': crypto.randomUUID() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ intent, source: 'dm', phase: 'propose' }),
   });
   logServerRequestId('/v1/combat', response);
@@ -86,13 +91,16 @@ export async function proposeAuthoritativeSpell(
   encounterId: string,
   intent: Extract<ClientCombatIntent, { type: 'spell' }>,
 ): Promise<CombatSpellProposal> {
-  // #1787: mint an idempotency key so a transient network blip retries the
-  // proposal instead of erroring the popup. The key is inert server-side —
-  // proposals return before the route's dedup lookup (intents.ts) — but the
-  // retry is safe anyway: a proposal claims nothing and resolves nothing.
+  // #1787 (strategist FIX round 2): no idempotency key here — the server
+  // returns a proposal before the route's dedup lookup (intents.ts), so a
+  // key would be ignored, not honoured. The retry on a network blip comes
+  // from the gate's explicit propose allowlist (rest-client.ts).
+  // (The window.fetch wrapper in main.tsx still stamps a fresh
+  // per-attempt x-request-id on the wire; that is observability, not
+  // dedup — the server ignores propose keys and it is never resent.)
   const response = await fetchWithAuth(`/v1/combat/${encodeURIComponent(encounterId)}/intent`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-request-id': crypto.randomUUID() },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ intent, source: 'dm', phase: 'propose' }),
   });
   logServerRequestId('/v1/combat', response);

@@ -262,6 +262,13 @@
       "breakpoints": true
     },
     {
+      "idx": 39,
+      "version": "7",
+      "when": 1795632941104,
+      "tag": "0039_story_map_progress",
+      "breakpoints": true
+    },
+    {
       "idx": 41,
       "version": "7",
       "when": 1795754651819,
