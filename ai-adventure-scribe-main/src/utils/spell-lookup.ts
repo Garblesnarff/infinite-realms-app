@@ -8,6 +8,7 @@
  */
 
 import { REVERSE_SPELL_ID_MAPPING } from './spell-id-mapping';
+import { canonicalSpellId, RETIRED_SPELL_UUIDS } from '../../shared/spell-aliases';
 
 import type { Spell, Character } from '@/types/character';
 
@@ -34,12 +35,15 @@ export function getSpellById(spellId: string, createFallback: boolean = true): S
   if (!spellId) return null;
 
   try {
-    // First try direct lookup by kebab-case ID
-    const spell = allSpells.find((spell) => spell?.id === spellId);
+    // #254: a possessive alias resolves to the canonical SRD row first, so
+    // a stored alias id still finds the one catalog entry.
+    const spell = allSpells.find((spell) => spell?.id === canonicalSpellId(spellId));
     if (spell) return spell;
 
-    // If not found, check if it's a UUID that needs mapping to kebab-case
-    const kebabId = REVERSE_SPELL_ID_MAPPING[spellId];
+    // If not found, check if it's a UUID that needs mapping to kebab-case.
+    // #254: a row written under a retired duplicate UUID reads as the
+    // canonical spell (the row-rewriting cleanup needs Rob's line).
+    const kebabId = REVERSE_SPELL_ID_MAPPING[spellId] ?? RETIRED_SPELL_UUIDS[spellId];
     if (kebabId) {
       const mappedSpell = allSpells.find((spell) => spell?.id === kebabId);
       if (mappedSpell) return mappedSpell;
