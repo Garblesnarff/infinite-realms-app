@@ -1,11 +1,17 @@
 /**
  * #1776: the starter campaign request is bounded. A request that never answers ends in an
- * error after two attempts (about 8 s), and retry() runs the load again.
+ * error after two attempts (5 s + 4 s), and retry() runs the load again.
  */
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { STARTER_CAMPAIGNS_ATTEMPT_MS, useStarterCampaigns } from '@/hooks/use-starter-campaigns';
+import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
+
+// The Explore page's bounds (ExploreGalleryPage.tsx): first try 5 s, second 4 s.
+const EXPLORE_TIMEOUTS_MS = [5_000, 4_000];
+const BOUNDED = { attemptTimeoutsMs: EXPLORE_TIMEOUTS_MS };
+const FIRST_ATTEMPT_MS = EXPLORE_TIMEOUTS_MS[0];
+const BOTH_ATTEMPTS_MS = EXPLORE_TIMEOUTS_MS[0] + EXPLORE_TIMEOUTS_MS[1];
 
 const fake = vi.hoisted(() => ({
   script: [] as Array<'hang' | 'ok'>,
@@ -33,7 +39,8 @@ vi.mock('@/integrations/supabase/client', () => {
         mode === 'ok'
           ? Promise.resolve({ data: fake.rows, error: null })
           : new Promise((_resolve, rejectAborted) => {
-              (q.signal as AbortSignal).addEventListener('abort', () =>
+              // Only a bounded call has a signal; an unbounded call never answers.
+              (q.signal as AbortSignal | undefined)?.addEventListener('abort', () =>
                 rejectAborted(new DOMException('aborted', 'AbortError')),
               );
             });
@@ -76,10 +83,10 @@ afterEach(() => {
 describe('useStarterCampaigns: bounded load (#1776)', () => {
   it('a request that never answers ends in an error after two bounded attempts', async () => {
     fake.script = ['hang', 'hang'];
-    const { result } = renderHook(() => useStarterCampaigns());
+    const { result } = renderHook(() => useStarterCampaigns(BOUNDED));
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(STARTER_CAMPAIGNS_ATTEMPT_MS * 2);
+      await vi.advanceTimersByTimeAsync(BOTH_ATTEMPTS_MS);
     });
 
     expect(fake.calls).toBe(2);
@@ -90,10 +97,10 @@ describe('useStarterCampaigns: bounded load (#1776)', () => {
 
   it('a slow first attempt is retried once and the list loads', async () => {
     fake.script = ['hang', 'ok'];
-    const { result } = renderHook(() => useStarterCampaigns());
+    const { result } = renderHook(() => useStarterCampaigns(BOUNDED));
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(STARTER_CAMPAIGNS_ATTEMPT_MS);
+      await vi.advanceTimersByTimeAsync(FIRST_ATTEMPT_MS);
     });
 
     expect(fake.calls).toBe(2);
@@ -104,9 +111,9 @@ describe('useStarterCampaigns: bounded load (#1776)', () => {
 
   it('retry() runs the load again after an error', async () => {
     fake.script = ['hang', 'hang'];
-    const { result } = renderHook(() => useStarterCampaigns());
+    const { result } = renderHook(() => useStarterCampaigns(BOUNDED));
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(STARTER_CAMPAIGNS_ATTEMPT_MS * 2);
+      await vi.advanceTimersByTimeAsync(BOTH_ATTEMPTS_MS);
     });
     expect(result.current.error).not.toBeNull();
 
@@ -118,5 +125,18 @@ describe('useStarterCampaigns: bounded load (#1776)', () => {
 
     expect(result.current.error).toBeNull();
     expect(result.current.campaigns).toHaveLength(1);
+  });
+
+  it('a caller without the option waits with no bound and never shows an error', async () => {
+    fake.script = ['hang'];
+    const { result } = renderHook(() => useStarterCampaigns());
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000);
+    });
+
+    expect(fake.calls).toBe(1);
+    expect(result.current.isLoading).toBe(true);
+    expect(result.current.error).toBeNull();
   });
 });

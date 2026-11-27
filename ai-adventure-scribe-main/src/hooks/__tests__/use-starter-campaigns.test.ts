@@ -65,9 +65,7 @@ describe('useStarterCampaigns', () => {
     (mockFrom as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnValue({
-        abortSignal: vi.fn().mockResolvedValue({ data: mockCampaigns, error: null }),
-      }),
+      order: vi.fn().mockResolvedValue({ data: mockCampaigns, error: null }),
     });
 
     const { result } = renderHook(() => useStarterCampaigns());
@@ -93,9 +91,7 @@ describe('useStarterCampaigns', () => {
     (mockFrom as any).mockReturnValue({
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
-      order: vi.fn().mockReturnValue({
-        abortSignal: vi.fn().mockResolvedValue({ data: null, error: { message: 'Fetch failed' } }),
-      }),
+      order: vi.fn().mockResolvedValue({ data: null, error: { message: 'Fetch failed' } }),
     });
 
     const { result } = renderHook(() => useStarterCampaigns());

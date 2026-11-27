@@ -69,56 +69,67 @@ function mapCampaignRow(row: Record<string, unknown>): StarterCampaign {
   };
 }
 
-/** Each attempt gives up after this long, so a stalled connection cannot hang the list (#1776). */
-export const STARTER_CAMPAIGNS_ATTEMPT_MS = 4_000;
-/** Two attempts: the worst case ends in an error after about 8 s. */
-export const STARTER_CAMPAIGNS_ATTEMPTS = 2;
+export interface StarterCampaignsOptions {
+  /** One entry per attempt, in ms. Omit to wait for the request with no bound. */
+  attemptTimeoutsMs?: readonly number[];
+}
 
-/** One bounded request for the published starter campaigns. Throws on timeout or error. */
-async function requestStarterCampaignRows(timeoutMs: number): Promise<Record<string, unknown>[]> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
+/** One request for the published starter campaigns. A null timeout waits with no bound. */
+async function requestStarterCampaignRows(
+  timeoutMs: number | null,
+): Promise<Record<string, unknown>[]> {
+  const controller = timeoutMs === null ? null : new AbortController();
+  const timer =
+    controller && timeoutMs !== null ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  const query = supabase
+    .from('starter_campaigns')
+    .select(
+      'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, is_complete, is_published, is_featured, cover_image_url, banner_image_url',
+    )
+    .eq('is_published', true)
+    .eq('is_complete', true)
+    .order('title');
   try {
-    const { data, error: queryError } = await supabase
-      .from('starter_campaigns')
-      .select(
-        'id, slug, title, tagline, genre, tone, difficulty, level_range, estimated_sessions, premise, is_complete, is_published, is_featured, cover_image_url, banner_image_url',
-      )
-      .eq('is_published', true)
-      .eq('is_complete', true)
-      .order('title')
-      .abortSignal(controller.signal);
+    const { data, error: queryError } = await (controller
+      ? query.abortSignal(controller.signal)
+      : query);
     if (queryError) {
       throw new Error(queryError.message);
     }
     return (data || []) as Record<string, unknown>[];
   } catch (err) {
-    if (controller.signal.aborted) {
+    if (controller?.signal.aborted) {
       throw new Error('The campaign list took too long to load');
     }
     throw err;
   } finally {
-    clearTimeout(timer);
+    if (timer) clearTimeout(timer);
   }
 }
 
 /**
- * Fetch all published starter campaigns. Each attempt is bounded, and a failed load is
- * retried once; after that `error` is set and `retry` runs the load again (#1776).
+ * Fetch all published starter campaigns. With `attemptTimeoutsMs`, each attempt is bounded and
+ * one attempt is made per entry; after the last failure `error` is set. `retry` runs the load
+ * again. Without it, one unbounded request, as before (#1776).
  */
-export function useStarterCampaigns(): UseStarterCampaignsResult {
+export function useStarterCampaigns(
+  options: StarterCampaignsOptions = {},
+): UseStarterCampaignsResult {
   const [campaigns, setCampaigns] = useState<StarterCampaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [attempt, setAttempt] = useState(0);
+  // A string key, so an inline array does not restart the load on every render.
+  const boundKey = options.attemptTimeoutsMs?.join(',') ?? '';
 
   useEffect(() => {
     let live = true;
+    const timeouts: (number | null)[] = boundKey ? boundKey.split(',').map(Number) : [null];
     async function loadCampaigns(): Promise<void> {
       let lastError: Error = new Error('Failed to fetch campaigns');
-      for (let i = 0; i < STARTER_CAMPAIGNS_ATTEMPTS; i++) {
+      for (const timeoutMs of timeouts) {
         try {
-          const rows = await requestStarterCampaignRows(STARTER_CAMPAIGNS_ATTEMPT_MS);
+          const rows = await requestStarterCampaignRows(timeoutMs);
           if (live) {
             setCampaigns(rows.map(mapCampaignRow));
             setError(null);
@@ -141,7 +152,7 @@ export function useStarterCampaigns(): UseStarterCampaignsResult {
     return () => {
       live = false;
     };
-  }, [attempt]);
+  }, [attempt, boundKey]);
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const featuredCampaigns = useMemo(() => campaigns.filter((c) => c.isFeatured), [campaigns]);

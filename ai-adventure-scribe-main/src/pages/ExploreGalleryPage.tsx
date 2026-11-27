@@ -17,8 +17,17 @@ import { BoxedCampaign } from '@/features/campaigns/table/BoxedCampaign';
 import { PublicExploreCard } from '@/features/explore/PublicExploreCard';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 
-/** After this long without the list or an error, the page shows an error with Retry (#1776). */
-export const EXPLORE_LOAD_DEADLINE_MS = 9_000;
+/**
+ * Explore's own request bounds (#1776): a first try of 5 s, then a second of 4 s. Only this page
+ * passes them; the other callers of useStarterCampaigns wait with no bound.
+ */
+export const EXPLORE_CAMPAIGN_ATTEMPT_TIMEOUTS_MS: readonly number[] = [5_000, 4_000];
+
+/**
+ * After this long without the list or an error, the page shows an error with Retry (#1776).
+ * Set above the two bounded attempts (5 s + 4 s), so a slow second attempt is not cut short.
+ */
+export const EXPLORE_LOAD_DEADLINE_MS = 9_500;
 
 /**
  * Logged out: the PublicExplore board (navy card). Signed in: the Campaigns board (boxed card, #1484).
@@ -26,7 +35,9 @@ export const EXPLORE_LOAD_DEADLINE_MS = 9_000;
  * Auth and the campaign request are both bounded, so the page ends in the list or an error.
  */
 export const ExploreGalleryPage: React.FC = () => {
-  const { campaigns, isLoading, error, retry } = useStarterCampaigns();
+  const { campaigns, isLoading, error, retry } = useStarterCampaigns({
+    attemptTimeoutsMs: EXPLORE_CAMPAIGN_ATTEMPT_TIMEOUTS_MS,
+  });
   const { user, loading: authLoading } = useAuth();
   const ready = !isLoading && !authLoading;
   const signedIn = Boolean(user);
@@ -143,6 +154,8 @@ export const ExploreGalleryPage: React.FC = () => {
               <p className="text-sm text-muted-foreground mb-3">
                 Check your connection and try again.
               </p>
+              {/* A failed list retries the campaign request. A stalled auth check cannot be
+                  retried from here, because auth runs once at page load: reload runs it again. */}
               <Button
                 onClick={() => (error ? retry() : window.location.reload())}
                 variant="outline"
