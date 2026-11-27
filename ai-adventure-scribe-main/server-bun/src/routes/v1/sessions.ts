@@ -29,6 +29,7 @@ import { combatEncounters, gameSessions, sessionChronicles } from '../../../../d
 import { chronicleGenerator, persistChronicleFailure } from '../../services/chronicle-generator.js';
 import { getSessionContextRouteResult } from './session-context-handler.js';
 import { getSessionListRouteResult } from './session-list-handler.js';
+import { lethalActRoutes } from './lethal-act.js';
 
 import type { GameSession } from '../../../../db/schema/index';
 
@@ -185,6 +186,9 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
       return { error: 'Not found' };
     }
   })
+  // #468 item 2: confirmed lethal free-text acts. Lives here so it inherits
+  // session auth without editing app.ts (owned by open PR #1762).
+  .use(lethalActRoutes)
 
   /**
    * POST /v1/sessions
@@ -404,12 +408,8 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
         // must never fail the manual end itself — the route-contract tests
         // exercise this handler without a real database.
         try {
-          const { payPendingEndingXp } = await import(
-            '../../services/dm/story-xp.js'
-          );
-          const { playerMessage } = await import(
-            '../../services/dm/story-spell-slots.js'
-          );
+          const { payPendingEndingXp } = await import('../../services/dm/story-xp.js');
+          const { playerMessage } = await import('../../services/dm/story-spell-slots.js');
           const lastPlayerMessage = await playerMessage(id);
           if (lastPlayerMessage?.createdAt) {
             await payPendingEndingXp({
@@ -422,10 +422,7 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
           logger.warn({
             msg: '[Sessions] Deferred ending XP payment skipped on manual end',
             sessionId: id,
-            error:
-              pendingError instanceof Error
-                ? pendingError.message
-                : String(pendingError),
+            error: pendingError instanceof Error ? pendingError.message : String(pendingError),
           });
         }
         const session = await SessionService.completeSession(

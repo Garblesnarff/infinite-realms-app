@@ -5,6 +5,7 @@ import { ATTACK_WAIT_RESOLVING, TURN_WAIT_WORKING } from './turn-wait-copy';
 import { useHeldEntryRecovery, playerMessageIsStillNewest } from './use-held-entry-recovery';
 import { useMessageCommandHandler } from './use-message-command-handler';
 import { useMessageSendQueue } from './use-message-send-queue';
+import { isClearlyLethalAction } from '../../../../../../shared/lethal-action-detector';
 import { useSessionValidator } from '../session/SessionValidator';
 
 import type { ExtendedGameSession, SessionStateUpdater } from '../../../types/session';
@@ -44,6 +45,7 @@ import {
   settlePendingCombatEntryConfirmation,
 } from '@/services/combat/combat-entry-confirmation-bridge';
 import { registerCombatEntryPlayerSource } from '@/services/combat/combat-entry-delivery';
+import { decideLethalFreeTextSend } from '@/services/combat/lethal-free-text-send';
 import { settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
 import { settlePendingSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
 import { buildCombatEntryPlayer } from '@/services/combat/structured-combat-payload';
@@ -275,7 +277,7 @@ export const useMessageHandlerLogic = ({
   const inFlightRollsRef = React.useRef(new Map<string, Promise<void>>());
   const [retryInFlight, setRetryInFlight] = React.useState(false);
   const handleSendMessage = React.useCallback(
-    (input: string, context?: MessageSendContext): Promise<void> => {
+    async (input: string, context?: MessageSendContext): Promise<void> => {
       const saved = [...messagesRef.current]
         .reverse()
         .find((message) => message.sender === 'player');
@@ -296,6 +298,43 @@ export const useMessageHandlerLogic = ({
         settlePendingCombatEntryConfirmation(false);
         markCombatEntryTypedAnswer(input);
       }
+      // #468 item 2: a clearly lethal free-text act outside a fight asks "Are you sure?"
+      // first. Cancel leaves the typed text in place and never sends the turn. Confirm
+      // goes to the engine, not the generate path, so only the engine can kill or harm.
+      // Ordinary sends (including roll retries) must not await this, or the Retry
+      // controls miss each other.
+      const mightBeLethal =
+        context?.intent !== 'dice_roll' &&
+        context?.intent !== 'resume_unanswered' &&
+        !gameState.isInCombat &&
+        isClearlyLethalAction(input);
+      const lethalDecision = mightBeLethal
+        ? await decideLethalFreeTextSend({
+            text: input,
+            inCombat: false,
+            intent: context?.intent,
+            sessionId,
+          })
+        : { kind: 'send-normal' as const };
+      if (lethalDecision.kind === 'cancelled') return;
+      if (lethalDecision.kind === 'engine') {
+        const { result } = lethalDecision;
+        await sendMessage({
+          text: input,
+          sender: 'player',
+          timestamp: new Date().toISOString(),
+          persist: true,
+        });
+        await sendMessage({
+          text: result.engineCard.line,
+          sender: 'system',
+          timestamp: new Date().toISOString(),
+          persist: true,
+          context: { engineCards: [result.engineCard] },
+        });
+        return;
+      }
+
       const rollRequestId =
         context?.intent === 'dice_roll'
           ? context.rollRequestId
@@ -313,7 +352,7 @@ export const useMessageHandlerLogic = ({
       setRetryInFlight(true);
       return sending;
     },
-    [queuedHandleSendMessage],
+    [queuedHandleSendMessage, gameState.isInCombat, sessionId, sendMessage],
   );
 
   React.useEffect(() => subscribeToNetworkRetry(setIsReconnecting), []);
