@@ -59,6 +59,7 @@ mock.module('../../../services/combat/combat-turn-flags.js', () => ({
   markTurnAttack: async () => {},
   claimRage: async () => null,
   isRaging: async () => false,
+  hasActiveRage: async () => false,
   clearRage: async () => {},
   markRageActive: async () => {},
   endRageIfIdle: async () => {},

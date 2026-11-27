@@ -325,7 +325,10 @@ describeWithDb('Rage posts through the real intent route (#1638)', () => {
       })
       .returning({ id: characterEquipment.id });
     try {
+      const { startConcentration, getConcentration } = await import('../../../../services/combat/concentration-service.js');
+      await startConcentration(characterId, { id: 'bless', name: 'Bless' });
       const response = await postRage();
+      expect(await getConcentration(characterId)).toBeNull();
       expect(response.status).toBe(200);
       expect(await usesLeft()).toBe(1);
       expect(await bonusActionUsed()).toBe(true);
