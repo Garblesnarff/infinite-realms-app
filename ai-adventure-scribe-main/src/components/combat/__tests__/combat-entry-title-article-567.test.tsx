@@ -18,17 +18,18 @@ function Host(): JSX.Element {
 
 const player = { name: 'Tester', initiativeModifier: 0 };
 
-function pendingFor(actorName: string): PendingCombatEntry {
+function pendingFor(actorName: string, monsterId?: string): PendingCombatEntry {
   return {
     trigger: 'player_intent',
     detail: 'entry',
-    combatants: [{ name: actorName, count: 1 }],
+    combatants: [{ name: actorName, count: 1, ...(monsterId ? { monsterId } : {}) }],
     sceneSpec: null,
     sceneSpecSynthesized: false,
     declaredAttack: {
       verb: 'attack',
       actorName,
       attackSource: 'weapon',
+      ...(monsterId ? { monsterId } : {}),
     },
   };
 }
@@ -77,6 +78,52 @@ describe('combat entry title article (#567)', () => {
       expect(screen.getByTestId('combat-entry-confirmation-overlay')).toBeInTheDocument();
     });
     expect(screen.getByText('Attack Odile Vantrell?')).toBeInTheDocument();
+
+    act(() => {
+      settlePendingCombatEntryConfirmation(false);
+    });
+    if (outcomePromise) await outcomePromise;
+  });
+
+  it('keeps the article for Owlbear with an srd: monster id', async () => {
+    render(<Host />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let outcomePromise: Promise<CombatEntryOutcome> | undefined;
+    await act(async () => {
+      outcomePromise = confirmCombatEntry(pendingFor('Owlbear', 'srd:owlbear'), player);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('combat-entry-confirmation-overlay')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Attack the Owlbear?')).toBeInTheDocument();
+
+    act(() => {
+      settlePendingCombatEntryConfirmation(false);
+    });
+    if (outcomePromise) await outcomePromise;
+  });
+
+  it('keeps the article for Giant Rats with an srd: monster id', async () => {
+    render(<Host />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    let outcomePromise: Promise<CombatEntryOutcome> | undefined;
+    await act(async () => {
+      outcomePromise = confirmCombatEntry(pendingFor('Giant Rats', 'srd:giant-rat'), player);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('combat-entry-confirmation-overlay')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Attack the Giant Rats?')).toBeInTheDocument();
 
     act(() => {
       settlePendingCombatEntryConfirmation(false);

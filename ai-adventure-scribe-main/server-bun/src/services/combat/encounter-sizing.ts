@@ -195,7 +195,8 @@ function isNamedUnique(
   if (index.blocklessNpcs.has(baseKey)) {
     return true;
   }
-  // Name-only judgement (shared with the client fight-start card title).
+  // Kind judgement, shared with the client fight-start card, which
+  // now receives the roster's monster id (an srd: id marks a kind).
   return nameReadsAsPerson(base, lookup.monsterId);
 }
 
