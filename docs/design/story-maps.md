@@ -214,6 +214,25 @@ a place the DM names for the first time with `state = known` (a neighbour of a
 visited place); anything else is dropped and logged, not an error. The client
 never sends it.
 
+**The opening (strategist decision, 11-26, #1762).** Before the first visit the
+campaign has no visited place, so there is no current place and no neighbour to
+check against. In that state the server accepts any `place_key` of the
+session's starter map: that is the place the opening scene puts the hero
+(`story-map-rules.ts`, the `opening` branch of `decidePlace`). To let the DM
+choose it, the `<story_map>` block lists every place of the map until the first
+visit, and only the known places and their routes after it. From the first
+visit on, the rules above apply.
+
+**Same zone (strategist decision, 11-27, #1762).** Places in the same zone are
+neighbours without a route line. The first real routes (#1757) showed why: one
+bible has 40 places and 7 routes, so 32 places had no route at all. Routes are
+for paths between zones and for hidden paths. So a place is a neighbour of a
+visited place when a route leads to it **or** it is in the same zone (both
+`zone_key` set and equal). The accept rule in `decidePlace` uses that, the
+`<story_map>` block lists same-zone places among the routes onward, and a
+visit makes same-zone places known. A place with no zone (a bible without
+zones) has no same-zone neighbours; only routes reach it.
+
 **Budget.** Narrative optionals go 20 → 21. The strict cap is 24
 (`dm-response-schema-budget.test.ts:59-139`), so it fits.
 

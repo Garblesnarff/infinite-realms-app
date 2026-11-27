@@ -24,6 +24,7 @@ import { blogAdminAuthRoutes } from './routes/blog-admin-auth';
 import { billingRoutes } from './routes/v1/billing';
 import { combatRoutes } from './routes/v1/combat';
 import { tacticalMapRoutes } from './routes/v1/tactical-maps';
+import { storyMapRoutes } from './routes/v1/story-map';
 import { handoutRoutes } from './routes/v1/handouts';
 import { inventoryRoutes } from './routes/v1/inventory';
 import { loadoutRoutes } from './routes/v1/loadout';
@@ -250,6 +251,8 @@ export function createApp() {
   // Combat routes (D&D 5E combat system)
   app.use(combatRoutes);
   app.use(tacticalMapRoutes);
+  // #1753: the story region map for a player campaign.
+  app.use(storyMapRoutes);
   app.use(handoutRoutes);
 
   // Inventory routes (D&D 5E inventory management)
