@@ -17,15 +17,27 @@ import { BoxedCampaign } from '@/features/campaigns/table/BoxedCampaign';
 import { PublicExploreCard } from '@/features/explore/PublicExploreCard';
 import { useStarterCampaigns } from '@/hooks/use-starter-campaigns';
 
+/** After this long without the list or an error, the page shows an error with Retry (#1776). */
+export const EXPLORE_LOAD_DEADLINE_MS = 9_000;
+
 /**
  * Logged out: the PublicExplore board (navy card). Signed in: the Campaigns board (boxed card, #1484).
  * Nothing renders as a campaign list until auth has resolved, so the wrong layout never flashes.
+ * Auth and the campaign request are both bounded, so the page ends in the list or an error.
  */
 export const ExploreGalleryPage: React.FC = () => {
-  const { campaigns, isLoading, error } = useStarterCampaigns();
+  const { campaigns, isLoading, error, retry } = useStarterCampaigns();
   const { user, loading: authLoading } = useAuth();
   const ready = !isLoading && !authLoading;
   const signedIn = Boolean(user);
+  const [stalled, setStalled] = React.useState(false);
+  React.useEffect(() => {
+    setStalled(false);
+    if (ready) return undefined;
+    const timer = window.setTimeout(() => setStalled(true), EXPLORE_LOAD_DEADLINE_MS);
+    return () => window.clearTimeout(timer);
+  }, [ready, error]);
+  const loadFailed = Boolean(error) || (stalled && !ready);
 
   return (
     <>
@@ -101,7 +113,7 @@ export const ExploreGalleryPage: React.FC = () => {
           </div>
 
           {/* Loading State */}
-          {!ready && (
+          {!ready && !loadFailed && (
             <div role="status" aria-label="Loading campaigns">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-[18px]">
                 {[1, 2, 3].map((n) => (
@@ -122,20 +134,26 @@ export const ExploreGalleryPage: React.FC = () => {
           )}
 
           {/* Error State */}
-          {error && (
-            <div className="rounded-[10px] border border-[color:color-mix(in_srgb,var(--ir-hp-bad)_50%,transparent)] bg-[color:color-mix(in_srgb,var(--ir-hp-bad)_7%,transparent)] p-4">
+          {loadFailed && (
+            <div
+              role="alert"
+              className="rounded-[10px] border border-[color:color-mix(in_srgb,var(--ir-hp-bad)_50%,transparent)] bg-[color:color-mix(in_srgb,var(--ir-hp-bad)_7%,transparent)] p-4"
+            >
               <p className="font-semibold">We could not load the campaigns.</p>
               <p className="text-sm text-muted-foreground mb-3">
                 Check your connection and try again.
               </p>
-              <Button onClick={() => window.location.reload()} variant="outline">
+              <Button
+                onClick={() => (error ? retry() : window.location.reload())}
+                variant="outline"
+              >
                 Try again
               </Button>
             </div>
           )}
 
           {/* Empty State */}
-          {ready && !error && campaigns.length === 0 && (
+          {ready && !loadFailed && campaigns.length === 0 && (
             <div className="text-center py-16">
               <p className="text-muted-foreground text-lg mb-4">
                 No campaigns available yet. Check back soon!
@@ -157,7 +175,7 @@ export const ExploreGalleryPage: React.FC = () => {
           )}
 
           {/* Campaigns Grid */}
-          {ready && !error && campaigns.length > 0 && (
+          {ready && !loadFailed && campaigns.length > 0 && (
             <div className="grid grid-cols-1 gap-10 md:grid-cols-2 lg:grid-cols-3 lg:gap-10">
               {campaigns.map((campaign, index) =>
                 signedIn ? (
@@ -169,7 +187,7 @@ export const ExploreGalleryPage: React.FC = () => {
             </div>
           )}
 
-          {ready && !error && campaigns.length > 0 && (
+          {ready && !loadFailed && campaigns.length > 0 && (
             <p className="mt-10 text-center text-base text-muted-foreground">
               More adventures are on the way.
             </p>
