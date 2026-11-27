@@ -10,6 +10,7 @@
  * that fills index.html's app-version meta tag) and the session id GameContent resolved.
  */
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
 import { APP_BUILD_SHORT } from '@/services/app-version';
 
@@ -35,14 +36,16 @@ export const BuildSessionStatus: React.FC<BuildSessionStatusProps> = memo(({ ses
   const resetTimer = useRef<ReturnType<typeof setTimeout>>();
   useEffect(() => () => clearTimeout(resetTimer.current), []);
 
-  // The result shows on the button: the app-level error boundary wraps the toast host, so a toast
-  // is not a feedback channel this line can rely on.
+  // The result shows on the button, so it reads even without a toast host. A toast says it too: the
+  // game renders inside the same app-level boundary as the Toaster, so the host is there whenever
+  // this button is (Hark's reports quote the session id; the toast says it reached the clipboard).
   const handleCopy = useCallback(async (): Promise<void> => {
     try {
       await navigator.clipboard.writeText(
         `build ${APP_BUILD_SHORT}\nsession ${shortId}\nsession ${sessionId}`,
       );
       setCopyStatus('copied');
+      toast.success('Session id copied');
     } catch {
       // `navigator.clipboard` is undefined outside secure contexts, and writeText can reject.
       setCopyStatus('failed');
