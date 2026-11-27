@@ -59,7 +59,7 @@ function Pin({
           ?
         </text>
       )}
-      {label && (
+      {label && !label.hidden && (
         <text
           x={label.x}
           y={label.y}
@@ -198,7 +198,7 @@ export const RegionMap: React.FC<{
                     strokeOpacity={0.35}
                   />
                 )}
-                {label && (
+                {label && !label.hidden && (
                   <text
                     x={label.x}
                     y={label.y}

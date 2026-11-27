@@ -29,14 +29,28 @@ export function zoneRect(bounds: {
   };
 }
 
+/** The part of a zone box that lies inside the map. */
+export function clampRect(rect: ZoneRect): ZoneRect {
+  const x1 = Math.max(0, rect.x);
+  const y1 = Math.max(0, rect.y);
+  const x2 = Math.min(MAP_W, rect.x + rect.w);
+  const y2 = Math.min(MAP_H, rect.y + rect.h);
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+}
+
 export type TextAnchor = 'start' | 'middle' | 'end';
 
-/** One text label: where its baseline starts and how it hangs from that point. */
+/**
+ * One text label: where its baseline starts and how it hangs from that point. `hidden` is set
+ * when no candidate spot inside the map is free of route lines and other labels; the map then
+ * draws nothing for it. The name stays in the place list and on the pin's accessible name.
+ */
 export interface MapLabel {
   x: number;
   y: number;
   anchor: TextAnchor;
   text: string;
+  hidden: boolean;
 }
 
 export interface Box {
@@ -90,45 +104,64 @@ export function routeHits(box: Box, routes: Segment[]): boolean {
   );
 }
 
-/** Pick the first candidate that no route line crosses and no earlier label covers; else the first. */
+/** True when the box lies inside the whole map (every zoom shows a part of it). */
+export function insideMap(box: Box): boolean {
+  return box.x1 >= 0 && box.y1 >= 0 && box.x2 <= MAP_W && box.y2 <= MAP_H;
+}
+
+/**
+ * The first candidate inside the map that crosses no route line and covers no earlier label.
+ * When none qualifies the label is hidden: no fallback is drawn outside the map or on a line.
+ */
 function pick(
-  candidates: Omit<MapLabel, 'text'>[],
+  candidates: Omit<MapLabel, 'text' | 'hidden'>[],
   text: string,
   fontSize: number,
   routes: Segment[],
   placed: Box[],
 ): MapLabel {
-  const options = candidates.map((c) => ({ ...c, text }));
+  const options = candidates.map((c) => ({ ...c, text, hidden: false }));
   const clear = options.find((option) => {
     const box = textBox(option, fontSize);
-    return !routeHits(box, routes) && !placed.some((other) => overlaps(box, other));
+    return (
+      insideMap(box) && !routeHits(box, routes) && !placed.some((other) => overlaps(box, other))
+    );
   });
-  const chosen = clear ?? options[0];
-  placed.push(textBox(chosen, fontSize));
-  return chosen;
+  if (!clear) return { ...options[0], hidden: true };
+  placed.push(textBox(clear, fontSize));
+  return { ...clear, hidden: false };
 }
 
-function placeCandidates(place: StoryMapPlaceView): Omit<MapLabel, 'text'>[] {
+function placeCandidates(place: StoryMapPlaceView): Omit<MapLabel, 'text' | 'hidden'>[] {
   const cx = place.x * MAP_W;
   const cy = place.y * MAP_H;
+  // Below and above the pin first; then beside it, level, lower and higher, so a pin on an
+  // edge still has a spot inside the map.
   return [
     { x: cx, y: cy + 20, anchor: 'middle' },
     { x: cx, y: cy - 12, anchor: 'middle' },
     { x: cx + 11, y: cy + 4, anchor: 'start' },
     { x: cx - 11, y: cy + 4, anchor: 'end' },
+    { x: cx + 11, y: cy + 14, anchor: 'start' },
+    { x: cx - 11, y: cy + 14, anchor: 'end' },
+    { x: cx + 11, y: cy - 4, anchor: 'start' },
+    { x: cx - 11, y: cy - 4, anchor: 'end' },
   ];
 }
 
-function zoneCandidates(rect: ZoneRect, known: boolean): Omit<MapLabel, 'text'>[] {
-  const corners: Omit<MapLabel, 'text'>[] = [
+function zoneCandidates(rect: ZoneRect, known: boolean): Omit<MapLabel, 'text' | 'hidden'>[] {
+  const corners: Omit<MapLabel, 'text' | 'hidden'>[] = [
     { x: rect.x + 8, y: rect.y + 13, anchor: 'start' },
     { x: rect.x + 8, y: rect.y + rect.h - 6, anchor: 'start' },
     { x: rect.x + rect.w - 8, y: rect.y + 13, anchor: 'end' },
     { x: rect.x + rect.w - 8, y: rect.y + rect.h - 6, anchor: 'end' },
   ];
-  return known
-    ? corners
-    : [{ x: rect.x + rect.w / 2, y: rect.y + rect.h / 2, anchor: 'middle' }, ...corners];
+  const centre: Omit<MapLabel, 'text' | 'hidden'> = {
+    x: rect.x + rect.w / 2,
+    y: rect.y + rect.h / 2,
+    anchor: 'middle',
+  };
+  return known ? corners : [centre, ...corners];
 }
 
 export interface MapLabels {
@@ -156,10 +189,9 @@ export function layoutMapLabels(
   for (const zone of view.zones) {
     if (!zone.bounds) continue;
     const known = zone.places.length > 0;
-    zones.set(
-      zone.key,
-      pick(zoneCandidates(zoneRect(zone.bounds), known), zone.name, ZONE_FONT, routes, placed),
-    );
+    // A zone box can run past the map edge; its label is placed inside the part that shows.
+    const rect = clampRect(zoneRect(zone.bounds));
+    zones.set(zone.key, pick(zoneCandidates(rect, known), zone.name, ZONE_FONT, routes, placed));
   }
   const places = new Map<string, MapLabel>();
   for (const place of view.places) {
