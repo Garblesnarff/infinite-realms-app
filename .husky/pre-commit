@@ -77,4 +77,14 @@ fi
 # fi
 
 # === Lint-Staged (ESLint + Prettier) ===
-bunx lint-staged
+# Not on a merge commit. A merge stages every file that came in from the other branch, so
+# lint-staged would run eslint --fix and prettier --write on files this commit did not change,
+# and re-wrap the ones main holds unformatted (#1775, #1744, #1796). Those files were already
+# checked on their own PRs; only conflict resolutions are new here, and the checks above (secrets,
+# conflict markers, schema drift) still run. MERGE_HEAD is asked of git, not read from .git/, so
+# this also works in a linked worktree where .git is a file.
+if git rev-parse -q --verify MERGE_HEAD > /dev/null; then
+    echo "Merge commit: lint-staged skipped (merged files were checked on their own PRs)."
+else
+    bunx lint-staged
+fi

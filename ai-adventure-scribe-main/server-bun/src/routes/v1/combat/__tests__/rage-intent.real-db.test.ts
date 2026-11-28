@@ -329,17 +329,22 @@ describeWithDb('Rage posts through the real intent route (#1638)', () => {
       })
       .returning({ id: characterEquipment.id });
     try {
-      const { startConcentration, getConcentration } = await import('../../../../services/combat/concentration-service.js');
+      const { startConcentration, getConcentration } =
+        await import('../../../../services/combat/concentration-service.js');
       await startConcentration(characterId, { id: 'bless', name: 'Bless' });
       const response = await postRage();
       expect(await getConcentration(characterId)).toBeNull();
       expect(response.status).toBe(200);
       expect(await usesLeft()).toBe(1);
       expect(await bonusActionUsed()).toBe(true);
-      const { hasActiveRage, isRaging } = await import('../../../../services/combat/combat-turn-flags.js');
+      const { hasActiveRage, isRaging } =
+        await import('../../../../services/combat/combat-turn-flags.js');
       expect(await hasActiveRage(encounterId, FIGHTER_FEATURE_ACTOR_ID)).toBe(true);
       expect(await isRaging(encounterId, FIGHTER_FEATURE_ACTOR_ID)).toBe(false);
-      await db.update(characterEquipment).set({ equipped: false }).where(eq(characterEquipment.id, armor.id));
+      await db
+        .update(characterEquipment)
+        .set({ equipped: false })
+        .where(eq(characterEquipment.id, armor.id));
       expect(await isRaging(encounterId, FIGHTER_FEATURE_ACTOR_ID)).toBe(true);
     } finally {
       await db.delete(characterEquipment).where(eq(characterEquipment.id, armor.id));
