@@ -434,6 +434,8 @@ export interface Character {
   // New AI-generated fields
   avatar_url?: string;
   image_url?: string;
+  /** #1741: the premade's title, shown after the name as "Mara, the Seeker". */
+  starter_title?: string | null;
   background_image?: string;
   theme?: string;
   appearance?: string;

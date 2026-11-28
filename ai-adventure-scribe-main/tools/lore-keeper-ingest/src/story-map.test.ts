@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'bun:test';
 
 import { chunkCampaignFiles } from './chunker.js';
-import { replaceStoryMap } from './reingest-database.js';
+import { diffPlaceKeys, replaceStoryMap } from './reingest-database.js';
 import {
   SCENE_ENVIRONMENTS,
   SCENE_SIZES,
@@ -214,7 +214,9 @@ function storyMapTables(): {
   client: SupabaseClient;
   places: Map<string, Record<string, unknown>>;
   edges: Map<string, Record<string, unknown>>;
+  calls: { rpc: number };
 } {
+  const calls = { rpc: 0 };
   const places = new Map<string, Record<string, unknown>>();
   const edges = new Map<string, Record<string, unknown>>();
   const placeKey = (row: Record<string, unknown>) => `${row.campaign_id}|${row.place_key}`;
@@ -270,8 +272,22 @@ function storyMapTables(): {
         },
       };
     },
+    // replace_story_map_edges (#1752 follow-up): all routes of one campaign in one call.
+    rpc: async (
+      name: string,
+      args: { p_campaign_id: string; p_edges: Array<Record<string, unknown>> },
+    ) => {
+      assert.equal(name, 'replace_story_map_edges');
+      calls.rpc += 1;
+      for (const [key, row] of edges) if (row.campaign_id === args.p_campaign_id) edges.delete(key);
+      for (const edge of args.p_edges) {
+        const row = { campaign_id: args.p_campaign_id, ...edge };
+        edges.set(edgeKey(row), row);
+      }
+      return { data: args.p_edges.length, error: null };
+    },
   } as unknown as SupabaseClient;
-  return { client, places, edges };
+  return { client, places, edges, calls };
 }
 
 test('re-ingest updates rows in place and reports a place key that went away', async () => {
@@ -298,4 +314,31 @@ test('re-ingest updates rows in place and reports a place key that went away', a
   assert.deepEqual(third.addedKeys, ['the-ossuary']);
   assert.equal(places.size, 4);
   assert.ok(!places.has('abyssal-descent|the-crypt'));
+});
+
+test('routes are written in one replace_story_map_edges call per campaign', async () => {
+  const { chunks, routes } = chunked(bible());
+  const { client, edges, calls } = storyMapTables();
+  await replaceStoryMap(client, buildStoryMap('abyssal-descent', chunks, routes, null));
+  assert.equal(calls.rpc, 1);
+  assert.equal(edges.size, 5);
+});
+
+test('diffPlaceKeys names the keys a re-ingest removes and adds (the dry run prints them)', () => {
+  const { chunks, routes } = chunked(bible());
+  const map = buildStoryMap('abyssal-descent', chunks, routes, null);
+  assert.deepEqual(diffPlaceKeys(['the-rope-ledge', 'the-archive', 'the-old-crypt'], map), {
+    removedKeys: ['the-old-crypt'],
+    addedKeys: ['the-crypt', 'the-sunken-gate'],
+  });
+  assert.deepEqual(
+    diffPlaceKeys(
+      map.places.map((place) => place.placeKey),
+      map,
+    ),
+    {
+      removedKeys: [],
+      addedKeys: [],
+    },
+  );
 });

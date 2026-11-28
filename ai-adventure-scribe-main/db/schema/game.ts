@@ -143,6 +143,10 @@ export const characters = pgTable(
     // #1344: how the hero was made. 'starter' = a premade from a starter campaign (Free);
     // 'custom' = wizard; 'import' = roster JSON import; 'legacy' = rows made before this column.
     origin: text('origin').default('custom').notNull(),
+    // #1741: the premade a 'starter' hero was copied from, and that premade's title ("The Seeker").
+    // The hero's own name stays in `name`. Null for every other hero, and for rows made before this.
+    starterTemplateId: uuid('starter_template_id'),
+    starterTitle: text('starter_title'),
     // Timestamps
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).defaultNow(),

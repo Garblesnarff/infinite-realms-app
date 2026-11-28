@@ -295,9 +295,15 @@ describeWithDb(
       expect(await attackLines()).toHaveLength(0);
     });
 
-    const dagger = { ...SHORTSWORD, name: 'Dagger', damageDice: '1d4', ranged: true, normalRange: 20, longRange: 60 };
+    const dagger = {
+      ...SHORTSWORD,
+      name: 'Dagger',
+      damageDice: '1d4',
+      ranged: true,
+      normalRange: 20,
+      longRange: 60,
+    };
     test.each([SHORTSWORD, dagger])(
-
       'a foe whose first attack is ranged makes an opportunity attack with $name',
       async (meleeWeapon) => {
         // The opportunity attack is a melee attack, so a creature that HAS a melee weapon in reach

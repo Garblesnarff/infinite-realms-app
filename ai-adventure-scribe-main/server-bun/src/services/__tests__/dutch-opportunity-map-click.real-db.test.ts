@@ -41,7 +41,9 @@ mock.module('../../lib/auth.js', () => ({
 }));
 const { createRequestPipelineApp } = await importWithRealDb(() => import('../../http-pipeline.js'));
 const { intentRoutes } = await importWithRealDb(() => import('../../routes/v1/combat/intents.js'));
-const app = hasRealDb ? createRequestPipelineApp().group('/v1/combat', (group) => group.use(intentRoutes)) : null;
+const app = hasRealDb
+  ? createRequestPipelineApp().group('/v1/combat', (group) => group.use(intentRoutes))
+  : null;
 const { consumeDmTacticalFacts } = await importWithRealDb(
   () => import('../combat/tactical-action-service.js'),
 );
@@ -50,8 +52,13 @@ const { saveTacticalMap, loadActiveTacticalMap } = await importWithRealDb(
 );
 const HERO_HP = 30;
 const FISTS: MonsterAttackProfile['attacks'][number] = {
-  name: 'Unarmed Strike', attackBonus: 4, damageDice: '1d1', damageBonus: 2,
-  damageType: 'bludgeoning', ranged: false, normalRange: 5,
+  name: 'Unarmed Strike',
+  attackBonus: 4,
+  damageDice: '1d1',
+  damageBonus: 2,
+  damageType: 'bludgeoning',
+  ranged: false,
+  normalRange: 5,
 };
 describeWithDb(
   'a foe makes an opportunity attack when the hero walks out of its reach (#1758)',
@@ -214,13 +221,18 @@ describeWithDb(
       await closeRealDb();
     });
 
-    const move = () => app!.handle(new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${userId}`, 'content-type': 'application/json' },
-      body: JSON.stringify({
-        intent: { type: 'move', actorId: heroId, x: 2, y: 4 }, source: 'player', origin: 'action_bar',
-      }),
-    }));
+    const move = () =>
+      app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${userId}`, 'content-type': 'application/json' },
+          body: JSON.stringify({
+            intent: { type: 'move', actorId: heroId, x: 2, y: 4 },
+            source: 'player',
+            origin: 'action_bar',
+          }),
+        }),
+      );
 
     const foeRow = async () => {
       const [row] = await db
@@ -250,10 +262,14 @@ describeWithDb(
       expect(await heroAt()).toMatchObject({ x: 2, y: 4 });
       expect(await attackLines()).toEqual([expect.stringContaining('with its Unarmed Strike')]);
       expect(await foeRow()).toMatchObject({ actionUsed: false, reactionUsed: true });
-      const rows = await db.select({ text: dialogueHistory.message }).from(dialogueHistory)
+      const rows = await db
+        .select({ text: dialogueHistory.message })
+        .from(dialogueHistory)
         .where(eq(dialogueHistory.sessionId, sessionId));
       const reactions = rows.filter(({ text }) => text.startsWith('Opportunity attack:'));
-      expect(reactions).toEqual([{ text: expect.stringMatching(/Dutch Pellam.*Unarmed Strike.*miss/i) }]);
+      expect(reactions).toEqual([
+        { text: expect.stringMatching(/Dutch Pellam.*Unarmed Strike.*miss/i) },
+      ]);
     });
     test.each([{ hp: 30, downed: false }, { hp: 2, downed: true }])(
       'the persisted reaction hit and move agree for $hp HP',

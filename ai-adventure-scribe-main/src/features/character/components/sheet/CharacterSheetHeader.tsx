@@ -22,6 +22,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { IRPanel, IRThumb } from '@/components/ui/ir-primitives';
 import { useAuth } from '@/contexts/AuthContext';
+import { heroEpithetName } from '@/data/hero-names';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { userDataApi } from '@/services/user-data-api';
@@ -104,7 +105,9 @@ export const CharacterSheetHeader: React.FC<CharacterSheetHeaderProps> = ({ char
         {/* Character Title */}
         <div className="flex-1">
           <h1 className="ir-display text-2xl font-semibold text-foreground">
-            {character.name || 'Unnamed Character'}
+            {character.starter_title
+              ? heroEpithetName(character.name || 'Unnamed Character', character.starter_title)
+              : character.name || 'Unnamed Character'}
           </h1>
           <p className="text-muted-foreground">
             Level {character.level || 1} {character.race?.name || 'Unknown Race'}{' '}

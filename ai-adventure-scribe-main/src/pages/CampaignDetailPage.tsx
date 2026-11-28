@@ -34,7 +34,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { checkHeroName, heroEpithetName } from '@/data/hero-names';
 import { HeroFan } from '@/features/campaigns/table/HeroFan';
+import { HeroNameField } from '@/features/campaigns/table/HeroNameField';
 import { tableImageUrl } from '@/features/campaigns/table/image-url';
 import { useTableLookActive } from '@/features/campaigns/table/useTableLookActive';
 import { useStarterCampaign } from '@/hooks/use-starter-campaigns';
@@ -133,7 +135,7 @@ interface HeroCardProps {
   isStarting: boolean;
   startDisabled: boolean;
   signedIn: boolean;
-  onPlay: (template: StarterCharacterTemplate, fresh?: boolean) => void;
+  onPlay: (template: StarterCharacterTemplate, fresh?: boolean, heroName?: string) => void;
 }
 
 const HeroCard: React.FC<HeroCardProps> = ({
@@ -143,6 +145,11 @@ const HeroCard: React.FC<HeroCardProps> = ({
   signedIn,
   onPlay,
 }) => {
+  // #1741: the typed name; empty keeps the premade's title.
+  const [heroName, setHeroName] = React.useState('');
+  const nameCheck = checkHeroName(heroName, template.name);
+  const nameOk = nameCheck.ok;
+  const chosenName = nameCheck.ok && heroName.trim() !== '' ? nameCheck.name : undefined;
   // One template with an unresolvable class must not blank the page: the
   // vitals line degrades away and the hero stays startable (a start then
   // fails honestly on the server side, which throws for the same template).
@@ -165,7 +172,9 @@ const HeroCard: React.FC<HeroCardProps> = ({
         className="h-16 w-16 max-[700px]:h-12 max-[700px]:w-12 rounded-[10px] border border-infinite-gold/45"
       />
       <div className="min-w-0">
-        <h3 className="text-base font-semibold text-foreground truncate">{template.name}</h3>
+        <h3 className="text-base font-semibold text-foreground truncate">
+          {heroEpithetName(nameCheck.ok ? nameCheck.name : template.name, template.name)}
+        </h3>
         <p className="text-[13px] text-muted-foreground">
           {template.race} {template.class} · Level {template.level}
         </p>
@@ -179,11 +188,18 @@ const HeroCard: React.FC<HeroCardProps> = ({
           </p>
         )}
       </div>
-      <div className="col-span-2">
+      <div className="col-span-2 space-y-3">
+        <HeroNameField
+          hero={template}
+          value={heroName}
+          onChange={setHeroName}
+          disabled={startDisabled}
+          check={nameCheck}
+        />
         <Button
           variant="ir-gold"
-          disabled={startDisabled}
-          onClick={() => onPlay(template)}
+          disabled={startDisabled || !nameOk}
+          onClick={() => onPlay(template, false, chosenName)}
           className="w-full min-h-11"
         >
           {signedIn ? `Play as ${template.name}` : `Sign in to play as ${template.name}`}
@@ -191,8 +207,8 @@ const HeroCard: React.FC<HeroCardProps> = ({
         {signedIn && (
           <Button
             variant="ghost"
-            onClick={() => onPlay(template, true)}
-            disabled={startDisabled}
+            onClick={() => onPlay(template, true, chosenName)}
+            disabled={startDisabled || !nameOk}
             className="w-full"
           >
             Start a fresh playthrough
@@ -266,12 +282,12 @@ const CampaignDetailPage: React.FC = () => {
    * starter campaign" route exists yet).
    */
   const playAs = React.useCallback(
-    async (template: StarterCharacterTemplate, fresh = false): Promise<void> => {
+    async (template: StarterCharacterTemplate, fresh = false, heroName?: string): Promise<void> => {
       if (!user) {
         try {
           sessionStorage.setItem(
             PENDING_HERO_KEY,
-            JSON.stringify({ slug, templateId: template.id, at: Date.now() }),
+            JSON.stringify({ slug, templateId: template.id, heroName, at: Date.now() }),
           );
         } catch {
           // Storage unavailable: sign-in still proceeds, auto-start just
@@ -312,6 +328,7 @@ const CampaignDetailPage: React.FC = () => {
           const listed = {
             sessions,
             starterCampaignId: campaign.id,
+            starterTemplateId: template.id,
             heroName: template.name,
             campaignId,
           };
@@ -331,7 +348,10 @@ const CampaignDetailPage: React.FC = () => {
             return;
           }
         }
-        const character = await seedStarterCharacter(template, campaignId, (payload) =>
+        // #1741: the typed name goes on the player's copy only. The copy is a
+        // spread of the template, so the shared template row is never changed.
+        const seedTemplate = heroName ? { ...template, name: heroName } : template;
+        const character = await seedStarterCharacter(seedTemplate, campaignId, (payload) =>
           userDataApi.createCharacter(payload),
         );
         // Same target the retired selection page used.
@@ -344,7 +364,7 @@ const CampaignDetailPage: React.FC = () => {
           try {
             sessionStorage.setItem(
               PENDING_HERO_KEY,
-              JSON.stringify({ slug, templateId: template.id, at: Date.now() }),
+              JSON.stringify({ slug, templateId: template.id, heroName, at: Date.now() }),
             );
           } catch {
             // Ignore: the sign-in banner still offers a manual retry.
@@ -420,10 +440,12 @@ const CampaignDetailPage: React.FC = () => {
     const {
       slug: pendingSlug,
       templateId,
+      heroName: pendingName,
       at,
     } = pending as {
       slug?: unknown;
       templateId?: unknown;
+      heroName?: unknown;
       at?: unknown;
     };
     if (pendingSlug !== slug) return;
@@ -441,7 +463,15 @@ const CampaignDetailPage: React.FC = () => {
     // Resumed (or found gone) once: an entry the start re-arms (a 401 inside
     // playAs) waits for the next return, never for this visit's next render.
     returnVisitKeyRef.current = null;
-    if (template) void playAsRef.current(template);
+    if (template) {
+      const resumedName =
+        typeof pendingName === 'string' ? checkHeroName(pendingName, template.name) : null;
+      void playAsRef.current(
+        template,
+        false,
+        resumedName?.ok && pendingName !== '' ? resumedName.name : undefined,
+      );
+    }
   }, [user, campaign, templatesLoading, templatesError, templates, slug, location.key]);
 
   // A sign-in by any path clears a stale session-expired banner and refetches
@@ -751,7 +781,7 @@ const CampaignDetailPage: React.FC = () => {
                   templates={templates}
                   disabled={startingTemplate !== null}
                   signedIn={Boolean(user)}
-                  onPlay={(candidate, fresh) => void playAs(candidate, fresh)}
+                  onPlay={(candidate, fresh, heroName) => void playAs(candidate, fresh, heroName)}
                 />
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -762,7 +792,9 @@ const CampaignDetailPage: React.FC = () => {
                       isStarting={startingTemplate?.id === template.id}
                       startDisabled={startingTemplate !== null}
                       signedIn={Boolean(user)}
-                      onPlay={(candidate, fresh) => void playAs(candidate, fresh)}
+                      onPlay={(candidate, fresh, heroName) =>
+                        void playAs(candidate, fresh, heroName)
+                      }
                     />
                   ))}
                 </div>

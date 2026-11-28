@@ -35,6 +35,8 @@ import {
 import {
   reingestCampaignChunks,
   replaceCampaignRules,
+  diffPlaceKeys,
+  readStoryMapPlaceKeys,
   replaceStoryMap,
   upsertStarterCampaignPreservingState,
 } from '../tools/lore-keeper-ingest/src/reingest-database.ts';
@@ -215,13 +217,34 @@ async function main(options: Options): Promise<void> {
     console.log(storyMapReportLine(storyMaps.get(campaign.id)!));
   }
 
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
   if (!options.apply) {
+    // #1752 follow-up: the dry run also names the place keys a re-ingest would rename, read-only,
+    // when database credentials are present. Without them it says it could not compare.
+    if (supabaseUrl && serviceRoleKey) {
+      const { createClient } = await import('@supabase/supabase-js');
+      const readClient = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      for (const { campaign } of loadedCampaigns) {
+        const map = storyMaps.get(campaign.id)!;
+        const { removedKeys, addedKeys } = diffPlaceKeys(
+          await readStoryMapPlaceKeys(readClient, campaign.id),
+          map,
+        );
+        console.log(placeKeyChangeLine(campaign.id, removedKeys, addedKeys));
+      }
+    } else {
+      console.log(
+        'Place key changes: not compared (no Supabase URL and service-role credential in this run).',
+      );
+    }
     console.log('No database changes made. Pass --apply on Hetzner after reviewing this output.');
     return;
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceRoleKey) {
     throw new Error('A Supabase URL and service-role credential are required for --apply');
   }
@@ -256,16 +279,28 @@ async function main(options: Options): Promise<void> {
     console.log(
       `${campaign.id}: story map wrote ${mapResult.placesWritten} places and ${mapResult.edgesWritten} route rows`,
     );
-    if (mapResult.removedKeys.length > 0) {
-      console.log(`${campaign.id}: place keys removed: ${mapResult.removedKeys.join(', ')}`);
-      console.log(`${campaign.id}: place keys added: ${mapResult.addedKeys.join(', ') || 'none'}`);
-    }
+    console.log(placeKeyChangeLine(campaign.id, mapResult.removedKeys, mapResult.addedKeys));
 
     console.log(
       `${campaign.id}: wrote ${result.rowsWritten}/${result.parsedChunks}, inserted ${result.rowsInserted}, updated ${result.rowsUpdated}, removed ${result.duplicateRowsRemoved} duplicates and ${result.sectionMarkerRowsRemoved} section markers`,
     );
     if (options.verbose) console.log(JSON.stringify(result, null, 2));
   }
+}
+
+/**
+ * One report line for place keys that change on re-ingest. A removed key drops that place's
+ * map progress in player campaigns, so the dry run and the apply both print it.
+ */
+function placeKeyChangeLine(
+  campaignId: string,
+  removedKeys: string[],
+  addedKeys: string[],
+): string {
+  if (removedKeys.length === 0 && addedKeys.length === 0) {
+    return `${campaignId}: place keys unchanged`;
+  }
+  return `${campaignId}: place keys removed: ${removedKeys.join(', ') || 'none'}; added: ${addedKeys.join(', ') || 'none'}`;
 }
 
 /** One OpenRouter chat call. Asks for usage accounting so the reply carries its own cost. */
