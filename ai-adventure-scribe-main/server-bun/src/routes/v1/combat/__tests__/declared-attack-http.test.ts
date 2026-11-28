@@ -58,6 +58,8 @@ const app = createRequestPipelineApp().use(
       return { actors: roster, deadNames, deadExcludedCount: deadNames.length };
     }) as never,
     getActiveEncounter: async () => liveEncounter,
+    // #1755: no story map place in these sessions; the stub keeps the gate off the database.
+    placeFightRecipe: async () => null,
   }),
 );
 
