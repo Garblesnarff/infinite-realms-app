@@ -30,6 +30,7 @@ import { chronicleGenerator, persistChronicleFailure } from '../../services/chro
 import { getSessionContextRouteResult } from './session-context-handler.js';
 import { getSessionListRouteResult } from './session-list-handler.js';
 import { lethalActRoutes } from './lethal-act.js';
+import { deathSaveRoutes } from './death-save.js';
 
 import type { GameSession } from '../../../../db/schema/index';
 
@@ -189,6 +190,8 @@ export const sessionsRoutes = new Elysia({ prefix: '/v1/sessions' })
   // #468 item 2: confirmed lethal free-text acts. Lives here so it inherits
   // session auth; app.ts is unchanged.
   .use(lethalActRoutes)
+  // #1811: death saving throws outside a fight.
+  .use(deathSaveRoutes)
 
   /**
    * POST /v1/sessions

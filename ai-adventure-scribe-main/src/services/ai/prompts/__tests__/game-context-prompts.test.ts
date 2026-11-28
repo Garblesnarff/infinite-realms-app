@@ -210,6 +210,95 @@ describe('GameContextPrompts', () => {
       expect(result).toContain('<proficiency_bonus>+3</proficiency_bonus>');
     });
 
+    it('tells the DM when the hero is dying at 0 HP (#1811)', async () => {
+      getCharacterLoadout.mockResolvedValueOnce({
+        weapons: [],
+        armor: [],
+        armorClass: 12,
+        carriedItems: [],
+      });
+      const result = await GameContextPrompts.buildCharacterSection({
+        id: 'char-mira',
+        name: 'Mira',
+        level: 1,
+        race: 'Human',
+        class: 'Wizard',
+        character_stats: [
+          {
+            strength: 10,
+            dexterity: 10,
+            constitution: 10,
+            intelligence: 10,
+            wisdom: 10,
+            charisma: 10,
+            current_hit_points: 0,
+            vital_state: 'dying',
+          },
+        ],
+      });
+      expect(result).toContain('Vital state: dying');
+      expect(result).not.toContain('Vital state: stable, unconscious');
+    });
+
+    it('tells the DM when the hero is stable and unconscious at 0 HP (#1811)', async () => {
+      getCharacterLoadout.mockResolvedValueOnce({
+        weapons: [],
+        armor: [],
+        armorClass: 12,
+        carriedItems: [],
+      });
+      const result = await GameContextPrompts.buildCharacterSection({
+        id: 'char-mira',
+        name: 'Mira',
+        level: 1,
+        race: 'Human',
+        class: 'Wizard',
+        character_stats: [
+          {
+            strength: 10,
+            dexterity: 10,
+            constitution: 10,
+            intelligence: 10,
+            wisdom: 10,
+            charisma: 10,
+            current_hit_points: 0,
+            vital_state: 'stable',
+          },
+        ],
+      });
+      expect(result).toContain('Vital state: stable, unconscious');
+      expect(result).not.toContain('Vital state: dying');
+    });
+
+    it('omits the vital-state line when the hero is standing (#1811)', async () => {
+      getCharacterLoadout.mockResolvedValueOnce({
+        weapons: [],
+        armor: [],
+        armorClass: 12,
+        carriedItems: [],
+      });
+      const result = await GameContextPrompts.buildCharacterSection({
+        id: 'char-mira',
+        name: 'Mira',
+        level: 1,
+        race: 'Human',
+        class: 'Wizard',
+        character_stats: [
+          {
+            strength: 10,
+            dexterity: 10,
+            constitution: 10,
+            intelligence: 10,
+            wisdom: 10,
+            charisma: 10,
+            current_hit_points: 8,
+            vital_state: 'standing',
+          },
+        ],
+      });
+      expect(result).not.toContain('Vital state:');
+    });
+
     it('should handle missing background and stats', async () => {
       const char = {
         id: 'char-nameless',

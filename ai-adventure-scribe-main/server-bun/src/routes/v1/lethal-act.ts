@@ -107,6 +107,19 @@ export const lethalActRoutes = new Elysia()
           ? await CharacterVitalsService.applyDamage(characterId, userId, resolved.damage)
           : current;
 
+      try {
+        const { publishStoryCharacterUpdate } =
+          await import('../../services/dm/story-broadcast.js');
+        publishStoryCharacterUpdate(sessionId, 'story_damage');
+      } catch (broadcastError) {
+        logger.warn({
+          msg: 'LETHAL_ACT_BROADCAST_FAILED',
+          sessionId,
+          characterId,
+          error: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+        });
+      }
+
       logger.info({
         msg: 'LETHAL_ACT_RESOLVED',
         sessionId,
