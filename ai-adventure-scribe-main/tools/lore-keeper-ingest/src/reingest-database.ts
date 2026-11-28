@@ -379,21 +379,41 @@ export interface StoryMapWriteResult {
  * re-ingest updates rows in place; places the bible no longer has are deleted. Edges have no
  * other references, so they are replaced as a set.
  */
+/** The place keys a campaign's story map has in the database now. Read-only. */
+export async function readStoryMapPlaceKeys(
+  client: SupabaseClient,
+  campaignId: string,
+): Promise<string[]> {
+  const { data, error } = await client
+    .from('story_map_places')
+    .select('place_key')
+    .eq('campaign_id', campaignId);
+  if (error) throw new Error(`Failed to read story map for ${campaignId}: ${error.message}`);
+  return (data ?? []).map((row: { place_key: string }) => row.place_key);
+}
+
+/** Keys the new map drops and keys it adds, compared with the keys stored now. */
+export function diffPlaceKeys(
+  storedKeys: string[],
+  map: StoryMap,
+): { removedKeys: string[]; addedKeys: string[] } {
+  const before = new Set(storedKeys);
+  const after = new Set(map.places.map((place) => place.placeKey));
+  return {
+    removedKeys: [...before].filter((key) => !after.has(key)).sort(),
+    addedKeys: [...after].filter((key) => !before.has(key)).sort(),
+  };
+}
+
 export async function replaceStoryMap(
   client: SupabaseClient,
   map: StoryMap,
 ): Promise<StoryMapWriteResult> {
   const campaignId = map.campaignId;
-  const { data: existing, error: readError } = await client
-    .from('story_map_places')
-    .select('place_key')
-    .eq('campaign_id', campaignId);
-  if (readError)
-    throw new Error(`Failed to read story map for ${campaignId}: ${readError.message}`);
-  const before = new Set((existing ?? []).map((row: { place_key: string }) => row.place_key));
-  const after = new Set(map.places.map((place) => place.placeKey));
-  const removedKeys = [...before].filter((key) => !after.has(key)).sort();
-  const addedKeys = [...after].filter((key) => !before.has(key)).sort();
+  const { removedKeys, addedKeys } = diffPlaceKeys(
+    await readStoryMapPlaceKeys(client, campaignId),
+    map,
+  );
 
   if (map.places.length > 0) {
     const { error } = await client.from('story_map_places').upsert(
@@ -425,27 +445,20 @@ export async function replaceStoryMap(
       throw new Error(`Failed to remove old story map places for ${campaignId}: ${error.message}`);
   }
 
-  const { error: edgeDeleteError } = await client
-    .from('story_map_edges')
-    .delete()
-    .eq('campaign_id', campaignId);
-  if (edgeDeleteError)
-    throw new Error(
-      `Failed to replace story map routes for ${campaignId}: ${edgeDeleteError.message}`,
-    );
-  if (map.edges.length > 0) {
-    const { error } = await client.from('story_map_edges').insert(
-      map.edges.map((edge) => ({
-        campaign_id: campaignId,
-        from_key: edge.fromKey,
-        to_key: edge.toKey,
-        label: edge.label,
-        hidden: edge.hidden,
-      })),
-    );
-    if (error)
-      throw new Error(`Failed to write story map routes for ${campaignId}: ${error.message}`);
-  }
+  // One call, one transaction (#1752 follow-up): replace_story_map_edges deletes the
+  // campaign's routes and inserts the new set inside a single function call, so a failed
+  // insert can no longer leave the campaign with no routes.
+  const { error: edgeError } = await client.rpc('replace_story_map_edges', {
+    p_campaign_id: campaignId,
+    p_edges: map.edges.map((edge) => ({
+      from_key: edge.fromKey,
+      to_key: edge.toKey,
+      label: edge.label,
+      hidden: edge.hidden,
+    })),
+  });
+  if (edgeError)
+    throw new Error(`Failed to replace story map routes for ${campaignId}: ${edgeError.message}`);
 
   return {
     placesWritten: map.places.length,
