@@ -39,6 +39,29 @@ function unknownEntity(map: TacticalMap, action: MapAction, token: string): Disp
   };
 }
 
+/**
+ * #1802 (round 1): a `resolvedUnreachableApproaches` marker records that one actor could
+ * not reach one target from where they stood this turn. Any move of either side voids
+ * that premise — the next proposal must re-plan from the new board, not answer "could
+ * not reach" from the old positions. This gateway is the single choke point, so the
+ * clear lives here: the manual-move route reaches it through `applyTacticalMapAction`,
+ * and the AoE forced-move route calls it directly and saves. The approach's own move
+ * passes through here too; that is harmless because the marker is re-recorded after
+ * the approach — by the fact write for an unreachable resolution, and by the
+ * fall-through upsert in `decideAttackApproach`. A death clears the same way,
+ * but from the HP service (`CombatHPService.applyDamage`), which owns the death
+ * event: death is a status flag, not a board event, so no dispatch path ever
+ * sees it. That hook writes the map row directly rather than importing this
+ * helper — the import edge would break the 31 test files that mock the engine
+ * or the map store (see the hook's comment).
+ */
+function clearStaleApproachMarkers(map: TacticalMap, entityId: string): void {
+  if (!map.resolvedUnreachableApproaches?.length) return;
+  map.resolvedUnreachableApproaches = map.resolvedUnreachableApproaches.filter(
+    (marker) => marker.actorId !== entityId && marker.targetId !== entityId,
+  );
+}
+
 /** The only mutation gateway used by both player requests and DM structured output. */
 export function dispatchMapAction(map: TacticalMap, action: MapAction): DispatchResult {
   if (action.action === 'move') {
@@ -50,13 +73,16 @@ export function dispatchMapAction(map: TacticalMap, action: MapAction): Dispatch
     // action — not the model's spelling — is what the result reports.
     const resolved: MapAction = { ...action, entityId: entity.id };
     const result = moveEntity(map, entity.id, action.x, action.y);
-    return result.success
-      ? { applied: true, action: resolved, path: result.path }
-      : {
-          applied: false,
-          action: resolved,
-          refusal: { ...result, validMoves: getValidMoves(map, entity.id) },
-        };
+    if (!result.success)
+      return {
+        applied: false,
+        action: resolved,
+        refusal: { ...result, validMoves: getValidMoves(map, entity.id) },
+      };
+    // A move to the entity's own cell succeeds with a one-cell path and changes
+    // nothing: it must not void the repeat protection (self-review nit 3).
+    if (result.path && result.path.length > 1) clearStaleApproachMarkers(map, entity.id);
+    return { applied: true, action: resolved, path: result.path };
   }
   if (action.action === 'forced_move') {
     const entity = resolveEntityRef(map.entities, action.target);
@@ -70,26 +96,32 @@ export function dispatchMapAction(map: TacticalMap, action: MapAction): Dispatch
       action.distance ?? null,
       action.destination ?? null,
     );
-    return result.success
-      ? { applied: true, action: resolved, path: result.path }
-      : {
-          applied: false,
-          action: resolved,
-          refusal: { ...result, reason: 'illegal_forced_movement' },
-        };
+    if (!result.success)
+      return {
+        applied: false,
+        action: resolved,
+        refusal: { ...result, reason: 'illegal_forced_movement' },
+      };
+    // Same no-op guard as the move branch: a forced move that lands the target on
+    // its own cell changed nothing, so it clears nothing.
+    if (result.path && result.path.length > 1) clearStaleApproachMarkers(map, entity.id);
+    return { applied: true, action: resolved, path: result.path };
   }
   if (action.action === 'remove') {
     if (!action.entityId) return { applied: false, action, refusal: { reason: 'invalid_entity' } };
     const entity = resolveEntityRef(map.entities, action.entityId);
     if (!entity) return unknownEntity(map, action, action.entityId);
-    return removeEntity(map, entity.id)
-      ? { applied: true, action: { ...action, entityId: entity.id } }
-      : { applied: false, action, refusal: { reason: 'invalid_entity' } };
+    if (!removeEntity(map, entity.id))
+      return { applied: false, action, refusal: { reason: 'invalid_entity' } };
+    clearStaleApproachMarkers(map, entity.id);
+    return { applied: true, action: { ...action, entityId: entity.id } };
   }
-  if (action.action === 'place')
-    return action.changes && placeEntity(map, action.changes as MapEntity)
-      ? { applied: true, action }
-      : { applied: false, action, refusal: { reason: 'invalid_placement' } };
+  if (action.action === 'place') {
+    if (!action.changes || !placeEntity(map, action.changes as MapEntity))
+      return { applied: false, action, refusal: { reason: 'invalid_placement' } };
+    clearStaleApproachMarkers(map, (action.changes as MapEntity).id);
+    return { applied: true, action };
+  }
   if (
     action.x != null &&
     action.y != null &&

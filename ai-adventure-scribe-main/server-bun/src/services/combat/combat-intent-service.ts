@@ -1149,6 +1149,7 @@ export async function proposeCombatAttack(
         targetId: resolvedAttack.targetId,
         targetLabel,
         weapon: grounding.weapon,
+        phase: 'propose',
       });
   if (approach.movementOnly) return { movementOnly: true, result: approach.result };
   const proposal = await attackService.proposeAttack(
@@ -1683,6 +1684,7 @@ export async function executeCombatIntent(
             targetId: intent.targetId,
             targetLabel,
             weapon,
+            phase: 'commit',
           });
       if (approach.movementOnly) {
         result = exposeAttackVisibility(approach.result, visibility);

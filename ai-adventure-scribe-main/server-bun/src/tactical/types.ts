@@ -70,6 +70,31 @@ export interface TacticalMap {
    */
   parleyHolds?: Array<{ participantId: string; round: number }>;
   /**
+   * Melee approaches that already resolved as unreachable this turn (#1802). A second
+   * proposal for the same actor and target reuses that resolution instead of moving
+   * again and appending a second DM fact. The commit phase does not READ it: a
+   * commit re-runs the normal approach, so a commit after a movement-only proposal
+   * still moves with the remaining movement and records a second fact. The commit's
+   * own resolution still RECORDS a marker, like any unreachable resolution — so a
+   * propose after that commit reuses the commit's resolution instead of moving a
+   * third time. That is the design (the commit is a resolution for the pair), not
+   * a leak, and the commit test pins it. Markers carry no round:
+   * the map's own `round` field is set once at generation and never advances, so it
+   * cannot scope a turn, and the encounter's `currentRound` lives behind a lookup no
+   * caller of this field owns. The turn boundary is the expiry instead: the actor's
+   * markers are cleared when their next turn starts (`resetTacticalMovementForTurn`)
+   * and when they gain fresh movement (`grantTacticalDash`), which is also what
+   * restores their movement. `movedFeet` is what the first resolution spent: a
+   * resolution that spent nothing (the engine refused the move, or there was nowhere
+   * to go) does not block a re-plan once the board changes, because there is nothing
+   * to double-spend. A move of either side voids a marker sooner (round 1): any
+   * applied map move, forced move, removal or placement clears markers naming that
+   * entity (`dispatchMapAction`) — a stale marker must never answer "could not
+   * reach" after the board changed. The marker check itself runs only in the
+   * propose phase; the commit re-runs the normal approach.
+   */
+  resolvedUnreachableApproaches?: Array<{ actorId: string; targetId: string; movedFeet: number }>;
+  /**
    * Structured sibling of `pendingDmFacts`: the discrete actions the engine resolved this
    * turn (kind, actor, target, hit/miss), recorded alongside their narration sentence.
    * The narration contract is built from these, and the client post-check validates the

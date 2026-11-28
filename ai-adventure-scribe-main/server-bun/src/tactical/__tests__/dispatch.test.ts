@@ -98,6 +98,39 @@ describe('CM-2 tactical dispatch', () => {
     expect(result.applied).toBe(false);
     if (!result.applied) expect(result.refusal).toHaveProperty('validMoves');
   });
+  test("#1802 (round 1) a move to the entity's own cell changes nothing, so it clears no marker", () => {
+    const state = map();
+    state.resolvedUnreachableApproaches = [
+      { actorId: 'pc-participant', targetId: 'monster-participant', movedFeet: 5 },
+    ];
+    const result = dispatchMapAction(state, {
+      action: 'move',
+      entityId: 'pc-participant',
+      x: 0,
+      y: 0,
+      changes: null,
+    });
+    expect(result.applied).toBe(true);
+    expect(state.entities[0]).toMatchObject({ x: 0, y: 0, movementRemaining: 30 });
+    expect(state.resolvedUnreachableApproaches).toEqual([
+      { actorId: 'pc-participant', targetId: 'monster-participant', movedFeet: 5 },
+    ]);
+  });
+  test('#1802 (round 1) a real move clears markers naming the mover', () => {
+    const state = map();
+    state.resolvedUnreachableApproaches = [
+      { actorId: 'pc-participant', targetId: 'monster-participant', movedFeet: 5 },
+    ];
+    const result = dispatchMapAction(state, {
+      action: 'move',
+      entityId: 'pc-participant',
+      x: 2,
+      y: 0,
+      changes: null,
+    });
+    expect(result.applied).toBe(true);
+    expect(state.resolvedUnreachableApproaches ?? []).toEqual([]);
+  });
   test('includes bounded map, digest, and non-negotiable narration instructions', () => {
     const prompt = buildTacticalPrompt(map(), 'pc-participant');
     expect(prompt.split(/\s+/).length).toBeLessThanOrEqual(500);

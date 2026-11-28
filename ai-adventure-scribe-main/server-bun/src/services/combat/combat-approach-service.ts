@@ -7,7 +7,7 @@
  * quietly: it resolves as movement, and the next DM context says so in plain words.
  */
 import { applyTacticalMapAction, recordDmTacticalFact } from './tactical-action-service.js';
-import { loadActiveTacticalMap } from './tactical-map-store.js';
+import { loadActiveTacticalMap, saveTacticalMap } from './tactical-map-store.js';
 import { combatLogger } from '../../lib/logger.js';
 // Re-exported from its own module so the sentence stays importable without dragging this
 // file's logger dependency along; see attack-narration.ts.
@@ -271,42 +271,15 @@ export type AttackApproachDecision =
   | { movementOnly: true; result: MovementOnlyResult };
 
 /**
- * Walks a melee attacker into reach before its attack is rolled, and reports whether the
- * attack still happens.
- *
- * The weapon is supplied rather than looked up so this module stays pure geometry with no
- * database behind it. Ranged attacks are left alone: their legality is range and line of
- * sight, which `resolveAttackRules` already judges from where the attacker stands. Melee is
- * the case the DM could never be relied on to handle, so the engine handles it.
+ * Builds the movement-only answer from an unreachable approach result. Shared by the first
+ * resolution and the repeat path so the two wordings can never drift apart.
  */
-export async function decideAttackApproach(params: {
-  sessionId: string;
-  actorId: string;
-  actorLabel: string;
-  targetId: string;
-  targetLabel: string;
-  weapon: { name: string; ranged: boolean; normalRange: number };
-}): Promise<AttackApproachDecision> {
-  const { sessionId, actorId, actorLabel, targetId, targetLabel, weapon } = params;
-  const attackType = weapon.ranged ? 'ranged' : 'melee';
-  if (weapon.ranged) return { movementOnly: false, attackType };
-
-  const approach = await approachForAttack(sessionId, actorId, targetId, weapon.normalRange);
-  if (approach.kind !== 'unreachable') return { movementOnly: false, attackType };
-
-  const narrative = describeUnreachableApproach(
-    actorLabel,
-    targetLabel,
-    approach,
-    `an attack with its ${weapon.name}`,
-  );
-  // The DM asked for a strike the board does not permit. It gets the movement it implicitly
-  // asked for, plus a plain statement of what happened, rather than a silent no-op.
-  await recordDmTacticalFact(sessionId, narrative);
-  combatLogger.info(
-    { sessionId, actorId, targetId, ...approach },
-    '[tactical] attack resolved as movement: target out of reach after full movement',
-  );
+function movementOnlyDecision(
+  actorId: string,
+  targetId: string,
+  approach: Extract<ApproachResult, { kind: 'unreachable' }>,
+  narrative: string,
+): AttackApproachDecision {
   return {
     movementOnly: true,
     result: {
@@ -329,4 +302,190 @@ export async function decideAttackApproach(params: {
       narrative,
     },
   };
+}
+
+/**
+ * #1802: replays a melee approach that already resolved as unreachable this turn, without
+ * moving again or recording a second DM fact. The marker on the map is the turn-scoped key
+ * (actor, target); a retried proposal — the response to the first one lost, so the
+ * client sent it again — re-enters `decideAttackApproach` and lands here. Returns null when
+ * this pair has no marker, so a first proposal takes the normal path. Markers carry no
+ * round: they are cleared when the actor's next turn starts (`resetTacticalMovementForTurn`)
+ * and when they gain fresh movement (`grantTacticalDash`).
+ *
+ * The board can change between the two proposals (the target moved closer, an obstacle was
+ * cleared). When the actor now stands within reach, the attack proceeds with no move and no
+ * fact — that is the board's current truth, not a repeat of the first resolution. When it
+ * does not, the outcome is the same movement-only answer from the current position — unless
+ * the first resolution spent no movement at all (`movedFeet` 0: the engine refused the move,
+ * or there was nowhere to go). Then there is nothing to double-spend, and a plan that now
+ * reaches falls through to the normal path, which moves once and proceeds. The caller
+ * updates the marker with the movement actually spent, so a later retry cannot move again
+ * on the strength of a stale 0.
+ */
+async function resolveRepeatUnreachableApproach(params: {
+  sessionId: string;
+  actorId: string;
+  actorLabel: string;
+  targetId: string;
+  targetLabel: string;
+  weapon: { name: string; ranged: boolean; normalRange: number };
+}): Promise<AttackApproachDecision | { fallThrough: true } | null> {
+  const { sessionId, actorId, actorLabel, targetId, targetLabel, weapon } = params;
+  const map = await loadActiveTacticalMap(sessionId);
+  if (!map) return null;
+  const marker = (map.resolvedUnreachableApproaches ?? []).find(
+    (entry) => entry.actorId === actorId && entry.targetId === targetId,
+  );
+  if (!marker) return null;
+  const actor = map.entities.find((entity) => entity.id === actorId);
+  const target = map.entities.find((entity) => entity.id === targetId);
+  if (!actor || !target) return null;
+  const from: Point = { x: actor.x, y: actor.y };
+  const currentDistance = getDistance(actor, target);
+  if (currentDistance <= weapon.normalRange) return { movementOnly: false, attackType: 'melee' };
+
+  const plan = planApproach(map, actorId, targetId, weapon.normalRange);
+  if (!plan) {
+    // No plan although actor and target are on the same snapshot: the board cannot be
+    // re-planned. Answer movement-only from here rather than falling through to a
+    // proceed — this pair is already marked resolved. The path cost is the straight-line
+    // distance, the honest lower bound for a path that was never planned.
+    const approach: Extract<ApproachResult, { kind: 'unreachable' }> = {
+      kind: 'unreachable',
+      startingDistanceFeet: currentDistance,
+      distanceFeet: currentDistance,
+      movedFeet: 0,
+      movementAvailableFeet: actor.movementRemaining,
+      movementRemainingFeet: actor.movementRemaining,
+      pathCostFeet: currentDistance,
+      from,
+      to: from,
+      reachFeet: weapon.normalRange,
+      reason: actor.movementRemaining <= 0 ? 'movement_exhausted' : 'no_reachable_adjacent_cell',
+    };
+    const narrative = describeUnreachableApproach(
+      actorLabel,
+      targetLabel,
+      approach,
+      `an attack with its ${weapon.name}`,
+    );
+    combatLogger.info(
+      { sessionId, actorId, targetId, ...approach },
+      '[tactical] attack resolved as movement: repeat proposal cannot re-plan',
+    );
+    return movementOnlyDecision(actorId, targetId, approach, narrative);
+  }
+  if (plan.inReach && marker.movedFeet === 0) return { fallThrough: true };
+  const reason: Exclude<ApproachRefusalReason, 'no_geometry'> =
+    actor.movementRemaining <= 0 ? 'movement_exhausted' : 'no_reachable_adjacent_cell';
+  const approach: Extract<ApproachResult, { kind: 'unreachable' }> = {
+    kind: 'unreachable',
+    startingDistanceFeet: currentDistance,
+    distanceFeet: currentDistance,
+    movedFeet: 0,
+    movementAvailableFeet: actor.movementRemaining,
+    movementRemainingFeet: actor.movementRemaining,
+    pathCostFeet: plan.pathCostFeet ?? plan.costFeet,
+    from,
+    to: from,
+    reachFeet: weapon.normalRange,
+    ...(plan.blockingCell ? { blockingCell: plan.blockingCell } : {}),
+    ...(plan.blockingObstacle ? { blockingObstacle: plan.blockingObstacle } : {}),
+    reason,
+  };
+  const narrative = describeUnreachableApproach(
+    actorLabel,
+    targetLabel,
+    approach,
+    `an attack with its ${weapon.name}`,
+  );
+  combatLogger.info(
+    { sessionId, actorId, targetId, ...approach },
+    "[tactical] attack resolved as movement: repeat proposal reuses this turn's unreachable resolution",
+  );
+  return movementOnlyDecision(actorId, targetId, approach, narrative);
+}
+
+/**
+ * Walks a melee attacker into reach before its attack is rolled, and reports whether the
+ * attack still happens.
+ *
+ * The weapon is supplied rather than looked up so this module stays pure geometry with no
+ * database behind it. Ranged attacks are left alone: their legality is range and line of
+ * sight, which `resolveAttackRules` already judges from where the attacker stands. Melee is
+ * the case the DM could never be relied on to handle, so the engine handles it.
+ */
+export async function decideAttackApproach(params: {
+  sessionId: string;
+  actorId: string;
+  actorLabel: string;
+  targetId: string;
+  targetLabel: string;
+  weapon: { name: string; ranged: boolean; normalRange: number };
+  /**
+   * Which phase is asking. Only a proposal READS this turn's unreachable
+   * resolution (#1802 round 1): a commit re-runs the normal approach, so a commit
+   * after a movement-only proposal still moves with the remaining movement and
+   * records a second fact. The commit's own resolution still records a marker, so
+   * a later propose reuses the commit's resolution — that is the design (the commit
+   * is a resolution for the pair), pinned by the commit test.
+   */
+  phase: 'propose' | 'commit';
+}): Promise<AttackApproachDecision> {
+  const { sessionId, actorId, actorLabel, targetId, targetLabel, weapon, phase } = params;
+  const attackType = weapon.ranged ? 'ranged' : 'melee';
+  if (weapon.ranged) return { movementOnly: false, attackType };
+
+  // #1802: a second proposal for the same actor, target and turn re-enters here after the
+  // first one already moved and recorded the fact. Reuse that resolution read-only — unless
+  // the first resolution spent no movement and the board changed, in which case the repeat
+  // helper falls through and the normal path below moves once.
+  const repeat = phase === 'propose' ? await resolveRepeatUnreachableApproach(params) : null;
+  if (repeat && !('fallThrough' in repeat)) return repeat;
+
+  const approach = await approachForAttack(sessionId, actorId, targetId, weapon.normalRange);
+  if (approach.kind !== 'unreachable') {
+    // The fall-through moved: the stale 0-spent marker would let a later retry move again,
+    // so update it with the movement actually spent. (`in_reach` spends nothing, so the
+    // marker correctly stays 0.) The map is reloaded first: the move above saved it. The
+    // update upserts rather than mapping over the existing entries (round 1): the approach
+    // move itself cleared the stale marker in `dispatchMapAction`, so a map-only update
+    // would silently drop it.
+    if (repeat && 'fallThrough' in repeat && 'movedFeet' in approach && approach.movedFeet > 0) {
+      const fresh = await loadActiveTacticalMap(sessionId);
+      if (fresh) {
+        fresh.resolvedUnreachableApproaches = [
+          ...(fresh.resolvedUnreachableApproaches ?? []).filter(
+            (entry) => !(entry.actorId === actorId && entry.targetId === targetId),
+          ),
+          { actorId, targetId, movedFeet: approach.movedFeet },
+        ];
+        await saveTacticalMap(fresh);
+      }
+    }
+    return { movementOnly: false, attackType };
+  }
+
+  const narrative = describeUnreachableApproach(
+    actorLabel,
+    targetLabel,
+    approach,
+    `an attack with its ${weapon.name}`,
+  );
+  // The DM asked for a strike the board does not permit. It gets the movement it implicitly
+  // asked for, plus a plain statement of what happened, rather than a silent no-op. The
+  // marker lands in the same save as the fact (#1802), so a retried proposal reuses this
+  // resolution instead of moving again and appending a second fact. The stamp upserts: a
+  // fall-through re-attempt replaces the stale 0-spent marker with the movement it spent.
+  await recordDmTacticalFact(sessionId, narrative, undefined, undefined, {
+    actorId,
+    targetId,
+    movedFeet: approach.movedFeet,
+  });
+  combatLogger.info(
+    { sessionId, actorId, targetId, ...approach },
+    '[tactical] attack resolved as movement: target out of reach after full movement',
+  );
+  return movementOnlyDecision(actorId, targetId, approach, narrative);
 }

@@ -178,12 +178,32 @@ export async function applyDmTacticalActions(
  * killing blow is written microseconds before `endCombatIfResolved` tears the board down, and
  * a channel that closes with the board is a channel that can never carry an ending. See
  * `loadLatestTacticalMapRow`.
+ *
+ * `approachMarker` records a melee approach that already resolved as unreachable this turn
+ * (#1802): a second proposal for the same actor and target reuses that resolution instead
+ * of moving again and appending a second fact. The stamp upserts by (actor, target), so a
+ * re-attempt replaces the spent amount rather than duplicating the marker. Markers carry
+ * no round — the map's own `round` field never advances — so they are cleared when the
+ * actor's next turn starts (`resetTacticalMovementForTurn`) and when they gain fresh
+ * movement (`grantTacticalDash`), which is the turn boundary.
+ *
+ * The fact lands on the LATEST row (the killing-blow channel), but the marker is board
+ * state and belongs on the row the repeat check reads: the ACTIVE one. The two are the
+ * same row in the normal flow, and the marker lands in the same save as the fact there.
+ * When the latest row is a torn-down board (`row.active` false — the latest row can lag
+ * the active one: both rows are re-stamped by `consumeTacticalMapContext`, and
+ * `updatedAt` ties are decided by no secondary sort), the marker goes on the active
+ * row instead, so a repeat proposal cannot miss it and move again. That write is
+ * state-only (no `updatedAt` bump): stamping it would tie the active row with the
+ * fact row saved below, and a tie makes "latest" a coin flip that can strand the
+ * fact on the torn-down row forever.
  */
 export async function recordDmTacticalFact(
   sessionId: string,
   fact: string,
   action?: Omit<DmFactAction, 'timestamp'>,
   resolvedPlayerSpell?: NonNullable<TacticalMap['resolvedPlayerSpells']>[number],
+  approachMarker?: { actorId: string; targetId: string; movedFeet: number },
 ): Promise<void> {
   // A concluded fight has no active board to receive a new engine fact. This mirrors
   // `destroyTacticalCombatMap`: post-conclusion retries must not append another victory
@@ -192,6 +212,39 @@ export async function recordDmTacticalFact(
   const row = await loadLatestTacticalMapRow(sessionId);
   if (!row) return;
   row.state.pendingDmFacts = [...(row.state.pendingDmFacts ?? []), fact];
+  if (approachMarker) {
+    const marker = approachMarker;
+    const upsertMarker = (
+      markers: Array<{ actorId: string; targetId: string; movedFeet: number }>,
+    ) => [
+      ...markers.filter(
+        (entry) => !(entry.actorId === marker.actorId && entry.targetId === marker.targetId),
+      ),
+      marker,
+    ];
+    if (row.active) {
+      row.state.resolvedUnreachableApproaches = upsertMarker(
+        row.state.resolvedUnreachableApproaches ?? [],
+      );
+    } else {
+      const activeMap = await loadActiveTacticalMap(sessionId);
+      if (activeMap) {
+        activeMap.resolvedUnreachableApproaches = upsertMarker(
+          activeMap.resolvedUnreachableApproaches ?? [],
+        );
+        // State-only write: do NOT bump updatedAt. saveTacticalMap always stamps it,
+        // and stamping it here would tie the active row with the fact row saved below
+        // (both stamped in the same millisecond); a tie makes "latest" a coin flip
+        // that can strand the fact on the torn-down row forever. The fact row's save
+        // below is the only updatedAt bump, so it stays strictly newest.
+        const { db } = await import('../../../../db/client.js');
+        await db
+          .update(tacticalMaps)
+          .set({ state: activeMap })
+          .where(and(eq(tacticalMaps.sessionId, sessionId), eq(tacticalMaps.active, true)));
+      }
+    }
+  }
   if (resolvedPlayerSpell) {
     row.state.resolvedPlayerSpells = [
       ...(row.state.resolvedPlayerSpells ?? []).filter(

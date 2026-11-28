@@ -95,9 +95,23 @@ export async function resetTacticalMovementForTurn(
   entityId: string,
 ): Promise<TacticalMap | null> {
   const map = await loadActiveTacticalMap(sessionId);
-  if (!map || !resetMovement(map, entityId)) return map;
+  if (!map) return map;
+  // #1802: a new turn for this actor also clears its already-resolved unreachable
+  // approaches. The marker is the turn-scoped key, and this is the turn boundary:
+  // the actor's next proposal after this call takes the normal path. The clear runs
+  // even when the entity is not on the map, so a re-placed actor starts fresh; the
+  // save rides the same call as the movement reset.
+  const markersCleared =
+    !!map.resolvedUnreachableApproaches?.length &&
+    map.resolvedUnreachableApproaches.some((marker) => marker.actorId === entityId);
+  if (markersCleared)
+    map.resolvedUnreachableApproaches = map.resolvedUnreachableApproaches!.filter(
+      (marker) => marker.actorId !== entityId,
+    );
+  const movementReset = resetMovement(map, entityId);
+  if (!movementReset && !markersCleared) return map;
   await saveTacticalMap(map);
-  broadcast(sessionId, { type: 'entity_moved', entityId, path: [], movementReset: true });
+  broadcast(sessionId, { type: 'entity_moved', entityId, path: [], movementReset });
   return map;
 }
 
@@ -109,6 +123,14 @@ export async function grantTacticalDash(
   const entity = map?.entities.find((candidate) => candidate.id === entityId);
   if (!map || !entity) return map;
   entity.movementRemaining += entity.speedFeet;
+  // #1802: fresh movement is a fresh approach — the marker's premise (the movement budget
+  // is spent) no longer holds, so the actor's already-resolved unreachable approaches clear
+  // here too. Without this, a bonus-action Dash after a failed approach (proposals spend
+  // no action) would re-propose into a movement-only answer despite the new movement.
+  if (map.resolvedUnreachableApproaches?.length)
+    map.resolvedUnreachableApproaches = map.resolvedUnreachableApproaches.filter(
+      (marker) => marker.actorId !== entityId,
+    );
   await saveTacticalMap(map);
   broadcast(sessionId, {
     type: 'movement_updated',
