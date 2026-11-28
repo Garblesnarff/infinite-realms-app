@@ -18,7 +18,7 @@
  * @module server/services/combat-hp-service
  */
 
-import { and, eq, exists, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, or, sql } from 'drizzle-orm';
 
 import { CharacterVitalsService } from './character-vitals-service.js';
 import {
@@ -32,6 +32,7 @@ import {
   combatDamageLog,
   combatParticipants,
   combatEncounters,
+  tacticalMaps,
   gameSessions,
   campaigns,
   characters,
@@ -54,11 +55,10 @@ import {
 } from './combat/hp-data-access.js';
 import { HPMechanics } from './combat/hp-mechanics.js';
 import { withRageResistances } from './combat/resistance-resolver.js';
-import { loadActiveTacticalMap, saveTacticalMap } from './combat/tactical-map-store.js';
-import { clearStaleApproachMarkers } from '../tactical/dispatch.js';
 
 import type { CombatResolvedVitals, VitalsTx } from './character-vitals-service.js';
 import type { CombatParticipantStatus, CombatDamageLog } from '../../../db/schema/index';
+import type { TacticalMap } from '../tactical/types.js';
 import type {
   DamageResult,
   DamageType,
@@ -578,11 +578,19 @@ export class CombatHPService {
     // be refused as a dead target), not answer "could not reach" from the old board.
     // Death is a status flag, not a board event, so no dispatch path ever sees it;
     // this HP write is the one choke point every damage death flows through
-    // (attacks, hazards, AoE). Best-effort like the Rage/Hide clears above: the
-    // damage already landed, so a failed clear is logged, never thrown. `final` is
-    // the post-Relentless result, so a saved Half-Orc (1 HP, not dead) clears nothing.
-    // A player that dies on death saves takes a separate path (death-saves-service);
-    // a dying player cannot be a melee target, so that path clears nothing here.
+    // (attacks, hazards, AoE). The clear is a targeted `db` read/write on the
+    // active map row, NOT a call into the map store or dispatch: those modules
+    // import the tactical engine, and 31 test files mock the engine / map store
+    // (mook-spell-save.test.ts mocks `engine.js` with 3 exports — a static import
+    // of dispatch from here made that file fail at load with "Export named
+    // 'forceMoveEntity' not found"). The store's `saveTacticalMap` would do the
+    // same update, but its import edge is what breaks the mocks; this write is
+    // the same shape (active row, updatedAt bump, markers filtered by actor/target).
+    // Best-effort like the Rage/Hide clears above: the damage already landed, so a
+    // failed clear is logged, never thrown. `final` is the post-Relentless result,
+    // so a saved Half-Orc (1 HP, not dead) clears nothing. A player that dies on
+    // death saves takes a separate path (death-saves-service); a dying player
+    // cannot be a melee target, so that path clears nothing here.
     if (final.isDead) {
       try {
         const [encounterRow] = await db
@@ -590,12 +598,35 @@ export class CombatHPService {
           .from(combatEncounters)
           .where(eq(combatEncounters.id, encounterId))
           .limit(1);
-        const map = encounterRow ? await loadActiveTacticalMap(encounterRow.sessionId) : null;
-        if (map?.resolvedUnreachableApproaches?.length) {
-          const before = map.resolvedUnreachableApproaches.length;
-          clearStaleApproachMarkers(map, participantId);
-          if (map.resolvedUnreachableApproaches.length !== before) {
-            await saveTacticalMap(map);
+        if (encounterRow) {
+          const [row] = await db
+            .select()
+            .from(tacticalMaps)
+            .where(
+              and(
+                eq(tacticalMaps.sessionId, encounterRow.sessionId),
+                eq(tacticalMaps.active, true),
+              ),
+            )
+            .orderBy(desc(tacticalMaps.updatedAt))
+            .limit(1);
+          const markers = (row?.state as TacticalMap | undefined)?.resolvedUnreachableApproaches;
+          if (row && markers?.length) {
+            const kept = markers.filter(
+              (marker) => marker.actorId !== participantId && marker.targetId !== participantId,
+            );
+            if (kept.length !== markers.length) {
+              await db
+                .update(tacticalMaps)
+                .set({
+                  state: {
+                    ...(row.state as TacticalMap),
+                    resolvedUnreachableApproaches: kept,
+                  },
+                  updatedAt: new Date(),
+                })
+                .where(eq(tacticalMaps.id, row.id));
+            }
           }
         }
       } catch (error) {

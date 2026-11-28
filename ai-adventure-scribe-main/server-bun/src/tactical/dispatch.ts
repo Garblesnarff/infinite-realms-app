@@ -48,12 +48,14 @@ function unknownEntity(map: TacticalMap, action: MapAction, token: string): Disp
  * and the AoE forced-move route calls it directly and saves. The approach's own move
  * passes through here too; that is harmless because the marker is re-recorded after
  * the approach — by the fact write for an unreachable resolution, and by the
- * fall-through upsert in `decideAttackApproach`. A death clears the same way, but
- * from the HP service (`CombatHPService.applyDamage`), which owns the death event:
- * death is a status flag, not a board event, so no dispatch path ever sees it.
- * Exported for that caller; the filter is a no-op when the entity names no marker.
+ * fall-through upsert in `decideAttackApproach`. A death clears the same way,
+ * but from the HP service (`CombatHPService.applyDamage`), which owns the death
+ * event: death is a status flag, not a board event, so no dispatch path ever
+ * sees it. That hook writes the map row directly rather than importing this
+ * helper — the import edge would break the 31 test files that mock the engine
+ * or the map store (see the hook's comment).
  */
-export function clearStaleApproachMarkers(map: TacticalMap, entityId: string): void {
+function clearStaleApproachMarkers(map: TacticalMap, entityId: string): void {
   if (!map.resolvedUnreachableApproaches?.length) return;
   map.resolvedUnreachableApproaches = map.resolvedUnreachableApproaches.filter(
     (marker) => marker.actorId !== entityId && marker.targetId !== entityId,
