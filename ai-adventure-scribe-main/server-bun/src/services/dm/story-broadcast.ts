@@ -25,6 +25,7 @@ export type StoryCharacterUpdateReason =
   | 'story_slots'
   | 'story_features'
   | 'story_inspiration'
+  | 'story_death_save'
   | 'combat_ended';
 
 /** The socket message type the client maps to the `character-state-updated` window event. */

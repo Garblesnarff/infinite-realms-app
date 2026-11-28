@@ -45,7 +45,7 @@ import {
   settlePendingCombatEntryConfirmation,
 } from '@/services/combat/combat-entry-confirmation-bridge';
 import { registerCombatEntryPlayerSource } from '@/services/combat/combat-entry-delivery';
-import { LethalActRejectedError } from '@/services/combat/lethal-act-api';
+import { submitDeathSave } from '@/services/combat/death-save-api';
 import { decideLethalFreeTextSend } from '@/services/combat/lethal-free-text-send';
 import { settlePendingPlayerRoll } from '@/services/combat/player-roll-bridge';
 import { settlePendingSpellTargetSave } from '@/services/combat/spell-target-save-bridge';
@@ -173,6 +173,21 @@ export function rollReplyMessage(
   };
 }
 
+function characterStatsWithVitals(
+  character: { character_stats?: unknown } | null | undefined,
+  patch: { vital_state: string; current_hit_points: number },
+) {
+  const stats = character?.character_stats;
+  if (Array.isArray(stats)) {
+    const first = { ...(stats[0] ?? {}), ...patch };
+    return [first, ...stats.slice(1)];
+  }
+  if (stats && typeof stats === 'object') {
+    return { ...(stats as Record<string, unknown>), ...patch };
+  }
+  return patch;
+}
+
 export const useMessageHandlerLogic = ({
   sessionId,
   campaignId,
@@ -223,8 +238,9 @@ export const useMessageHandlerLogic = ({
   const gameStateRef = React.useRef(gameState);
   gameStateRef.current = gameState;
   const { toast } = useToast();
-  const { state: characterState } = useCharacter();
-  const character = characterState.character;
+  const characterContext = useCharacter();
+  const character = characterContext.state.character;
+  const dispatchCharacter = characterContext.dispatch;
 
   React.useEffect(
     () =>
@@ -304,6 +320,65 @@ export const useMessageHandlerLogic = ({
       // goes to the engine, not the generate path, so only the engine can kill or harm.
       // Ordinary sends (including roll retries) must not await this, or the Retry
       // controls miss each other.
+      // #1811: a hero dying outside a fight spends each message on one engine
+      // death save. The typed action is never sent to the DM.
+      const dyingStats = Array.isArray(character?.character_stats)
+        ? character?.character_stats?.[0]
+        : character?.character_stats;
+      const isDyingOutsideFight =
+        !gameState.isInCombat &&
+        dyingStats?.vital_state === 'dying' &&
+        (dyingStats?.current_hit_points ?? 0) === 0;
+      if (isDyingOutsideFight) {
+        try {
+          const result = await submitDeathSave(sessionId);
+          const lines = result.engineLines ?? [];
+          if (lines.length > 0) {
+            await sendMessage({
+              text: lines.join('\n\n'),
+              sender: 'system',
+              timestamp: new Date().toISOString(),
+              persist: true,
+              context: {
+                engineCards:
+                  result.engineCards.length > 0
+                    ? result.engineCards
+                    : lines.map((line) => ({
+                        kind: 'death_save' as const,
+                        side: 'party' as const,
+                        line,
+                        title: 'Death saving throw',
+                      })),
+              },
+            });
+          }
+          const terminal = result.terminal === true || result.vitalState === 'dead';
+          if (terminal) {
+            await checkRestoredDefeat(sessionId);
+          }
+          if (typeof dispatchCharacter === 'function') {
+            dispatchCharacter({
+              type: 'UPDATE_CHARACTER',
+              payload: {
+                character_stats: characterStatsWithVitals(character, {
+                  vital_state: result.vitalState,
+                  current_hit_points: result.currentHitPoints,
+                }),
+              },
+            });
+          }
+        } catch {
+          await sendMessage({
+            text: "You can't do that now.",
+            sender: 'system',
+            timestamp: new Date().toISOString(),
+            persist: false,
+          });
+        }
+        setComposerBlocked(false);
+        return;
+      }
+
       const mightBeLethal =
         context?.intent !== 'dice_roll' &&
         context?.intent !== 'resume_unanswered' &&
@@ -320,17 +395,14 @@ export const useMessageHandlerLogic = ({
             intent: context?.intent,
             sessionId,
           });
-        } catch (err) {
-          if (err instanceof LethalActRejectedError) {
-            await sendMessage({
-              text: "You can't do that now.",
-              sender: 'system',
-              timestamp: new Date().toISOString(),
-              persist: false,
-            });
-            return;
-          }
-          throw err;
+        } catch {
+          await sendMessage({
+            text: "You can't do that now.",
+            sender: 'system',
+            timestamp: new Date().toISOString(),
+            persist: false,
+          });
+          return;
         }
       }
       if (lethalDecision.kind === 'cancelled') return;
@@ -349,6 +421,17 @@ export const useMessageHandlerLogic = ({
           persist: true,
           context: { engineCards: [result.engineCard] },
         });
+        if (result.vitalState && typeof dispatchCharacter === 'function') {
+          dispatchCharacter({
+            type: 'UPDATE_CHARACTER',
+            payload: {
+              character_stats: characterStatsWithVitals(character, {
+                vital_state: result.vitalState,
+                current_hit_points: result.currentHitPoints,
+              }),
+            },
+          });
+        }
         return;
       }
 

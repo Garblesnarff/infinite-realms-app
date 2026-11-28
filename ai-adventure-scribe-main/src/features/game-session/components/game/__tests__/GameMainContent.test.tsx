@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ENEMY_FAILS_SAVE,
@@ -942,5 +942,31 @@ describe('GameMainContent overhaul behavior contract', () => {
     homeLink.addEventListener('click', (event) => event.preventDefault());
     fireEvent.click(homeLink);
     expect(updateGameSessionState).not.toHaveBeenCalled();
+  });
+});
+
+describe('GameMainContent dying outside a fight (#1811)', () => {
+  afterEach(() => {
+    mockCharacterRecord = { id: 'test-char-id', name: 'Test Character' };
+  });
+
+  it('shows You are dying on the composer when the hero is dying and not in a fight', () => {
+    mockCharacterRecord = {
+      id: 'test-char-id',
+      name: 'Test Character',
+      character_stats: { current_hit_points: 0, vital_state: 'dying' },
+    };
+    render(<GameMainContent {...baseProps} isCombatDetected={false} />);
+    expect(screen.getByTestId('dying-status')).toHaveTextContent('You are dying');
+  });
+
+  it('does not show You are dying while a fight is live', () => {
+    mockCharacterRecord = {
+      id: 'test-char-id',
+      name: 'Test Character',
+      character_stats: { current_hit_points: 0, vital_state: 'dying' },
+    };
+    render(<GameMainContent {...baseProps} isCombatDetected />);
+    expect(screen.queryByTestId('dying-status')).not.toBeInTheDocument();
   });
 });

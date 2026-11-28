@@ -425,7 +425,15 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     const dmWaiting = useDmWaiting();
     // #88: names for the opening-scene body, read optionally so this column
     // still renders without the character/campaign providers (#2517).
-    const greetingCharacterName = useOptionalCharacter()?.state?.character?.name ?? null;
+    const optionalCharacter = useOptionalCharacter();
+    const greetingCharacterName = optionalCharacter?.state?.character?.name ?? null;
+    const dyingCharacterStats = Array.isArray(optionalCharacter?.state?.character?.character_stats)
+      ? optionalCharacter?.state?.character?.character_stats?.[0]
+      : optionalCharacter?.state?.character?.character_stats;
+    const isDyingOutsideFight =
+      !isCombatDetected &&
+      dyingCharacterStats?.vital_state === 'dying' &&
+      (dyingCharacterStats?.current_hit_points ?? 0) === 0;
     const greetingCampaignName = useOptionalCampaign()?.state?.campaign?.name ?? null;
     const castPhase = useSheetCastProgress().cast?.phase;
     React.useEffect(() => {
@@ -805,6 +813,14 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                             queueProcessing={queueStatus === 'processing'}
                             onResumeTurn={onResumeTurn}
                           />
+                          {isDyingOutsideFight && (
+                            <div
+                              data-testid="dying-status"
+                              className="px-3 py-1 text-sm font-semibold text-red-400"
+                            >
+                              You are dying
+                            </div>
+                          )}
                           <ChatInput
                             onSendMessage={handleSendMessage}
                             isReconnecting={isReconnecting}
@@ -814,9 +830,11 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                             onRetry={onRetry}
                             retryInFlight={retryInFlight}
                             placeholder={
-                              !isCombatDetected
-                                ? 'Speak to the table… “I feint high and cut at its legs”'
-                                : combatChatPlaceholder
+                              isDyingOutsideFight
+                                ? 'You are dying'
+                                : !isCombatDetected
+                                  ? 'Speak to the table… “I feint high and cut at its legs”'
+                                  : combatChatPlaceholder
                             }
                             disabledReason={
                               isGeneratingGreeting

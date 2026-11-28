@@ -13,7 +13,7 @@ const LETHAL_PATTERNS: ReadonlyArray<RegExp> = [
   // A plain step, jump, leap or throw-myself off a drop, with nothing after it
   // in the sentence. A destination or purpose ("onto the ledge", "into the
   // lake", "to rescue the child") keeps it quiet.
-  /\b(?:i|we)\s+(?:step|jump|leap|throw myself|hurl myself|fling myself)\s+off\s+(?:the\s+|a\s+)?(?:top\s+of\s+(?:the\s+)?)?(?:cliff|tower|roof|bridge|ledge|edge)\s*(?:[.!?]|$)/i,
+  /\b(?:i|we)\s+(?:step|jump|leap|throw myself|hurl myself|fling myself)\s+off\s+(?:the\s+|a\s+)?(?:top\s+of\s+(?:the\s+)?)?(?:cliff|tower|roof|bridge|ledge|edge(?:\s+of\s+the\s+(?:cliff|tower|roof|bridge|ledge))?)\s*(?:[.!?]|$)/i,
   // Into the lava / magma / volcano itself, not a "lava cave".
   /\b(?:i|we)\s+(?:step|walk|jump|leap|dive|throw myself|hurl myself|fling myself)\s+into\s+(?:the\s+)?(?:lava|magma|volcano)\b(?!\s+cave)/i,
   // Drinking poison, not a "poison antidote".

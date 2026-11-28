@@ -41,6 +41,7 @@ import {
   spendRelentlessEndurance,
   wouldRelentlessEnduranceTrigger,
 } from './combat/relentless-endurance.js';
+import { resolveDeathSave } from './session/death-save-resolution.js';
 import { db } from '../../../db/client';
 import { characterStats, characters } from '../../../db/schema/index';
 import { DEATH_SAVE_LIMIT } from '../../../shared/death-save-limit.js';
@@ -371,6 +372,110 @@ export class CharacterVitalsService {
       // proper is PR3; a `vital_state` of 'dead' with no timestamp beside it would be a row
       // that cannot say when it happened.
       ...(vitalState === 'dead' && current.diedAt === null ? { diedAt: new Date() } : {}),
+    });
+  }
+
+  /**
+   * Resolve and record one death saving throw for a hero dying outside combat (#1811).
+   * Rolls the d20 (and 1d4 on a third success) through the injected deps, applies the
+   * tally progression through `HPMechanics.resolveDeathSave`, and writes the character
+   * record with a compare-and-set on the current tallies.
+   */
+  static async applyDeathSave(
+    characterId: string,
+    userId: string,
+    options: { name?: string; rollDie?: (sides: number) => number } = {},
+  ): Promise<CharacterVitals & { resolution: ReturnType<typeof resolveDeathSave> }> {
+    const rollDie = options.rollDie ?? (await import('../lib/rng.js')).rollDie;
+    return db.transaction(async (tx) => {
+      const current = await loadVitals(tx, characterId, { userId, forUpdate: true });
+      if (!current) throw notFound();
+      if (current.currentHitPoints !== 0 || current.vitalState !== 'dying') {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Not dying',
+        });
+      }
+
+      let charName = options.name;
+      if (!charName) {
+        const [row] = await tx
+          .select({ name: characters.name })
+          .from(characters)
+          .where(eq(characters.id, characterId))
+          .limit(1);
+        charName = row?.name ?? 'You';
+      }
+
+      const natural = rollDie(20);
+      let resolution = resolveDeathSave({ vitals: current, name: charName, natural });
+      if (resolution.isStabilized) {
+        const d4 = rollDie(4);
+        resolution = resolveDeathSave({ vitals: current, name: charName, natural, d4 });
+      }
+
+      const diedAt = resolution.isDead
+        ? current.diedAt === null
+          ? new Date()
+          : current.diedAt
+        : current.diedAt;
+
+      const [updated] = await tx
+        .update(characterStats)
+        .set({
+          currentHitPoints: resolution.vitals.currentHitPoints,
+          temporaryHitPoints: resolution.vitals.temporaryHitPoints,
+          isConscious: resolution.vitals.isConscious,
+          vitalState: resolution.vitals.vitalState,
+          deathSavesSuccesses: resolution.vitals.deathSavesSuccesses,
+          deathSavesFailures: resolution.vitals.deathSavesFailures,
+          ...(resolution.vitals.diedAt === undefined
+            ? diedAt === null
+              ? {}
+              : { diedAt }
+            : { diedAt: resolution.vitals.diedAt }),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(characterStats.characterId, characterId),
+            eq(characterStats.deathSavesSuccesses, current.deathSavesSuccesses),
+            eq(characterStats.deathSavesFailures, current.deathSavesFailures),
+            eq(characterStats.vitalState, 'dying'),
+            eq(characterStats.currentHitPoints, 0),
+            ownedByCaller(tx, userId)!,
+          ),
+        )
+        .returning({
+          currentHitPoints: characterStats.currentHitPoints,
+          temporaryHitPoints: characterStats.temporaryHitPoints,
+          isConscious: characterStats.isConscious,
+          deathSavesSuccesses: characterStats.deathSavesSuccesses,
+          deathSavesFailures: characterStats.deathSavesFailures,
+          vitalState: characterStats.vitalState,
+          diedAt: characterStats.diedAt,
+        });
+
+      if (!updated) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'Compare-and-set failed',
+        });
+      }
+
+      const written: CharacterVitals = {
+        characterId,
+        currentHitPoints: updated.currentHitPoints,
+        maxHitPoints: current.maxHitPoints,
+        temporaryHitPoints: updated.temporaryHitPoints ?? 0,
+        isConscious: updated.isConscious,
+        deathSavesSuccesses: updated.deathSavesSuccesses,
+        deathSavesFailures: updated.deathSavesFailures,
+        vitalState: updated.vitalState,
+        diedAt: updated.diedAt ?? null,
+      };
+
+      return { ...written, resolution };
     });
   }
 }

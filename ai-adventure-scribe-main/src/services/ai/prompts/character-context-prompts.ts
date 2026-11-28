@@ -226,6 +226,18 @@ STR ${stats.strength}(${calcMod(stats.strength)}), DEX ${stats.dexterity}(${calc
 
       section += `
 <proficiency_bonus>+${proficiencyBonus(char.level)}</proficiency_bonus>`;
+
+      if (
+        stats.current_hit_points === 0 &&
+        (stats.vital_state === 'dying' ||
+          stats.vital_state === 'stable' ||
+          stats.vital_state === 'stabilized')
+      ) {
+        const vitalStateLine =
+          stats.vital_state === 'dying' ? 'Vital state: dying' : 'Vital state: stable, unconscious';
+        section += `
+${vitalStateLine}`;
+      }
     }
 
     section += await CharacterContextPrompts.buildEquipmentSection(char);
