@@ -95,6 +95,36 @@ export function writeEngineLineRow(
   );
 }
 
+/** Player movement is written by the route from the path the engine actually applied. */
+export function writePlayerMoveRow(
+  state: CombatState,
+  actionId: string,
+  line: string,
+  userId: string,
+): Promise<NpcEngineRow[]> {
+  const round = state.encounter.currentRound;
+  return storeEngineRow(
+    state,
+    actionId,
+    line,
+    {
+      intent: 'combat_player_result',
+      round,
+      combatEngineBlocks: [
+        {
+          sequence: 0,
+          round,
+          source: 'player',
+          lines: [line],
+          cards: [{ kind: 'move', side: 'party', title: line, line }],
+        },
+      ],
+    },
+    userId,
+    'player',
+  );
+}
+
 /** The safety-cap line, one row per (round, holder): a drain that stops there again writes nothing. */
 export function writeNpcCapRow(
   state: CombatState,

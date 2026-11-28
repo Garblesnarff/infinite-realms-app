@@ -29,7 +29,17 @@ export function confirmCombatEntry(
   const combatantLabels = pendingEntry.combatants
     .map((combatant) => combatant.name)
     .filter((label) => !isUnresolvedNpcName(label));
+  // Server-side person-vs-kind hint for the fight-start card title (#567):
+  // an srd: monster id wins over the name-only rule, so "Owlbear" with
+  // monsterId 'srd:owlbear' keeps its article.
+  const combatantMonsterIds: Record<string, string> = {};
+  for (const combatant of pendingEntry.combatants) {
+    if (combatant.monsterId) combatantMonsterIds[combatant.name] = combatant.monsterId;
+  }
   const declaredTarget = pendingEntry.declaredAttack?.actorName?.trim();
+  if (declaredTarget && pendingEntry.declaredAttack?.monsterId) {
+    combatantMonsterIds[declaredTarget] = pendingEntry.declaredAttack.monsterId;
+  }
   const declaredTargets = declaredTarget ? [declaredTarget] : [];
   const normalizeLabel = (value: string): string =>
     value
@@ -73,6 +83,8 @@ export function confirmCombatEntry(
       : {}),
     initiativeRoll: null,
     initiativeModifier: player.initiativeModifier,
+    // #567: server kind (monster id) for the card title.
+    ...(Object.keys(combatantMonsterIds).length ? { combatantMonsterIds } : {}),
   });
 }
 

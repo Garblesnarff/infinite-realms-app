@@ -460,10 +460,15 @@ export class CombatEncounterService {
         );
 
         /**
-         * Party scaling applies to exactly the combatants the stat ladder resolves: those with
-         * neither a character row nor an NPC row. Those are the ones whose numbers came from a
-         * source priced for four adventurers — a campaign bible, the SRD catalog, the CR table,
-         * or a DM-supplied `hpMax` written with the same party-sized instinct.
+         * Party scaling applies to combatants the stat ladder resolves that have neither a
+         * character row nor an NPC row, and whose hit points were priced for four
+         * adventurers: the SRD catalog, the CR table, or a DM-supplied `hpMax` written with
+         * the same party-sized instinct.
+         *
+         * Hit points the campaign bible actually authored are used as written (#132). The
+         * scaler is skipped when `source === 'campaign'` and `maxHp` was not filled from a
+         * lower rung. A campaign-named foe whose bible omitted HP still scales, because
+         * those hit points came from the SRD or generic fallback, not the author.
          *
          * Player characters and database NPCs are untouched. A PC's hit points are the
          * player's own, and an NPC row is a specific creature somebody authored for this
@@ -475,7 +480,7 @@ export class CombatEncounterService {
          * adventurers. Scaling it would take an improvised bystander to 3 hit points on the
          * strength of an assumption its author never made. So the requirement is a resolved
          * stat block OR hit points the DM stated outright, both of which are party-sized;
-         * neither is the fallback default.
+         * neither is the fallback default. Authored bible HP is the one authored exception.
          */
         const scalable =
           !input.characterId && !input.npcId && (monster !== null || input.hpMax != null);
@@ -498,12 +503,18 @@ export class CombatEncounterService {
               })
             : null;
         if (npcFallback) npcFallbackSeats.push(npcFallback.seat);
+        // A DM-supplied hpMax is still treated as party-sized, even on a bible-named foe.
+        const bibleAuthoredHp =
+          monster?.source === 'campaign' &&
+          !monster.filledFromFallback.includes('maxHp') &&
+          input.hpMax == null;
         const scaled = scalable
           ? scaleMonsterForParty({
               rawMaxHp,
               rawCurrentHp,
               attackProfile: npcFallback?.profile ?? monster?.attackProfile ?? null,
               partySize,
+              skipPartyScale: bibleAuthoredHp,
             })
           : null;
         const maxHp = scaled ? scaled.maxHp : rawMaxHp;
@@ -600,7 +611,7 @@ export class CombatEncounterService {
             dmMonsterId: input.monsterId ?? null,
           });
         }
-        if (scaled && scaled.factor < 1) {
+        if (scaled && (scaled.factor < 1 || scaled.skipped)) {
           // Logged separately from the profile line and only when it changes something. A
           // scaler that rewrites a stat block in silence is the same class of problem as the
           // silent stat fallbacks this project spent weeks eliminating.
@@ -613,6 +624,7 @@ export class CombatEncounterService {
             baseline: scaled.scaling.baseline,
             factor: scaled.factor,
             hp: `${scaled.scaling.rawMaxHp} -> ${scaled.maxHp}`,
+            ...(scaled.skipped ? { skipped: scaled.skipped } : {}),
             damage: scaled.scaling.rawAttacks.map(
               (raw, index) =>
                 `${raw} -> ${scaled.attackProfile?.attacks[index]?.damageDice ?? '?'}${
@@ -940,6 +952,7 @@ export class CombatEncounterService {
             : sql`true`,
         ),
       with: {
+        session: { columns: { sessionState: true } },
         participants: {
           orderBy: (cp, { asc }) => [asc(cp.turnOrder)],
           with: {
@@ -957,7 +970,12 @@ export class CombatEncounterService {
     }
 
     // Extract participants from the joined result
-    const { participants: participantRows, ...encounter } = encounterWithParticipants;
+    const { participants: participantRows, session, ...encounter } = encounterWithParticipants;
+    const marks = (
+      session?.sessionState as {
+        raging?: Record<string, { encounterId?: unknown; expiresRound?: unknown }>;
+      } | null
+    )?.raging;
     const map = await loadActiveTacticalMap(encounter.sessionId);
     const positions = new Map(
       map?.entities.map((entity) => [entity.id, { x: entity.x, y: entity.y, sceneId: map.id }]),
@@ -967,8 +985,17 @@ export class CombatEncounterService {
       const position = positions.get(participant.id);
       const downedBehavior = authoredDownedBehavior(npc?.stats);
       const authored = authoredNumbers(npc?.stats);
+      const rage = marks?.[participant.id];
+      const raging =
+        encounter.status === 'active' &&
+        participant.isActive &&
+        participant.participantType === 'player' &&
+        rage?.encounterId === encounterId &&
+        typeof rage.expiresRound === 'number' &&
+        encounter.currentRound < rage.expiresRound;
       const view = {
         ...participant,
+        ...(raging ? { raging: true } : {}),
         ...(position ? { position } : {}),
         ...(disposition ? { disposition } : {}),
         ...authored,

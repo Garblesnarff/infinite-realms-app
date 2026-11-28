@@ -11,7 +11,7 @@
  */
 import { and, eq } from 'drizzle-orm';
 
-import { claimRage, clearRage, classLevelOfCharacter, isRaging } from './combat-turn-flags.js';
+import { claimRage, clearRage, classLevelOfCharacter } from './combat-turn-flags.js';
 import { characters } from '../../../../db/schema/index';
 import { familyCountRule } from '../../../../shared/limited-feature-counts';
 import { BusinessLogicError } from '../../lib/errors.js';
@@ -45,12 +45,10 @@ export async function rageIsOffered(input: {
     family: 'barbarian-rage',
     includeUnlimited: true,
   });
-  if (!pool || pool.remaining <= 0) return false;
-  const { wearsHeavyArmor } = await import('../character/character-armor-class.js');
-  return (
-    !(await wearsHeavyArmor(input.characterId)) &&
-    !(await isRaging(input.encounterId, input.participantId))
-  );
+  const { hasActiveRage } = await import('./combat-turn-flags.js');
+
+  return Boolean(pool && pool.remaining > 0) &&
+    !(await hasActiveRage(input.encounterId, input.participantId));
 }
 
 async function database(): Promise<typeof DatabaseClient> {
@@ -78,14 +76,6 @@ export async function resolveRage(input: {
   if (level <= 0) {
     throw new BusinessLogicError(`${RAGE_NAME} is not on this character's sheet`, {
       reason: 'feature_not_on_sheet',
-      featureName: RAGE_NAME,
-    });
-  }
-
-  const { wearsHeavyArmor } = await import('../character/character-armor-class.js');
-  if (await wearsHeavyArmor(characterId)) {
-    throw new BusinessLogicError('Rage grants no benefits in heavy armor.', {
-      reason: 'heavy_armor',
       featureName: RAGE_NAME,
     });
   }

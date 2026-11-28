@@ -28,7 +28,9 @@ describe('filterValidHandoutActions', () => {
   });
 
   it('trims a valid batch to the route cap of 10 and counts the rest as dropped', () => {
-    const makeAction = (n: number): { mode: string; key: null; title: string; body: string; giver: string } => ({
+    const makeAction = (
+      n: number,
+    ): { mode: string; key: null; title: string; body: string; giver: string } => ({
       mode: 'improvised',
       key: null,
       title: `Field Notes ${n}`,
@@ -47,7 +49,9 @@ describe('filterValidHandoutActions', () => {
   });
 
   it('counts invalid and over-cap actions together as dropped', () => {
-    const makeAction = (n: number): { mode: string; key: null; title: string; body: string; giver: string } => ({
+    const makeAction = (
+      n: number,
+    ): { mode: string; key: null; title: string; body: string; giver: string } => ({
       mode: 'improvised',
       key: null,
       title: `Field Notes ${n}`,

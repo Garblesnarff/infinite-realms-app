@@ -26,6 +26,7 @@ vi.mock('../combat/combat-turn-flags.js', () => ({
   markTurnAttack: vi.fn(async () => {}),
   claimRage: vi.fn(async () => null),
   isRaging: vi.fn(async () => false),
+  hasActiveRage: vi.fn(async () => false),
   clearRage: vi.fn(async () => {}),
   markRageActive: vi.fn(async () => {}),
   endRageIfIdle: vi.fn(async () => {}),

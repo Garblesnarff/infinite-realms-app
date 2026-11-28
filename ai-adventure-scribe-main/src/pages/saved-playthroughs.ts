@@ -52,6 +52,21 @@ const readVitals = (
   return { hpCurrent: null, hpMax: null, fallen: false };
 };
 
+/**
+ * #1741: a hero is the same premade when its template id is the one being started. A renamed
+ * hero still matches. A hero made before #1741 has no template id and matches by its name.
+ */
+const isSameHero = (
+  character: Record<string, unknown>,
+  input: { starterTemplateId: string; heroName: string },
+): boolean => {
+  const templateId = character.starter_template_id;
+  if (typeof templateId === 'string' && templateId.length > 0) {
+    return templateId === input.starterTemplateId;
+  }
+  return character.name === input.heroName;
+};
+
 interface Bucket {
   name: string;
   sessionNumber: number;
@@ -71,6 +86,9 @@ export const buildSavedPlaythroughs = (input: {
   sessions: readonly unknown[];
   characters: readonly unknown[];
   starterCampaignId: string;
+  /** #1741: the premade the player is starting. Heroes match by the template they were copied from. */
+  starterTemplateId: string;
+  /** The premade's title. Only for heroes made before #1741, which carry no template id. */
   heroName: string;
   campaignId: string;
 }): SavedPlaythrough[] => {
@@ -83,13 +101,13 @@ export const buildSavedPlaythroughs = (input: {
     const characterId = session.character_id;
     if (typeof characterId !== 'string' || characterId.length === 0) continue;
     const character = asRecord(session.character);
-    if (character?.name !== input.heroName) continue;
+    if (!character || !isSameHero(character, input)) continue;
 
     const sessionNumber = asNumber(session.session_number);
     const rank = sessionNumber ?? 0;
     const updated = asTime(session.updated_at);
     const current = buckets.get(characterId) ?? {
-      name: input.heroName,
+      name: typeof character.name === 'string' ? character.name : input.heroName,
       sessionNumber: sessionNumber ?? 1,
       rank: -1,
       rankUpdated: -1,

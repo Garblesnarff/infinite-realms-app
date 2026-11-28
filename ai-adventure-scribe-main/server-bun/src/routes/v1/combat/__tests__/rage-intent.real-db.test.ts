@@ -238,6 +238,29 @@ describeWithDb('Rage posts through the real intent route (#1638)', () => {
     expect(await bonusActionUsed()).toBe(true);
   });
 
+  test('combat state exposes a live Rage mark and drops it on expiry', async () => {
+    const isMarked = async () => {
+      const response = await app!.handle(
+        new Request(`http://localhost/v1/combat/sessions/${sessionId}/active`, {
+          headers: { authorization: `Bearer ${userId}` },
+        }),
+      );
+      expect(response.status).toBe(200);
+      const { combat } = (await response.json()) as {
+        combat: { participants: Array<{ id: string; raging?: boolean }> };
+      };
+      return combat.participants.find((participant) => participant.id === FIGHTER_FEATURE_ACTOR_ID);
+    };
+    expect(await isMarked()).not.toHaveProperty('raging');
+    expect((await postRage()).status).toBe(200);
+    expect(await isMarked()).toHaveProperty('raging', true);
+    await db
+      .update(combatEncounters)
+      .set({ currentRound: 11 })
+      .where(eq(combatEncounters.id, encounterId));
+    expect(await isMarked()).not.toHaveProperty('raging');
+  });
+
   test('a refused Rage with no uses left spends nothing and leaves the bonus action free', async () => {
     await db
       .update(characterFeatures)
@@ -295,7 +318,7 @@ describeWithDb('Rage posts through the real intent route (#1638)', () => {
     }
   });
 
-  test('equipped heavy armor prevents Rage without spending a use or bonus action', async () => {
+  test('heavy armor allows Rage activation and suppresses its benefits', async () => {
     const [armor] = await db
       .insert(characterEquipment)
       .values({
@@ -306,11 +329,18 @@ describeWithDb('Rage posts through the real intent route (#1638)', () => {
       })
       .returning({ id: characterEquipment.id });
     try {
+      const { startConcentration, getConcentration } = await import('../../../../services/combat/concentration-service.js');
+      await startConcentration(characterId, { id: 'bless', name: 'Bless' });
       const response = await postRage();
-      expect(response.status).toBe(422);
-      expect(JSON.stringify(response.body)).toContain('heavy armor');
-      expect(await usesLeft()).toBe(2);
-      expect(await bonusActionUsed()).toBe(false);
+      expect(await getConcentration(characterId)).toBeNull();
+      expect(response.status).toBe(200);
+      expect(await usesLeft()).toBe(1);
+      expect(await bonusActionUsed()).toBe(true);
+      const { hasActiveRage, isRaging } = await import('../../../../services/combat/combat-turn-flags.js');
+      expect(await hasActiveRage(encounterId, FIGHTER_FEATURE_ACTOR_ID)).toBe(true);
+      expect(await isRaging(encounterId, FIGHTER_FEATURE_ACTOR_ID)).toBe(false);
+      await db.update(characterEquipment).set({ equipped: false }).where(eq(characterEquipment.id, armor.id));
+      expect(await isRaging(encounterId, FIGHTER_FEATURE_ACTOR_ID)).toBe(true);
     } finally {
       await db.delete(characterEquipment).where(eq(characterEquipment.id, armor.id));
     }

@@ -48,8 +48,8 @@ describe('splitDamageDice', () => {
   });
 
   test('a flat damage number becomes dice the roller accepts', () => {
-    // `1d1 + 3` is exactly 4, not an approximation of it.
-    expect(splitDamageDice('4')).toEqual({ dice: '1d1', bonus: 3 });
+    // `0d1 + 4` is exactly 4, with no die for a critical to double.
+    expect(splitDamageDice('4')).toEqual({ dice: '0d1', bonus: 4 });
   });
 
   test('nothing readable yields null rather than a guess', () => {

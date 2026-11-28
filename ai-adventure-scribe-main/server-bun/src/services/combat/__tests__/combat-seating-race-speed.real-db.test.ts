@@ -14,16 +14,18 @@
  * Skips honestly without one; CI's server-real-db job runs it by glob.
  */
 import { afterAll, beforeAll, expect, test } from 'bun:test';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 
 import {
+  campaignChunks,
   campaigns,
+  characterEquipment,
   characters,
   characterStats,
-  characterEquipment,
   combatEncounters,
   combatParticipants,
   gameSessions,
+  starterCampaigns,
 } from '../../../../../db/schema/index';
 import {
   closeRealDb,
@@ -153,7 +155,8 @@ describeWithDb('startCombat seats the character speed (#1251)', () => {
       await db.delete(characters).where(eq(characters.id, characterId));
     }
     await db.delete(campaigns).where(eq(campaigns.id, campaignId));
-    await closeRealDb();
+    // closeRealDb() is in the second describe: both share the realDb()
+    // singleton, and that describe still needs the pool.
   });
 
   test('a gnome seats at 25 ft, a wood elf at 35 ft, an unknown race at 30 ft', async () => {
@@ -266,5 +269,182 @@ describeWithDb('startCombat seats the character speed (#1251)', () => {
       .from(combatParticipants)
       .where(eq(combatParticipants.characterId, characterIds.gnome));
     expect(row.speed).toBe(25);
+  });
+});
+
+describeWithDb('authored bible HP is not party-scaled (#132)', () => {
+  const db = hasRealDb ? realDb() : (null as never);
+  const userId = testId('132-user');
+
+  let campaignId: string;
+  let starterId: string;
+  const characterIds: string[] = [];
+  const sessionIds: string[] = [];
+  const encounterIds: string[] = [];
+
+  beforeAll(async () => {
+    if (!hasRealDb) return;
+    [{ id: campaignId }] = await db
+      .insert(campaigns)
+      .values({ userId, name: testId('132-camp') })
+      .returning({ id: campaigns.id });
+
+    starterId = testId('132-starter');
+    await db.insert(starterCampaigns).values({
+      id: starterId,
+      title: 'Authored HP Fixture',
+      slug: starterId,
+      genre: ['fantasy'],
+      tone: [''],
+      difficulty: 'medium',
+      premise: 'A fixture campaign whose Test Foe carries authored HP.',
+    });
+    await db.execute(sql`INSERT INTO campaign_chunks (campaign_id, entity_name, chunk_type, content)
+      VALUES (${starterId}, 'Test Foe', 'monster', '**Test Foe**\n\n**HP:** 32 **AC:** 12 **Speed:** 30ft')`);
+  });
+
+  afterAll(async () => {
+    if (!hasRealDb) return;
+    if (encounterIds.length) {
+      await db
+        .delete(combatParticipants)
+        .where(inArray(combatParticipants.encounterId, encounterIds));
+      await db.delete(combatEncounters).where(inArray(combatEncounters.id, encounterIds));
+    }
+    for (const sessionId of sessionIds) {
+      await db.delete(gameSessions).where(eq(gameSessions.id, sessionId));
+    }
+    for (const characterId of characterIds) {
+      await db.delete(characters).where(eq(characters.id, characterId));
+    }
+    await db.delete(campaignChunks).where(eq(campaignChunks.campaignId, starterId));
+    await db.delete(starterCampaigns).where(eq(starterCampaigns.id, starterId));
+    await db.delete(campaigns).where(eq(campaigns.id, campaignId));
+    await closeRealDb();
+  });
+
+  test('a single player seats an authored 32 HP foe at 32, not 8', async () => {
+    if (!hasRealDb) return;
+    const [{ id: characterId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: testId('132-hero'),
+        race: 'Human',
+        level: 3,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    characterIds.push(characterId);
+    await db.insert(characterStats).values({
+      characterId,
+      strength: 10,
+      dexterity: 14,
+      armorClass: 12,
+      maxHitPoints: 20,
+      currentHitPoints: 20,
+    });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({
+        campaignId,
+        characterId,
+        starterCampaignId: starterId,
+        sessionNumber: 1,
+        status: 'active',
+      })
+      .returning({ id: gameSessions.id });
+    sessionIds.push(sessionId);
+
+    const { clearCampaignMonsterCache } = await import('../campaign-monster-resolution.js');
+    clearCampaignMonsterCache();
+
+    const state = await CombatEncounterService.startCombat(
+      sessionId,
+      [
+        {
+          encounterId: testId('132-enc-a'),
+          characterId,
+          name: testId('132-hero'),
+          initiativeModifier: 0,
+          initiativeRoll: 10,
+        },
+        {
+          encounterId: testId('132-enc-a'),
+          name: 'Test Foe',
+          initiativeModifier: 0,
+          initiativeRoll: 5,
+        },
+      ],
+      false,
+      userId,
+    );
+    encounterIds.push(state.encounter.id);
+    const foe = state.participants.find((p) => p.name === 'Test Foe');
+    expect(foe?.maxHp).toBe(32);
+  });
+
+  test('a generic goblin still scales for the same solo party', async () => {
+    if (!hasRealDb) return;
+    const [{ id: characterId }] = await db
+      .insert(characters)
+      .values({
+        userId,
+        campaignId,
+        name: testId('132-hero2'),
+        race: 'Human',
+        level: 3,
+        class: 'Fighter',
+      })
+      .returning({ id: characters.id });
+    characterIds.push(characterId);
+    await db.insert(characterStats).values({
+      characterId,
+      strength: 10,
+      dexterity: 14,
+      armorClass: 12,
+      maxHitPoints: 20,
+      currentHitPoints: 20,
+    });
+    const [{ id: sessionId }] = await db
+      .insert(gameSessions)
+      .values({
+        campaignId,
+        characterId,
+        starterCampaignId: starterId,
+        sessionNumber: 2,
+        status: 'active',
+      })
+      .returning({ id: gameSessions.id });
+    sessionIds.push(sessionId);
+
+    const { clearCampaignMonsterCache } = await import('../campaign-monster-resolution.js');
+    clearCampaignMonsterCache();
+
+    const state = await CombatEncounterService.startCombat(
+      sessionId,
+      [
+        {
+          encounterId: testId('132-enc-b'),
+          characterId,
+          name: testId('132-hero2'),
+          initiativeModifier: 0,
+          initiativeRoll: 10,
+        },
+        {
+          encounterId: testId('132-enc-b'),
+          name: 'Goblin',
+          initiativeModifier: 0,
+          initiativeRoll: 5,
+        },
+      ],
+      false,
+      userId,
+    );
+    encounterIds.push(state.encounter.id);
+    const goblin = state.participants.find((p) => p.name === 'Goblin');
+    // SRD goblin is 7 HP; party of one scales to round(7 * 0.25) = 2.
+    expect(goblin?.maxHp).toBe(2);
   });
 });

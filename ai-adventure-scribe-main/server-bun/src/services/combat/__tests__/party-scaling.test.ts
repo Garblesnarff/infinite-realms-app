@@ -164,4 +164,21 @@ describe('a whole monster', () => {
     expect(half.maxHp).toBe(25);
     expect(half.currentHp).toBe(13);
   });
+
+  test('skipPartyScale leaves authored HP untouched even for a solo party', () => {
+    const skipped = scaleMonsterForParty({
+      rawMaxHp: 32,
+      rawCurrentHp: 32,
+      attackProfile: profile,
+      partySize: 1,
+      skipPartyScale: true,
+    });
+    expect(skipped.factor).toBe(1);
+    expect(skipped.maxHp).toBe(32);
+    expect(skipped.currentHp).toBe(32);
+    expect(skipped.skipped).toBe('authored_bible_hp');
+    expect(skipped.scaling.skipped).toBe('authored_bible_hp');
+    // Attacks unchanged because factor is 1.
+    expect(skipped.attackProfile?.attacks[0]?.damageDice).toBe('5d6');
+  });
 });

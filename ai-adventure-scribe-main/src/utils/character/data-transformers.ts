@@ -606,6 +606,8 @@ export const transformCharacterData = (
     // AI-generated fields
     avatar_url: characterData.avatar_url as string | undefined,
     image_url: characterData.image_url as string | undefined,
+    // #1741: the premade's title, so the sheet can show "Mara, the Seeker".
+    starter_title: (characterData as { starter_title?: string | null }).starter_title ?? null,
     appearance: characterData.appearance as string | undefined,
     personality_traits: characterData.personality_traits as string | undefined,
     backstory_elements: characterData.backstory_elements as string | undefined,

@@ -13,6 +13,14 @@ import { TargetNumbersToggle } from './TargetNumbersToggle';
 import { ChatInput } from '../../chat/ChatInput';
 import { ComposerDraftProvider } from '../../chat/composer-draft';
 import { MessageList } from '../../chat/MessageList';
+import {
+  closeStoryMap,
+  openStoryMap,
+  StoryMapTravelBridge,
+  useOpenStoryMapCampaign,
+} from '../../story-map/story-map-state';
+import { StoryMapPanel } from '../../story-map/StoryMapPanel';
+import { useStoryMapAvailable } from '../../story-map/useStoryMap';
 import { requestMapMoveMode } from '../../tactical/map-move-mode';
 import { TacticalMapBoard } from '../../tactical/TacticalMapBoard';
 import { useTacticalMapContext } from '../../tactical/TacticalMapProvider';
@@ -345,10 +353,15 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
     const [mapSheetOpen, setMapSheetOpen] = React.useState(false);
     const showMapButton = hasTacticalMap && !mapInRail;
     const showMapSheet = showMapButton && mapSheetOpen;
+    // #1754: the region map opens where the fight board does: the rail when it shows the
+    // board, else a sheet in this column with the same bounds.
+    const storyMapCampaignId = useOpenStoryMapCampaign();
+    const showStoryMapSheet = storyMapCampaignId !== null && !mapInRail;
+    React.useEffect(() => () => closeStoryMap(), [sessionId]);
     // The sheet covers the card from its top down to the dock (tray + chat box), never lower.
     const cardRef = React.useRef<HTMLDivElement>(null);
     const dockRef = React.useRef<HTMLDivElement>(null);
-    const mapSheetHeight = useHeightAboveDock(showMapSheet, cardRef, dockRef);
+    const mapSheetHeight = useHeightAboveDock(showMapSheet || showStoryMapSheet, cardRef, dockRef);
     const { queueStatus, sendMessage, messages } = useMessageContext();
     // The plaque's scene location: the newest message that carries one (CombatTurnBar does the same).
     const sceneLocation = React.useMemo(
@@ -379,6 +392,34 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
         setMapSheetOpen(true);
       }
     }, [mapInRail, isLeftCollapsed, onLeftToggle]);
+    // #1754: no map button unless the server returns a map for this campaign. Player-made
+    // campaigns, other users' campaigns and any failed load all leave the plaque plain.
+    const mapCampaignId = sessionData.starter_campaign_id ? campaignIdForHandler : null;
+    const storyMapAvailable = useStoryMapAvailable(mapCampaignId ?? null);
+    const openRegionMap = React.useMemo(
+      () =>
+        mapCampaignId && storyMapAvailable
+          ? (plaque: HTMLElement) => {
+              setMapSheetOpen(false);
+              openStoryMap(mapCampaignId, plaque);
+            }
+          : undefined,
+      [mapCampaignId, storyMapAvailable],
+    );
+    const openFightBoard = React.useMemo(
+      () =>
+        sessionData.starter_campaign_id && hasTacticalMap
+          ? () => {
+              closeStoryMap();
+              if (mapInRail) {
+                if (isLeftCollapsed) onLeftToggle();
+              } else {
+                setMapSheetOpen(true);
+              }
+            }
+          : undefined,
+      [sessionData.starter_campaign_id, hasTacticalMap, mapInRail, isLeftCollapsed, onLeftToggle],
+    );
     // The pill covers the whole wait for the DM, not only the database write the queue reports
     // (#2418). A cast's result is shown by scrolling the feed to its newest card.
     const dmWaiting = useDmWaiting();
@@ -483,6 +524,8 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
                 combat={overhaul.combat}
                 blurb={showSceneBlurb ? overhaul.scene.blurb : undefined}
                 onSceneInfo={onSceneBlurbToggle}
+                onOpenMap={openRegionMap}
+                onOpenFightBoard={openFightBoard}
               />
               <div ref={setTableTurnSlot} data-testid="table-turn-slot" />
               <SafetyBanner
@@ -616,6 +659,7 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
               }) => (
                 <RollTraySlotProvider value={rollTraySlot}>
                   <ComposerDraftProvider>
+                    <StoryMapTravelBridge />
                     {/* min-h-24: the newest story line keeps a place above the tray. contain:size keeps the
                       story's length out of this column's minimum height. */}
                     <div
@@ -803,6 +847,15 @@ export const GameMainContent: React.FC<GameMainContentProps> = memo(
             </MessageHandler>
           </div>
 
+          {showStoryMapSheet && storyMapCampaignId && (
+            <div
+              id="story-map-sheet"
+              className="absolute inset-x-0 top-0 overflow-y-auto border-b border-infinite-gold/25 bg-infinite-dark/95 p-2 backdrop-blur-sm"
+              style={{ zIndex: Z_INDEX.CARD_HOVER, height: mapSheetHeight ?? undefined }}
+            >
+              <StoryMapPanel campaignId={storyMapCampaignId} layout="sheet" />
+            </div>
+          )}
           {showMapSheet && (
             <div
               id="tactical-map-sheet"

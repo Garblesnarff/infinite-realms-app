@@ -25,12 +25,19 @@ export const PREMADE_TEMPLATE_ROW = {
   languages: ['Common'],
 };
 
-/** The body the premade path posts for PREMADE_TEMPLATE_ROW, naming the template id. */
+/** #1741: the name a player typed at hero choice (the template row keeps its own name). */
+export const PREMADE_TYPED_HERO_NAME = 'Mara';
+
+/**
+ * The body the premade path posts for PREMADE_TEMPLATE_ROW, naming the template id.
+ * `name` is the hero's name on the player's copy; it defaults to the template's name.
+ */
 export function premadeCreateBody(
   templateId: string = PREMADE_TEMPLATE_ID,
+  name: string = PREMADE_TEMPLATE_ROW.name,
 ): Record<string, unknown> {
   return {
-    name: PREMADE_TEMPLATE_ROW.name,
+    name,
     race: PREMADE_TEMPLATE_ROW.race,
     subrace: null,
     class: PREMADE_TEMPLATE_ROW.class,
