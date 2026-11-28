@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file. See [Conventional Commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.59.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.58.0...v0.59.0) (2026-11-28)
+
+
+### Features
+
+* **maps:** a fight at a place uses that place's board ([#1755](https://github.com/Garblesnarff/infinite-realms-app/issues/1755)) ([#1774](https://github.com/Garblesnarff/infinite-realms-app/issues/1774)) ([633f91d](https://github.com/Garblesnarff/infinite-realms-app/commit/633f91dbd3430ace2dc5ce39a0f0e71e88d9fe7a))
+* **maps:** current place and discovery for each player campaign ([#1753](https://github.com/Garblesnarff/infinite-realms-app/issues/1753)) ([#1762](https://github.com/Garblesnarff/infinite-realms-app/issues/1762)) ([52a2257](https://github.com/Garblesnarff/infinite-realms-app/commit/52a22574b8cfa73f596eeed59463a47d04f66c56))
+* **premades:** name your hero at hero choice ([#1741](https://github.com/Garblesnarff/infinite-realms-app/issues/1741)) ([#1744](https://github.com/Garblesnarff/infinite-realms-app/issues/1744)) ([d12ba6c](https://github.com/Garblesnarff/infinite-realms-app/commit/d12ba6cc2fabc7d84af72da8ddbdf9cfc68d56cf))
+* **session:** copy the full session id from the build chip ([aca5814](https://github.com/Garblesnarff/infinite-realms-app/commit/aca581401d1a71eb59ccaadf4eb327eea6cdeb8e)), closes [#173](https://github.com/Garblesnarff/infinite-realms-app/issues/173)
+* **voice:** meter premium voice monthly in minutes ([#58](https://github.com/Garblesnarff/infinite-realms-app/issues/58)) ([#1785](https://github.com/Garblesnarff/infinite-realms-app/issues/1785)) ([8346f59](https://github.com/Garblesnarff/infinite-realms-app/commit/8346f59e04471a6d5a40457ab8a4af7a7be6ef4d))
+
+
+### Bug Fixes
+
+* **client:** give the Supabase client a 30 s request timeout ([#1790](https://github.com/Garblesnarff/infinite-realms-app/issues/1790)) ([#1807](https://github.com/Garblesnarff/infinite-realms-app/issues/1807)) ([cb429c1](https://github.com/Garblesnarff/infinite-realms-app/commit/cb429c137753839814d36b1b02fc82fac3dc9d85))
+* **combat:** a foe crit rolls damage dice twice, not a flat number ([407f856](https://github.com/Garblesnarff/infinite-realms-app/commit/407f85687ecf34995e663b10bd952cc776e63184))
+* **combat:** a proper name takes no article on the fight-start card ([#567](https://github.com/Garblesnarff/infinite-realms-app/issues/567)) ([b4b4dae](https://github.com/Garblesnarff/infinite-realms-app/commit/b4b4dae77bc47ac3e266750eb9b64cf6957d6afa))
+* **combat:** allow Rage activation in heavy armor ([#1654](https://github.com/Garblesnarff/infinite-realms-app/issues/1654)) ([77b3411](https://github.com/Garblesnarff/infinite-realms-app/commit/77b3411be96a0cc4e56bde407b920a1f0aa17c2e))
+* **combat:** choose a melee weapon for opportunity attacks ([#1758](https://github.com/Garblesnarff/infinite-realms-app/issues/1758)) ([d6237e1](https://github.com/Garblesnarff/infinite-realms-app/commit/d6237e1f06d11c11ca9a05dd54ee50ddd3316f13))
+* **combat:** show melee reach on player Move ([#153](https://github.com/Garblesnarff/infinite-realms-app/issues/153)) ([b35e5a5](https://github.com/Garblesnarff/infinite-realms-app/commit/b35e5a532cd886fa88d098d5f36df7d0d78078eb))
+* **combat:** show opportunity attacks provoked by Move ([#1758](https://github.com/Garblesnarff/infinite-realms-app/issues/1758)) ([c548a69](https://github.com/Garblesnarff/infinite-realms-app/commit/c548a699d0cdf13d89a976cf13f2ccd8585efc29))
+* **combat:** the tactical map survives a round change ([#1797](https://github.com/Garblesnarff/infinite-realms-app/issues/1797)) ([6bbb70e](https://github.com/Garblesnarff/infinite-realms-app/commit/6bbb70e4bbc3ef5d66d07df78996b842571310b6))
+* **combat:** the weapon arrow waits for a fresh list ([#1797](https://github.com/Garblesnarff/infinite-realms-app/issues/1797)) ([74950a8](https://github.com/Garblesnarff/infinite-realms-app/commit/74950a823eb2a398d277a43f7febc5eb8a4b58f7))
+* **combat:** use bible-authored HP as written ([#132](https://github.com/Garblesnarff/infinite-realms-app/issues/132)) ([89ce899](https://github.com/Garblesnarff/infinite-realms-app/commit/89ce899ec5033d362b4693b8486479ed06160986))
+* **combat:** write player movement distance to the engine log ([#153](https://github.com/Garblesnarff/infinite-realms-app/issues/153)) ([3c31ee4](https://github.com/Garblesnarff/infinite-realms-app/commit/3c31ee4315fac90c000b0354ad3a54b9c5107b5d))
+* **dm:** refresh the Inspiration coin after a granted Inspiration ([#1537](https://github.com/Garblesnarff/infinite-realms-app/issues/1537)) ([0b21021](https://github.com/Garblesnarff/infinite-realms-app/commit/0b210211cbe10688dd75eaf58e5aa21304acf2f3))
+* **dm:** repaired narration follows the target-number setting ([#157](https://github.com/Garblesnarff/infinite-realms-app/issues/157)) ([79c2933](https://github.com/Garblesnarff/infinite-realms-app/commit/79c29330e70a963921507d635ae708b97a83ed56))
+* **dm:** tell the DM whether the hero has darkvision and state the darkness rule ([#111](https://github.com/Garblesnarff/infinite-realms-app/issues/111)) ([3d0c55e](https://github.com/Garblesnarff/infinite-realms-app/commit/3d0c55e61d71a1b816769e86b34cacdb4d0a8508))
+* **explore:** bounded load with retry ([#1776](https://github.com/Garblesnarff/infinite-realms-app/issues/1776)) ([1d04be0](https://github.com/Garblesnarff/infinite-realms-app/commit/1d04be04f76d5f8e1c212e2c2eb9dd9ce32e90af))
+* **ingest:** keep sensory notes out of the place list ([#1757](https://github.com/Garblesnarff/infinite-realms-app/issues/1757)) ([e3a2107](https://github.com/Garblesnarff/infinite-realms-app/commit/e3a21078ae065da28ea303675e1107967212dcb3))
+* **maps:** map polish from review ([#1742](https://github.com/Garblesnarff/infinite-realms-app/issues/1742)) ([2a5689c](https://github.com/Garblesnarff/infinite-realms-app/commit/2a5689c199c4592a0f05ae1a0ef0ed48c09be6fe))
+* **maps:** replace story map routes in one transaction; dry run names renamed keys ([#1752](https://github.com/Garblesnarff/infinite-realms-app/issues/1752)) ([#1775](https://github.com/Garblesnarff/infinite-realms-app/issues/1775)) ([8d70707](https://github.com/Garblesnarff/infinite-realms-app/commit/8d70707bd70e35d30b63ec4ff50e9aa0b61b1801))
+* **session:** confirm a clearly lethal act, then the engine decides ([#468](https://github.com/Garblesnarff/infinite-realms-app/issues/468)) ([9fe6b37](https://github.com/Garblesnarff/infinite-realms-app/commit/9fe6b370c521617add9e3cea4901931490a151bd))
+* **spells:** one canonical spell id ([#254](https://github.com/Garblesnarff/infinite-realms-app/issues/254)) ([#1784](https://github.com/Garblesnarff/infinite-realms-app/issues/1784)) ([41eb617](https://github.com/Garblesnarff/infinite-realms-app/commit/41eb61789651c1cde105853fc5499ba30c1d1c4a))
+* **voice:** reserve the TTS charge before the provider call ([#1789](https://github.com/Garblesnarff/infinite-realms-app/issues/1789)) ([#1793](https://github.com/Garblesnarff/infinite-realms-app/issues/1793)) ([17150c8](https://github.com/Garblesnarff/infinite-realms-app/commit/17150c8bfcc9e5867a71883bdd4d79c0e9ad462c))
+* **wizard:** add an alignment step so alignment can be set and saved ([#213](https://github.com/Garblesnarff/infinite-realms-app/issues/213)) ([#1764](https://github.com/Garblesnarff/infinite-realms-app/issues/1764)) ([46d01bc](https://github.com/Garblesnarff/infinite-realms-app/commit/46d01bc5e0496c140a63c6151fdb5ad920a5920d))
+
+
+### Tests
+
+* **combat:** Dutch Pellam fight-start title and review follow-ups ([2a17218](https://github.com/Garblesnarff/infinite-realms-app/commit/2a1721899d4041070c3ed945a1246f8c531374dd)), closes [#567](https://github.com/Garblesnarff/infinite-realms-app/issues/567)
+* **combat:** only the Javelin is listed at 10 ft vs 25 ft ([#1642](https://github.com/Garblesnarff/infinite-realms-app/issues/1642)) ([f92fcd2](https://github.com/Garblesnarff/infinite-realms-app/commit/f92fcd224355f0db5fe7a8564d805d3da7c700da))
+* **combat:** the table panel HP follows the combat status ([#1797](https://github.com/Garblesnarff/infinite-realms-app/issues/1797)) ([0ce85d9](https://github.com/Garblesnarff/infinite-realms-app/commit/0ce85d9cd413e4cfdd2a6e67041aa31171ed9317))
+* **data:** first committed tests for the [#253](https://github.com/Garblesnarff/infinite-realms-app/issues/253) racial-bonus backfill counter ([#1783](https://github.com/Garblesnarff/infinite-realms-app/issues/1783)) ([739d800](https://github.com/Garblesnarff/infinite-realms-app/commit/739d8002fffb13aa9542c9c19b98c9aa0ff8d156))
+* **maps:** the story map end to end on a real database ([#1756](https://github.com/Garblesnarff/infinite-realms-app/issues/1756)) ([ff620b5](https://github.com/Garblesnarff/infinite-realms-app/commit/ff620b53ab6f777f4c883c03871e78216a724e9d))
+* **sheet:** sheet header, vitals, and card render the same stored HP ([#52](https://github.com/Garblesnarff/infinite-realms-app/issues/52)) ([#1763](https://github.com/Garblesnarff/infinite-realms-app/issues/1763)) ([3ffb262](https://github.com/Garblesnarff/infinite-realms-app/commit/3ffb2620a9ace5023c2b513384e855bfe6b72f83))
+
 ## [0.58.0](https://github.com/Garblesnarff/infinite-realms-app/compare/v0.57.0...v0.58.0) (2026-11-27)
 
 
