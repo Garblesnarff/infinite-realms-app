@@ -1,6 +1,8 @@
 import { Zap } from 'lucide-react';
 import React, { useId } from 'react';
 
+import { voiceCharsToMinutes } from '../../../shared/voice-request';
+
 import type { QuotaEntry, QuotaStatus } from '@/hooks/use-account-billing';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -56,7 +58,9 @@ export const AccountUsageCard: React.FC<AccountUsageCardProps> = ({ quota }) => 
         <Zap className="h-5 w-5" />
         Today's Usage
       </CardTitle>
-      <CardDescription>Your AI quotas reset once a day</CardDescription>
+      <CardDescription>
+        Messages and images reset daily; premium voice resets monthly
+      </CardDescription>
     </CardHeader>
     <CardContent>
       <div className="space-y-4">
@@ -67,7 +71,35 @@ export const AccountUsageCard: React.FC<AccountUsageCardProps> = ({ quota }) => 
           // a broken quota, so say what unlocks it instead (#2510).
           <p className="text-sm">Premium voice: Legend only</p>
         ) : (
-          <QuotaRow label="Premium Voice" entry={quota.quotas.voice} unit="characters" />
+          <>
+            <QuotaRow
+              label="Premium Voice"
+              entry={{
+                used: voiceCharsToMinutes(quota.quotas.voice.used),
+                limit: voiceCharsToMinutes(quota.quotas.voice.limit),
+                // Minutes are floored from chars independently, so remaining
+                // from chars can read 0 while ~a minute is left (53,101 used
+                // -> 59 used, 0 remaining from 899 chars). Derive it so
+                // used + remaining = limit; the server still enforces in chars.
+                remaining:
+                  voiceCharsToMinutes(quota.quotas.voice.limit) -
+                  voiceCharsToMinutes(quota.quotas.voice.used),
+              }}
+              unit="minutes"
+            />
+            {quota.quotas.voice.resetAt ? (
+              <p className="text-xs text-muted-foreground">
+                Premium voice resets{' '}
+                {new Date(quota.quotas.voice.resetAt).toLocaleDateString(undefined, {
+                  month: 'long',
+                  day: 'numeric',
+                  // The reset instant is UTC midnight; without this the date
+                  // renders a day early west of UTC (Dec 1 -> Nov 30).
+                  timeZone: 'UTC',
+                })}
+              </p>
+            ) : null}
+          </>
         )}
         <p className="text-xs text-muted-foreground">
           Resets at: {new Date(quota.resetAt).toLocaleString()}

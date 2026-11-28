@@ -155,6 +155,8 @@ describeWithDb('startCombat seats the character speed (#1251)', () => {
       await db.delete(characters).where(eq(characters.id, characterId));
     }
     await db.delete(campaigns).where(eq(campaigns.id, campaignId));
+    // closeRealDb() is in the second describe: both share the realDb()
+    // singleton, and that describe still needs the pool.
   });
 
   test('a gnome seats at 25 ft, a wood elf at 35 ft, an unknown race at 30 ft', async () => {

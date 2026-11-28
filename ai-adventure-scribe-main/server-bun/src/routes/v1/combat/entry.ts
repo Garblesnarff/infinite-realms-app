@@ -476,6 +476,8 @@ export interface DeclaredAttackRouteOptions {
   loadCombatIntentRoster?: typeof defaultLoadCombatIntentRoster;
   /** When this returns an encounter, the message is a turn inside a fight, not a new entry. */
   getActiveEncounter?: (sessionId: string, userId: string) => Promise<unknown>;
+  /** #1755: the current story map place's board; the gate loads it by default when omitted. */
+  placeFightRecipe?: Parameters<typeof applyCombatEntryGate>[0]['placeFightRecipe'];
 }
 
 /**
@@ -489,6 +491,7 @@ export function createDeclaredAttackRoutes({
   authenticateRequest = defaultAuthenticateRequest,
   loadCombatIntentRoster = defaultLoadCombatIntentRoster,
   getActiveEncounter,
+  placeFightRecipe,
 }: DeclaredAttackRouteOptions = {}) {
   return new Elysia().post(
     '/sessions/:sessionId/declared-attack',
@@ -552,6 +555,7 @@ export function createDeclaredAttackRoutes({
         },
         declaredAttack,
         ...(getActiveEncounter ? { liveEncounter: getActiveEncounter } : {}),
+        ...(placeFightRecipe ? { placeFightRecipe } : {}),
       });
       const envelope = JSON.parse(gated.text) as { combat_entry_pending?: unknown };
       return { pending: envelope.combat_entry_pending ?? null };

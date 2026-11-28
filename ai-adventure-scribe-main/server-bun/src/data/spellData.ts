@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, max-lines */
+import { canonicalSpellId } from '../../../shared/spell-aliases.js';
 import { FULL_CASTER_SLOTS, WARLOCK_PACT_MAGIC } from '../../../shared/spell-slot-tables.js';
 import nonSrdSupplement from '../../../src/data/spells/non-srd-supplement.json';
 import srdSpells from '../../../src/data/srd/spells.json';
@@ -228,12 +229,18 @@ export function getClassSpells(className: string): { cantrips: Spell[]; spells: 
 }
 
 export function getSpellById(id: string): Spell | undefined {
-  return allSpells.find((spell) => spell.id === id);
+  // #254: a possessive alias resolves to the canonical SRD row.
+  return allSpells.find((spell) => spell.id === canonicalSpellId(id));
 }
 
 export function getSpellByName(name: string): Spell | undefined {
   const normalized = name.trim().toLowerCase();
-  return allSpells.find((spell) => spell.name.toLowerCase() === normalized);
+  // #254: a possessive display name ("Tasha's Hideous Laughter") resolves to
+  // the canonical row, so the DM feature gate counts it as on-catalog.
+  return (
+    allSpells.find((spell) => spell.name.toLowerCase() === normalized) ??
+    getSpellById(canonicalSpellId(name))
+  );
 }
 
 const slugifySpellRef = (value: string): string =>
@@ -259,6 +266,9 @@ export function resolveCatalogSpell(
     if (typeof ref !== 'string' || !ref.trim()) continue;
     const slug = slugifySpellRef(ref);
     const spell =
+      // #254: an alias id or possessive name resolves to the canonical row
+      // first, so both spellings key the same spell in the prepared gate.
+      // (getSpellById canonicalizes, so the raw ref is covered too.)
       getSpellById(ref.trim()) ??
       getSpellByName(ref) ??
       allSpells.find(

@@ -15,6 +15,7 @@ import type { MessageSendContext } from '../MessageList';
 import type { ChatMessage } from '@/types/game';
 
 import { CombatEntryConfirmation } from '@/components/combat/CombatEntryConfirmation';
+import { LethalActionConfirmation } from '@/components/combat/LethalActionConfirmation';
 import { PendingIntentConfirmation } from '@/components/combat/PendingIntentConfirmation';
 import { DiceRollRequest } from '@/components/game/DiceRollRequest';
 import { DiceRollResultFlash } from '@/components/game/DiceRollResultFlash';
@@ -24,6 +25,7 @@ import { isEngineTaggedRoll } from '@/contexts/game/dice-queue-visibility';
 import { RollTray } from '@/features/game-session/components/game/game-content/roll-tray-slot';
 import { SpellTargetSaveCard } from '@/features/game-session/components/game/SpellTargetSaveCard';
 import { useCombatEntryConfirmationHost } from '@/hooks/combat/use-combat-entry-confirmation-host';
+import { useLethalActionConfirmationHost } from '@/hooks/combat/use-lethal-action-confirmation-host';
 import { usePendingCombatEntryOffer } from '@/hooks/combat/use-pending-combat-entry-offer';
 import { usePlayerRollHost } from '@/hooks/combat/use-player-roll-host';
 import { useSpellTargetSaveHost } from '@/hooks/combat/use-spell-target-save-host';
@@ -103,6 +105,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
     const entryConfirmation = useCombatEntryConfirmationHost(sessionId);
     usePendingCombatEntryOffer(sessionId);
     const spellTargetSave = useSpellTargetSaveHost();
+    const lethalActionConfirmation = useLethalActionConfirmationHost();
     // Player-visible names for the pre-cast save alert, resolved the same way
     // the tracker and the engine lines resolve them (#2343 B4).
     const engineRoster = useMemo<EngineRosterEntry[]>(
@@ -370,6 +373,7 @@ export const MessageListContainer: React.FC<MessageListContainerProps> = React.m
         ))}
 
         <CombatEntryConfirmation confirmation={entryConfirmation} />
+        <LethalActionConfirmation confirmation={lethalActionConfirmation} />
 
         {/* The current roll from the GameContext queue, docked in the roll tray between the
             story and the chat box (#2252) rather than floating inside the scroll area. */}

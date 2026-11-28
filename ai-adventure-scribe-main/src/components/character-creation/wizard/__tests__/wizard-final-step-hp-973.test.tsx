@@ -147,7 +147,7 @@ describe('wizard final step HP (#973)', () => {
         feats: ['tough'],
         abilityScores: abilityScores([15, 14, 14, 10, 10, 8]),
       }),
-      12,
+      13,
     );
     expect(await screen.findByText('Finalize Your Character')).toBeTruthy();
     expect(previewHitPoints()).toBe('14');
@@ -157,7 +157,7 @@ describe('wizard final step HP (#973)', () => {
     // The N21-007 fixture: a rogue with CON 14. The wizard holds base
     // scores, so a half-orc (CON +1) with base CON 13 has final CON 14 —
     // the CON the saved sheet shows. Server level-1 HP: d8 max (8) + 2 = 10.
-    renderAtStep(seedCharacter({}), 12);
+    renderAtStep(seedCharacter({}), 13);
 
     expect(await screen.findByText('Finalize Your Character')).toBeTruthy();
     expect(previewHitPoints()).toBe('10');
@@ -172,7 +172,7 @@ describe('wizard final step HP (#973)', () => {
         subrace: highElf,
         abilityScores: abilityScores([10, 16, 14, 12, 11, 10]),
       }),
-      12,
+      13,
     );
 
     expect(await screen.findByText('Finalize Your Character')).toBeTruthy();
@@ -190,7 +190,7 @@ describe('wizard final step HP (#973)', () => {
         class: wizard,
         abilityScores: abilityScores([8, 14, 14, 16, 12, 10]),
       }),
-      13,
+      14,
     );
 
     expect(await screen.findByText('Finalize Your Character')).toBeTruthy();
@@ -219,7 +219,7 @@ describe('wizard final step HP (#973)', () => {
         },
         abilityScores: abilityScores([8, 14, 14, 12, 11, 16]),
       }),
-      12,
+      13,
     );
 
     expect(await screen.findByText('Finalize Your Character')).toBeTruthy();
@@ -231,7 +231,7 @@ describe('wizard final step HP (#973)', () => {
     // field exists only on the Character type). This seed pins the seam
     // anyway: the review step must never prefer a stored value — a stale
     // 13 sitting on the character cannot become the displayed HP.
-    renderAtStep(seedCharacter({ hitPoints: { maximum: 13, current: 13, temporary: 0 } }), 12);
+    renderAtStep(seedCharacter({ hitPoints: { maximum: 13, current: 13, temporary: 0 } }), 13);
 
     expect(await screen.findByText('Finalize Your Character')).toBeTruthy();
     expect(previewHitPoints()).toBe('10');

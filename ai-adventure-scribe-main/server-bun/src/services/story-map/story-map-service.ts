@@ -9,6 +9,7 @@
 import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
 
 import {
+  currentPlaceKey,
   decidePlace,
   planMove,
   storyMapPromptBlock,
@@ -294,4 +295,41 @@ export async function loadStoryMapPayload(
     })),
     edges: view.edges.map((edge) => ({ from: edge.fromKey, to: edge.toKey, label: edge.label })),
   };
+}
+
+/** A place's fight-board recipe (#1755): the scene_spec fields a fight there must use. */
+export interface PlaceFightRecipe {
+  placeKey: string;
+  environment: string;
+  size: string;
+  seed: number;
+}
+
+/**
+ * The recipe of the session campaign's current place, or null when there is none: no map
+ * (player-made campaign, no campaign_id), or no visited place yet.
+ */
+export async function loadPlaceFightRecipe(
+  sessionId: string,
+  userId: string,
+): Promise<PlaceFightRecipe | null> {
+  const scope = await loadSessionMapScope(sessionId, userId);
+  if (!scope) return null;
+  const placeKey = currentPlaceKey(await loadProgress(scope));
+  if (!placeKey) return null;
+  const [row] = await db
+    .select({
+      environment: storyMapPlaces.fightEnv,
+      size: storyMapPlaces.fightSize,
+      seed: storyMapPlaces.fightSeed,
+    })
+    .from(storyMapPlaces)
+    .where(
+      and(
+        eq(storyMapPlaces.campaignId, scope.starterCampaignId),
+        eq(storyMapPlaces.placeKey, placeKey),
+      ),
+    )
+    .limit(1);
+  return row ? { placeKey, ...row } : null;
 }

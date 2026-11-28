@@ -167,6 +167,7 @@ export default defineConfig({
       'shared/__tests__/always-prepared-subclass-spells.test.ts', // #1555 oath and domain spells
       'shared/__tests__/level-1-hit-points.test.ts', // #620 single-owner level-1 HP formula
       'shared/__tests__/player-exit-wording.test.ts', // #749 free-text movement is not an exit
+      'shared/__tests__/lethal-action-detector.test.ts', // #468 clearly lethal detector
       'src/**/*.{test,spec}.{ts,tsx}',
       'tests/**/*.{test,spec}.{ts,tsx}',
     ],

@@ -37,6 +37,7 @@ import {
   spells,
 } from '../../../../db/schema/index';
 import { abilityModifier } from '../../../../shared/ability-modifier';
+import { checkHeroName } from '../../../../shared/hero-name';
 import { planHasPaidFeatures } from '../../../../shared/plan-features';
 import { sql } from '../../lib/db.js';
 import { BusinessLogicError, NotFoundError, ValidationError } from '../../lib/errors.js';
@@ -245,6 +246,12 @@ const characterSchema = t.Object({
 /** #1344: how a hero was made. Set by the server only; the body never sets it. */
 type CharacterOrigin = 'starter' | 'custom' | 'import';
 
+/** The origin decided for a create body, and the premade it names when the origin is 'starter'. */
+interface CreateOrigin {
+  origin: CharacterOrigin;
+  template: { id: string; title: string } | null;
+}
+
 const STARTER_TEMPLATE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -253,17 +260,32 @@ const STARTER_TEMPLATE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
  * player who changes the class of a premade gets the Legend gate. Throws on a database
  * error; the caller turns that into a 503.
  */
-async function originForCreateBody(body: typeof characterSchema.static): Promise<CharacterOrigin> {
+async function originForCreateBody(body: typeof characterSchema.static): Promise<CreateOrigin> {
   const templateId = body.starter_template_id;
-  if (!templateId || !STARTER_TEMPLATE_ID.test(templateId)) return 'custom';
+  if (!templateId || !STARTER_TEMPLATE_ID.test(templateId))
+    return { origin: 'custom', template: null };
   const rows = (await sql`
-    SELECT class, race, level FROM starter_character_templates WHERE id = ${templateId} LIMIT 1
-  `) as Array<{ class: string; race: string; level: number | null }>;
+    SELECT name, class, race, level FROM starter_character_templates WHERE id = ${templateId} LIMIT 1
+  `) as Array<{ name: string; class: string; race: string; level: number | null }>;
   const row = rows[0];
-  if (!row) return 'custom';
+  if (!row) return { origin: 'custom', template: null };
   const matches =
     body.class === row.class && body.race === row.race && (body.level ?? 1) === (row.level ?? 1);
-  return matches ? 'starter' : 'custom';
+  return matches
+    ? { origin: 'starter', template: { id: templateId, title: row.name } }
+    : { origin: 'custom', template: null };
+}
+
+/**
+ * #1741: a premade start may carry the name its player typed. The rule is the shared one
+ * (shared/hero-name.ts). The premade's own title always passes, so a start with no typed name
+ * is never refused. Returns the refusal message, or null when the name is allowed.
+ */
+function heroNameRefusal(name: string, title: string): string | null {
+  if (name === title) return null;
+  const check = checkHeroName(name, title);
+  if (!check.ok) return check.message;
+  return check.name === name ? null : 'Use a name without spaces at either end.';
 }
 
 interface CreateRefusal {
@@ -304,12 +326,15 @@ async function legendGateRefusal(
 async function createCharacterFromBody(
   userId: string,
   body: typeof characterSchema.static,
-  origin: CharacterOrigin,
+  created: CreateOrigin,
 ): Promise<Character> {
   const character = await CharacterService.create(
     userId,
     {
-      origin,
+      origin: created.origin,
+      // #1741: only a verified premade start records its template and title.
+      starterTemplateId: created.template?.id ?? null,
+      starterTitle: created.template?.title ?? null,
       name: body.name,
       description: body.description,
       race: body.race,
@@ -451,6 +476,9 @@ export function mapCharacterToApi(
   return {
     id: character.id,
     name: character.name,
+    // #1741: the premade's title, shown after the hero's name as "Mara, the Seeker".
+    starter_title: character.starterTitle ?? null,
+    starter_template_id: character.starterTemplateId ?? null,
     description: character.description,
     race: character.race,
     subrace: character.subrace,
@@ -623,7 +651,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
         }
 
         // #1344: the server decides the origin and the gate; the client never sends either.
-        let origin: CharacterOrigin;
+        let origin: CreateOrigin;
         try {
           origin = await originForCreateBody(body);
         } catch (error) {
@@ -632,7 +660,15 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           set.status = 503;
           return { error: 'Starter catalog unavailable. Try again.', code: 'CATALOG_UNAVAILABLE' };
         }
-        const refusal = await legendGateRefusal(user!.userId, origin);
+        // #1741: a premade start's typed name follows the shared rule, checked on the server too.
+        if (origin.origin === 'starter' && origin.template) {
+          const nameRefusal = heroNameRefusal(body.name, origin.template.title);
+          if (nameRefusal) {
+            set.status = 400;
+            return { error: nameRefusal, code: 'HERO_NAME_INVALID' };
+          }
+        }
+        const refusal = await legendGateRefusal(user!.userId, origin.origin);
         if (refusal) {
           set.status = refusal.status;
           return refusal.body;
@@ -680,7 +716,7 @@ export const charactersRoutes = new Elysia({ prefix: '/v1/characters' })
           pact_slots: undefined,
           starter_template_id: undefined,
         },
-        'import',
+        { origin: 'import', template: null },
       );
       set.status = 201;
       return mapCharacterToApi(character as Character & { stats?: CharacterStats });

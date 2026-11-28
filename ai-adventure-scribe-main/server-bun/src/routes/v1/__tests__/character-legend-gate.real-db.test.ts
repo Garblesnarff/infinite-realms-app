@@ -154,7 +154,9 @@ describeWithDb('Legend gate on character create and import (#1344)', () => {
   });
 
   it('lets a Free player create a premade hero: 201, stored as starter', async () => {
-    const name = testId('Premade Gate');
+    // #1741: a premade start's typed name follows the letters-only rule, so the suffix is letters.
+    const suffix = [...String(process.pid)].map((digit) => 'abcdefghij'[Number(digit)]).join('');
+    const name = `Premade Gate ${suffix}`;
     const res = await post('/v1/characters', { ...premadeCreateBody(), name }, 'free');
     expect(res.status).toBe(201);
     const id = await created(res);

@@ -247,25 +247,6 @@
     "legacy_ids": ["searing-smite"]
   },
   {
-    "id": "tashas-hideous-laughter",
-    "name": "Tasha's Hideous Laughter",
-    "level": 1,
-    "school": "Enchantment",
-    "casting_time": "1 action",
-    "range_text": "30 feet",
-    "components": "V, S, M (tiny tarts and a feather that is waved in the air)",
-    "components_verbal": true,
-    "components_somatic": true,
-    "components_material": true,
-    "material_components": "tiny tarts and a feather that is waved in the air",
-    "duration": "Concentration, up to 1 minute",
-    "description": "A creature of your choice that you can see within range perceives everything as hilariously funny and falls into fits of laughter if this spell affects it.",
-    "ritual": false,
-    "concentration": true,
-    "classes": ["bard"],
-    "legacy_ids": ["tashas-hideous-laughter"]
-  },
-  {
     "id": "thunderous-smite",
     "name": "Thunderous Smite",
     "level": 1,
@@ -283,25 +264,6 @@
     "concentration": true,
     "classes": ["paladin"],
     "legacy_ids": ["thunderous-smite"]
-  },
-  {
-    "id": "tensers-floating-disk",
-    "name": "Tenser's Floating Disk",
-    "level": 1,
-    "school": "Conjuration",
-    "casting_time": "1 action",
-    "range_text": "30 feet",
-    "components": "V, S, M (a drop of mercury)",
-    "components_verbal": true,
-    "components_somatic": true,
-    "components_material": true,
-    "material_components": "a drop of mercury",
-    "duration": "1 hour",
-    "description": "This spell creates a circular, horizontal plane of force, 3 feet in diameter and 1 inch thick, that floats 3 feet above the ground in an unoccupied space of your choice that you can see within range.",
-    "ritual": true,
-    "concentration": false,
-    "classes": ["wizard"],
-    "legacy_ids": ["tensers-floating-disk"]
   },
   {
     "id": "witch-bolt",

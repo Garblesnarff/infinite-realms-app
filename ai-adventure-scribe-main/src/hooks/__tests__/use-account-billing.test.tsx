@@ -96,18 +96,27 @@ describe('useAccountBilling', () => {
     const mockSubscription = { plan: 'legend', status: 'active' };
     // Fixture copies the real GET /v1/llm/quota producer shape
     // (AIUsageService.getQuotaStatus for llm + getAllQuotaStatuses.quotas):
-    // { plan, limits: { daily }, usage, remaining, resetAt, quotas } where
-    // quotas.voice is in characters and llm/image are counts (#2510).
+    // { plan, limits: { daily, monthly }, usage, remaining, resetAt, quotas }
+    // where quotas.voice is in characters with its own monthly resetAt (#58)
+    // and llm/image are counts (#2510).
     const mockQuota = {
       plan: 'pro',
-      limits: { daily: { llm: 40, llm_system: 1000, image: 2, voice: 20 } },
+      limits: {
+        daily: { llm: 40, llm_system: 1000, image: 2 },
+        monthly: { voice: 540 },
+      },
       usage: 5,
       remaining: 35,
       resetAt: '2026-09-29T00:00:00.000Z',
       quotas: {
         llm: { limit: 40, usage: 5, remaining: 35 },
         image: { limit: 2, usage: 1, remaining: 1 },
-        voice: { limit: 2000, usage: 0, remaining: 2000 },
+        voice: {
+          limit: 54000,
+          usage: 0,
+          remaining: 54000,
+          resetAt: '2026-10-01T00:00:00.000Z',
+        },
       },
     };
 
@@ -141,7 +150,12 @@ describe('useAccountBilling', () => {
         quotas: {
           llm: { used: 5, limit: 40, remaining: 35 },
           image: { used: 1, limit: 2, remaining: 1 },
-          voice: { used: 0, limit: 2000, remaining: 2000 },
+          voice: {
+            used: 0,
+            limit: 54000,
+            remaining: 54000,
+            resetAt: '2026-10-01T00:00:00.000Z',
+          },
         },
       });
     });

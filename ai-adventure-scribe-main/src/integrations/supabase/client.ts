@@ -12,6 +12,63 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
   console.warn('Required: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY');
 }
 
+/**
+ * Default ceiling for one Supabase request (#1790). Without it every query
+ * inherits the browser's TCP wait, about 35 s here, so a hung query holds
+ * the caller for half a minute. 30 s sits below that wait — a blackholed
+ * request fails fast with our error instead — and far above legitimate
+ * query times (the slowest bounded caller today is the explore page's 5 s
+ * attempt). The only production uploads through this client are AI-generated
+ * PNGs (~1-2 MB) with a data-URL fallback on failure, so a 2 MB image still
+ * gets through on connections down to ~1 Mbps upstream.
+ */
+export const SUPABASE_REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * A fetch that aborts after `timeoutMs` and honours the caller's own signal
+ * too (supabase-js passes one for its bounded calls). The timer is cleared
+ * as soon as the request settles, so a fast request leaves nothing behind.
+ *
+ * The return type is the plain call signature, not `typeof fetch`: Bun's
+ * fetch type carries a `preconnect` method this wrapper does not (and
+ * supabase-js never calls — it only ever invokes the fetch).
+ */
+export const createTimeoutFetch = (
+  timeoutMs: number = SUPABASE_REQUEST_TIMEOUT_MS,
+): ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) => {
+  return async (input, init) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort(
+        new DOMException(
+          `Supabase request timed out after ${timeoutMs} ms`,
+          'TimeoutError',
+        ),
+      );
+    }, timeoutMs);
+    const callerSignal = init?.signal;
+    let onCallerAbort: (() => void) | undefined;
+    if (callerSignal) {
+      onCallerAbort = (): void => {
+        controller.abort(callerSignal.reason);
+      };
+      if (callerSignal.aborted) {
+        onCallerAbort();
+      } else {
+        callerSignal.addEventListener('abort', onCallerAbort, { once: true });
+      }
+    }
+    try {
+      return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+      if (callerSignal && onCallerAbort) {
+        callerSignal.removeEventListener('abort', onCallerAbort);
+      }
+    }
+  };
+};
+
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 //
@@ -20,5 +77,13 @@ if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
 
 export const supabase = createClient<Database>(
   SUPABASE_URL || '',
-  SUPABASE_PUBLISHABLE_KEY || ''
+  SUPABASE_PUBLISHABLE_KEY || '',
+  {
+    // The wrapper is a plain call-signature fetch; Bun's fetch type also
+    // demands a `preconnect` method, which supabase-js never calls on a
+    // custom fetch (it only ever invokes it). The cast keeps the options
+    // object well-typed so the client's generic schema inference (which
+    // every `.from()` call in the app depends on) is not disturbed.
+    global: { fetch: createTimeoutFetch() as typeof fetch },
+  },
 );

@@ -110,13 +110,15 @@ export function writePlayerMoveRow(
     {
       intent: 'combat_player_result',
       round,
-      combatEngineBlocks: [{
-        sequence: 0,
-        round,
-        source: 'player',
-        lines: [line],
-        cards: [{ kind: 'move', side: 'party', title: line, line }],
-      }],
+      combatEngineBlocks: [
+        {
+          sequence: 0,
+          round,
+          source: 'player',
+          lines: [line],
+          cards: [{ kind: 'move', side: 'party', title: line, line }],
+        },
+      ],
     },
     userId,
     'player',

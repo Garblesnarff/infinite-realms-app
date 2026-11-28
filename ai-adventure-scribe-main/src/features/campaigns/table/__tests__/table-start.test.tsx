@@ -201,7 +201,27 @@ describe('Table start screens', () => {
     expect(choice).toHaveAttribute('tabindex', '-1');
     fireEvent.click(screen.getByRole('button', { name: 'Play as Two' }));
     expect(onPlay).toHaveBeenCalledTimes(1);
-    expect(onPlay).toHaveBeenCalledWith(second);
+    expect(onPlay).toHaveBeenCalledWith(second, false, undefined);
+  });
+  it('passes the typed hero name to the start, and blocks an invalid one (#1741)', () => {
+    const onPlay = vi.fn();
+    const first = hero('one', 'One');
+    render(
+      <HeroFan
+        vitals={() => ({ hp: 12, ac: 15 })}
+        templates={[first]}
+        disabled={false}
+        signedIn
+        onPlay={onPlay}
+      />,
+    );
+    const field = screen.getByLabelText('Name your hero');
+    fireEvent.change(field, { target: { value: 'Mara' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Play as One' }));
+    expect(onPlay).toHaveBeenLastCalledWith(first, false, 'Mara');
+    fireEvent.change(field, { target: { value: 'R2-D2' } });
+    expect(screen.getByRole('button', { name: 'Play as One' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('letters, spaces, apostrophes');
   });
   it('states the real hero count under the fan', () => {
     const render1 = render(

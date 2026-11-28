@@ -16,6 +16,9 @@ vi.mock('@/services/app-version', async (importOriginal) => {
   };
 });
 
+const toastSuccess = vi.hoisted(() => vi.fn());
+vi.mock('sonner', () => ({ toast: { success: toastSuccess } }));
+
 import { BuildSessionStatus } from '../BuildSessionStatus';
 
 import type * as AppVersion from '@/services/app-version';
@@ -81,6 +84,30 @@ describe('BuildSessionStatus (#2583)', () => {
     await userEvent.click(screen.getByTestId('build-session-status'));
 
     expect(await screen.findByText('Copy failed')).toBeInTheDocument();
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('says "Session id copied" in a toast after the copy', async () => {
+    mockClipboard();
+    render(<BuildSessionStatus sessionId={SESSION_ID} />);
+
+    await userEvent.click(screen.getByRole('button', { name: /Copy build and session id/ }));
+
+    expect(toastSuccess).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).toHaveBeenCalledWith('Session id copied');
+  });
+
+  it('never writes the full session id to the page, in text or in its accessible name', async () => {
+    mockClipboard();
+    const { container } = render(<BuildSessionStatus sessionId={SESSION_ID} />);
+    const button = screen.getByRole('button', { name: /Copy build and session id/ });
+
+    expect(button).toHaveAccessibleName(
+      'Copy build and session id: build 3fa7eefe · session 72ff7843',
+    );
+    expect(container.innerHTML).not.toContain(SESSION_ID);
+    await userEvent.click(button);
+    expect(container.innerHTML).not.toContain(SESSION_ID);
   });
 
   it('shows "Copy failed" instead of throwing when navigator.clipboard is undefined', async () => {

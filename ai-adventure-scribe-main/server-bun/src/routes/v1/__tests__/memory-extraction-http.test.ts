@@ -162,7 +162,10 @@ mock.module('../../../services/ai-usage-service.js', () => ({
   AIUsageService: {
     getQuotaStatus: async () => ({
       plan: 'free',
-      limits: { daily: { llm: 15, llm_system: 500, image: 1, voice: 0 } },
+      limits: {
+        daily: { llm: 15, llm_system: 500, image: 1 },
+        monthly: { voice: 0 },
+      },
       usage: quotaAllowed ? 0 : 500,
       remaining: quotaAllowed ? 10 : 0,
       resetAt: '2026-09-23T00:00:00.000Z',

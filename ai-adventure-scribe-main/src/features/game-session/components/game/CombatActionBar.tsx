@@ -51,6 +51,8 @@ export interface CombatActionBarProps {
   moveSub?: string;
   /** The map can show move mode (a map exists and movement remains). */
   canMove: boolean;
+  /** The list is being re-read: its small attack arrow waits for the fresh list (#1797). */
+  listRefreshing?: boolean;
   spellInfo: (action: LegalAction) => ActionBarSpellInfo | null;
   onAction: (action: LegalAction) => void;
   onMove: () => void;
@@ -223,6 +225,7 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
   attackSub,
   moveSub,
   canMove,
+  listRefreshing = false,
   spellInfo,
   onAction,
   onMove,
@@ -266,7 +269,7 @@ export const CombatActionBar: React.FC<CombatActionBarProps> = ({
       >
         Attack
       </BarButton>
-      {attacks.length > 1 && (
+      {attacks.length > 1 && !listRefreshing && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild disabled={!attackOn}>
             <BarButton
@@ -536,11 +539,14 @@ const CombatActionBarInCombat: React.FC<CombatActionBarLiveProps> = ({
         actions={actions}
         enabled={isPlayerTurn && !turnInFlight && !isRefreshing && !running}
         hasSpells={hasSpells}
-        raging={encounter.participants.some((participant) => participant.participantType === 'player' && participant.raging)}
+        raging={encounter.participants.some(
+          (participant) => participant.participantType === 'player' && participant.raging,
+        )}
         nameOf={nameOf}
         attackSub={attackSub}
         moveSub={moveSub}
         canMove={Boolean(mapActor && mapActor.movementRemaining > 0)}
+        listRefreshing={isRefreshing}
         spellInfo={spellInfo}
         onAction={(action) => run(() => runAction(action, { exitConfirmed: true }))}
         onMove={onMove}
