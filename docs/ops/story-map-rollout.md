@@ -1,8 +1,9 @@
 # Story map rollout (Hetzner)
 
 **For:** the Hetzner ops session. **Issue:** #1756 (maps 5/5) needs this done first. **Parent:** #1742.
-**Rules:** AGENTS.md applies. Each migration apply, each merge and each `--apply` needs Rob's
-typed line. Do not merge between a Playtest `run N started` and `run N ended` comment on #229.
+**Rules:** AGENTS.md applies. Merges follow AGENTS.md §1 (a strategist PASS and a green
+pull_request CI run at the same head); Rob's typed line is for each migration apply and for the
+`--apply` re-ingest. Do not merge between a Playtest `run N started` and `run N ended` comment on #229.
 
 This is the order to take the story map live: two database changes, two merges, then a
 re-ingest of the four starter bibles with their routes. Each step is one paste. Stop at the
