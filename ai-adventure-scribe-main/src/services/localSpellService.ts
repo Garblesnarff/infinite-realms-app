@@ -1,3 +1,4 @@
+import { canonicalSpellId } from '../../shared/spell-aliases';
 import { FULL_CASTER_SLOTS } from '../../shared/spell-slot-tables';
 
 import type { Spell } from '@/types/character';
@@ -155,7 +156,8 @@ class LocalSpellService {
   }
 
   async getSpellById(spellId: string): Promise<Spell> {
-    const spell = allSpells.find((s) => s.id === spellId);
+    // #254: a possessive alias resolves to the canonical SRD row.
+    const spell = allSpells.find((s) => s.id === canonicalSpellId(spellId));
     if (!spell) {
       throw new Error(`Spell with ID ${spellId} not found`);
     }

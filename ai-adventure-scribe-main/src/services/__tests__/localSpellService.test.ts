@@ -63,6 +63,18 @@ vi.mock('@/data/spellOptions', () => ({
       duration: 'Concentration, up to 10 minutes',
       description: 'For the duration...',
     },
+    {
+      id: 'hideous-laughter',
+      name: 'Hideous Laughter',
+      level: 1,
+      school: 'Enchantment',
+      ritual: false,
+      concentration: true,
+      casting_time: '1 action',
+      range_text: '30 feet',
+      duration: 'Up to 1 minute',
+      description: 'Fits of laughter.',
+    },
   ],
   getClassSpells: vi.fn((className: string) => {
     if (className === 'Wizard') {
@@ -98,7 +110,12 @@ describe('LocalSpellService', () => {
 
     it('should filter by level', async () => {
       const spells = await localSpellService.getAllSpells({ level: 1 });
-      expect(spells).toHaveLength(2);
+      expect(spells).toHaveLength(3);
+      expect(spells.map((s) => s.id).sort()).toEqual([
+        'cure-wounds',
+        'detect-magic',
+        'hideous-laughter',
+      ]);
       expect(spells.every((s) => s.level === 1)).toBe(true);
     });
 
@@ -236,6 +253,12 @@ describe('LocalSpellService', () => {
     it('should return a spell by ID', async () => {
       const spell = await localSpellService.getSpellById('fireball');
       expect(spell.name).toBe('Fireball');
+    });
+
+    it('should resolve a possessive alias to the canonical spell (#254)', async () => {
+      const spell = await localSpellService.getSpellById('tashas-hideous-laughter');
+      expect(spell.id).toBe('hideous-laughter');
+      expect(spell.name).toBe('Hideous Laughter');
     });
 
     it('should throw error for non-existent spell', async () => {

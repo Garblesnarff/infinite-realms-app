@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { cantrips, firstLevelSpells, allSpells } from '@/data/spellOptions';
+import { cantrips, firstLevelSpells, allSpells, validateSpellSelection } from '@/data/spellOptions';
 
 /**
  * Spell Data Integrity Tests
@@ -296,6 +296,25 @@ describe('Spell Data Integrity', () => {
       level1Spells.forEach((spell) => {
         expect(spell.level).toBe(1);
       });
+    });
+  });
+
+  describe('validateSpellSelection with possessive aliases (#254)', () => {
+    it('accepts an alias id for a class that has the canonical spell', () => {
+      expect(validateSpellSelection('Bard', [], ['tashas-hideous-laughter'])).toEqual({
+        valid: true,
+        errors: [],
+      });
+      expect(validateSpellSelection('Wizard', [], ['tensers-floating-disk'])).toEqual({
+        valid: true,
+        errors: [],
+      });
+    });
+
+    it('still refuses a spell the class does not have', () => {
+      const result = validateSpellSelection('Bard', [], ['fireball']);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toHaveLength(1);
     });
   });
 });
