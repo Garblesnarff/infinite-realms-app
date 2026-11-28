@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 
+import { createThrottledTrigger } from './legal-actions-refresh-throttle';
 import { LEGAL_ACTION_TYPES } from '../../../../shared/combat-legal-action-types';
 import { chooseSpellSlotLevel } from '../../../../shared/spell-slot-choice';
 
@@ -176,6 +177,9 @@ async function sendEngineNotice(
   }
 }
 
+/** The window in which map changes share one weapon-list read (#1797). */
+const BOARD_REFRESH_WINDOW_MS = 150;
+
 export function useCombatLegalActions(input: {
   enabled: boolean;
   onSendMessage?: (message: ChatMessage) => Promise<void>;
@@ -286,8 +290,15 @@ export function useCombatLegalActions(input: {
     void refreshLegalActions();
   }, [refreshLegalActions]);
 
+  // #1797: a burst of map changes (a foe turn's moves) re-reads the list once, not once per change.
+  const refreshRef = useRef(refreshLegalActions);
+  refreshRef.current = refreshLegalActions;
   useEffect(() => {
     if (!showCombatMenu || !encounter?.id) return;
+    const throttle = createThrottledTrigger(
+      () => void refreshRef.current(),
+      BOARD_REFRESH_WINDOW_MS,
+    );
     const onBoardChange = (event: Event): void => {
       const delta = (event as CustomEvent<{ type?: string }>).detail;
       // #1797: every map change re-reads the list, so the attack arrow never holds one from before
@@ -300,12 +311,15 @@ export function useCombatLegalActions(input: {
         delta?.type === 'entity_placed' ||
         delta?.type === 'entity_removed'
       ) {
-        void refreshLegalActions();
+        throttle.trigger();
       }
     };
     window.addEventListener('tactical-map-delta', onBoardChange);
-    return () => window.removeEventListener('tactical-map-delta', onBoardChange);
-  }, [showCombatMenu, encounter?.id, refreshLegalActions]);
+    return () => {
+      window.removeEventListener('tactical-map-delta', onBoardChange);
+      throttle.cancel();
+    };
+  }, [showCombatMenu, encounter?.id]);
 
   const isPlayerTurn =
     legalState.actorId === encounter?.currentTurnParticipantId &&
