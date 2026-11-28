@@ -54,6 +54,8 @@ import {
 } from './combat/hp-data-access.js';
 import { HPMechanics } from './combat/hp-mechanics.js';
 import { withRageResistances } from './combat/resistance-resolver.js';
+import { loadActiveTacticalMap, saveTacticalMap } from './combat/tactical-map-store.js';
+import { clearStaleApproachMarkers } from '../tactical/dispatch.js';
 
 import type { CombatResolvedVitals, VitalsTx } from './character-vitals-service.js';
 import type { CombatParticipantStatus, CombatDamageLog } from '../../../db/schema/index';
@@ -566,6 +568,42 @@ export class CombatHPService {
           participantId,
           damageAmount: final.modifiedDamage,
           roundNumber: currentRound,
+        });
+      }
+    }
+
+    // #1802 (round 1): a target that dies voids its markers. A marker records that
+    // this actor could not reach this target from where they stood this turn, and a
+    // dead target is not standing there any more — the next proposal must re-plan (or
+    // be refused as a dead target), not answer "could not reach" from the old board.
+    // Death is a status flag, not a board event, so no dispatch path ever sees it;
+    // this HP write is the one choke point every damage death flows through
+    // (attacks, hazards, AoE). Best-effort like the Rage/Hide clears above: the
+    // damage already landed, so a failed clear is logged, never thrown. `final` is
+    // the post-Relentless result, so a saved Half-Orc (1 HP, not dead) clears nothing.
+    // A player that dies on death saves takes a separate path (death-saves-service);
+    // a dying player cannot be a melee target, so that path clears nothing here.
+    if (final.isDead) {
+      try {
+        const [encounterRow] = await db
+          .select({ sessionId: combatEncounters.sessionId })
+          .from(combatEncounters)
+          .where(eq(combatEncounters.id, encounterId))
+          .limit(1);
+        const map = encounterRow ? await loadActiveTacticalMap(encounterRow.sessionId) : null;
+        if (map?.resolvedUnreachableApproaches?.length) {
+          const before = map.resolvedUnreachableApproaches.length;
+          clearStaleApproachMarkers(map, participantId);
+          if (map.resolvedUnreachableApproaches.length !== before) {
+            await saveTacticalMap(map);
+          }
+        }
+      } catch (error) {
+        logger.error({
+          msg: 'APPROACH_MARKER_CLEAR_ON_DEATH_FAILED',
+          encounterId,
+          participantId,
+          error,
         });
       }
     }

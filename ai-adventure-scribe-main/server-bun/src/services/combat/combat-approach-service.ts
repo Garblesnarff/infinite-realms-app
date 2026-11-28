@@ -423,8 +423,17 @@ export async function decideAttackApproach(params: {
   targetId: string;
   targetLabel: string;
   weapon: { name: string; ranged: boolean; normalRange: number };
+  /**
+   * Which phase is asking. Only a proposal READS this turn's unreachable
+   * resolution (#1802 round 1): a commit re-runs the normal approach, so a commit
+   * after a movement-only proposal still moves with the remaining movement and
+   * records a second fact. The commit's own resolution still records a marker, so
+   * a later propose reuses the commit's resolution — that is the design (the commit
+   * is a resolution for the pair), pinned by the commit test.
+   */
+  phase: 'propose' | 'commit';
 }): Promise<AttackApproachDecision> {
-  const { sessionId, actorId, actorLabel, targetId, targetLabel, weapon } = params;
+  const { sessionId, actorId, actorLabel, targetId, targetLabel, weapon, phase } = params;
   const attackType = weapon.ranged ? 'ranged' : 'melee';
   if (weapon.ranged) return { movementOnly: false, attackType };
 
@@ -432,22 +441,26 @@ export async function decideAttackApproach(params: {
   // first one already moved and recorded the fact. Reuse that resolution read-only — unless
   // the first resolution spent no movement and the board changed, in which case the repeat
   // helper falls through and the normal path below moves once.
-  const repeat = await resolveRepeatUnreachableApproach(params);
+  const repeat = phase === 'propose' ? await resolveRepeatUnreachableApproach(params) : null;
   if (repeat && !('fallThrough' in repeat)) return repeat;
 
   const approach = await approachForAttack(sessionId, actorId, targetId, weapon.normalRange);
   if (approach.kind !== 'unreachable') {
     // The fall-through moved: the stale 0-spent marker would let a later retry move again,
     // so update it with the movement actually spent. (`in_reach` spends nothing, so the
-    // marker correctly stays 0.) The map is reloaded first: the move above saved it.
+    // marker correctly stays 0.) The map is reloaded first: the move above saved it. The
+    // update upserts rather than mapping over the existing entries (round 1): the approach
+    // move itself cleared the stale marker in `dispatchMapAction`, so a map-only update
+    // would silently drop it.
     if (repeat && 'fallThrough' in repeat && 'movedFeet' in approach && approach.movedFeet > 0) {
       const fresh = await loadActiveTacticalMap(sessionId);
-      if (fresh?.resolvedUnreachableApproaches?.length) {
-        fresh.resolvedUnreachableApproaches = fresh.resolvedUnreachableApproaches.map((entry) =>
-          entry.actorId === actorId && entry.targetId === targetId
-            ? { ...entry, movedFeet: approach.movedFeet }
-            : entry,
-        );
+      if (fresh) {
+        fresh.resolvedUnreachableApproaches = [
+          ...(fresh.resolvedUnreachableApproaches ?? []).filter(
+            (entry) => !(entry.actorId === actorId && entry.targetId === targetId),
+          ),
+          { actorId, targetId, movedFeet: approach.movedFeet },
+        ];
         await saveTacticalMap(fresh);
       }
     }

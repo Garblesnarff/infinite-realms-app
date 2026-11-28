@@ -151,6 +151,9 @@ describe('approachForAttack', () => {
       targetId: 'the-seeker',
       targetLabel: 'The Seeker',
       weapon: { name: 'Bite', ranged: false, normalRange: 5 },
+      // Round 1: the direct call exercises the propose path (the commit path
+      // skips the marker check, so it cannot return this movement-only repeat).
+      phase: 'propose',
     });
 
     expect(decision).toMatchObject({
