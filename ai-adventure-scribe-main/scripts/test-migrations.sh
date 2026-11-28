@@ -233,6 +233,10 @@ build_replay_list() {
         # Adds the nullable starter_template_id and starter_title columns to characters (#1741).
         # Pinned after the newest migration so the characters table exists.
         0040_character_starter_template.sql) echo "20261126_000000	$f"; continue;;
+        # Creates combat_intent_idempotency, which references combat_encounters, created by
+        # supabase/migrations/20251112_01_add_combat_system_unified.sql (#51); pinned after the
+        # newest migration so the combat tables exist.
+        0041_combat_intent_idempotency.sql) echo "20261127_000000	$f"; continue;;
         # Deliberate no-op snapshot re-baseline; safe anywhere, pinned last.
         0004_schema_baseline.sql) echo "99999999_999999	$f"; continue;;
       esac

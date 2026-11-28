@@ -8,6 +8,7 @@ import {
   characterStats,
   characters,
   combatEncounters,
+  combatIntentIdempotency,
   combatParticipantStatus,
   combatParticipants,
   gameSessions,
@@ -18,6 +19,10 @@ import {
   dashIntentBody,
 } from '../../../../../../shared/test-fixtures/combat-dash-intent';
 import {
+  COMBAT_INTENT_REQUEST_ID_HEADER,
+  combatIntentMoveBody,
+} from '../../../../../../shared/test-fixtures/combat-intent-move';
+import {
   closeRealDb,
   describeWithDb,
   hasRealDb,
@@ -25,6 +30,11 @@ import {
   realDb,
   testId,
 } from '../../../../services/__tests__/fixtures/real-db.js';
+import {
+  PENDING_TAKEOVER_AFTER_MS,
+  releaseIntentClaim,
+  storeIntentResponse,
+} from '../../../../services/combat/combat-intent-idempotency.js';
 
 const userId = `dash-route-${process.pid}`;
 
@@ -251,5 +261,289 @@ describeWithDb('Dash More-menu body resolves through the real route (#613)', () 
       mapAfterRefusal.state as { entities: Array<{ id: string; movementRemaining: number }> }
     ).entities.find((entity) => entity.id === DASH_ACTOR_ID);
     expect(heroAfterRefusal?.movementRemaining).toBe(60);
+  });
+
+  test('a retried move with the same x-request-id replays the stored response (#51)', async () => {
+    const requestId = crypto.randomUUID();
+    // Read the hero's state first: this test shares the encounter with the
+    // Dash test above, so it must not assume Dash already ran (movement 60)
+    // or not (movement 30). The assertions are relative — one 5-ft step.
+    const [mapBefore] = await db
+      .select({ state: tacticalMaps.state })
+      .from(tacticalMaps)
+      .where(eq(tacticalMaps.sessionId, sessionId));
+    const heroBefore = (
+      mapBefore.state as {
+        entities: Array<{ id: string; x: number; y: number; movementRemaining: number }>;
+      }
+    ).entities.find((entity) => entity.id === DASH_ACTOR_ID);
+    const fromX = heroBefore?.x ?? 0;
+    const fromY = heroBefore?.y ?? 0;
+    const movementBefore = heroBefore?.movementRemaining ?? 0;
+    // #51, AGENTS.md §4: the body is the executor's own wire body (the
+    // shared fixture the client test proves the executor sends), and the
+    // header value is minted with crypto.randomUUID() the way the executor
+    // mints it — not a hand-written string.
+    const moveBody = combatIntentMoveBody(DASH_ACTOR_ID, fromX + 1, fromY);
+    const postMove = (): Promise<Response> =>
+      app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${userId}`,
+            'content-type': 'application/json',
+            [COMBAT_INTENT_REQUEST_ID_HEADER]: requestId,
+          },
+          body: JSON.stringify(moveBody),
+        }),
+      );
+    const first = await postMove();
+    expect(first.status).toBe(200);
+    const firstBody = await first.json();
+    expect(firstBody.accepted).toBe(true);
+
+    const second = await postMove();
+    expect(second.status).toBe(200);
+    const secondBody = await second.json();
+    // The retry returns the first delivery's response, not a fresh execution:
+    // a re-executed move from the new position would report an empty path.
+    expect(secondBody).toEqual(firstBody);
+
+    const [map] = await db
+      .select({ state: tacticalMaps.state })
+      .from(tacticalMaps)
+      .where(eq(tacticalMaps.sessionId, sessionId));
+    const state = map.state as {
+      entities: Array<{ id: string; x: number; y: number; movementRemaining: number }>;
+      pendingDmFacts?: string[];
+    };
+    const hero = state.entities.find((entity) => entity.id === DASH_ACTOR_ID);
+    expect(hero?.x).toBe(fromX + 1);
+    expect(hero?.y).toBe(fromY);
+    // Exactly one 5-ft step: a second execution of the same move would
+    // append a second "moved to" DM fact.
+    expect(hero?.movementRemaining).toBe(movementBefore - 5);
+    expect(
+      (state.pendingDmFacts ?? []).filter((fact) =>
+        fact.includes(`moved to (${fromX + 1}, ${fromY})`),
+      ),
+    ).toHaveLength(1);
+  });
+
+  // The hero's map row, read fresh: the tests below share the encounter,
+  // so each reads its start position instead of assuming one.
+  const heroState = async (): Promise<{
+    x: number;
+    y: number;
+    movementRemaining: number;
+    pendingDmFacts: string[];
+  }> => {
+    const [map] = await db
+      .select({ state: tacticalMaps.state })
+      .from(tacticalMaps)
+      .where(eq(tacticalMaps.sessionId, sessionId));
+    const state = map.state as {
+      entities: Array<{ id: string; x: number; y: number; movementRemaining: number }>;
+      pendingDmFacts?: string[];
+    };
+    const hero = state.entities.find((entity) => entity.id === DASH_ACTOR_ID);
+    return {
+      x: hero?.x ?? 0,
+      y: hero?.y ?? 0,
+      movementRemaining: hero?.movementRemaining ?? 0,
+      pendingDmFacts: state.pendingDmFacts ?? [],
+    };
+  };
+
+  test('two overlapping same-id Move intents record one move (#51)', async () => {
+    const requestId = crypto.randomUUID();
+    const before = await heroState();
+    const moveBody = combatIntentMoveBody(DASH_ACTOR_ID, before.x, before.y + 1);
+    const postMove = (): Promise<Response> =>
+      app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${userId}`,
+            'content-type': 'application/json',
+            [COMBAT_INTENT_REQUEST_ID_HEADER]: requestId,
+          },
+          body: JSON.stringify(moveBody),
+        }),
+      );
+    // Fired together, so at least two of them overlap in the claim window:
+    // the winner claims the id and executes, the others find its pending
+    // row (409) or its stored response (200). However they interleave, the
+    // move itself must happen exactly once.
+    const responses = await Promise.all([postMove(), postMove(), postMove()]);
+    const statuses = responses.map((response) => response.status);
+    expect(statuses.every((status) => status === 200 || status === 409)).toBe(true);
+    expect(statuses).toContain(200);
+    const bodies = await Promise.all(
+      responses.filter((response) => response.status === 200).map((response) => response.json()),
+    );
+    expect(bodies.length).toBeGreaterThan(0);
+    for (const body of bodies.slice(1)) expect(body).toEqual(bodies[0]);
+
+    const after = await heroState();
+    expect(after.x).toBe(before.x);
+    expect(after.y).toBe(before.y + 1);
+    expect(after.movementRemaining).toBe(before.movementRemaining - 5);
+    expect(
+      after.pendingDmFacts.filter((fact) =>
+        fact.includes(`moved to (${before.x}, ${before.y + 1})`),
+      ),
+    ).toHaveLength(1);
+  });
+
+  test('a fresh pending row answers 409 and executes nothing (#51)', async () => {
+    const requestId = crypto.randomUUID();
+    const before = await heroState();
+    await db.insert(combatIntentIdempotency).values({
+      encounterId,
+      requestId,
+      claimToken: crypto.randomUUID(),
+      response: null,
+    });
+    try {
+      const response = await app!.handle(
+        new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+          method: 'POST',
+          headers: {
+            authorization: `Bearer ${userId}`,
+            'content-type': 'application/json',
+            [COMBAT_INTENT_REQUEST_ID_HEADER]: requestId,
+          },
+          body: JSON.stringify(combatIntentMoveBody(DASH_ACTOR_ID, before.x + 1, before.y)),
+        }),
+      );
+      expect(response.status).toBe(409);
+      const body = (await response.json()) as { code?: string };
+      expect(body.code).toBe('COMBAT_INTENT_IN_FLIGHT');
+
+      const after = await heroState();
+      expect(after.x).toBe(before.x);
+      expect(after.y).toBe(before.y);
+      expect(after.movementRemaining).toBe(before.movementRemaining);
+    } finally {
+      await db
+        .delete(combatIntentIdempotency)
+        .where(eq(combatIntentIdempotency.requestId, requestId));
+    }
+  });
+
+  test('a stale pending row is taken over and the move executes once (#51)', async () => {
+    const requestId = crypto.randomUUID();
+    const before = await heroState();
+    await db.insert(combatIntentIdempotency).values({
+      encounterId,
+      requestId,
+      claimToken: crypto.randomUUID(),
+      response: null,
+      createdAt: new Date(Date.now() - PENDING_TAKEOVER_AFTER_MS - 1_000),
+    });
+    const response = await app!.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${userId}`,
+          'content-type': 'application/json',
+          [COMBAT_INTENT_REQUEST_ID_HEADER]: requestId,
+        },
+        body: JSON.stringify(combatIntentMoveBody(DASH_ACTOR_ID, before.x + 1, before.y)),
+      }),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { accepted?: boolean };
+    expect(body.accepted).toBe(true);
+
+    const after = await heroState();
+    expect(after.x).toBe(before.x + 1);
+    expect(after.y).toBe(before.y);
+    expect(after.movementRemaining).toBe(before.movementRemaining - 5);
+    expect(
+      after.pendingDmFacts.filter((fact) =>
+        fact.includes(`moved to (${before.x + 1}, ${before.y})`),
+      ),
+    ).toHaveLength(1);
+    // The takeover claim was filled with the completed response, so a
+    // retry with the same id replays it.
+    const [row] = await db
+      .select({ response: combatIntentIdempotency.response })
+      .from(combatIntentIdempotency)
+      .where(eq(combatIntentIdempotency.requestId, requestId));
+    expect(row?.response).toEqual(expect.objectContaining({ accepted: true }));
+  });
+
+  test('a refused intent releases its claim, so the same id can be reused (#51)', async () => {
+    const requestId = crypto.randomUUID();
+    const before = await heroState();
+    // Dash is spent (the first test used it), so a Dash under this id is
+    // refused 422 — and the refusal must release the claim, not leave it
+    // 409ing for the takeover window.
+    const refused = await app!.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${userId}`,
+          'content-type': 'application/json',
+          [COMBAT_INTENT_REQUEST_ID_HEADER]: requestId,
+        },
+        body: JSON.stringify(dashIntentBody()),
+      }),
+    );
+    expect(refused.status).toBe(422);
+    // The same id now proceeds: the claim was released, so this Move
+    // executes instead of answering 409.
+    const moved = await app!.handle(
+      new Request(`http://localhost/v1/combat/${encounterId}/intent`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${userId}`,
+          'content-type': 'application/json',
+          [COMBAT_INTENT_REQUEST_ID_HEADER]: requestId,
+        },
+        body: JSON.stringify(combatIntentMoveBody(DASH_ACTOR_ID, before.x, before.y - 1)),
+      }),
+    );
+    expect(moved.status).toBe(200);
+    const after = await heroState();
+    expect(after.y).toBe(before.y - 1);
+    expect(after.movementRemaining).toBe(before.movementRemaining - 5);
+  });
+
+  test('store and release only touch the row their own claim created (#51)', async () => {
+    const requestId = crypto.randomUUID();
+    const claimToken = crypto.randomUUID();
+    const otherToken = crypto.randomUUID();
+    await db.insert(combatIntentIdempotency).values({
+      encounterId,
+      requestId,
+      claimToken,
+      response: null,
+    });
+    const readRow = async (): Promise<{ response: Record<string, unknown> | null } | undefined> => {
+      const [row] = await db
+        .select({ response: combatIntentIdempotency.response })
+        .from(combatIntentIdempotency)
+        .where(eq(combatIntentIdempotency.requestId, requestId));
+      return row;
+    };
+    // A store carrying another claim's token must not fill this row: a
+    // first attempt that returns late, after a takeover owner re-claimed
+    // the id, must never overwrite the owner's response.
+    await storeIntentResponse(encounterId, requestId, { accepted: true }, otherToken);
+    expect((await readRow())?.response).toBeNull();
+    await storeIntentResponse(encounterId, requestId, { accepted: true }, claimToken);
+    expect((await readRow())?.response).toEqual({ accepted: true });
+    // A release carrying another claim's token must not delete a live
+    // row — and a release never deletes a completed row at all.
+    await releaseIntentClaim(encounterId, requestId, otherToken);
+    expect(await readRow()).toBeDefined();
+    await releaseIntentClaim(encounterId, requestId, claimToken);
+    expect(await readRow()).toBeDefined();
+    await db
+      .delete(combatIntentIdempotency)
+      .where(eq(combatIntentIdempotency.requestId, requestId));
   });
 });

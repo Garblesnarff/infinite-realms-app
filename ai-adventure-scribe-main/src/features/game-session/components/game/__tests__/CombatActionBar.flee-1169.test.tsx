@@ -269,7 +269,10 @@ describe('CombatActionBar flee #1169', () => {
     await user.click(more);
     await user.click(await screen.findByRole('menuitem', { name: 'Flee (Goblin attacks)' }));
     await user.click(screen.getByRole('button', { name: 'Flee anyway' }));
-    const alert = await screen.findByRole('alert');
+    // #51: the intent POST retries a dropped response inside a 3 s budget,
+    // so a dead connection surfaces its error at ~3 s, not immediately.
+    // The alert and its text are unchanged — only the wait grows.
+    const alert = await screen.findByRole('alert', {}, { timeout: 10_000 });
     expect(alert).toHaveTextContent('Failed to fetch');
   });
 

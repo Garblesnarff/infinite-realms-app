@@ -262,6 +262,10 @@ export const sessionMessageRoutes = new Elysia({ prefix: '/v1/sessions' })
           timestamp: message.timestamp ? new Date(message.timestamp) : undefined,
         })),
         user!.userId,
+        // #51: a retried save gets the stored rows back instead of an empty
+        // list. Internal callers keep the default (zero rows = already
+        // stored) — see addMessages.
+        { includeStoredDuplicates: true },
       );
       return { messages: messages.map(mapMessage) };
     },

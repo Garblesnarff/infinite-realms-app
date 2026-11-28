@@ -70,6 +70,14 @@ const IMAGE_GENERATE_ROUTE_PREFIX = '/v1/images/generate';
 const MEMORY_EXTRACTION_JOBS_ROUTE = '/v1/memory-extraction/jobs';
 export const NETWORK_RETRY_BUDGET_MS = 20_000;
 export const BACKGROUND_LLM_RETRY_BUDGET_MS = 5_000;
+/**
+ * #51: one hung fetch attempt aborts after 10 s so the retry loop can try again
+ * inside the retry budget, instead of the whole request hanging until the
+ * 30 s route ceiling. Applies only to default-timeout routes — model work
+ * (/v1/llm/generate, images, memory extraction) is exempt; see
+ * getPerAttemptTimeoutMs.
+ */
+export const PER_ATTEMPT_TIMEOUT_MS = 10_000;
 const NETWORK_RETRY_INITIAL_DELAY_MS = 1_000;
 const NETWORK_RETRY_MAX_DELAY_MS = 8_000;
 const TOKEN_REFRESH_MARGIN_MS = 2 * 60 * 1000;
@@ -175,6 +183,21 @@ function getRouteTimeoutMs(path: string): number | undefined {
   return DEFAULT_REQUEST_TIMEOUT_MS;
 }
 
+/**
+ * #51: the per-attempt abort for a route. Model work is exempt — a generation
+ * can legitimately take longer than 10 s to first byte, and memory extraction
+ * / image generation carry no ceiling at all — so only default-timeout routes
+ * get a per-attempt abort. A blackholed attempt on one of those fails fast
+ * and the retry loop gets its chance inside the retry budget, instead of the
+ * attempt consuming the whole 30 s route ceiling.
+ */
+function getPerAttemptTimeoutMs(path: string): number | undefined {
+  if (path.startsWith(MEMORY_EXTRACTION_JOBS_ROUTE)) return undefined;
+  if (isGenerateRoute(path)) return undefined;
+  if (path.startsWith(IMAGE_GENERATE_ROUTE_PREFIX)) return undefined;
+  return PER_ATTEMPT_TIMEOUT_MS;
+}
+
 function getErrorName(error: unknown): string {
   if (error && typeof error === 'object' && 'name' in error) {
     const name = (error as { name?: unknown }).name;
@@ -235,11 +258,40 @@ function waitForNetworkRetry(delayMs: number, signal?: AbortSignal | null): Prom
   });
 }
 
+/**
+ * #51: one signal that fires when any of the inputs fires. The combined signal
+ * only lives for one fetch attempt; the caller must call cleanup once the
+ * attempt settles so the one-shot listeners do not linger on the outer signals.
+ */
+function combineAbortSignals(signals: Array<AbortSignal | null | undefined>): {
+  signal: AbortSignal | undefined;
+  cleanup: () => void;
+} {
+  const present = signals.filter((s): s is AbortSignal => Boolean(s));
+  if (present.length === 0) return { signal: undefined, cleanup: () => {} };
+  if (present.length === 1) return { signal: present[0], cleanup: () => {} };
+  if (present.some((s) => s.aborted)) {
+    const controller = new AbortController();
+    controller.abort();
+    return { signal: controller.signal, cleanup: () => {} };
+  }
+  const controller = new AbortController();
+  const onAbort = (): void => controller.abort();
+  for (const s of present) s.addEventListener('abort', onAbort, { once: true });
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      for (const s of present) s.removeEventListener('abort', onAbort);
+    },
+  };
+}
+
 async function requestWithNetworkRetry(
   path: string,
-  request: () => Promise<Response>,
+  request: (attemptSignal?: AbortSignal | null) => Promise<Response>,
   signal?: AbortSignal | null,
   retryBudgetMs: number = NETWORK_RETRY_BUDGET_MS,
+  perAttemptTimeoutMs?: number,
 ): Promise<Response> {
   const startedAt = Date.now();
   let delayMs = NETWORK_RETRY_INITIAL_DELAY_MS;
@@ -248,9 +300,38 @@ async function requestWithNetworkRetry(
 
   try {
     while (true) {
+      // #51: each attempt gets its own abort so a blackholed connection fails
+      // fast instead of consuming the whole request ceiling. The timer's
+      // abort is NOT retried below: a timeout means the server may still be
+      // executing the first attempt, and resubmitting a POST in that window
+      // would risk double-applying it. The abort surfaces so the caller can
+      // retry with the same id (the server dedups it); an abort from the
+      // outer signal (caller cancel / whole-request timeout) still
+      // propagates immediately.
+      let attemptTimedOut = false;
+      const attemptController =
+        perAttemptTimeoutMs !== undefined && perAttemptTimeoutMs > 0
+          ? new AbortController()
+          : undefined;
+      const attemptTimeoutId = attemptController
+        ? setTimeout(() => {
+            attemptTimedOut = true;
+            attemptController.abort();
+          }, perAttemptTimeoutMs)
+        : undefined;
+      const { signal: attemptSignal, cleanup: cleanupCombined } = combineAbortSignals([
+        signal,
+        attemptController?.signal,
+      ]);
       try {
-        return await request();
+        return await request(attemptSignal);
       } catch (error) {
+        // #51: the attempt exceeded its 10 s budget — whether it surfaced
+        // as an abort or as a network error racing the abort in the same
+        // tick, the server may still be executing, so never resubmit here.
+        // An outer-signal abort also throws (an AbortError is not a network
+        // error). Only a genuine network error inside the budget retries.
+        if (attemptTimedOut) throw error;
         if (!isNetworkError(error)) throw error;
 
         const elapsedMs = Date.now() - startedAt;
@@ -272,6 +353,9 @@ async function requestWithNetworkRetry(
         });
         await waitForNetworkRetry(retryDelayMs, signal);
         delayMs = Math.min(delayMs * 2, NETWORK_RETRY_MAX_DELAY_MS);
+      } finally {
+        if (attemptTimeoutId !== undefined) clearTimeout(attemptTimeoutId);
+        cleanupCombined();
       }
     }
   } finally {
@@ -445,11 +529,28 @@ export async function fetchWithAuth(
         });
       })()
     : null;
+  // #51: bound each attempt (~10 s) so a hung fetch fails fast and the retry
+  // loop can try again inside the budget. A caller that opts out of timeouts
+  // (null) opts out of the per-attempt abort too; an explicit numeric ceiling
+  // caps its own attempts; otherwise the route decides (model work exempt).
+  const routePerAttemptMs = getPerAttemptTimeoutMs(path);
+  const perAttemptTimeoutMs =
+    requestedTimeoutMs === null || routePerAttemptMs === undefined
+      ? undefined
+      : requestedTimeoutMs === undefined
+        ? routePerAttemptMs
+        : Math.min(requestedTimeoutMs, routePerAttemptMs);
   // #1113: the bearer token each fetch attempt actually sent, in attempt order.
   // The last entry belongs to the attempt whose response is returned.
   const sentAccessTokens: Array<string | undefined> = [];
-  const attemptFetch = (accessToken?: string): Promise<Response> => {
-    const init = buildRequestInit(effectiveInit, accessToken);
+  const attemptFetch = (
+    accessToken?: string,
+    attemptSignal?: AbortSignal | null,
+  ): Promise<Response> => {
+    const init = buildRequestInit(
+      attemptSignal ? { ...effectiveInit, signal: attemptSignal } : effectiveInit,
+      accessToken,
+    );
     sentAccessTokens.push(bearerTokenOf(init));
     return fetch(`${API_BASE_URL}${path}`, init);
   };
@@ -458,17 +559,19 @@ export async function fetchWithAuth(
       ? Promise.race([
           requestWithNetworkRetry(
             path,
-            () => attemptFetch(accessToken),
+            (attemptSignal) => attemptFetch(accessToken, attemptSignal),
             timeoutSignal,
             retryBudgetMs,
+            perAttemptTimeoutMs,
           ),
           timeoutPromise,
         ])
       : requestWithNetworkRetry(
           path,
-          () => attemptFetch(accessToken),
+          (attemptSignal) => attemptFetch(accessToken, attemptSignal),
           timeoutSignal,
           retryBudgetMs,
+          perAttemptTimeoutMs,
         )) as Promise<Response>;
 
   try {

@@ -274,6 +274,13 @@
       "when": 1795650000000,
       "tag": "0040_character_starter_template",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1795754651819,
+      "tag": "0041_combat_intent_idempotency",
+      "breakpoints": true
     }
   ]
 }

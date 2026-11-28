@@ -18,6 +18,7 @@ import {
   boolean,
   index,
   jsonb,
+  primaryKey,
   unique,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
@@ -93,6 +94,41 @@ export const combatEncounters = pgTable(
     activeSessionIdx: uniqueIndex('idx_combat_encounters_one_active_session')
       .on(table.sessionId)
       .where(sql`${table.status} = 'active'`),
+  }),
+);
+
+/**
+ * #51: completed combat-intent responses, keyed by the client's request id.
+ * A retried intent POST (same encounter + request id) returns the stored
+ * response instead of re-executing the intent. Only successful (2xx)
+ * responses are stored — refusals and failures stay retryable — and the
+ * encounter FK cascades, so deleting an encounter drops its cached
+ * responses with it. No cleanup job: rows are tiny and bound to the
+ * encounter's lifetime, so they die with it.
+ */
+export const combatIntentIdempotency = pgTable(
+  'combat_intent_idempotency',
+  {
+    encounterId: uuid('encounter_id')
+      .notNull()
+      .references(() => combatEncounters.id, { onDelete: 'cascade' }),
+    requestId: text('request_id').notNull(),
+    // #51 FIX round: the claim token. A `createdAt` timestamp cannot serve
+    // as the owner token: Postgres stores microseconds, a JS Date carries
+    // milliseconds, so the value read back never equals the stored value
+    // and the store/release WHERE matched zero rows (the retry test 409'd
+    // on the second POST). A UUID minted by the claimant is exact, and it
+    // is what lets a late first attempt's store/release miss a takeover
+    // owner's re-claimed row.
+    claimToken: uuid('claim_token').notNull(),
+    // #51 FIX round: nullable — a pending claim row is inserted before
+    // execution and has no response until the first delivery completes.
+    // A NULL response means "claimed, still executing".
+    response: jsonb('response').$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.encounterId, table.requestId] }),
   }),
 );
 

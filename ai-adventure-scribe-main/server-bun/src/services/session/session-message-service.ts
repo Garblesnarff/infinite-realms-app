@@ -1,5 +1,5 @@
 /* eslint-disable max-lines */
-import { and, eq, asc, desc, sql, exists } from 'drizzle-orm';
+import { and, eq, asc, desc, inArray, sql, exists } from 'drizzle-orm';
 
 import { getOwnershipCondition } from './session-authorization.js';
 import { db } from '../../../../db/client';
@@ -406,6 +406,7 @@ export class SessionMessageService {
       timestamp?: Date;
     }>,
     userId: string,
+    options?: { includeStoredDuplicates?: boolean },
   ): Promise<DialogueHistory[]> {
     if (messages.length === 0) return [];
     const sessionId = messages[0]!.sessionId;
@@ -583,6 +584,49 @@ export class SessionMessageService {
         if (row) reconciled.push(row);
       }
 
+      // #51: a retry of an already-stored message id drops out of the insert
+      // above (ON CONFLICT DO NOTHING). The HTTP route asks for the stored
+      // rows back (`includeStoredDuplicates`) so the second call gets the
+      // cached body instead of nothing. Every other caller keeps the old
+      // contract — an empty return means "already stored" — because the
+      // exactly-once claims depend on it: `claimEngineChatLine` (#777 story
+      // damage / story endings), `postEngineChatLine`, and `storeEngineRow`
+      // all read zero rows as "this id already landed". Returning dropped
+      // rows to them would let a retried claim re-apply its effect. Ids the
+      // second pass just reconciled are already in `reconciled`, so they are
+      // excluded here; the session scope keeps a foreign id from ever
+      // resolving to another session's row. Dropped rows come back in
+      // request order, matching the inserted rows.
+      const storedIds = new Set(reconciled.map((row) => row.id));
+      // Dedupe preserving request order: a batch carrying the same id twice
+      // must return its stored row once, not twice.
+      const droppedIds = [
+        ...new Set(
+          toInsert
+            .filter((data) => data.id && !insertedIds.has(data.id) && !storedIds.has(data.id))
+            .map((data) => data.id as string),
+        ),
+      ];
+      const dropped: DialogueHistory[] =
+        options?.includeStoredDuplicates && droppedIds.length > 0
+          ? await tx
+              .select()
+              .from(dialogueHistory)
+              .where(
+                and(
+                  eq(dialogueHistory.sessionId, sessionId),
+                  inArray(dialogueHistory.id, droppedIds),
+                ),
+              )
+              .then((rows) => {
+                const byId = new Map(rows.map((row) => [row.id, row]));
+                return droppedIds.flatMap((id) => {
+                  const row = byId.get(id);
+                  return row ? [row] : [];
+                });
+              })
+          : [];
+
       if (inserted.length > 0) {
         await tx
           .update(gameSessions)
@@ -592,7 +636,7 @@ export class SessionMessageService {
           })
           .where(eq(gameSessions.id, sessionId));
       }
-      return [...existingOnce, ...reconciled, ...inserted];
+      return [...existingOnce, ...reconciled, ...inserted, ...dropped];
     });
   }
 

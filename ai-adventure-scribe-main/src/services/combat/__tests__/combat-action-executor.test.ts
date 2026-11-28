@@ -2,6 +2,11 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { HELP_REFUSAL, READY_REFUSAL } from '../../../../shared/combat-object-action';
+import { DASH_ACTOR_ID } from '../../../../shared/test-fixtures/combat-dash-intent';
+import {
+  COMBAT_INTENT_REQUEST_ID_HEADER,
+  combatIntentMoveBody,
+} from '../../../../shared/test-fixtures/combat-intent-move';
 import {
   COMBAT_OBJECT_ACTOR_ID,
   combatObjectIntentBody,
@@ -118,6 +123,142 @@ describe('combat-action-executor', () => {
       );
       expect(result).toBe('use-item-success');
     });
+
+    it('sends one x-request-id per intent submission, fresh on each call (#51)', async () => {
+      const intent = { type: 'dash' as const, actorId: 'actor-1', expectedVersion: 5 };
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: true,
+        json: async () => ({ result: 'dash-success' }),
+      });
+
+      await executeAuthoritativeCombatIntent(encounterId, intent, 'player', 12345);
+      await executeAuthoritativeCombatIntent(encounterId, intent, 'player', 12345);
+
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      const firstHeaders = (globalThis.fetch as any).mock.calls[0][1].headers;
+      const secondHeaders = (globalThis.fetch as any).mock.calls[1][1].headers;
+      // The id is the server's dedup key: a UUID, minted once per call, so a
+      // retry of the same call resends it while a fresh call gets a new one.
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      expect(firstHeaders['x-request-id']).toMatch(uuid);
+      expect(secondHeaders['x-request-id']).toMatch(uuid);
+      expect(secondHeaders['x-request-id']).not.toBe(firstHeaders['x-request-id']);
+    });
+
+    it('resends the same x-request-id when fetchWithAuth retries a dropped response (#51)', async () => {
+      const intent = { type: 'dash' as const, actorId: 'actor-1', expectedVersion: 5 };
+      (globalThis.fetch as any)
+        .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ result: 'dash-success' }),
+        });
+
+      const result = await executeAuthoritativeCombatIntent(encounterId, intent, 'player', 12345);
+
+      expect(result).toBe('dash-success');
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      const firstHeaders = (globalThis.fetch as any).mock.calls[0][1].headers;
+      const secondHeaders = (globalThis.fetch as any).mock.calls[1][1].headers;
+      // The retry is the same submission, so the server dedupes on it: a
+      // dropped response (server executed, reply lost) replays the stored
+      // response instead of re-executing the intent.
+      expect(secondHeaders['x-request-id']).toBe(firstHeaders['x-request-id']);
+    });
+
+    it('sends exactly the shared Move fixture body with a UUID x-request-id (#51)', async () => {
+      (globalThis.fetch as any).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ result: 'move-success' }),
+      });
+
+      const result = await executeAuthoritativeCombatIntent(
+        encounterId,
+        { type: 'move', actorId: DASH_ACTOR_ID, x: 1, y: 0 },
+        'dm',
+        1_700_000_000_000,
+        'typed',
+      );
+
+      expect(result).toBe('move-success');
+      expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+      const [, init] = (globalThis.fetch as any).mock.calls[0];
+      // The wire body is the shared fixture's: the server test posts this
+      // same body through the real route, so the body the server approves
+      // is the one the executor actually sends (AGENTS.md §4, #2286).
+      expect(init.body).toBe(JSON.stringify(combatIntentMoveBody(DASH_ACTOR_ID, 1, 0)));
+      const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      expect(init.headers[COMBAT_INTENT_REQUEST_ID_HEADER]).toMatch(uuid);
+    });
+
+    it('retries a 409 once the first attempt lands and resends the same id (#51)', async () => {
+      const conflict = {
+        ok: false,
+        status: 409,
+        json: async () => ({
+          error: 'Combat intent already in flight — retry with the same x-request-id',
+          code: 'COMBAT_INTENT_IN_FLIGHT',
+        }),
+      };
+      (globalThis.fetch as any).mockResolvedValueOnce(conflict).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ result: 'move-success' }),
+      });
+
+      const result = await executeAuthoritativeCombatIntent(
+        encounterId,
+        { type: 'move', actorId: 'actor-1', x: 1, y: 0 },
+        'dm',
+        1_700_000_000_000,
+        'typed',
+      );
+
+      expect(result).toBe('move-success');
+      expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+      const firstHeaders = (globalThis.fetch as any).mock.calls[0][1].headers;
+      const secondHeaders = (globalThis.fetch as any).mock.calls[1][1].headers;
+      // The 409 means the first attempt is still executing under this id:
+      // the retry resends the same id, and the server replays the stored
+      // response instead of executing twice.
+      expect(secondHeaders['x-request-id']).toBe(firstHeaders['x-request-id']);
+    }, 10_000);
+
+    it('surfaces a 409 after the conflict retries are exhausted (#51)', async () => {
+      const conflict = {
+        ok: false,
+        status: 409,
+        json: async () => ({
+          error: 'Combat intent already in flight — retry with the same x-request-id',
+          code: 'COMBAT_INTENT_IN_FLIGHT',
+        }),
+      };
+      (globalThis.fetch as any).mockResolvedValue(conflict);
+
+      let caught: unknown;
+      try {
+        await executeAuthoritativeCombatIntent(
+          encounterId,
+          { type: 'move', actorId: 'actor-1', x: 1, y: 0 },
+          'dm',
+          1_700_000_000_000,
+          'typed',
+        );
+      } catch (error) {
+        caught = error;
+      }
+
+      expect(caught).toBeInstanceOf(CombatIntentRefusedError);
+      expect((caught as CombatIntentRefusedError).status).toBe(409);
+      // One first attempt plus three retries, all under the same id: a
+      // first attempt stuck past ~3 s does not hang the turn forever.
+      expect(globalThis.fetch).toHaveBeenCalledTimes(4);
+      const ids = (globalThis.fetch as any).mock.calls.map(
+        (call: any[]) => call[1].headers['x-request-id'],
+      );
+      expect(new Set(ids).size).toBe(1);
+    }, 10_000);
 
     it('should fetch the combat status first if a player intent has no expectedVersion', async () => {
       const intent = { type: 'dash' as const, actorId: 'actor-1', expectedVersion: undefined };
