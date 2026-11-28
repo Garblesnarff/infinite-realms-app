@@ -290,10 +290,15 @@ export function useCombatLegalActions(input: {
     if (!showCombatMenu || !encounter?.id) return;
     const onBoardChange = (event: Event): void => {
       const delta = (event as CustomEvent<{ type?: string }>).detail;
+      // #1797: every map change re-reads the list, so the attack arrow never holds one from before
+      // a move, a new round, or a placed or removed token.
       if (
         delta?.type === 'entity_moved' ||
         delta?.type === 'movement_updated' ||
-        delta?.type === 'cell_updated'
+        delta?.type === 'cell_updated' ||
+        delta?.type === 'map_created' ||
+        delta?.type === 'entity_placed' ||
+        delta?.type === 'entity_removed'
       ) {
         void refreshLegalActions();
       }

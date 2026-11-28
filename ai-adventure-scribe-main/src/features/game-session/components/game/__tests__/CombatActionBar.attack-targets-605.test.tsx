@@ -276,8 +276,10 @@ describe('CombatActionBar attack targets (#605)', () => {
     await waitFor(() =>
       expect(recorded.filter(({ url }) => url.includes('/legal-actions'))).toHaveLength(2),
     );
-    await waitFor(() => expect(trigger).not.toBeDisabled());
-    await user.click(trigger);
+    // #1797: the arrow waits while the list is re-read, so it is found again on the fresh list.
+    const freshTrigger = await screen.findByRole('button', { name: /Other weapons and targets/i });
+    await waitFor(() => expect(freshTrigger).not.toBeDisabled());
+    await user.click(freshTrigger);
     expect(
       await screen.findByRole('menuitem', { name: 'Attack with Javelin → Slug-Thing 1' }),
     ).toBeVisible();
