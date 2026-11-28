@@ -1,10 +1,13 @@
 import React from 'react';
 
+import { HeroNameField } from './HeroNameField';
 import { tableImageUrl } from './image-url';
 import { TableImage } from './TableImage';
 import { useScrollEdges } from './useScrollEdges';
 
 import type { StarterCharacterTemplate } from '@/hooks/use-starter-character-templates';
+
+import { checkHeroName, heroEpithetName } from '@/data/hero-names';
 
 const COUNT_WORDS = ['Zero', 'One', 'Two', 'Three', 'Four', 'Five'];
 
@@ -32,15 +35,20 @@ export const HeroFan: React.FC<{
   disabled: boolean;
   signedIn: boolean;
   vitals: (template: StarterCharacterTemplate) => { hp: number; ac: number };
-  onPlay: (template: StarterCharacterTemplate, fresh?: boolean) => void;
+  onPlay: (template: StarterCharacterTemplate, fresh?: boolean, heroName?: string) => void;
 }> = ({ templates, disabled, signedIn, onPlay, vitals }) => {
   const [selectedId, setSelectedId] = React.useState(templates[0]?.id);
+  // #1741: the typed name, kept with the hero it was typed for.
+  const [nameDraft, setNameDraft] = React.useState({ id: '', value: '' });
   const buttons = React.useRef<Array<HTMLButtonElement | null>>([]);
   const row = React.useRef<HTMLDivElement>(null);
   // Which side of the row has heroes scrolled out of view: an edge fade marks it (#1672).
   const edges = useScrollEdges(row);
   const selected = templates.find((template) => template.id === selectedId) ?? templates[0];
   if (!selected) return null;
+  const heroName = nameDraft.id === selected.id ? nameDraft.value : '';
+  const nameCheck = checkHeroName(heroName, selected.name);
+  const chosenName = nameCheck.ok && heroName.trim() !== '' ? nameCheck.name : undefined;
 
   const move = (event: React.KeyboardEvent, index: number): void => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
@@ -146,16 +154,27 @@ export const HeroFan: React.FC<{
       </div>
       <p className="text-center text-sm italic text-[#f1e6cb]">{heroCountLine(templates.length)}</p>
       <div className="ir-parchment rounded p-4">
-        <h3 className="text-xl font-bold">{selected.name}</h3>
+        <h3 className="text-xl font-bold">
+          {heroEpithetName(nameCheck.ok ? nameCheck.name : selected.name, selected.name)}
+        </h3>
         <p>
           {selected.race} {selected.class} · Level {selected.level}
         </p>
         {selected.tagline && <p>{selected.tagline}</p>}
+        <div className="mt-3">
+          <HeroNameField
+            hero={selected}
+            value={heroName}
+            onChange={(value) => setNameDraft({ id: selected.id, value })}
+            disabled={disabled}
+            check={nameCheck}
+          />
+        </div>
         <button
           type="button"
           className="ir-brass-btn mt-3 min-h-11 w-full min-w-11 rounded px-4 sm:w-auto sm:whitespace-nowrap"
-          disabled={disabled}
-          onClick={() => onPlay(selected)}
+          disabled={disabled || !nameCheck.ok}
+          onClick={() => onPlay(selected, false, chosenName)}
         >
           {signedIn ? `Play as ${selected.name}` : `Sign in to play as ${selected.name}`}
         </button>
@@ -163,8 +182,8 @@ export const HeroFan: React.FC<{
           <button
             type="button"
             className="ml-2 min-h-11 px-3 underline"
-            disabled={disabled}
-            onClick={() => onPlay(selected, true)}
+            disabled={disabled || !nameCheck.ok}
+            onClick={() => onPlay(selected, true, chosenName)}
           >
             Start a fresh playthrough
           </button>

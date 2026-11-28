@@ -47,7 +47,9 @@ export async function getDefaultCombatWeapon(
   options: { preferMelee?: boolean } = {},
 ): Promise<WeaponRuleProfile> {
   const weapons = await listEquippedWeaponProfiles(participant);
-  const melee = options.preferMelee ? weapons.find((weapon) => !weapon.ranged || weapon.meleeWeapon === true) : undefined;
+  const melee = options.preferMelee
+    ? weapons.find((weapon) => !weapon.ranged || weapon.meleeWeapon === true)
+    : undefined;
   return melee ?? weapons[0] ?? { ...UNARMED_STRIKE };
 }
 

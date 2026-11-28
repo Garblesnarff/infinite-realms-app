@@ -29,6 +29,7 @@ describe('Choose a saved playthrough (#1349)', () => {
   it('shows three saved runs with hero, HP, latest session, and last played, newest first', () => {
     const rows = buildSavedPlaythroughs({
       starterCampaignId: 'c1',
+      starterTemplateId: '',
       heroName: 'Bram',
       campaignId: 'camp-9',
       sessions: [
@@ -110,6 +111,7 @@ describe('Choose a saved playthrough (#1349)', () => {
     const characters = await loadPlaythroughCharacters('camp-9');
     const rows = buildSavedPlaythroughs({
       starterCampaignId: 'c1',
+      starterTemplateId: '',
       heroName: 'Bram',
       campaignId: 'camp-9',
       sessions: [

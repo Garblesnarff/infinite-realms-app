@@ -235,17 +235,13 @@ export async function resolveMovementReactions(params: {
         finalDamage: Number(outcome.finalDamage ?? 0),
       };
       const line = describeResolvedAttack(attackerName, targetName, outcome, attacker.weapon.name);
-      await recordDmTacticalFact(
-        sessionId,
-        line,
-        {
-          kind: 'attack',
-          actorSlug: params.slugOf(attacker.participant.id),
-          actorIsPlayer: attacker.participant.participantType === 'player',
-          targetSlug: params.slugOf(actorId),
-          hit: outcome.hit,
-        },
-      );
+      await recordDmTacticalFact(sessionId, line, {
+        kind: 'attack',
+        actorSlug: params.slugOf(attacker.participant.id),
+        actorIsPlayer: attacker.participant.participantType === 'player',
+        targetSlug: params.slugOf(actorId),
+        hit: outcome.hit,
+      });
       // Flee already writes the reaction as part of its exit result. A map Move has no such row.
       if (params.intent !== 'flee') {
         try {

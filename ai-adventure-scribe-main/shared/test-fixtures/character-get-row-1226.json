@@ -1,6 +1,8 @@
 {
   "id": "c1226000-0000-4000-8000-000000000001",
   "name": "Clarice Faro",
+  "starter_title": null,
+  "starter_template_id": null,
   "race": "Human",
   "class": "Sorcerer",
   "level": 3,
