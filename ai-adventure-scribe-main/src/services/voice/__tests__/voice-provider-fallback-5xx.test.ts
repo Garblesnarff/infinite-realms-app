@@ -99,9 +99,11 @@ describe('VoiceAudioService premium 5xx / network fallback (#1348)', () => {
   });
 
   it('falls back to Standard for this segment only on a premium network failure', async () => {
-    // The transport retries a failed fetch for 20 s before surfacing it, so
-    // this test runs on fake timers past the retry budget (the 30 s route
-    // timeout does not fire first).
+    // #1787: a keyless POST is not retried by the transport, so the premium
+    // attempt fails fast after one call and the fallback fires immediately —
+    // the transport no longer retries a failed fetch for 20 s before
+    // surfacing it. Fake timers are kept so the failure path settles the
+    // same way (the 30 s route timeout does not fire first).
     vi.useFakeTimers();
     try {
       (global.fetch as any).mockRejectedValue(new TypeError('Failed to fetch'));
@@ -112,9 +114,10 @@ describe('VoiceAudioService premium 5xx / network fallback (#1348)', () => {
       expect(first.provider).toBe('kokoro');
       expect(first.error).toBeUndefined();
       expect(getVoiceModeStatus().fallbackReason).toBeNull();
-      // The transport retried before surfacing the failure: more than one
-      // premium attempt happened, so the fallback did not fire immediately.
-      expect((global.fetch as any).mock.calls.length).toBeGreaterThan(1);
+      // Exactly one premium attempt: the gate fails the keyless POST after
+      // the first network error, so the fallback fires at once instead of
+      // after the transport's retries.
+      expect((global.fetch as any).mock.calls.length).toBe(1);
     } finally {
       vi.useRealTimers();
     }

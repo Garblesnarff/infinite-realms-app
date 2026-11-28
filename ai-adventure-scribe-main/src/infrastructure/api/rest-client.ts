@@ -169,6 +169,91 @@ function isGenerateRoute(path: string): boolean {
   return path.startsWith(LLM_GENERATE_ROUTE_PREFIX);
 }
 
+/** #1787: the header a caller mints so the server can dedup a retried POST. */
+const IDEMPOTENCY_KEY_HEADER = 'x-request-id';
+/** #1787: the turn POST, keyed by its stored message/reply id (see below). */
+const TURN_POST_ROUTE_PATTERN = /^\/v1\/sessions\/[^/]+\/messages$/;
+const COMBAT_INTENT_ROUTE_PATTERN = /^\/v1\/combat\/[^/]+\/intent$/;
+
+/**
+ * #1787: `HeadersInit` has three shapes — a Headers instance, an array of
+ * [name, value] pairs, or a plain record — but `buildRequestInit` spreads
+ * headers into a plain object, which drops a Headers instance (no own
+ * enumerable properties) and mangles an array into numeric keys. A key in
+ * either shape would never reach the wire, so the gate below must never
+ * trust the un-normalized headers: normalize once, and the gate and the
+ * wire see the same headers.
+ */
+function headersToRecord(headers: HeadersInit | undefined): Record<string, string> {
+  if (!headers) return {};
+  if (headers instanceof Headers) return Object.fromEntries(headers.entries());
+  if (Array.isArray(headers)) return Object.fromEntries(headers);
+  // Copy: the normalized init must never alias the caller's object.
+  return { ...headers };
+}
+
+/**
+ * #1787: true when the caller set a non-empty idempotency key. Headers
+ * arrive here already normalized to a plain record (see headersToRecord);
+ * the name match is case-insensitive, and the value must be non-empty
+ * after trimming — the server ignores a whitespace-only key, so it cannot
+ * dedup server-side either.
+ */
+function hasIdempotencyKey(headers: Record<string, string> | undefined): boolean {
+  if (!headers) return false;
+  return Object.entries(headers).some(
+    ([name, value]) => name.toLowerCase() === IDEMPOTENCY_KEY_HEADER && value.trim() !== '',
+  );
+}
+
+/**
+ * #1787: the turn POST is the one keyless POST the server dedups — #1786
+ * replays a retried save from the stored rows + cached DM response, keyed
+ * by the stored message/reply id, so no client-minted key is needed.
+ * The path may carry a query string; strip it before matching.
+ */
+function isServerDedupedTurnPost(path: string): boolean {
+  return TURN_POST_ROUTE_PATTERN.test(path.split('?')[0]);
+}
+
+/**
+ * #1787 (strategist FIX round 2): a read-only combat proposal is the
+ * second explicit allowlist entry in the gate. The propose call POSTs to
+ * the intent route with `phase: 'propose'` in the JSON body, and the
+ * server returns the proposal BEFORE the idempotency-claim lookup
+ * (intents.ts) — so a key on this call would be ignored, not honoured,
+ * and must not be sent. The retry is safe with ONE KNOWN EXCEPTION: a
+ * non-off-hand melee attack proposal walks the actor into reach (a real
+ * tactical-map move) and, if the target is still unreachable, appends a
+ * DM tactical fact — so a retried proposal can move again and duplicate
+ * the fact (combat-approach-service.ts, tactical-action-service.ts).
+ * Low stakes: a duplicated DM-context sentence and possibly extra
+ * movement — no charge, no damage, no spent slot; the spell path has no
+ * approach call. A second propose-visible side effect, also single-apply:
+ * both propose paths call resolveActorTurn, which can advance the turn
+ * (DB-backed) when the actor is known but not current and the current
+ * participant has spent its action — a retry finds the actor current and
+ * cannot re-advance. Tracked as follow-up #1802. The allowlist is
+ * narrow on purpose: only `phase: 'propose'` on the intent route. A
+ * commit to the same route (no phase, or `phase: 'commit'`) is NOT
+ * allowlisted — it needs a real key. Fail closed: a non-string body, or
+ * one that is not JSON, is not a proposal.
+ */
+function isReadOnlyCombatProposal(path: string, body: unknown): boolean {
+  if (!COMBAT_INTENT_ROUTE_PATTERN.test(path.split('?')[0])) return false;
+  if (typeof body !== 'string') return false;
+  try {
+    const parsed: unknown = JSON.parse(body);
+    return (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      (parsed as { phase?: unknown }).phase === 'propose'
+    );
+  } catch {
+    return false;
+  }
+}
+
 function getRouteTimeoutMs(path: string): number | undefined {
   // Memory extraction has no timeout: the server answers 202 at once and finishes the job
   // itself (#2148). The 10 s timeout that used to sit here aborted every production extraction
@@ -292,6 +377,9 @@ async function requestWithNetworkRetry(
   signal?: AbortSignal | null,
   retryBudgetMs: number = NETWORK_RETRY_BUDGET_MS,
   perAttemptTimeoutMs?: number,
+  // #1787: false for a POST the server cannot dedupe — resubmitting it
+  // could pay for the work twice, so the first network error surfaces.
+  allowNetworkRetry = true,
 ): Promise<Response> {
   const startedAt = Date.now();
   let delayMs = NETWORK_RETRY_INITIAL_DELAY_MS;
@@ -333,6 +421,11 @@ async function requestWithNetworkRetry(
         // error). Only a genuine network error inside the budget retries.
         if (attemptTimedOut) throw error;
         if (!isNetworkError(error)) throw error;
+        // #1787: a POST the server cannot dedupe must not be resubmitted —
+        // a lost reply could pay for the work twice. Fail after the first
+        // network error; the caller surfaces its Retry control and the
+        // player decides whether to try again.
+        if (!allowNetworkRetry) throw error;
 
         const elapsedMs = Date.now() - startedAt;
         const remainingMs = retryBudgetMs - elapsedMs;
@@ -515,6 +608,12 @@ export async function fetchWithAuth(
   // timeout AND when the caller's signal aborts (see startRequestTimeout).
   const timeoutSignal = timeoutHandle?.signal ?? requestInit.signal ?? noTimeoutSignal;
   const effectiveInit = timeoutSignal ? { ...requestInit, signal: timeoutSignal } : requestInit;
+  // #1787: normalize headers to a plain record once — the gate below and
+  // the wire (via buildRequestInit) must see the same headers, and a
+  // Headers instance or array would not survive the spread (see
+  // headersToRecord). This is a fresh object; the caller's options are
+  // never mutated.
+  const normalizedInit = { ...effectiveInit, headers: headersToRecord(effectiveInit.headers) };
   const timeoutPromise = timeoutHandle
     ? (() => {
         const handle = timeoutHandle;
@@ -540,6 +639,25 @@ export async function fetchWithAuth(
       : requestedTimeoutMs === undefined
         ? routePerAttemptMs
         : Math.min(requestedTimeoutMs, routePerAttemptMs);
+  // #1787: a POST is network-retried only when the server can dedupe the
+  // retry — a client-minted `x-request-id` the server honours, or the turn
+  // POST, whose stored-response replay dedups it (#1786), or a read-only
+  // combat proposal (see isReadOnlyCombatProposal — read-only except one
+  // known melee exception, #1802). Any other POST fails after the first
+  // network error: resubmitting it could pay for a DM turn (or an image, a
+  // voice clip, an extraction job) twice. Non-POSTs are unchanged. The 401
+  // grace/refresh retry below is an HTTP-response path, not a network
+  // retry, so the gate does not block the 401 retry itself — but a
+  // re-attempt that then hits a network error is still gated (it fails
+  // fast on a keyless POST). Keys minted downstream per attempt (the
+  // window.fetch wrapper in main.tsx stamps a fresh x-request-id per call)
+  // are not visible here by design — a per-attempt key could never dedup
+  // a retry.
+  const allowNetworkRetry =
+    (requestInit.method ?? 'GET').toUpperCase() !== 'POST' ||
+    hasIdempotencyKey(normalizedInit.headers) ||
+    isServerDedupedTurnPost(path) ||
+    isReadOnlyCombatProposal(path, normalizedInit.body);
   // #1113: the bearer token each fetch attempt actually sent, in attempt order.
   // The last entry belongs to the attempt whose response is returned.
   const sentAccessTokens: Array<string | undefined> = [];
@@ -548,7 +666,7 @@ export async function fetchWithAuth(
     attemptSignal?: AbortSignal | null,
   ): Promise<Response> => {
     const init = buildRequestInit(
-      attemptSignal ? { ...effectiveInit, signal: attemptSignal } : effectiveInit,
+      attemptSignal ? { ...normalizedInit, signal: attemptSignal } : normalizedInit,
       accessToken,
     );
     sentAccessTokens.push(bearerTokenOf(init));
@@ -563,6 +681,7 @@ export async function fetchWithAuth(
             timeoutSignal,
             retryBudgetMs,
             perAttemptTimeoutMs,
+            allowNetworkRetry,
           ),
           timeoutPromise,
         ])
@@ -572,6 +691,7 @@ export async function fetchWithAuth(
           timeoutSignal,
           retryBudgetMs,
           perAttemptTimeoutMs,
+          allowNetworkRetry,
         )) as Promise<Response>;
 
   try {
@@ -1194,8 +1314,10 @@ class LlmApiClient {
    *
    * The server replies 202 as soon as it has accepted the job, then calls the model and writes
    * the memories itself; they reach the next turn from the DB like every other memory. Nothing
-   * comes back to parse here. The only retry is the 5 s background network budget (#2137), and
-   * this never rejects — a lost extraction must never surface in the turn.
+   * comes back to parse here. #1787: there is no network retry for this route — the 5 s
+   * background budget (#2137) is kept as the call-site value, but the gate makes it a no-op
+   * for a keyless POST, so a lost extraction warns once instead of being retried into a
+   * duplicate paid job. This never rejects — a lost extraction must never surface in the turn.
    */
   async submitMemoryExtraction(
     job: MemoryExtractionJob,

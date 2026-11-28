@@ -613,8 +613,13 @@ describe('LlmApiClient', () => {
       await expect(extractRequest).resolves.toBeUndefined();
       await expect(llmApiClient.generateText({ prompt: 'test' })).resolves.toBe('Narration');
 
-      expect(mockFetch).toHaveBeenCalledTimes(5);
-      expect(mockFetch.mock.calls[4][0]).toEqual(expect.stringContaining('/v1/llm/generate'));
+      // #1787: the extraction POST is no longer retried — a keyless POST
+      // fails after the first network error — so this is 1 extraction
+      // attempt + 1 generate, not the 4 + 1 the 5 s budget used to buy.
+      // The point of the test is unchanged: the failed extraction trips no
+      // offline fallback, so generate still fetches.
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      expect(mockFetch.mock.calls[1][0]).toEqual(expect.stringContaining('/v1/llm/generate'));
       expect(logger.warn).not.toHaveBeenCalledWith('OFFLINE_FALLBACK_TRIPPED', expect.anything());
     });
 
@@ -660,7 +665,10 @@ describe('LlmApiClient', () => {
       mockFetch.mockRejectedValue(new TypeError('Failed to fetch'));
       const request = llmApiClient.generateText({ prompt: 'test' });
       const rejection = expect(request).rejects.toThrow('Failed to fetch');
-      await exhaustNetworkRetryBudget();
+      // #1787: the generate POST fails fast on the first network error, so
+      // the offline trip happens at once — there is no retry budget left to
+      // exhaust, and exhausting it here would erode the remaining time the
+      // next assertion measures. The rejection settles without it.
       await rejection;
 
       mockFetch.mockClear();
