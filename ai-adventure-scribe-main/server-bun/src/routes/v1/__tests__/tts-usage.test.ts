@@ -38,6 +38,7 @@ mock.module('../../../services/ai-usage-service.js', () => ({
     assertUsageStoreAvailable: async () => {},
     getQuotaStatus: async () => ({ remaining: 1000 }),
     recordProviderUsage: async () => {},
+    refundQuota: async () => {},
   },
   elevenLabsCharacterCostUsd: (characters: number) => (characters * 0.05) / 1000,
   voiceQuotaUnits: (characters: number) => Math.ceil(characters / 100),
@@ -65,6 +66,7 @@ const testAuth = new Elysia({ name: 'test-tts-usage-auth' }).resolve(
 );
 
 const quotaConsumes: Array<{ units?: number; type: string; userId: string; plan: string }> = [];
+const quotaRefunds: Array<{ units?: number; type: string; userId: string; plan: string }> = [];
 const providerUsage: Array<{
   provider: string;
   inputTokens: number;
@@ -98,6 +100,9 @@ const app = new Elysia().use(
         providerUsage.push(opts);
         if (recordThrows) throw new Error('usage insert failed');
       },
+      refundQuota: async (opts: Parameters<TtsUsageService['refundQuota']>[0]) => {
+        quotaRefunds.push(opts);
+      },
     } as unknown as TtsRouteOptions['usageService'],
     fetchImpl: async (_input, init) => {
       forwardedBody = String(init?.body ?? '');
@@ -113,6 +118,7 @@ beforeEach(() => {
   fetchStatus = 200;
   recordThrows = false;
   quotaConsumes.length = 0;
+  quotaRefunds.length = 0;
   providerUsage.length = 0;
 });
 
@@ -160,6 +166,8 @@ describe('POST /v1/ai-proxy/voice usage', () => {
       }),
     ]);
     expect(providerUsage[0]?.sessionId).toBeUndefined();
+    // A usable clip keeps its reservation: charged once, nothing refunded.
+    expect(quotaRefunds).toEqual([]);
   });
 
   it('#2158: pins the server model and ignores a client-supplied model_id', async () => {
@@ -234,9 +242,16 @@ describe('POST /v1/ai-proxy/voice usage', () => {
     const response = await app.handle(speak('tts-fail-user', 'The lantern flickers.'));
 
     expect(response.status).toBe(503);
-    // #2676 step 2b: the quota is charged only after a usable clip. This assertion used to expect
-    // one unit consumed before the provider call; a rejected call must now charge nothing.
-    expect(quotaConsumes).toEqual([]);
+    // #1789: the charge is now reserved before the provider call and released
+    // on failure, so a rejected call still consumes first — and then refunds
+    // the same units. Net charge: zero. (#2676 step 2b's "charged only after
+    // a usable clip" holds as a net effect, not as call order.)
+    expect(quotaConsumes).toEqual([
+      expect.objectContaining({ userId: 'tts-fail-user', plan: 'pro', type: 'voice', units: 1 }),
+    ]);
+    expect(quotaRefunds).toEqual([
+      expect.objectContaining({ userId: 'tts-fail-user', plan: 'pro', type: 'voice', units: 1 }),
+    ]);
     expect(providerUsage).toEqual([]);
   });
 });

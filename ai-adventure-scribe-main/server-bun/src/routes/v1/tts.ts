@@ -38,7 +38,11 @@ export interface TtsRouteOptions {
   rateLimit?: ReturnType<typeof planRateLimit>;
   usageService?: Pick<
     typeof AIUsageService,
-    'assertUsageStoreAvailable' | 'checkQuotaAndConsume' | 'getQuotaStatus' | 'recordProviderUsage'
+    | 'assertUsageStoreAvailable'
+    | 'checkQuotaAndConsume'
+    | 'getQuotaStatus'
+    | 'recordProviderUsage'
+    | 'refundQuota'
   >;
   fetchImpl?: TtsFetch;
 }
@@ -66,7 +70,9 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
           const characters = body.text.length;
           const { sessionId, model_id: _clientModelId, ...providerBody } = body;
           const modelId = process.env.ELEVENLABS_MODEL?.trim() || DEFAULT_ELEVENLABS_MODEL;
-          // Check before the provider call. The charge happens after a usable clip (#2676).
+          // Fail-fast read before the provider call. The atomic reserve below
+          // is the gate: the pre-check alone cannot stop a parallel request
+          // (#1789).
           const units = voiceQuotaUnits(characters);
           // #1344: the plan on the request is lenient (authenticateRequest fails open
           // to 'free'). Resolve strictly once, before any quota check or charge: a DB
@@ -97,6 +103,63 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
             return { error: 'Voice service unavailable' };
           }
 
+          // #1789: reserve the charge BEFORE the provider call. Two parallel
+          // requests can both pass the getQuotaStatus read above, both reach
+          // ElevenLabs, and both incur provider cost. checkQuotaAndConsume is
+          // the atomic gate (advisory lock + guarded insert in the service):
+          // the request that loses the race is refused here, before any
+          // provider call. A throw here is ambiguous — the consume may have
+          // committed with a lost ack (see memory-extraction-job.ts) — so it
+          // is logged for reconciliation and rethrown to 503 (http-pipeline)
+          // with no refund and no retry: blindly refunding could grant free
+          // units.
+          let reservation;
+          try {
+            reservation = await usageService.checkQuotaAndConsume({
+              userId: user.userId,
+              plan,
+              type: 'voice',
+              units,
+            });
+          } catch (error) {
+            logger.error({
+              msg: 'TTS_VOICE_RESERVE_AMBIGUOUS',
+              error: error instanceof Error ? error.message : error,
+              userId: user.userId,
+              units,
+            });
+            throw error;
+          }
+          if (!reservation.allowed) {
+            set.status = 429;
+            return { error: 'Voice quota exceeded' };
+          }
+
+          // Give the reservation back when the provider call fails, so the
+          // user is not charged for a clip that never arrived. A refund
+          // failure is logged, never fatal: the response is already degraded
+          // (#350 pattern in llm.ts). The guard makes the release at-most-once
+          // even if a future edit adds a second call site.
+          let released = false;
+          const releaseReservation = async (): Promise<void> => {
+            if (released) return;
+            released = true;
+            try {
+              await usageService.refundQuota({
+                userId: user.userId,
+                plan,
+                type: 'voice',
+                units,
+              });
+            } catch (error) {
+              logger.error({
+                msg: 'TTS_VOICE_REFUND_FAILED',
+                error: error instanceof Error ? error.message : error,
+                userId: user.userId,
+              });
+            }
+          };
+
           // One upstream call per voice id attempted (a 404 retries once
           // with the fallback id, below). The fetch boundary is injectable
           // (options.fetchImpl) so tests stub the provider without a live call.
@@ -114,7 +177,12 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
                 body: JSON.stringify({ ...providerBody, model_id: modelId }),
               },
             );
-          const fetchFailed = (error: unknown, voiceId: string): { error: string } => {
+          const fetchFailed = async (
+            error: unknown,
+            voiceId: string,
+          ): Promise<{ error: string }> => {
+            // #1789: the provider call never ran, so the reservation goes back.
+            await releaseReservation();
             // #1348: the proxy never logged provider failures, so a run of
             // 502s could not be told apart from a quota or a bad voice.
             logger.error({
@@ -168,6 +236,8 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
           }
 
           if (!upstream.ok) {
+            // #1789: no usable clip, so the reservation goes back.
+            await releaseReservation();
             // Upstream 5xx maps to 503, anything else below 500 to 502; log
             // the upstream status either way so the next run of failures
             // says whether it was quota (402), auth (401) or a voice (422).
@@ -183,14 +253,8 @@ export function createTtsRoutes(options: TtsRouteOptions = {}) {
             return { error: 'Voice request failed' };
           }
 
-          // The clip is usable: charge it now. A second call at limit-1 can pass the check above
-          // and still reach the provider; if its charge is refused, that clip is not billed.
-          await usageService.checkQuotaAndConsume({
-            userId: user.userId,
-            plan,
-            type: 'voice',
-            units,
-          });
+          // The clip is usable: the reservation made before the provider call
+          // stands as the charge (#1789). Nothing more to consume here.
 
           // Recording is not part of the provider try. A thrown insert must not
           // turn a successful ElevenLabs response into a 503.
