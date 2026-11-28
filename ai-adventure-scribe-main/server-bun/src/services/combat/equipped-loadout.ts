@@ -47,10 +47,10 @@ export async function getDefaultCombatWeapon(
   options: { preferMelee?: boolean } = {},
 ): Promise<WeaponRuleProfile> {
   const weapons = await listEquippedWeaponProfiles(participant);
-  const melee = options.preferMelee
-    ? weapons.find((weapon) => !weapon.ranged || weapon.meleeWeapon === true)
-    : undefined;
-  return melee ?? weapons[0] ?? { ...UNARMED_STRIKE };
+  const weapon = options.preferMelee
+    ? weapons.find((candidate) => !candidate.ranged || candidate.meleeWeapon === true)
+    : weapons[0];
+  return weapon ?? { ...UNARMED_STRIKE };
 }
 
 /** `inventory_items` has no shield type; the legacy table does, so both are accepted. */
