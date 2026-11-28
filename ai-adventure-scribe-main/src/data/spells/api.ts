@@ -6,6 +6,7 @@
  * https://creativecommons.org/licenses/by/4.0/legalcode.
  */
 import nonSrdSupplementJson from './non-srd-supplement.json';
+import { canonicalSpellId } from '../../../shared/spell-aliases';
 import { logger } from '../../lib/logger';
 
 import type { Spell } from '@/types/character';
@@ -97,11 +98,15 @@ export const searchSpells = (query: string): Spell[] => {
   );
 };
 
-export const getSpellById = (id: string): Spell | undefined =>
-  allSpells.find((spell) => {
-    const normalizedId = normalizeLegacySpellId(id);
-    return spell.id === normalizedId || spell.legacy_ids?.includes(id);
-  });
+export const getSpellById = (id: string): Spell | undefined => {
+  // #254: a possessive alias ("Tasha's Hideous Laughter") resolves to the
+  // canonical SRD row, so either spelling finds the one catalog entry.
+  const canonicalId = canonicalSpellId(id);
+  const normalizedId = normalizeLegacySpellId(canonicalId);
+  return allSpells.find(
+    (spell) => spell.id === normalizedId || spell.legacy_ids?.includes(canonicalId),
+  );
+};
 
 export const validateSpellSelection = (
   className: string,
@@ -110,12 +115,13 @@ export const validateSpellSelection = (
 ): { valid: boolean; errors: string[] } => {
   const classSpells = getClassSpells(className);
   const errors: string[] = [];
+  // #254: an alias id counts as the canonical spell for its class.
   selectedCantrips.forEach((id) => {
-    if (!classSpells.cantrips.some((c) => c.id === id))
+    if (!classSpells.cantrips.some((c) => c.id === canonicalSpellId(id)))
       errors.push(`${id} is not available as a cantrip for ${className}`);
   });
   selectedSpells.forEach((id) => {
-    if (!classSpells.spells.some((s) => s.id === id))
+    if (!classSpells.spells.some((s) => s.id === canonicalSpellId(id)))
       errors.push(`${id} is not available as a spell for ${className}`);
   });
   return { valid: errors.length === 0, errors };

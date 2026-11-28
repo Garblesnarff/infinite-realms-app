@@ -26,6 +26,7 @@ function makeDeps(
     row?: unknown;
     mode?: InspirationGrantMode;
     grant?: InspirationGrantDeps['grant'];
+    publish?: InspirationGrantDeps['publish'];
   } = {},
 ) {
   const row =
@@ -40,13 +41,15 @@ function makeDeps(
       inspiration: true as const,
     }));
   const writeLine = mock(async (_input: EngineChatLineInput) => undefined);
+  const publish = overrides.publish ?? mock((_sessionId: string, _reason: string) => undefined);
   const deps: InspirationGrantDeps = {
     mode: overrides.mode ?? 'on',
     character,
     grant,
     writeLine,
+    publish,
   };
-  return { deps, grant, writeLine };
+  return { deps, grant, writeLine, publish };
 }
 
 const input = { userId: 'user-1', sessionId: 'session-1', grant: { character_name: 'Mira' } };
@@ -140,6 +143,45 @@ describe('applyStoryInspiration (#1537)', () => {
     expect(grant).not.toHaveBeenCalled();
     expect(writeLine).not.toHaveBeenCalled();
     expect(inspirationGrantCounts()).toEqual({ shadow: 1 });
+  });
+
+  it('mode on grant publishes exactly once with (session-1, story_inspiration)', async () => {
+    const { deps, publish } = makeDeps();
+    const outcome = await applyStoryInspiration(input, deps);
+
+    expect(outcome).toBe('granted');
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledWith('session-1', 'story_inspiration');
+  });
+
+  it('shadow mode does not publish', async () => {
+    const { deps, publish } = makeDeps({ mode: 'shadow' });
+    const outcome = await applyStoryInspiration(input, deps);
+
+    expect(outcome).toBe('shadow');
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('already held does not publish', async () => {
+    const { deps, publish } = makeDeps({
+      row: { id: 'char-mira', name: 'Mira', personalityNotes: held },
+    });
+    const outcome = await applyStoryInspiration(input, deps);
+
+    expect(outcome).toBe('already_held');
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('a publish that throws still returns granted and writes the engine line', async () => {
+    const publish = mock(() => {
+      throw new Error('boom');
+    });
+    const { deps, writeLine } = makeDeps({ publish });
+    const outcome = await applyStoryInspiration(input, deps);
+
+    expect(outcome).toBe('granted');
+    expect(writeLine).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledTimes(1);
   });
 
   it('the flag defaults to shadow, and only LLM_INSPIRATION_GRANT=on turns writing on', () => {

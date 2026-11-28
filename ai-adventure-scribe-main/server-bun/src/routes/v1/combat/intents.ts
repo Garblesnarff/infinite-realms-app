@@ -301,7 +301,8 @@ export const intentRoutes = new Elysia()
           const path = (result as { path?: unknown[] }).path;
           if (path && path.length > 1) {
             try {
-              const { persistPlayerMove } = await import('../../../services/combat/player-move-line.js');
+              const { persistPlayerMove } =
+                await import('../../../services/combat/player-move-line.js');
               moveRows = await persistPlayerMove({
                 encounterId: params.encounterId,
                 actorId: payload.intent.actorId,
@@ -310,7 +311,11 @@ export const intentRoutes = new Elysia()
                 userId: user.userId,
               });
             } catch (error) {
-              logger.warn({ msg: 'PLAYER_MOVE_LINE_FAILED', encounterId: params.encounterId, error });
+              logger.warn({
+                msg: 'PLAYER_MOVE_LINE_FAILED',
+                encounterId: params.encounterId,
+                error,
+              });
             }
           }
         }

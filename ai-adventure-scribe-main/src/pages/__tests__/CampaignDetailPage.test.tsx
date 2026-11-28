@@ -406,6 +406,18 @@ describe('CampaignDetailPage heroes (#89)', () => {
     document.body.classList.remove('ir-table-look');
   });
 
+  it('seeds the typed hero name on the copy, and leaves the template title alone (#1741)', async () => {
+    state.campaign = campaign({});
+    state.user = { id: 'u1' };
+    state.templates = [template()];
+    renderPage();
+    fireEvent.change(screen.getByLabelText('Name your hero'), { target: { value: 'Mara' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Play as Bram' }));
+    await waitFor(() => expect(state.seed).toHaveBeenCalledTimes(1));
+    expect(state.seed.mock.calls[0][0]).toMatchObject({ id: 't1', name: 'Mara' });
+    expect(state.templates[0].name).toBe('Bram');
+  });
+
   it('offers only the campaign premade, not a hero from another campaign (#1740)', () => {
     state.campaign = campaign({});
     state.user = { id: 'u1' };

@@ -1,5 +1,6 @@
 import AbilityScoresSelection from '../steps/AbilityScoresSelection';
 import AdvancedSpellcastingSelection from '../steps/AdvancedSpellcastingSelection';
+import AlignmentStep from '../steps/AlignmentStep';
 import BackgroundSelection from '../steps/BackgroundSelection';
 import BasicInfo from '../steps/BasicInfo';
 import CharacterEnhancements from '../steps/CharacterEnhancements';
@@ -67,6 +68,15 @@ export const wizardSteps: WizardStep[] = [
   {
     component: BackgroundSelection,
     label: 'Background',
+  },
+  {
+    // #213 QA-051: the wizard had no alignment step, so alignment saved as ''
+    // and the sheet displayed "Unaligned". Placed after Background so the
+    // Personality step's randomizer (which reads alignment) sees the choice.
+    // Optional: no validator entry, so validateStep returns VALID and
+    // Continue always works with nothing chosen.
+    component: AlignmentStep,
+    label: 'Alignment',
   },
   {
     component: PersonalitySelection,

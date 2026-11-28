@@ -6,6 +6,7 @@
  * but the database uses UUIDs for spell references.
  */
 import { THAUMATURGY_SPELL_ID } from '../../shared/racial-spell-ids';
+import { canonicalSpellId, RETIRED_SPELL_UUIDS } from '../../shared/spell-aliases';
 
 import { getSpellById } from '@/data/spells/api';
 import logger from '@/lib/logger';
@@ -53,6 +54,10 @@ export const SPELL_ID_MAPPING: Record<string, string> = {
   'faerie-fire': '041dc19b-4ccd-4715-b1f4-2270efa654b9',
   'feather-fall': '1f13d572-45ee-4dff-9658-c4f16b156796',
   heroism: '5a9f7a8a-762d-4b97-ae6e-b7220922db5f',
+  // #254: the canonical SRD id. The possessive alias ('tashas-hideous-laughter')
+  // maps to this same UUID in convertSpellIdsToDatabase, so either spelling
+  // saves to the one character_spells row.
+  'hideous-laughter': '49679c17-4b59-5e1b-b9a2-8ed2f53f209e',
   'silent-image': '66c93478-4e2c-4339-b69c-ae98339e74f7',
   sleep: 'b3babcaa-e69b-4bcb-ae35-47f917b8630f',
   'speak-with-animals': '8e846494-7ccd-423d-9e93-4fe9ca55e5db',
@@ -66,6 +71,9 @@ export const SPELL_ID_MAPPING: Record<string, string> = {
   // Common Wizard Level 1 Spells
   'burning-hands': '4f5a6b7c-8d9e-0f1a-2b3c-4d5e6f7a8b9c', // Wizard
   'detect-magic': 'fff789f3-def2-5805-b17b-bdf5f78bbfcd', // Wizard, Ritual
+  // #254: the canonical SRD id; the possessive alias ('tensers-floating-disk')
+  // maps to this same UUID in convertSpellIdsToDatabase.
+  'floating-disk': '14bccb17-1728-5095-ab6a-35b28812c6b7', // Wizard
   identify: '9b944916-3d61-5d2e-81bb-4afd3a12fe83', // Wizard, Ritual
   'mage-armor': 'f3179e7d-c1e2-5d7e-9ca9-135423a85191', // Wizard
   shield: 'b69a1665-196d-53fb-bb22-254e9cfe47a1', // Wizard
@@ -93,7 +101,10 @@ export const REVERSE_SPELL_ID_MAPPING: Record<string, string> = Object.fromEntri
 export function convertSpellIdsToDatabase(spellIds: string[]): string[] {
   return spellIds
     .map((kebabId) => {
-      const uuid = SPELL_ID_MAPPING[kebabId];
+      // #254: a possessive alias saves under the canonical id; a raw retired
+      // duplicate UUID maps to its canonical slug first, so it still lands.
+      const canonical = RETIRED_SPELL_UUIDS[kebabId] ?? canonicalSpellId(kebabId);
+      const uuid = SPELL_ID_MAPPING[canonical];
       if (!uuid) {
         logger.warn(`No database mapping found for spell ID: ${kebabId}`);
         return null;
@@ -114,7 +125,12 @@ export function convertSpellIdsToFrontend(spellIds: string[]): string[] {
       // The character-spells API returns canonical frontend slugs in `id`.
       // Keep UUID translation for older records, but do not discard a slug
       // that already resolves in the complete frontend spell catalog.
-      const kebabId = REVERSE_SPELL_ID_MAPPING[spellId] ?? getSpellById(spellId)?.id;
+      // #254: a row written under a retired duplicate UUID still reads as
+      // the canonical spell (the row-rewriting cleanup needs Rob's line).
+      const kebabId =
+        REVERSE_SPELL_ID_MAPPING[spellId] ??
+        RETIRED_SPELL_UUIDS[spellId] ??
+        getSpellById(spellId)?.id;
       if (!kebabId) {
         logger.warn(`No frontend mapping found for spell identifier: ${spellId}`);
         return null;
@@ -138,5 +154,8 @@ export function getValidSpellIds(): string[] {
  * @returns True if the spell can be saved to database
  */
 export function hasSpellMapping(kebabId: string): boolean {
-  return kebabId in SPELL_ID_MAPPING;
+  // #254: an alias counts as mapped — it saves under the canonical id — and
+  // so does a raw retired duplicate UUID.
+  const canonical = RETIRED_SPELL_UUIDS[kebabId] ?? canonicalSpellId(kebabId);
+  return canonical in SPELL_ID_MAPPING;
 }

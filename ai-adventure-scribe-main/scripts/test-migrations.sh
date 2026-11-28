@@ -230,6 +230,9 @@ build_replay_list() {
         # Creates story_map_progress/story_map_revealed_edges, which reference campaigns and
         # game_sessions (#1753); pinned right after 0038 so every table it references exists.
         0039_story_map_progress.sql) echo "20261125_000001	$f"; continue;;
+        # Adds the nullable starter_template_id and starter_title columns to characters (#1741).
+        # Pinned after the newest migration so the characters table exists.
+        0040_character_starter_template.sql) echo "20261126_000000	$f"; continue;;
         # Creates combat_intent_idempotency, which references combat_encounters, created by
         # supabase/migrations/20251112_01_add_combat_system_unified.sql (#51); pinned after the
         # newest migration so the combat tables exist.

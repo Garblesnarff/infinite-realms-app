@@ -56,6 +56,7 @@ mock.module('../../../services/ai-usage-service.js', () => ({
     assertUsageStoreAvailable: async () => {},
     getQuotaStatus: async () => ({ remaining: 1000 }),
     recordProviderUsage: async () => {},
+    refundQuota: async () => {},
   },
   elevenLabsCharacterCostUsd: (characters: number) => (characters * 0.05) / 1000,
   voiceQuotaUnits: (characters: number) => Math.ceil(characters / 100),
@@ -81,9 +82,9 @@ const noopRateLimit = new Elysia({ name: 'test-tts-noop-rate-limit' });
 
 function makeApp(fetchImpl: TtsRouteOptions['fetchImpl']): {
   app: { handle: (request: Request) => Promise<Response> };
-  calls: { consume: number; record: number };
+  calls: { consume: number; refund: number; record: number };
 } {
-  const calls = { consume: 0, record: 0 };
+  const calls = { consume: 0, refund: 0, record: 0 };
   const app = new Elysia().use(
     createTtsRoutes({
       auth: testAuth as unknown as TtsRouteOptions['auth'],
@@ -93,7 +94,10 @@ function makeApp(fetchImpl: TtsRouteOptions['fetchImpl']): {
         getQuotaStatus: async () => ({ remaining: 1000 }),
         checkQuotaAndConsume: async () => {
           calls.consume += 1;
-          return { allowed: true, remaining: 1, resetAt: '' };
+          return { allowed: true, remaining: 1, resetAt: '', usageId: 1 };
+        },
+        refundQuota: async () => {
+          calls.refund += 1;
         },
         recordProviderUsage: async () => {
           calls.record += 1;
@@ -152,7 +156,10 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream failures (#1348)', () => {
         voiceId: 'voice-1',
       }),
     );
-    expect(calls.consume).toBe(0);
+    // #1789: the reservation is taken before the provider call and released
+    // on failure, so a failed call consumes once and refunds once (net zero).
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toBe(1);
     expect(calls.record).toBe(0);
   });
 
@@ -170,7 +177,10 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream failures (#1348)', () => {
         voiceId: 'voice-1',
       }),
     );
-    expect(calls.consume).toBe(0);
+    // #1789: the reservation is taken before the provider call and released
+    // on failure, so a failed call consumes once and refunds once (net zero).
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toBe(1);
     expect(calls.record).toBe(0);
   });
 
@@ -185,7 +195,10 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream failures (#1348)', () => {
     expect(logged).toContainEqual(
       expect.objectContaining({ msg: 'TTS_UPSTREAM_FETCH_ERROR', voiceId: 'voice-1' }),
     );
-    expect(calls.consume).toBe(0);
+    // #1789: the reservation is taken before the provider call and released
+    // on failure, so a failed call consumes once and refunds once (net zero).
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toBe(1);
     expect(calls.record).toBe(0);
   });
 });
@@ -226,6 +239,7 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream 404 with fallback (#1406)', 
     );
     // One usable clip: charged once, not once per attempt.
     expect(calls.consume).toBe(1);
+    expect(calls.refund).toBe(0);
     expect(calls.record).toBe(1);
   });
 
@@ -258,7 +272,10 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream 404 with fallback (#1406)', 
         voiceId: 'voice-1',
       }),
     );
-    expect(calls.consume).toBe(0);
+    // #1789: the reservation is taken before the provider call and released
+    // on failure, so a failed call consumes once and refunds once (net zero).
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toBe(1);
     expect(calls.record).toBe(0);
   });
 
@@ -304,7 +321,10 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream 404 with fallback (#1406)', 
         voiceId: 'voice-fallback',
       }),
     );
-    expect(calls.consume).toBe(0);
+    // #1789: the reservation is taken before the provider call and released
+    // on failure, so a failed call consumes once and refunds once (net zero).
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toBe(1);
     expect(calls.record).toBe(0);
   });
 
@@ -323,7 +343,10 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream 404 with fallback (#1406)', 
     expect(
       logged.filter((entry) => entry.msg === 'TTS_VOICE_NOT_FOUND'),
     ).toHaveLength(1);
-    expect(calls.consume).toBe(0);
+    // #1789: the reservation is taken before the provider call and released
+    // on failure, so a failed call consumes once and refunds once (net zero).
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toBe(1);
     expect(calls.record).toBe(0);
   });
 
@@ -352,7 +375,10 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream 404 with fallback (#1406)', 
         voiceId: 'voice-1',
       }),
     );
-    expect(calls.consume).toBe(0);
+    // #1789: the reservation is taken before the provider call and released
+    // on failure, so a failed call consumes once and refunds once (net zero).
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toBe(1);
     expect(calls.record).toBe(0);
   });
 
@@ -388,7 +414,10 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream 404 with fallback (#1406)', 
     expect(logged).not.toContainEqual(
       expect.objectContaining({ msg: 'TTS_UPSTREAM_ERROR' }),
     );
-    expect(calls.consume).toBe(0);
+    // #1789: the reservation is taken before the provider call and released
+    // on failure, so a failed call consumes once and refunds once (net zero).
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toBe(1);
     expect(calls.record).toBe(0);
   });
 
@@ -431,7 +460,10 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream 404 with fallback (#1406)', 
         voiceId: 'voice-fallback',
       }),
     );
-    expect(calls.consume).toBe(0);
+    // #1789: the reservation is taken before the provider call and released
+    // on failure, so a failed call consumes once and refunds once (net zero).
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toBe(1);
     expect(calls.record).toBe(0);
   });
 
@@ -448,7 +480,10 @@ describe('POST /v1/ai-proxy/voice/:voiceId upstream 404 with fallback (#1406)', 
     expect(response.status).toBe(502);
     expect(urls).toEqual(['https://api.elevenlabs.io/v1/text-to-speech/voice-1/stream']);
     expect(logged.filter((entry) => entry.msg === 'TTS_VOICE_NOT_FOUND')).toHaveLength(1);
-    expect(calls.consume).toBe(0);
+    // #1789: the reservation is taken before the provider call and released
+    // on failure, so a failed call consumes once and refunds once (net zero).
+    expect(calls.consume).toBe(1);
+    expect(calls.refund).toBe(1);
     expect(calls.record).toBe(0);
   });
 });

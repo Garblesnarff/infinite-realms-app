@@ -909,7 +909,10 @@ export interface AppendMessageImageParams {
 
 export interface ImageQuotaStatus {
   plan: string;
-  limits: { daily: { llm: number; image: number; voice: number } };
+  limits: {
+    daily: { llm: number; image: number };
+    monthly: { voice: number };
+  };
   usage: number;
   remaining: number;
   resetAt: string;

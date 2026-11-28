@@ -106,7 +106,7 @@ function renderAtFinalStep(seed: Character): ReturnType<typeof render> {
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
-      <MemoryRouter initialEntries={['/app/characters/new?step=12']}>
+      <MemoryRouter initialEntries={['/app/characters/new?step=13']}>
         <LocationProbe />
         <StateHarness seed={seed} />
       </MemoryRouter>
@@ -124,10 +124,11 @@ describe('wizard final step with a missing name (#920)', () => {
   it('shows a name input on the final step when the name is missing', async () => {
     renderAtFinalStep(namelessRogue());
 
-    // Half-orc rogue filters to 13 steps; the final step is filtered index
-    // 12 but full-track step 15 of 15 (#210 QA-053: the counter is the
-    // full 15-step track, not the filtered list).
-    expect(await screen.findByText('Step 15 of 15')).toBeTruthy();
+    // Half-orc rogue filters to 14 steps (#213 added the Alignment step);
+    // the final step is filtered index 13 but full-track step 16 of 16
+    // (#210 QA-053: the counter is the full 16-step track, not the
+    // filtered list).
+    expect(await screen.findByText('Step 16 of 16')).toBeTruthy();
     expect(screen.getByText('Finalize Your Character')).toBeTruthy();
 
     // The summary must offer an editable name field, not just "Not set".
@@ -176,13 +177,13 @@ describe('wizard final step with a missing name (#920)', () => {
   it('Previous navigates back from the final step', async () => {
     renderAtFinalStep(namelessRogue());
 
-    expect(await screen.findByText('Step 15 of 15')).toBeTruthy();
+    expect(await screen.findByText('Step 16 of 16')).toBeTruthy();
     fireEvent.click(screen.getByText('Previous'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('location-search').textContent).toContain('step=11');
+      expect(screen.getByTestId('location-search').textContent).toContain('step=12');
     });
-    expect(await screen.findByText('Step 14 of 15')).toBeTruthy();
+    expect(await screen.findByText('Step 15 of 16')).toBeTruthy();
     // The rendered step actually changes, not just the URL.
     expect(screen.getAllByText('Character Enhancements').length).toBeGreaterThan(0);
     expect(screen.queryByText('Finalize Your Character')).toBeNull();
@@ -191,7 +192,7 @@ describe('wizard final step with a missing name (#920)', () => {
   it('Previous still navigates after a blocked Complete Character click', async () => {
     renderAtFinalStep(namelessRogue());
 
-    expect(await screen.findByText('Step 15 of 15')).toBeTruthy();
+    expect(await screen.findByText('Step 16 of 16')).toBeTruthy();
     fireEvent.click(screen.getByText('Complete Character'));
     await waitFor(() => {
       expect(harness.toast).toHaveBeenCalledWith(
@@ -202,9 +203,9 @@ describe('wizard final step with a missing name (#920)', () => {
     fireEvent.click(screen.getByText('Previous'));
 
     await waitFor(() => {
-      expect(screen.getByTestId('location-search').textContent).toContain('step=11');
+      expect(screen.getByTestId('location-search').textContent).toContain('step=12');
     });
-    expect(await screen.findByText('Step 14 of 15')).toBeTruthy();
+    expect(await screen.findByText('Step 15 of 16')).toBeTruthy();
   });
 
   it('an invalid-but-present name can be fixed in place on the final step', async () => {
@@ -212,7 +213,7 @@ describe('wizard final step with a missing name (#920)', () => {
     // Info's validity rule: a draft can carry a name the save gate rejects.
     renderAtFinalStep({ ...namelessRogue(), name: 'Vex123' });
 
-    expect(await screen.findByText('Step 15 of 15')).toBeTruthy();
+    expect(await screen.findByText('Step 16 of 16')).toBeTruthy();
     const input = screen.getByLabelText(/name:/i) as HTMLInputElement;
     expect(input.value).toBe('Vex123');
 
@@ -241,7 +242,7 @@ describe('wizard final step with a missing name (#920)', () => {
   it('shows the saved name as plain text when the character already has one', async () => {
     renderAtFinalStep({ ...namelessRogue(), name: 'Vex Marlowe' });
 
-    expect(await screen.findByText('Step 15 of 15')).toBeTruthy();
+    expect(await screen.findByText('Step 16 of 16')).toBeTruthy();
     // The name renders in the summary (and the preview sidebar).
     expect(screen.getAllByText('Vex Marlowe').length).toBeGreaterThan(0);
     expect(screen.queryByLabelText(/name:/i)).toBeNull();

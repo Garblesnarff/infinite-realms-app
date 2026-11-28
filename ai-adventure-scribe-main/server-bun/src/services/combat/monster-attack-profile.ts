@@ -204,10 +204,11 @@ export function splitDamageDice(
   if (!raw) return null;
   const dice = /^(\d+d\d+)([+-]\d+)?$/.exec(raw);
   if (dice) return { dice: dice[1], bonus: dice[2] ? Number(dice[2]) : 0 };
-  // A few entries carry a flat number with no dice ("1 piercing damage"). `1d1` is that
-  // number expressed as something the roller accepts, not an approximation of it.
+  // A few entries carry a flat number with no dice ("1 piercing damage"). `0d1`
+  // plus that number is the same total, with no die for a critical to double —
+  // 2014 doubles dice, not a flat amount. `1d1` plus (N-1) would add 1 on a crit.
   const flat = /^(\d+)$/.exec(raw);
-  if (flat) return { dice: '1d1', bonus: Number(flat[1]) - 1 };
+  if (flat) return { dice: '0d1', bonus: Number(flat[1]) };
   return null;
 }
 

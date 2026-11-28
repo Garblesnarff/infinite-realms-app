@@ -43,6 +43,7 @@ import type {
 import type { CombatIntentActor, DeclaredAttack } from './combat/combat-intent-gate.js';
 import type { EncounterContext } from './combat/encounter-sizing.js';
 import type { LLMResponse } from './llm-provider-service.js';
+import type { PlaceFightRecipe } from './story-map/story-map-service.js';
 
 /** What the client must send for the server to be able to seat the player in an encounter. */
 export interface CombatEntryContext {
@@ -287,6 +288,11 @@ export async function applyCombatEntryGate(params: {
   encounterContext?: (sessionId: string, userId: string) => Promise<EncounterContext>;
   deps?: CombatEntryGateDeps;
   /**
+   * #1755: the fight-board recipe of the session campaign's current story map place, or null
+   * when there is none. Loaded by default in production; tests pass a stub.
+   */
+  placeFightRecipe?: (sessionId: string, userId: string) => Promise<PlaceFightRecipe | null>;
+  /**
    * #913: the generate route remembers a proposal and drops a second one for
    * the same actors. Pipeline tests omit this, so detection stays pure.
    */
@@ -440,6 +446,55 @@ export async function applyCombatEntryGate(params: {
     pending = { ...pending, combatants: named };
   }
 
+  // #1755: a fight at a known story map place uses that place's board, so the same place gives
+  // the same board on every visit. The place's environment, size and seed replace the DM's (or
+  // the synthesized) ones and the merged spec goes through the same sanitizer; a recipe the
+  // sanitizer rejects, a failed read, or no current place leaves the scene as it was.
+  if (pending) {
+    const sanitize = params.deps?.sanitizeSceneSpec ?? defaultSanitizeSceneSpec;
+    let recipe: PlaceFightRecipe | null = null;
+    try {
+      recipe = await (params.placeFightRecipe ?? loadDefaultPlaceFightRecipe)(
+        combatEntry.sessionId,
+        params.userId,
+      );
+    } catch (error) {
+      logger.warn({
+        msg: 'COMBAT_ENTRY_PLACE_BOARD_UNAVAILABLE',
+        sessionId: combatEntry.sessionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    if (recipe) {
+      const placed = sanitize(
+        {
+          ...pending.sceneSpec,
+          environment: recipe.environment,
+          size: recipe.size,
+          seed: recipe.seed,
+        },
+        combatEntry.sessionId,
+      );
+      if (placed.ok) {
+        pending = { ...pending, sceneSpec: placed.sceneSpec };
+        logger.info({
+          msg: 'COMBAT_ENTRY_PLACE_BOARD',
+          sessionId: combatEntry.sessionId,
+          place: recipe.placeKey,
+          environment: placed.sceneSpec.environment,
+          size: placed.sceneSpec.size,
+        });
+      } else {
+        logger.warn({
+          msg: 'COMBAT_ENTRY_PLACE_BOARD_REJECTED',
+          sessionId: combatEntry.sessionId,
+          place: recipe.placeKey,
+          detail: placed.detail,
+        });
+      }
+    }
+  }
+
   // #2514: size the encounter before the handoff leaves the server. The
   // engine decides the count (campaign difficulty + bible encounter note);
   // the DM's prose in this turn already introduced the named creature, and
@@ -580,4 +635,13 @@ export async function applyCombatEntryGate(params: {
     combat_entry_pending: pending,
   };
   return { ...sanitizedResult, text: JSON.stringify(rewritten) };
+}
+
+/** Production loader for the place recipe; imported lazily so the gate stays DB-free to load. */
+async function loadDefaultPlaceFightRecipe(
+  sessionId: string,
+  userId: string,
+): Promise<PlaceFightRecipe | null> {
+  const { loadPlaceFightRecipe } = await import('./story-map/story-map-service.js');
+  return loadPlaceFightRecipe(sessionId, userId);
 }

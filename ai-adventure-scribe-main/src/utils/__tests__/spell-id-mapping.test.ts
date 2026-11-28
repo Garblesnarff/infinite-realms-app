@@ -1,5 +1,9 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+import { RETIRED_SPELL_UUIDS } from '../../../shared/spell-aliases';
 import {
   convertSpellIdsToDatabase,
   convertSpellIdsToFrontend,
@@ -136,6 +140,83 @@ describe('spell-id-mapping', () => {
       expect(hasSpellMapping('non-existent-spell')).toBe(false);
       expect(hasSpellMapping('')).toBe(false);
       expect(hasSpellMapping('Fireball')).toBe(false); // Case sensitive check
+    });
+  });
+
+  describe('one canonical spell id (#254)', () => {
+    // The seed files are the single source of truth for the catalog rows:
+    // parse them in-test like the StarterTemplateCard parity test does,
+    // instead of copying a fixture that can drift.
+    const SEED_DIR = path.resolve(process.cwd(), 'db', 'migrations');
+    const seedSql = ['20261021_seed_spell_catalog.sql', '20261021_seed_thaumaturgy.sql']
+      .map((file) => readFileSync(path.join(SEED_DIR, file), 'utf8'))
+      .join('\n');
+    const seedRowIds = new Set(
+      [...seedSql.matchAll(/\(\s*'([0-9a-f-]{36})'\s*,\s*'((?:[^']|'')+)'/g)].map(
+        ([, uuid]) => uuid,
+      ),
+    );
+
+    it('every mapping UUID resolves to a catalog row in the seed files', () => {
+      // Fail loudly if the parse ever comes back empty instead of passing vacuously.
+      expect(seedRowIds.size).toBeGreaterThan(300);
+      const unresolved = Object.entries(SPELL_ID_MAPPING).filter(
+        ([, uuid]) => !seedRowIds.has(uuid),
+      );
+      expect(unresolved).toEqual([]);
+    });
+
+    it('has one catalog entry per spell (no possessive-stripped duplicate names)', () => {
+      const stripped = (name: string): string => {
+        const lower = name.toLowerCase();
+        const possessive = lower.indexOf("'s ");
+        return possessive >= 0 ? lower.slice(possessive + 3) : lower;
+      };
+      const seen = new Map<string, string>();
+      const duplicates: string[] = [];
+      for (const spell of allSpells) {
+        const key = stripped(spell.name);
+        if (seen.has(key)) {
+          duplicates.push(`${seen.get(key)} vs ${spell.name}`);
+        } else {
+          seen.set(key, spell.name);
+        }
+      }
+      expect(duplicates).toEqual([]);
+    });
+
+    it('saves a possessive alias under the canonical UUID', () => {
+      const canonical = SPELL_ID_MAPPING['hideous-laughter'];
+      expect(canonical).toBeDefined();
+      expect(convertSpellIdsToDatabase(['tashas-hideous-laughter'])).toEqual([canonical]);
+      expect(convertSpellIdsToDatabase(['hideous-laughter'])).toEqual([canonical]);
+      expect(convertSpellIdsToDatabase(['tensers-floating-disk'])).toEqual([
+        SPELL_ID_MAPPING['floating-disk'],
+      ]);
+      expect(convertSpellIdsToDatabase(['floating-disk'])).toEqual([
+        SPELL_ID_MAPPING['floating-disk'],
+      ]);
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('counts a possessive alias as mapped', () => {
+      expect(hasSpellMapping('tashas-hideous-laughter')).toBe(true);
+      expect(hasSpellMapping('tensers-floating-disk')).toBe(true);
+    });
+
+    it('reads a retired duplicate UUID as the canonical spell', () => {
+      for (const [retiredUuid, canonicalSlug] of Object.entries(RETIRED_SPELL_UUIDS)) {
+        expect(convertSpellIdsToFrontend([retiredUuid])).toEqual([canonicalSlug]);
+      }
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('saves a raw retired duplicate UUID under the canonical UUID', () => {
+      for (const [retiredUuid, canonicalSlug] of Object.entries(RETIRED_SPELL_UUIDS)) {
+        expect(convertSpellIdsToDatabase([retiredUuid])).toEqual([SPELL_ID_MAPPING[canonicalSlug]]);
+        expect(hasSpellMapping(retiredUuid)).toBe(true);
+      }
+      expect(logger.warn).not.toHaveBeenCalled();
     });
   });
 });

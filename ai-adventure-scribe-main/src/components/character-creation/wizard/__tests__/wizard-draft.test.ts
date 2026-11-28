@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import type { Character } from '@/types/character';
 
+import { wizardSteps } from '@/components/character-creation/wizard/constants';
 import {
   WIZARD_DRAFT_VERSION,
   clearWizardDraft,
@@ -74,6 +75,32 @@ describe('wizard-draft storage', () => {
     expect(readWizardDraft(KEY)).toBeNull();
     window.localStorage.setItem(KEY, JSON.stringify({ ...makeDraft(), character: 'nope' }));
     expect(readWizardDraft(KEY)).toBeNull();
+  });
+
+  it('ignores a v2 draft saved on Personality now that Alignment moved it (#213)', () => {
+    expect(WIZARD_DRAFT_VERSION).toBeGreaterThan(2);
+    // The real track: Alignment sits before Personality, so a draft saved on
+    // Personality before #213 stored one less than the current index — the
+    // index Alignment now occupies. That draft must be ignored, not opened
+    // one step early on Alignment.
+    const personalityIndex = wizardSteps.findIndex((step) => step.label === 'Personality');
+    const alignmentIndex = wizardSteps.findIndex((step) => step.label === 'Alignment');
+    expect(personalityIndex).toBeGreaterThan(0);
+    expect(alignmentIndex).toBe(personalityIndex - 1);
+    window.localStorage.setItem(
+      KEY,
+      JSON.stringify({ ...makeDraft(), version: 2, step: alignmentIndex }),
+    );
+    expect(readWizardDraft(KEY)).toBeNull();
+
+    // Same for a later step: a v2 draft saved on Finalization (old index 14)
+    // would now open on Enhancements, so it is ignored too.
+    window.localStorage.setItem(KEY, JSON.stringify({ ...makeDraft(), version: 2, step: 14 }));
+    expect(readWizardDraft(KEY)).toBeNull();
+
+    // A v3 draft saved on Personality (its current index) reads back at that step.
+    window.localStorage.setItem(KEY, JSON.stringify({ ...makeDraft(), step: personalityIndex }));
+    expect(readWizardDraft(KEY)?.step).toBe(personalityIndex);
   });
 
   it('normalizes a bad step to 0', () => {

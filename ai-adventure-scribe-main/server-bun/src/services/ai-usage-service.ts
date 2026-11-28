@@ -17,11 +17,13 @@ export type UsageType = 'llm' | 'llm_system' | 'image' | 'voice';
 /** One voice quota unit is this many characters. A 100-character line costs 1. */
 export const VOICE_CHARS_PER_UNIT = 100;
 
-/** Daily voice caps for paid plans, in quota units (not characters, not calls).
- * pro 20 units = 2,000 characters/day; tester 200 units = 20,000; enterprise
- * 2,000 units = 200,000. Free voice stays 0 (#2178).
+/** Monthly voice caps, in quota units (not characters, not calls). One unit is
+ * VOICE_CHARS_PER_UNIT characters (#58). pro (Legend) 540 units = 54,000
+ * characters = 60 premium minutes a month. tester and enterprise keep their
+ * old daily caps scaled ×30, so their monthly spend ceiling is unchanged.
+ * Free voice stays 0 (#2178).
  */
-const VOICE_DAILY_UNIT_LIMITS = { pro: 20, tester: 200, enterprise: 2000 } as const;
+const VOICE_MONTHLY_UNIT_LIMITS = { pro: 540, tester: 6000, enterprise: 60000 } as const;
 
 /** ElevenLabs Flash/Turbo list price. cost_usd = characters * this / 1000. */
 export const ELEVENLABS_USD_PER_1K_CHARS = 0.05;
@@ -37,7 +39,10 @@ export function voiceQuotaUnits(characters: number): number {
 }
 
 export type QuotaConfig = {
-  daily: Record<UsageType, number>;
+  /** Caps that reset every UTC day. Voice is not here: it is monthly (#58). */
+  daily: Record<Exclude<UsageType, 'voice'>, number>;
+  /** Caps that reset on the 1st of the month (UTC). Only voice is monthly. */
+  monthly: Record<'voice', number>;
 };
 
 export { QuotaUnavailableError } from '../lib/quota-errors.js';
@@ -96,7 +101,7 @@ export class AIUsageService {
         textOutputTokens * (pricing?.output ?? 0) +
         pricedImageOutputTokens * (pricing?.imageOutput ?? pricing?.output ?? 0)) /
         1_000_000;
-    const period = AIUsageService.periodKey();
+    const period = AIUsageService.periodKey(opts.type);
 
     try {
       await AIUsageService.ensureTable();
@@ -115,8 +120,7 @@ export class AIUsageService {
         )
         RETURNING id
       `;
-      const usageId =
-        inserted.length > 0 && inserted[0].id != null ? Number(inserted[0].id) : null;
+      const usageId = inserted.length > 0 && inserted[0].id != null ? Number(inserted[0].id) : null;
       const totals = await sql`
         SELECT COALESCE(SUM(cost_usd), 0) AS cost_usd
         FROM ai_usage WHERE user_id = ${opts.userId} AND period_start = ${period}
@@ -151,25 +155,26 @@ export class AIUsageService {
       // llm_system: Background tasks like memory extraction, world building (500/day - generous for side effects)
       // image 1/day (#2510). voice 0: ElevenLabs is off; browser/Kokoro only (#2178).
       // Voice limits are in units of VOICE_CHARS_PER_UNIT characters (ceil(chars / 100) per call).
-      daily: { llm: 15, llm_system: 500, image: 1, voice: 0 },
+      daily: { llm: 15, llm_system: 500, image: 1 },
+      monthly: { voice: 0 },
     },
     pro: {
-      // Legend (#2510): 40 messages, 2 images and 20 voice units
-      // (2,000 premium-voice characters) a day.
+      // Legend (#2510): 40 messages, 2 images a day; 540 voice units
+      // (54,000 premium-voice characters = 60 minutes) a month (#58).
       daily: {
         llm: 40,
         llm_system: 1000,
         image: 2,
-        voice: VOICE_DAILY_UNIT_LIMITS.pro,
       },
+      monthly: { voice: VOICE_MONTHLY_UNIT_LIMITS.pro },
     },
     enterprise: {
       daily: {
         llm: 1000,
         llm_system: 5000,
         image: 500,
-        voice: VOICE_DAILY_UNIT_LIMITS.enterprise,
       },
+      monthly: { voice: VOICE_MONTHLY_UNIT_LIMITS.enterprise },
     },
     // Playtest accounts (#2474). Own plan so their spend stays out of the plan='pro' rows.
     tester: {
@@ -177,8 +182,8 @@ export class AIUsageService {
         llm: 500,
         llm_system: 5000,
         image: 50,
-        voice: VOICE_DAILY_UNIT_LIMITS.tester,
       },
+      monthly: { voice: VOICE_MONTHLY_UNIT_LIMITS.tester },
     },
   };
 
@@ -246,23 +251,49 @@ export class AIUsageService {
   }
 
   /**
-   * Generate period key for current UTC date (YYYY-MM-DD)
+   * Period key for a usage type. Daily types key on the UTC date
+   * (YYYY-MM-DD); voice keys on the first of the UTC month (YYYY-MM-01)
+   * because its bucket is monthly (#58).
    */
-  private static periodKey(now = new Date()): string {
+  private static periodKey(type: UsageType, now = new Date()): string {
     const y = now.getUTCFullYear();
     const m = String(now.getUTCMonth() + 1).padStart(2, '0');
+    if (type === 'voice') return `${y}-${m}-01`;
     const d = String(now.getUTCDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
   }
 
   /**
-   * Get reset time (next UTC midnight)
+   * Get reset time for a usage type: next UTC midnight for daily types, the
+   * 1st of next month (00:00 UTC) for voice (#58).
    */
-  private static getResetAt(): string {
-    const now = new Date();
+  private static getResetAt(type: UsageType, now = new Date()): string {
+    if (type === 'voice') {
+      return new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0),
+      ).toISOString();
+    }
     return new Date(
       Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0),
     ).toISOString();
+  }
+
+  /** Limit, period key and reset time for one plan + type. */
+  private static quotaWindow(
+    plan: string,
+    type: UsageType,
+    now = new Date(),
+  ): {
+    limit: number;
+    periodStart: string;
+    resetAt: string;
+  } {
+    const quota = AIUsageService.getPlanQuota(plan);
+    return {
+      limit: type === 'voice' ? quota.monthly.voice : quota.daily[type],
+      periodStart: AIUsageService.periodKey(type, now),
+      resetAt: AIUsageService.getResetAt(type, now),
+    };
   }
 
   /**
@@ -278,10 +309,11 @@ export class AIUsageService {
   }): Promise<{ allowed: boolean; remaining: number; resetAt: string; usageId: number | null }> {
     const { userId, orgId, plan, type } = opts;
     const units = Math.max(1, Math.floor(opts.units ?? 1));
-    const quota = AIUsageService.getPlanQuota(plan);
-    const limit = quota.daily[type];
-    const pkey = AIUsageService.periodKey();
-    const resetAt = AIUsageService.getResetAt();
+    const { limit, periodStart: pkey, resetAt } = AIUsageService.quotaWindow(plan, type);
+    // Exclusive upper bound of the period (the reset date): the 1st of next
+    // month for voice, tomorrow for daily types. Without it the voice SUM
+    // would also count any future-dated row.
+    const pend = resetAt.slice(0, 10);
 
     // Try Postgres
     try {
@@ -300,6 +332,11 @@ export class AIUsageService {
       const outcome = await sql.begin(async (tx) => {
         await tx`SELECT pg_advisory_xact_lock(hashtext(${lockScope}))`;
 
+        // Voice is a monthly bucket (#58): the SUM counts every voice row from
+        // this calendar month, including daily-shaped rows written before the
+        // monthly bucket shipped, and nothing dated on/after the reset date.
+        // Daily types match one period_start. The boolean parameters keep one
+        // shape for both (no nested fragment, so the DB-down unit mocks still work).
         // ⚡ Bolt: Consolidated SELECT and INSERT into a single atomic query to reduce round-trips from 2 to 1.
         // This uses a subquery to verify quota availability before inserting, returning the new total on success.
         // Now safe under concurrency because the advisory lock above serializes
@@ -312,14 +349,18 @@ export class AIUsageService {
             FROM ai_usage
             WHERE (org_id = ${orgId || null} OR user_id = ${userId})
               AND type = ${type}
-              AND period_start = ${pkey}
+              AND period_start >= ${pkey}
+              AND (${type === 'voice'} OR period_start = ${pkey})
+              AND (${type !== 'voice'} OR period_start < ${pend})
           ) + ${units} <= ${limit}
           RETURNING id, (
             SELECT COALESCE(SUM(units), 0)
             FROM ai_usage
             WHERE (org_id = ${orgId || null} OR user_id = ${userId})
               AND type = ${type}
-              AND period_start = ${pkey}
+              AND period_start >= ${pkey}
+              AND (${type === 'voice'} OR period_start = ${pkey})
+              AND (${type !== 'voice'} OR period_start < ${pend})
           ) AS total
         `;
 
@@ -343,7 +384,9 @@ export class AIUsageService {
           FROM ai_usage
           WHERE (org_id = ${orgId || null} OR user_id = ${userId})
             AND type = ${type}
-            AND period_start = ${pkey}
+            AND period_start >= ${pkey}
+            AND (${type === 'voice'} OR period_start = ${pkey})
+            AND (${type !== 'voice'} OR period_start < ${pend})
         `;
         const used = Number(rows?.[0]?.total || 0);
         return { allowed: false, remaining: Math.max(0, limit - used), usageId: null };
@@ -360,7 +403,8 @@ export class AIUsageService {
 
   /**
    * Give back units a checkQuotaAndConsume() call took. Quota is accounted as
-   * SUM(units) over today's rows, so a negative-units row restores the unit.
+   * SUM(units) over the period's rows (today for daily types, this calendar
+   * month for voice), so a negative-units row restores the unit.
    * Used when the turn that consumed the unit never reached a model (#350:
    * provider key/credit limit) — the player must not pay for the outage.
    * Throws on DB error; callers log and move on (the turn is already degraded).
@@ -379,7 +423,7 @@ export class AIUsageService {
   }): Promise<void> {
     const { userId, orgId, plan, type } = opts;
     const units = Math.max(1, Math.floor(opts.units ?? 1));
-    const pkey = AIUsageService.periodKey();
+    const pkey = AIUsageService.periodKey(type);
     await AIUsageService.ensureTable();
     await sql`
       INSERT INTO ai_usage (org_id, user_id, plan, type, units, period_start)
@@ -421,7 +465,7 @@ export class AIUsageService {
     type: UsageType;
   }): Promise<{
     plan: string;
-    limits: { daily: Record<UsageType, number> };
+    limits: QuotaConfig;
     usage: number;
     remaining: number;
     /** Voice only: remaining quota in characters (remaining units × VOICE_CHARS_PER_UNIT). */
@@ -429,12 +473,11 @@ export class AIUsageService {
     resetAt: string;
   }> {
     const { userId, orgId, plan, type } = opts;
-    const quota = AIUsageService.getPlanQuota(plan);
-    const limit = quota.daily[type];
-    const pkey = AIUsageService.periodKey();
+    const { limit, periodStart: pkey, resetAt } = AIUsageService.quotaWindow(plan, type);
+    // Exclusive upper bound of the period (the reset date); see checkQuotaAndConsume.
+    const pend = resetAt.slice(0, 10);
     const scope = orgId || userId;
     const key = `${scope}:${type}:${pkey}`;
-    const resetAt = AIUsageService.getResetAt();
 
     let used = 0;
 
@@ -445,7 +488,9 @@ export class AIUsageService {
         FROM ai_usage
         WHERE (org_id = ${orgId || null} OR user_id = ${userId})
           AND type = ${type}
-          AND period_start = ${pkey}
+          AND period_start >= ${pkey}
+          AND (${type === 'voice'} OR period_start = ${pkey})
+          AND (${type !== 'voice'} OR period_start < ${pend})
       `;
       used = Number(rows?.[0]?.total || 0);
     } catch (error) {
@@ -458,7 +503,7 @@ export class AIUsageService {
     const remaining = Math.max(0, limit - used);
     return {
       plan,
-      limits: quota,
+      limits: AIUsageService.getPlanQuota(plan),
       usage: used,
       remaining,
       ...(type === 'voice' ? { remainingCharacters: remaining * VOICE_CHARS_PER_UNIT } : {}),
@@ -485,6 +530,8 @@ export class AIUsageService {
    * so clients never convert units themselves; llm and image stay in counts.
    * Limits come from the same DEFAULT_QUOTAS the quota checks enforce, so the
    * displayed character cap always matches the value enforcement refuses at.
+   * Each entry carries its own resetAt: daily types reset at the next UTC
+   * midnight, voice at the 1st of next month (#58).
    */
   static async getAllQuotaStatuses(opts: {
     orgId?: string | null;
@@ -493,7 +540,10 @@ export class AIUsageService {
   }): Promise<{
     plan: string;
     resetAt: string;
-    quotas: Record<'llm' | 'image' | 'voice', { limit: number; usage: number; remaining: number }>;
+    quotas: Record<
+      'llm' | 'image' | 'voice',
+      { limit: number; usage: number; remaining: number; resetAt: string }
+    >;
   }> {
     const { userId, orgId, plan } = opts;
     const [llm, image, voice] = await Promise.all([
@@ -501,13 +551,21 @@ export class AIUsageService {
       AIUsageService.getQuotaStatus({ userId, orgId, plan, type: 'image' }),
       AIUsageService.getQuotaStatus({ userId, orgId, plan, type: 'voice' }),
     ]);
+    const limitFor = (status: { limits: QuotaConfig }, type: UsageType): number =>
+      type === 'voice' ? status.limits.monthly.voice : status.limits.daily[type];
     const entry = (
-      status: { limits: { daily: Record<UsageType, number> }; usage: number; remaining: number },
+      status: {
+        limits: QuotaConfig;
+        usage: number;
+        remaining: number;
+        resetAt: string;
+      },
       type: UsageType,
     ) => ({
-      limit: status.limits.daily[type],
+      limit: limitFor(status, type),
       usage: status.usage,
       remaining: status.remaining,
+      resetAt: status.resetAt,
     });
     return {
       plan,
@@ -516,9 +574,10 @@ export class AIUsageService {
         llm: entry(llm, 'llm'),
         image: entry(image, 'image'),
         voice: {
-          limit: voice.limits.daily.voice * VOICE_CHARS_PER_UNIT,
+          limit: voice.limits.monthly.voice * VOICE_CHARS_PER_UNIT,
           usage: voice.usage * VOICE_CHARS_PER_UNIT,
           remaining: voice.remaining * VOICE_CHARS_PER_UNIT,
+          resetAt: voice.resetAt,
         },
       },
     };

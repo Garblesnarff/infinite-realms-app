@@ -2,8 +2,12 @@ import type { Character } from '@/types/character';
 
 import logger from '@/lib/logger';
 
-/** Bump when the stored shape changes so stale drafts are ignored, not misread. */
-export const WIZARD_DRAFT_VERSION = 2;
+/**
+ * Bump when the stored shape changes so stale drafts are ignored, not misread.
+ * v3 (#213): the Alignment step moved every later step by one, so a v2 draft
+ * saved on Personality or later would open one step early.
+ */
+export const WIZARD_DRAFT_VERSION = 3;
 
 export interface WizardDraft {
   version: typeof WIZARD_DRAFT_VERSION;

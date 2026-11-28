@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
 import { readSeededPremadeTemplates } from '../../../../../src/services/character/__tests__/seeded-premade-templates.ts';
+import { planApproach } from '../../../tactical/approach.js';
+import { getDistance } from '../../../tactical/engine.js';
 import { resolveAttackRules } from '../combat-rules.js';
 import { buildCombatWeaponOptions, isEquippedWeaponCandidate } from '../combat-weapon-options.js';
 import { findCatalogWeapon } from '../weapon-catalog.js';
 
+import type { Cell, MapEntity, TacticalMap } from '../../../tactical/types.js';
 import type { WeaponRuleProfile } from '../combat-rules.js';
 
 const profileFor = (name: string): WeaponRuleProfile => {
@@ -493,5 +496,83 @@ describe('combat weapon option builder', () => {
         canCloseDistance: () => false,
       }).map((option) => option.label),
     ).toEqual(['Attack with Longsword']);
+  });
+
+  test('with 10 ft of movement and a foe 25 ft away, only the Javelin may be listed (#1642)', () => {
+    // Same geometry the legal-actions path uses: canCloseDistance is
+    // planApproach(...).inReach, and ranged legality is resolveAttackRules.
+    const hero: MapEntity = {
+      id: 'hero',
+      name: 'hero',
+      x: 5,
+      y: 5,
+      size: 'medium',
+      type: 'pc',
+      speedFeet: 30,
+      movementRemaining: 10,
+    };
+    const foe: MapEntity = {
+      id: 'foe',
+      name: 'foe',
+      x: 10,
+      y: 5,
+      size: 'medium',
+      type: 'monster',
+      speedFeet: 30,
+      movementRemaining: 30,
+    };
+    const cells: Cell[][] = Array.from({ length: 20 }, () =>
+      Array.from(
+        { length: 20 },
+        (): Cell => ({
+          terrain: 'floor',
+          blocksMovement: false,
+          blocksSight: false,
+          cover: 0,
+          elevation: 0,
+        }),
+      ),
+    );
+    const map: TacticalMap = {
+      id: 'map',
+      sessionId: 'session',
+      width: 20,
+      height: 20,
+      round: 1,
+      sceneDescription: 'test',
+      cells,
+      entities: [hero, foe],
+    };
+    expect(getDistance(hero, foe)).toBe(25);
+
+    const longsword = profileFor('longsword');
+    const javelin = profileFor('javelin');
+    const canCloseDistance = (targetId: string, weapon: WeaponRuleProfile): boolean =>
+      planApproach(map, hero.id, targetId, weapon.normalRange ?? 5)?.inReach === true;
+
+    const options = buildCombatWeaponOptions(
+      [longsword, javelin],
+      (weapon) => {
+        const rules = resolveAttackRules({
+          strength: 16,
+          dexterity: 12,
+          level: 3,
+          baseTargetAc: 14,
+          weapon,
+          geometry: {
+            distanceFeet: getDistance(hero, foe),
+            hasLineOfSight: true,
+            cover: 0,
+          },
+        });
+        return [{ targetId: foe.id, legal: rules.legal, refusal: rules.refusal }];
+      },
+      { canCloseDistance },
+    );
+
+    // 10 + 5 < 25, so the Longsword row is omitted. The Javelin (thrown 30/120)
+    // is already in range, so it is the only attack chip. The Attack chevron
+    // is shown only when that list has more than one row.
+    expect(options.map((option) => option.label)).toEqual(['Attack with Javelin']);
   });
 });

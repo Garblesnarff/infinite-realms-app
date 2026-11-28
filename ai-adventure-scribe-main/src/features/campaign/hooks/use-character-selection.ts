@@ -94,7 +94,7 @@ export interface UseCharacterSelectionReturn {
   loadError: Error | null;
   retryLoad: () => void;
   starterCampaignId: string | null | undefined;
-  handleSelectTemplate: (template: StarterTemplate) => Promise<void>;
+  handleSelectTemplate: (template: StarterTemplate, heroName?: string) => Promise<void>;
   startGameWithCharacter: (character: Character) => Promise<void>;
   handleCreateCharacter: () => void;
   getModifier: (score?: number) => string;
@@ -212,7 +212,10 @@ export function useCharacterSelection({
   /**
    * Create character from starter template and start game
    */
-  const handleSelectTemplate = async (template: StarterTemplate): Promise<void> => {
+  const handleSelectTemplate = async (
+    template: StarterTemplate,
+    heroName?: string,
+  ): Promise<void> => {
     if (!user || creatingRef.current) return;
 
     creatingRef.current = true;
@@ -240,6 +243,7 @@ export function useCharacterSelection({
         const base = {
           sessions: campaignSessions,
           starterCampaignId: starterCampaignId ?? '',
+          starterTemplateId: template.id,
           heroName: template.name,
           campaignId,
         };
@@ -277,7 +281,9 @@ export function useCharacterSelection({
       }
 
       try {
-        const character = await seedStarterCharacter(template, campaignId, (payload) =>
+        // #1741: the typed name goes on the player's copy only; the template is not changed.
+        const seedTemplate = heroName ? { ...template, name: heroName } : template;
+        const character = await seedStarterCharacter(seedTemplate, campaignId, (payload) =>
           userDataApi.createCharacter(payload),
         );
 

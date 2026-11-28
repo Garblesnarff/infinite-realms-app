@@ -57,6 +57,7 @@ mock.module('../../../services/ai-usage-service.js', () => ({
     assertUsageStoreAvailable: async () => {},
     getQuotaStatus: async () => ({ remaining: 1000 }),
     recordProviderUsage: async () => {},
+    refundQuota: async () => {},
   },
   elevenLabsCharacterCostUsd: (characters: number) => (characters * 0.05) / 1000,
   voiceQuotaUnits: (characters: number) => Math.ceil(characters / 100),
@@ -101,6 +102,7 @@ const app = new Elysia().use(
       getQuotaStatus: async () => ({ remaining: 1000 }),
       checkQuotaAndConsume: async () => ({ allowed: true, remaining: 1, resetAt: '' }),
       recordProviderUsage: async () => {},
+      refundQuota: async () => {},
     } as unknown as TtsRouteOptions['usageService'],
     fetchImpl: async (input, init) => {
       forwardedRequest = { url: String(input), init };

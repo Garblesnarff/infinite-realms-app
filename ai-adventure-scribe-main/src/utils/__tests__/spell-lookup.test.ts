@@ -62,6 +62,38 @@ vi.mock('@/data/spellOptions', () => ({
       concentration: false,
       ritual: false,
     },
+    {
+      id: 'hideous-laughter',
+      name: 'Hideous Laughter',
+      level: 1,
+      school: 'Enchantment',
+      description: 'Fits of laughter.',
+      casting_time: '1 action',
+      range_text: '30 feet',
+      components: 'V, S, M',
+      components_verbal: true,
+      components_somatic: true,
+      components_material: true,
+      duration: 'Up to 1 minute',
+      concentration: true,
+      ritual: false,
+    },
+    {
+      id: 'floating-disk',
+      name: 'Floating Disk',
+      level: 1,
+      school: 'Conjuration',
+      description: 'A floating plane of force.',
+      casting_time: '1 action',
+      range_text: '30 feet',
+      components: 'V, S, M',
+      components_verbal: true,
+      components_somatic: true,
+      components_material: true,
+      duration: '1 hour',
+      concentration: false,
+      ritual: false,
+    },
   ],
 }));
 
@@ -111,6 +143,25 @@ describe('spell-lookup', () => {
 
     it('should return null for empty ID', () => {
       expect(getSpellById('')).toBeNull();
+    });
+
+    it('should resolve a possessive alias to the canonical spell (#254)', () => {
+      const byAliasId = getSpellById('tashas-hideous-laughter');
+      expect(byAliasId).toBeDefined();
+      expect(byAliasId?.id).toBe('hideous-laughter');
+      expect(byAliasId?.name).toBe('Hideous Laughter');
+
+      const byAliasName = getSpellById("Tasha's Hideous Laughter", false);
+      expect(byAliasName).toBeDefined();
+      expect(byAliasName?.id).toBe('hideous-laughter');
+    });
+
+    it('should resolve a retired duplicate UUID to the canonical spell (#254)', () => {
+      const retired = getSpellById('2f531b61-5626-5b7b-a9f9-bf935e580864');
+      expect(retired).toBeDefined();
+      expect(retired?.id).toBe('hideous-laughter');
+      expect(retired?.level).toBe(1);
+      expect(getSpellById('ce62cea7-640b-5439-a175-10289409f59b')?.id).toBe('floating-disk');
     });
 
     it('should handle errors and return fallback if requested', () => {
@@ -208,8 +259,12 @@ describe('spell-lookup', () => {
 
     it('should filter by level', () => {
       const results = searchSpells('', 1);
-      expect(results).toHaveLength(1);
-      expect(results[0].id).toBe('mage-armor');
+      expect(results).toHaveLength(3);
+      expect(results.map((spell) => spell.id).sort()).toEqual([
+        'floating-disk',
+        'hideous-laughter',
+        'mage-armor',
+      ]);
 
       const cantrips = searchSpells('', 0);
       expect(cantrips).toHaveLength(1);
@@ -220,7 +275,7 @@ describe('spell-lookup', () => {
   describe('getAllSpells', () => {
     it('should return all mocked spells', () => {
       const all = getAllSpells();
-      expect(all).toHaveLength(2);
+      expect(all).toHaveLength(4);
     });
   });
 

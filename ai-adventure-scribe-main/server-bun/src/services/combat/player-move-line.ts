@@ -18,15 +18,17 @@ export async function persistPlayerMove(params: {
   const map = await loadActiveTacticalMap(state.encounter.sessionId);
   const mover = map?.entities.find((entity) => entity.id === actor.id);
   const hostiles = state.participants.filter(isLiveHostile);
-  const closest = mover && map?.entities
-    .flatMap((entity) => {
-      const hostile = hostiles.find((participant) => participant.id === entity.id);
-      return hostile ? [{ hostile, distance: getDistance(mover, entity) }] : [];
-    })
-    .sort((a, b) => a.distance - b.distance)[0];
+  const closest =
+    mover &&
+    map?.entities
+      .flatMap((entity) => {
+        const hostile = hostiles.find((participant) => participant.id === entity.id);
+        return hostile ? [{ hostile, distance: getDistance(mover, entity) }] : [];
+      })
+      .sort((a, b) => a.distance - b.distance)[0];
   let detail = '';
   if (closest) {
-    const profile = await getDefaultCombatWeapon(actor);
+    const profile = await getDefaultCombatWeapon(actor, { preferMelee: true });
     const reach = profile.ranged ? (profile.meleeWeapon ? 5 : null) : profile.normalRange;
     detail = `; ${closest.hostile.name} is ${closest.distance} ft away${reach ? ` (reach ${reach} ft)` : ''}`;
   }
