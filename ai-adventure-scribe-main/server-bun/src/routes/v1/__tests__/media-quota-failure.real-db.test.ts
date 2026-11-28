@@ -196,6 +196,18 @@ function utcToday(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function utcMonthStart(): string {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-01`;
+}
+
+function utcNextMonthStart(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1))
+    .toISOString()
+    .slice(0, 10);
+}
+
 async function postImage(token: string): Promise<Response> {
   return (imageApp as unknown as Handler).handle(
     new Request('http://localhost/v1/images/generate', {
@@ -217,12 +229,15 @@ async function postVoice(token: string): Promise<Response> {
   );
 }
 
-/** Units charged today for a user and type. Provider-usage rows carry units 0. */
+/** Units charged in the current period for a user and type. Provider-usage rows carry units 0. Voice is monthly (#58), so its rows carry the 1st of the month, not today. Mirrors the production period filter, upper bound included. */
 async function chargedUnits(userId: string, type: 'image' | 'voice'): Promise<number> {
   const rows = (await realDb().execute(sql`
     SELECT COALESCE(SUM(units), 0)::int AS units
     FROM ai_usage
-    WHERE user_id = ${userId} AND type = ${type} AND period_start = ${utcToday()}
+    WHERE user_id = ${userId} AND type = ${type}
+      AND period_start >= ${type === 'voice' ? utcMonthStart() : utcToday()}
+      AND (${type === 'voice'} OR period_start = ${utcToday()})
+      AND (${type !== 'voice'} OR period_start < ${utcNextMonthStart()})
   `)) as unknown as Array<{ units: number }>;
   return Number(rows[0]?.units ?? 0);
 }
@@ -442,10 +457,25 @@ describeWithDb(
 
       const all = await AIUsageService.getAllQuotaStatuses({ userId, plan: 'pro' });
 
-      expect(all.quotas.llm).toEqual({ limit: 40, usage: 2, remaining: 38 });
-      expect(all.quotas.image).toEqual({ limit: 2, usage: 1, remaining: 1 });
+      expect(all.quotas.llm).toEqual({
+        limit: 40,
+        usage: 2,
+        remaining: 38,
+        resetAt: expect.any(String),
+      });
+      expect(all.quotas.image).toEqual({
+        limit: 2,
+        usage: 1,
+        remaining: 1,
+        resetAt: expect.any(String),
+      });
       // Voice displays in characters: stored units × VOICE_CHARS_PER_UNIT.
-      expect(all.quotas.voice).toEqual({ limit: 2_000, usage: 300, remaining: 1_700 });
+      expect(all.quotas.voice).toEqual({
+        limit: 54_000,
+        usage: 300,
+        remaining: 53_700,
+        resetAt: expect.any(String),
+      });
     });
 
     // was ai-usage-tester-plan.test.ts
@@ -469,10 +499,10 @@ describeWithDb(
     });
 
     // was ai-usage-voice-quota.test.ts
-    test('sets pro and enterprise caps in units: pro 2,000 and enterprise 200,000 characters/day', async () => {
+    test('sets pro and enterprise caps in units: pro 54,000 and enterprise 6,000,000 characters/month (#58)', async () => {
       const cases = [
-        { plan: 'pro', limit: 20 },
-        { plan: 'enterprise', limit: 2000 },
+        { plan: 'pro', limit: 540 },
+        { plan: 'enterprise', limit: 60000 },
       ];
 
       for (const { plan, limit } of cases) {
@@ -495,20 +525,20 @@ describeWithDb(
       }
     });
 
-    // #128 sets the tester voice cap too (200 units = 20,000 characters); the
-    // pro/enterprise cases above never pinned it.
-    test('sets the tester voice cap in units: 200 units = 20,000 characters/day (#128)', async () => {
+    // #128 sets the tester voice cap too (6,000 units = 600,000 characters a
+    // month, the old 200/day × 30); the pro/enterprise cases above never pinned it.
+    test('sets the tester voice cap in units: 6,000 units = 600,000 characters/month (#128)', async () => {
       const within = await AIUsageService.checkQuotaAndConsume({
         userId: capUser('tester-voice-within'),
         plan: 'tester',
         type: 'voice',
-        units: 200,
+        units: 6000,
       });
       const over = await AIUsageService.checkQuotaAndConsume({
         userId: capUser('tester-voice-over'),
         plan: 'tester',
         type: 'voice',
-        units: 201,
+        units: 6001,
       });
 
       expect(within.allowed).toBe(true);
@@ -520,64 +550,90 @@ describeWithDb(
         plan: 'tester',
         type: 'voice',
       });
-      expect(status.limits.daily.voice).toBe(200);
-      expect(status.remainingCharacters).toBe(20_000);
+      expect(status.limits.monthly.voice).toBe(6000);
+      expect(status.remainingCharacters).toBe(600_000);
     });
 
-    // #127: the caps above are pinned within a day, but the reset itself was
-    // never pinned. Usage is SUM(units) over rows with period_start = the UTC
-    // date, so a new UTC day must restore the whole allowance without any row
-    // being deleted or rewritten.
-    test('resets the voice allowance on the UTC day boundary: yesterday\u2019s full cap does not count today (#127)', async () => {
+    // #127: the caps above are pinned within a month, but the reset itself was
+    // never pinned. Usage is SUM(units) over rows with period_start in this
+    // calendar month, so a new month must restore the whole allowance without
+    // any row being deleted or rewritten. Daily-shaped rows from this month
+    // still count (#58 continuity: rows written before the monthly bucket
+    // shipped keep counting until the month turns).
+    test('resets the voice allowance on the month boundary: last month\u2019s full cap does not count this month (#127)', async () => {
       const database = realDb();
-      const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+      const now = new Date();
+      const lastMonthMid = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 15))
+        .toISOString()
+        .slice(0, 10);
+      const lastMonthFirst = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1))
+        .toISOString()
+        .slice(0, 10);
       const insertUsage = async (userId: string, periodStart: string): Promise<void> => {
         await database.execute(sql`
           INSERT INTO ai_usage (org_id, user_id, plan, type, units, period_start)
-          VALUES (NULL, ${userId}, 'pro', 'voice', 20, ${periodStart})
+          VALUES (NULL, ${userId}, 'pro', 'voice', 540, ${periodStart})
         `);
       };
 
-      // Yesterday this user spent the entire pro voice day (20 units), in the
-      // row shape checkQuotaAndConsume writes.
+      // Last month this user spent the entire pro voice month (540 units),
+      // once as a daily-shaped row and once as a monthly-shaped row.
       const resetUser = capUser('pro-voice-reset');
-      await insertUsage(resetUser, yesterday);
+      await insertUsage(resetUser, lastMonthMid);
+      const resetUserMonthly = capUser('pro-voice-reset-monthly');
+      await insertUsage(resetUserMonthly, lastMonthFirst);
 
-      // Today the allowance is whole again, and resetAt is the next UTC midnight.
-      const status = await AIUsageService.getQuotaStatus({
-        userId: resetUser,
-        plan: 'pro',
-        type: 'voice',
-      });
-      expect(status.usage).toBe(0);
-      expect(status.remaining).toBe(20);
-      expect(status.remainingCharacters).toBe(2_000);
-      expect(status.resetAt.endsWith('T00:00:00.000Z')).toBe(true);
-      expect(Date.parse(status.resetAt)).toBeGreaterThan(Date.now());
+      // This month the allowance is whole again, and resetAt is the 1st of next month.
+      for (const userId of [resetUser, resetUserMonthly]) {
+        const status = await AIUsageService.getQuotaStatus({
+          userId,
+          plan: 'pro',
+          type: 'voice',
+        });
+        expect(status.usage).toBe(0);
+        expect(status.remaining).toBe(540);
+        expect(status.remainingCharacters).toBe(54_000);
+        expect(new Date(status.resetAt).getUTCDate()).toBe(1);
+        expect(Date.parse(status.resetAt)).toBeGreaterThan(Date.now());
+      }
 
       const first = await consume(resetUser, 'pro', 'voice', voiceQuotaUnits(100));
       expect(first.allowed).toBe(true);
-      expect(first.remaining).toBe(19);
+      expect(first.remaining).toBe(539);
 
-      // The reset is the period filter, not a deletion: yesterday's row is
+      // The reset is the period filter, not a deletion: last month's row is
       // still there, next to the row the consume above just wrote.
       expect(await usageRowCount(resetUser)).toBe(2);
 
-      // Contrast, same cap under TODAY's period: the allowance really is spent.
+      // Contrast, same cap under THIS month's period: the allowance really is spent.
+      // A daily-shaped row dated today counts toward the monthly bucket.
       const spentUser = capUser('pro-voice-spent-today');
       await insertUsage(spentUser, utcToday());
       const refused = await consume(spentUser, 'pro', 'voice', voiceQuotaUnits(100));
       expect(refused.allowed).toBe(false);
       expect(refused.remaining).toBe(0);
+
+      // Mid-month daily-shaped row: the continuity case the >= exists for.
+      // Dated the 5th (not the 1st, not today), it still counts toward the month.
+      const midUser = capUser('pro-voice-spent-midmonth');
+      const thisMonthMid = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 5))
+        .toISOString()
+        .slice(0, 10);
+      await insertUsage(midUser, thisMonthMid);
+      const midRefused = await consume(midUser, 'pro', 'voice', voiceQuotaUnits(100));
+      expect(midRefused.allowed).toBe(false);
+      expect(midRefused.remaining).toBe(0);
     });
 
-    test('lets a pro user at 1,900 characters send a 100-character line, then refuses at 2,000', async () => {
+    test('lets a pro user at 53,900 characters send a 100-character line, then refuses at 54,000 (#58)', async () => {
       const userId = capUser('pro-chars-boundary');
       const spend = (characters: number) =>
         consume(userId, 'pro', 'voice', voiceQuotaUnits(characters));
 
-      // 19 lines of 100 characters = 1,900 characters used.
-      for (let i = 0; i < 19; i++) expect((await spend(100)).allowed).toBe(true);
+      // 53,900 characters in one call costs ceil(539) = 539 units: one short of the month.
+      const almost = await spend(53_900);
+      expect(almost.allowed).toBe(true);
+      expect(almost.remaining).toBe(1);
 
       const last = await spend(100);
       expect(last.allowed).toBe(true);
@@ -590,16 +646,16 @@ describeWithDb(
     test('reports remaining voice in characters', async () => {
       const userId = capUser('pro-chars-display');
       await consume(userId, 'pro', 'voice', voiceQuotaUnits(1_950));
-      // 1,950 characters in one call costs ceil(19.5) = 20 units: the whole day.
+      // 1,950 characters in one call costs ceil(19.5) = 20 units of the month.
       const spent = await AIUsageService.getQuotaStatus({ userId, plan: 'pro', type: 'voice' });
-      expect(spent.remainingCharacters).toBe(0);
+      expect(spent.remainingCharacters).toBe(52_000);
 
       const fresh = await AIUsageService.getQuotaStatus({
         userId: capUser('pro-chars-display-fresh'),
         plan: 'pro',
         type: 'voice',
       });
-      expect(fresh.remainingCharacters).toBe(2_000);
+      expect(fresh.remainingCharacters).toBe(54_000);
 
       const partial = capUser('pro-chars-display-partial');
       await consume(partial, 'pro', 'voice', voiceQuotaUnits(500));
@@ -608,10 +664,10 @@ describeWithDb(
         plan: 'pro',
         type: 'voice',
       });
-      expect(status.remainingCharacters).toBe(1_500);
+      expect(status.remainingCharacters).toBe(53_500);
       expect(status.usage).toBe(5);
-      expect(status.remaining).toBe(15);
-      expect(status.limits.daily.voice).toBe(20);
+      expect(status.remaining).toBe(535);
+      expect(status.limits.monthly.voice).toBe(540);
 
       const image = await AIUsageService.getQuotaStatus({
         userId: partial,
@@ -632,7 +688,7 @@ describeWithDb(
         plan: 'free',
         type: 'voice',
       });
-      expect(status.limits.daily.voice).toBe(0);
+      expect(status.limits.monthly.voice).toBe(0);
     });
   },
 );
@@ -676,89 +732,92 @@ async function deleteUsage(token: string, ids: unknown, secret?: string): Promis
 // usage rows restores quota (quota = limit - SUM(units)).
 const CLEANUP_SECRET = 'test-cleanup-secret-not-real';
 
-describeWithDb('fix #350 round 2: usageIds and the usage-row cleanup (real routes, real ai_usage)', () => {
-  const OLD_SECRET = process.env.SMOKE_CLEANUP_SECRET;
-  beforeAll(() => {
-    globalThis.fetch = stubbedFetch as unknown as typeof fetch;
-    process.env.SMOKE_CLEANUP_SECRET = CLEANUP_SECRET;
-  });
+describeWithDb(
+  'fix #350 round 2: usageIds and the usage-row cleanup (real routes, real ai_usage)',
+  () => {
+    const OLD_SECRET = process.env.SMOKE_CLEANUP_SECRET;
+    beforeAll(() => {
+      globalThis.fetch = stubbedFetch as unknown as typeof fetch;
+      process.env.SMOKE_CLEANUP_SECRET = CLEANUP_SECRET;
+    });
 
-  beforeEach(() => {
-    providerCalls = [];
-    resetCircuitBreakersForTests();
-    resetProviderKeyLimitForTests();
-  });
+    beforeEach(() => {
+      providerCalls = [];
+      resetCircuitBreakersForTests();
+      resetProviderKeyLimitForTests();
+    });
 
-  afterAll(async () => {
-    globalThis.fetch = originalFetch;
-    if (OLD_SECRET === undefined) delete process.env.SMOKE_CLEANUP_SECRET;
-    else process.env.SMOKE_CLEANUP_SECRET = OLD_SECRET;
-    const database = realDb();
-    for (const id of createdUserIds) {
-      await database.execute(sql`DELETE FROM ai_usage WHERE user_id = ${id}`);
-    }
-  });
+    afterAll(async () => {
+      globalThis.fetch = originalFetch;
+      if (OLD_SECRET === undefined) delete process.env.SMOKE_CLEANUP_SECRET;
+      else process.env.SMOKE_CLEANUP_SECRET = OLD_SECRET;
+      const database = realDb();
+      for (const id of createdUserIds) {
+        await database.execute(sql`DELETE FROM ai_usage WHERE user_id = ${id}`);
+      }
+    });
 
-  test('a successful turn returns usageIds; deleting them leaves no rows', async () => {
-    const user = userFor('free');
+    test('a successful turn returns usageIds; deleting them leaves no rows', async () => {
+      const user = userFor('free');
 
-    const res = await postGenerate(user);
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as Record<string, unknown>;
-    expect(body.parsed).toBe(true);
-    expect(body.degraded ?? false).toBe(false);
-    const ids = body.usageIds as number[];
-    expect(Array.isArray(ids)).toBe(true);
-    expect(ids).toHaveLength(2);
-    // One quota row (units 1) and one provider-usage row (units 0).
-    expect(await usageRowCount(user)).toBe(2);
+      const res = await postGenerate(user);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as Record<string, unknown>;
+      expect(body.parsed).toBe(true);
+      expect(body.degraded ?? false).toBe(false);
+      const ids = body.usageIds as number[];
+      expect(Array.isArray(ids)).toBe(true);
+      expect(ids).toHaveLength(2);
+      // One quota row (units 1) and one provider-usage row (units 0).
+      expect(await usageRowCount(user)).toBe(2);
 
-    const del = await deleteUsage(user, ids, CLEANUP_SECRET);
-    expect(del.status).toBe(200);
-    expect(((await del.json()) as Record<string, unknown>).deleted).toBe(2);
-    expect(await usageRowCount(user)).toBe(0);
-  });
+      const del = await deleteUsage(user, ids, CLEANUP_SECRET);
+      expect(del.status).toBe(200);
+      expect(((await del.json()) as Record<string, unknown>).deleted).toBe(2);
+      expect(await usageRowCount(user)).toBe(0);
+    });
 
-  test('deleting usage rows without the cleanup secret is refused (403)', async () => {
-    const user = userFor('free');
+    test('deleting usage rows without the cleanup secret is refused (403)', async () => {
+      const user = userFor('free');
 
-    const res = await postGenerate(user);
-    const ids = ((await res.json()) as Record<string, unknown>).usageIds as number[];
-    expect(ids).toHaveLength(2);
+      const res = await postGenerate(user);
+      const ids = ((await res.json()) as Record<string, unknown>).usageIds as number[];
+      expect(ids).toHaveLength(2);
 
-    // No secret header: refused, rows untouched — otherwise this endpoint
-    // would be a self-service quota reset (quota = limit - SUM(units)).
-    const del = await deleteUsage(user, ids);
-    expect(del.status).toBe(403);
-    expect(await usageRowCount(user)).toBe(2);
+      // No secret header: refused, rows untouched — otherwise this endpoint
+      // would be a self-service quota reset (quota = limit - SUM(units)).
+      const del = await deleteUsage(user, ids);
+      expect(del.status).toBe(403);
+      expect(await usageRowCount(user)).toBe(2);
 
-    // Wrong secret: likewise refused.
-    const delWrong = await deleteUsage(user, ids, 'wrong-secret');
-    expect(delWrong.status).toBe(403);
-    expect(await usageRowCount(user)).toBe(2);
+      // Wrong secret: likewise refused.
+      const delWrong = await deleteUsage(user, ids, 'wrong-secret');
+      expect(delWrong.status).toBe(403);
+      expect(await usageRowCount(user)).toBe(2);
 
-    // With the secret the smoke's cleanup works.
-    const delOk = await deleteUsage(user, ids, CLEANUP_SECRET);
-    expect(((await delOk.json()) as Record<string, unknown>).deleted).toBe(2);
-    expect(await usageRowCount(user)).toBe(0);
-  });
+      // With the secret the smoke's cleanup works.
+      const delOk = await deleteUsage(user, ids, CLEANUP_SECRET);
+      expect(((await delOk.json()) as Record<string, unknown>).deleted).toBe(2);
+      expect(await usageRowCount(user)).toBe(0);
+    });
 
-  test("a caller cannot delete another user's usage rows", async () => {
-    const a = userFor('free');
-    const b = userFor('free');
+    test("a caller cannot delete another user's usage rows", async () => {
+      const a = userFor('free');
+      const b = userFor('free');
 
-    const res = await postGenerate(a);
-    const ids = ((await res.json()) as Record<string, unknown>).usageIds as number[];
-    expect(ids).toHaveLength(2);
+      const res = await postGenerate(a);
+      const ids = ((await res.json()) as Record<string, unknown>).usageIds as number[];
+      expect(ids).toHaveLength(2);
 
-    const del = await deleteUsage(b, ids, CLEANUP_SECRET);
-    expect(del.status).toBe(200);
-    expect(((await del.json()) as Record<string, unknown>).deleted).toBe(0);
-    expect(await usageRowCount(a)).toBe(2);
+      const del = await deleteUsage(b, ids, CLEANUP_SECRET);
+      expect(del.status).toBe(200);
+      expect(((await del.json()) as Record<string, unknown>).deleted).toBe(0);
+      expect(await usageRowCount(a)).toBe(2);
 
-    // Cleanup of a's rows still works for a.
-    const delA = await deleteUsage(a, ids, CLEANUP_SECRET);
-    expect(((await delA.json()) as Record<string, unknown>).deleted).toBe(2);
-    expect(await usageRowCount(a)).toBe(0);
-  });
-});
+      // Cleanup of a's rows still works for a.
+      const delA = await deleteUsage(a, ids, CLEANUP_SECRET);
+      expect(((await delA.json()) as Record<string, unknown>).deleted).toBe(2);
+      expect(await usageRowCount(a)).toBe(0);
+    });
+  },
+);

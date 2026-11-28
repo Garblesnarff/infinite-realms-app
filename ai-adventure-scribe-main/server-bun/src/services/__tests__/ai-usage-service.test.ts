@@ -41,8 +41,23 @@ describe('AIUsageService plan quotas (#2510)', () => {
       plan: 'free',
     });
 
-    expect(all.quotas.llm).toEqual({ limit: 15, usage: 0, remaining: 15 });
-    expect(all.quotas.image).toEqual({ limit: 1, usage: 0, remaining: 1 });
-    expect(all.quotas.voice).toEqual({ limit: 0, usage: 0, remaining: 0 });
+    expect(all.quotas.llm).toEqual({
+      limit: 15,
+      usage: 0,
+      remaining: 15,
+      resetAt: expect.any(String),
+    });
+    expect(all.quotas.image).toEqual({
+      limit: 1,
+      usage: 0,
+      remaining: 1,
+      resetAt: expect.any(String),
+    });
+    expect(all.quotas.voice).toEqual({
+      limit: 0,
+      usage: 0,
+      remaining: 0,
+      resetAt: expect.any(String),
+    });
   });
 });
