@@ -4,10 +4,10 @@ import { wizardSteps } from '../constants';
 
 // Proving test for #2675 step 1: the dead wizard step files
 // (FeatSelection, HitPointsSelection, StartingEquipmentSelection clusters)
-// are gone, but the live wizard still renders all 15 steps.
+// are gone, but the live wizard still renders all 16 steps (#213 added Alignment).
 describe('wizard steps (#2675 step 1)', () => {
-  it('still has exactly 15 steps', () => {
-    expect(wizardSteps).toHaveLength(15);
+  it('still has exactly 16 steps', () => {
+    expect(wizardSteps).toHaveLength(16);
   });
 
   it('gives every step a component and a label', () => {
