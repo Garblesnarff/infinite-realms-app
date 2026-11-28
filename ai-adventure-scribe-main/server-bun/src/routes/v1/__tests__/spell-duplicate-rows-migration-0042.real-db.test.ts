@@ -3,6 +3,10 @@
  * spell rows and their class_spells links, and leaves the canonical rows and
  * links intact.
  *
+ * Before the deletes it repoints any character_spells row on a retired id to
+ * the canonical id; a row whose character already holds the canonical spell
+ * is deleted instead, so no player's spell is lost.
+ *
  * Retired: Tasha's Hideous Laughter (2f531b61…) and Tenser's Floating Disk
  * (ce62cea7…). Canonical: Hideous Laughter (49679c17…) and Floating Disk
  * (14bccb17…).
@@ -19,12 +23,19 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, expect, it } from 'bun:test';
 import { and, eq, inArray, sql, TransactionRollbackError } from 'drizzle-orm';
 
-import { classes, classSpells, spells } from '../../../../../db/schema/index';
+import {
+  characters,
+  characterSpells,
+  classes,
+  classSpells,
+  spells,
+} from '../../../../../db/schema/index';
 import {
   closeRealDb,
   describeWithDb,
   hasRealDb,
   realDb,
+  testId,
 } from '../../../services/__tests__/fixtures/real-db.ts';
 
 const RETIRED_TASHAS_ID = '2f531b61-5626-5b7b-a9f9-bf935e580864';
@@ -92,6 +103,46 @@ const TEST_CLASS_NAME = 'TestBard1803';
 describeWithDb('migration 0042_remove_duplicate_spell_rows (#1803)', () => {
   const db = hasRealDb ? realDb() : (null as never);
   let testClassId = '';
+  const testCharacterIds: string[] = [];
+
+  async function readMigrationSql(): Promise<string> {
+    const migrationPath = fileURLToPath(
+      new URL('../../../../../db/migrations/0042_remove_duplicate_spell_rows.sql', import.meta.url),
+    );
+    const migrationSql = await readFile(migrationPath, 'utf8');
+    expect(migrationSql).toContain(RETIRED_TASHAS_ID);
+    expect(migrationSql).toContain(RETIRED_TENSERS_ID);
+    expect(migrationSql).toContain(HIDEOUS_LAUGHTER_ID);
+    expect(migrationSql).toContain(FLOATING_DISK_ID);
+    return migrationSql;
+  }
+
+  // A character holding the given spell ids, with character_spells rows whose
+  // source class is the test class. The character id is tracked for afterAll
+  // cleanup (deleting the character cascades to its character_spells rows).
+  async function createTestCharacterWithSpells(spellIds: string[]): Promise<string> {
+    const [character] = await db
+      .insert(characters)
+      .values({
+        userId: testId('user-1803'),
+        name: 'Synthetic Bard 1803',
+        class: 'Bard',
+        race: 'Human',
+        level: 1,
+      })
+      .returning();
+    expect(character).toBeDefined();
+    const characterId = character.id;
+    testCharacterIds.push(characterId);
+    for (const spellId of spellIds) {
+      await db.insert(characterSpells).values({
+        characterId,
+        spellId,
+        sourceClassId: testClassId,
+      });
+    }
+    return characterId;
+  }
 
   beforeAll(async () => {
     // Test class holding links to all four spell rows, so the link assertions
@@ -127,6 +178,10 @@ describeWithDb('migration 0042_remove_duplicate_spell_rows (#1803)', () => {
   });
 
   afterAll(async () => {
+    if (testCharacterIds.length > 0) {
+      // Deleting a character cascades to its character_spells rows.
+      await db.delete(characters).where(inArray(characters.id, testCharacterIds));
+    }
     if (testClassId) {
       await db.delete(classSpells).where(eq(classSpells.classId, testClassId));
       await db.delete(classes).where(eq(classes.id, testClassId));
@@ -200,5 +255,167 @@ describeWithDb('migration 0042_remove_duplicate_spell_rows (#1803)', () => {
       .from(classSpells)
       .where(and(eq(classSpells.classId, testClassId), inArray(classSpells.spellId, RETIRED_IDS)));
     expect(retiredLinksAfter).toHaveLength(2);
+  });
+
+  it('repoints character_spells rows on retired ids to the canonical ids', async () => {
+    const characterId = await createTestCharacterWithSpells([
+      RETIRED_TASHAS_ID,
+      RETIRED_TENSERS_ID,
+    ]);
+    const migrationSql = await readMigrationSql();
+    const rowsBefore = await db
+      .select({ id: characterSpells.id, spellId: characterSpells.spellId })
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, characterId));
+
+    let rollbackError: unknown;
+    try {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql.raw(migrationSql));
+
+        const rows = await tx
+          .select({ id: characterSpells.id, spellId: characterSpells.spellId })
+          .from(characterSpells)
+          .where(eq(characterSpells.characterId, characterId));
+        // Same rows (ids unchanged — a repoint, not a delete + re-insert),
+        // now on the canonical ids.
+        expect(rows.map((r) => r.id).sort()).toEqual(rowsBefore.map((r) => r.id).sort());
+        expect(rows.map((r) => r.spellId).sort()).toEqual(
+          [HIDEOUS_LAUGHTER_ID, FLOATING_DISK_ID].sort(),
+        );
+
+        tx.rollback();
+      });
+    } catch (e) {
+      rollbackError = e;
+    }
+    expect(rollbackError).toBeInstanceOf(TransactionRollbackError);
+
+    // The rollback restored the retired-id rows.
+    const rowsAfter = await db
+      .select({ spellId: characterSpells.spellId })
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, characterId));
+    expect(rowsAfter.map((r) => r.spellId).sort()).toEqual(
+      [RETIRED_TASHAS_ID, RETIRED_TENSERS_ID].sort(),
+    );
+  });
+
+  it('a character holding retired and canonical ids keeps only the canonical rows', async () => {
+    const characterId = await createTestCharacterWithSpells([
+      RETIRED_TASHAS_ID,
+      HIDEOUS_LAUGHTER_ID,
+      RETIRED_TENSERS_ID,
+      FLOATING_DISK_ID,
+    ]);
+    const migrationSql = await readMigrationSql();
+    const rowsBefore = await db
+      .select({ id: characterSpells.id, spellId: characterSpells.spellId })
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, characterId));
+    const canonicalIdsBefore = rowsBefore
+      .filter((r) => CANONICAL_IDS.includes(r.spellId))
+      .map((r) => r.id)
+      .sort();
+
+    let rollbackError: unknown;
+    try {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql.raw(migrationSql));
+
+        const rows = await tx
+          .select({ id: characterSpells.id, spellId: characterSpells.spellId })
+          .from(characterSpells)
+          .where(eq(characterSpells.characterId, characterId));
+        expect(rows.map((r) => r.spellId).sort()).toEqual([...CANONICAL_IDS].sort());
+        // The surviving rows are the original canonical rows, untouched.
+        expect(rows.map((r) => r.id).sort()).toEqual(canonicalIdsBefore);
+
+        tx.rollback();
+      });
+    } catch (e) {
+      rollbackError = e;
+    }
+    expect(rollbackError).toBeInstanceOf(TransactionRollbackError);
+
+    // The rollback restored all four rows.
+    const rowsAfter = await db
+      .select({ spellId: characterSpells.spellId })
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, characterId));
+    expect(rowsAfter.map((r) => r.spellId).sort()).toEqual(
+      [...RETIRED_IDS, ...CANONICAL_IDS].sort(),
+    );
+  });
+
+  it('a second run changes nothing', async () => {
+    const characterId = await createTestCharacterWithSpells([
+      RETIRED_TASHAS_ID,
+      RETIRED_TENSERS_ID,
+    ]);
+    const migrationSql = await readMigrationSql();
+
+    let rollbackError: unknown;
+    try {
+      await db.transaction(async (tx) => {
+        await tx.execute(sql.raw(migrationSql));
+
+        const spellsAfterFirst = await tx
+          .select({ spellId: characterSpells.spellId })
+          .from(characterSpells)
+          .where(eq(characterSpells.characterId, characterId));
+        const retiredAfterFirst = await tx
+          .select({ id: spells.id })
+          .from(spells)
+          .where(inArray(spells.id, RETIRED_IDS));
+        const canonicalAfterFirst = await tx
+          .select({ id: spells.id })
+          .from(spells)
+          .where(inArray(spells.id, CANONICAL_IDS));
+
+        await tx.execute(sql.raw(migrationSql));
+
+        const spellsAfterSecond = await tx
+          .select({ spellId: characterSpells.spellId })
+          .from(characterSpells)
+          .where(eq(characterSpells.characterId, characterId));
+        const retiredAfterSecond = await tx
+          .select({ id: spells.id })
+          .from(spells)
+          .where(inArray(spells.id, RETIRED_IDS));
+        const canonicalAfterSecond = await tx
+          .select({ id: spells.id })
+          .from(spells)
+          .where(inArray(spells.id, CANONICAL_IDS));
+
+        expect(spellsAfterFirst.map((r) => r.spellId).sort()).toEqual(
+          [HIDEOUS_LAUGHTER_ID, FLOATING_DISK_ID].sort(),
+        );
+        expect(spellsAfterSecond.map((r) => r.spellId).sort()).toEqual(
+          spellsAfterFirst.map((r) => r.spellId).sort(),
+        );
+        expect(retiredAfterSecond.map((r) => r.id).sort()).toEqual(
+          retiredAfterFirst.map((r) => r.id).sort(),
+        );
+        expect(retiredAfterSecond).toHaveLength(0);
+        expect(canonicalAfterSecond.map((r) => r.id).sort()).toEqual(
+          canonicalAfterFirst.map((r) => r.id).sort(),
+        );
+
+        tx.rollback();
+      });
+    } catch (e) {
+      rollbackError = e;
+    }
+    expect(rollbackError).toBeInstanceOf(TransactionRollbackError);
+
+    // The rollback restored the retired-id rows.
+    const rowsAfter = await db
+      .select({ spellId: characterSpells.spellId })
+      .from(characterSpells)
+      .where(eq(characterSpells.characterId, characterId));
+    expect(rowsAfter.map((r) => r.spellId).sort()).toEqual(
+      [RETIRED_TASHAS_ID, RETIRED_TENSERS_ID].sort(),
+    );
   });
 });
