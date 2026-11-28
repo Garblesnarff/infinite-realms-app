@@ -332,14 +332,7 @@ export const useMessageHandlerLogic = ({
       if (isDyingOutsideFight) {
         try {
           const result = await submitDeathSave(sessionId);
-          const lines =
-            Array.isArray(result.engineLines) && result.engineLines.length > 0
-              ? result.engineLines
-              : result.engineLine
-                ? [result.engineLine]
-                : result.engineCard?.line
-                  ? [result.engineCard.line]
-                  : [];
+          const lines = result.engineLines ?? [];
           if (lines.length > 0) {
             await sendMessage({
               text: lines.join('\n\n'),
@@ -348,7 +341,7 @@ export const useMessageHandlerLogic = ({
               persist: true,
               context: {
                 engineCards:
-                  Array.isArray(result.engineCards) && result.engineCards.length > 0
+                  result.engineCards.length > 0
                     ? result.engineCards
                     : lines.map((line) => ({
                         kind: 'death_save' as const,
@@ -359,11 +352,7 @@ export const useMessageHandlerLogic = ({
               },
             });
           }
-          const terminal =
-            result.terminal === true ||
-            result.dead === true ||
-            result.vitalState === 'dead' ||
-            result.vital_state === 'dead';
+          const terminal = result.terminal === true || result.vitalState === 'dead';
           if (terminal) {
             await checkRestoredDefeat(sessionId);
           }
