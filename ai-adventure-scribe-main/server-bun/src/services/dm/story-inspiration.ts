@@ -3,6 +3,7 @@
  * hero holds at most one. The reply's `inspiration_grant` names the player's character. The
  * engine checks that it is the sender's character and not already held, then writes the flag
  * (CharacterService.grantInspiration, a compare-and-set) and posts one engine line.
+ * It also publishes `character_state_updated` so the Inspiration coin refreshes.
  *
  * LLM_INSPIRATION_GRANT (shadow by default, the house pattern of LLM_STRICT_BRANCH_VALIDATION):
  * - `shadow` (default): the grant is validated, logged and counted, and nothing is written.
@@ -17,6 +18,7 @@ import { ownedSessionCharacter } from './dm-feature-gate.js';
 
 import type { CharacterService } from '../character-service.js';
 import type { EngineChatLineWriter } from '../engine-chat-line.js';
+import type { StoryCharacterUpdateReason } from './story-broadcast.js';
 
 // character-service.ts and engine-chat-line.ts load the database client when imported, so both
 // are loaded at call time (as dm-feature-gate.ts does). Route contract tests import this module
@@ -62,6 +64,7 @@ export interface InspirationGrantDeps {
     userId: string,
   ) => ReturnType<typeof CharacterService.grantInspiration>;
   writeLine?: EngineChatLineWriter;
+  publish?: (sessionId: string, reason: StoryCharacterUpdateReason) => void;
 }
 
 function record(
@@ -119,5 +122,19 @@ export async function applyStoryInspiration(
     text: `${row.name} gains Inspiration.`,
     context: { intent: 'inspiration_grant' },
   });
+  // The coin refreshes on character_state_updated, like every other story applier (#130). A
+  // failed broadcast must not fail the grant: the write already landed.
+  try {
+    const publish =
+      deps.publish ?? (await import('./story-broadcast.js')).publishStoryCharacterUpdate;
+    publish(sessionId, 'story_inspiration');
+  } catch (broadcastError) {
+    logger.warn({
+      msg: 'DM_INSPIRATION_BROADCAST_FAILED',
+      sessionId,
+      characterId: row.id,
+      error: broadcastError instanceof Error ? broadcastError.message : String(broadcastError),
+    });
+  }
   return record('granted', { sessionId, characterId: row.id, mode });
 }
